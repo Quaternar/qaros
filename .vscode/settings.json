@@ -1,0 +1,16 @@
+{
+    "C_Cpp.autocomplete": "disabled",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/",
+        "--background-index",
+        "--background-index-priority=normal",
+        "--completion-style=detailed",
+        "--enable-config", // Important! This enables reading .clangd file
+        "--fallback-style=none",
+        "--log=info"
+    ],
+    "clangd.checkUpdates": true,
+    "clangd.onConfigChanged": "restart",
+    "editor.formatOnSave": true,
+
+}

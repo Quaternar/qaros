@@ -1,0 +1,13 @@
+{
+  "name": "qaros",
+  "version-string": "0.1.0",
+  "description": "Qaros SDK libraries and samples",
+  "builtin-baseline": "c82f74667287d3dc386bce81e44964370c91a289",
+  "dependencies": [],
+  "features": {
+    "examples-core": {
+      "description": "",
+      "dependencies": []
+    }
+  }
+}

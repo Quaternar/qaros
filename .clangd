@@ -1,0 +1,42 @@
+CompileFlags:
+  Add: [
+    -std=c++17,
+    -Wall,
+    -Wpedantic,
+    -Wignored-qualifiers,
+    -Wuninitialized,
+    -Woverloaded-virtual,
+    -Wredundant-move,
+    -Wno-missing-prototypes,
+    -Wno-c++98-compat,
+    -Wno-extra-semi-stmt,
+    -Wno-pre-c++20-compat-pedantic,
+    -Wno-c++98-compat-pedantic,
+    -Wno-covered-switch-default
+  ]
+  Remove: [
+    -Wextra
+  ]
+
+Index:
+  External:
+    File: ./build/compile_commands.json
+  Background: Build    # Build index in background for faster startup
+  StandardLibrary: Yes # Don't index standard library (saves memory)
+
+InlayHints:
+  BlockEnd: Yes
+  Designators: Yes
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+  TypeNameLimit: 24
+
+Hover:
+  ShowAKA: Yes
+
+Completion:
+  AllScopes: Yes      # Show completions from all scopes
+
+Diagnostics:
+  UnusedIncludes: Strict

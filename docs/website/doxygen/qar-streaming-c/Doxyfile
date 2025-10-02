@@ -1,0 +1,70 @@
+###############################################################################
+# Doxyfile for qar-streaming-c (lives under docs/docusaurus/doxygen/qar-streaming-c)
+#
+# Generates XML output to be consumed by doxygen2docusaurus.
+# All paths are relative to THIS file location.
+###############################################################################
+
+# Project
+PROJECT_NAME           = "qar-streaming-c"
+PROJECT_BRIEF          = "C API for Quaternar QarOS streaming and runtime services"
+OUTPUT_DIRECTORY       = ./doxygen
+CREATE_SUBDIRS         = NO
+OPTIMIZE_OUTPUT_FOR_C  = YES
+OPTIMIZE_OUTPUT_FOR_CPLUS_PLUS = NO
+FULL_PATH_NAMES        = NO
+STRIP_FROM_PATH        = ../../../../libs/qar-streaming-c
+STRIP_FROM_INC_PATH    = ../../../../libs/qar-streaming-c
+
+# Input
+INPUT                  = ../../../../libs/qar-streaming-c/
+FILE_PATTERNS          = *.h *.c
+RECURSIVE              = YES
+
+# Examples (kept alongside API docs, single Doxygen run)
+EXAMPLE_PATH           = ../../../../examples/qar-streaming-c
+EXAMPLE_PATTERNS       = *.c *.h *.cpp
+
+# Extraction
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+SORT_MEMBER_DOCS       = YES
+SORT_BRIEF_DOCS        = YES
+SORT_BY_SCOPE_NAME     = YES
+
+# Groups / modules
+GENERATE_GROUPS        = YES
+GROUP_NESTED_COMPOUNDS = YES
+
+# Source browsing
+REFERENCED_BY_RELATION = NO
+REFERENCES_RELATION    = NO
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+
+# Output
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_MAN           = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_TREEVIEW      = NO
+GENERATE_TAGFILE       = ./doxygen/qar-streaming-c.tag
+
+# Preprocessor
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = \
+  QAR_ENABLE_D3D11 \
+  QAR_ENABLE_DYNAMIC_LOADING
