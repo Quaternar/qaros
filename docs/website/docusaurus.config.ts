@@ -16,15 +16,15 @@ const config: Config = {
 	},
 
 	// Set the production url of your site here
-	url: "https://example.com",
+	url: "https://docs.quaternar.com",
 	// Set the /<baseUrl>/ pathname under which your site is served
 	// For GitHub pages deployment, it is often '/<projectName>/'
-	baseUrl: "/",
+	baseUrl: "/qaros/",
 
 	// GitHub pages deployment config.
 	// If you aren't using GitHub pages, you don't need these.
 	organizationName: "Quaternar", // Usually your GitHub org/user name.
-	projectName: "quaternar", // Usually your repo name.
+	projectName: "qaros", // Usually your repo name.
 
 	onBrokenLinks: "throw",
 	trailingSlash: true,
