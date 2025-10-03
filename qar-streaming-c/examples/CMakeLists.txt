@@ -1,7 +1,14 @@
 if(BUILD_CORE_EXAMPLES)
-  add_executable(library_dynamic_loading library_dynamic_loading.c)
-  target_compile_features(library_dynamic_loading PRIVATE c_std_11)
-  target_link_libraries(library_dynamic_loading PRIVATE qar-streaming-c-headers)
+  set(QAR_DYNAMIC_EXAMPLES
+      dynamic_loading
+      session_create_and_join
+      app_volume_management
+      gui_panel_operations
+      cpu_rendering_visualizer)
 
-
+  foreach(sample ${QAR_DYNAMIC_EXAMPLES})
+    add_executable(${sample} ${sample}.c)
+    target_compile_features(${sample} PRIVATE c_std_11)
+    target_link_libraries(${sample} PRIVATE qar-streaming-c-headers)
+  endforeach()
 endif()

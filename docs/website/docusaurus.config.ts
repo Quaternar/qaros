@@ -2,7 +2,6 @@ import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 import doxygenQarStreamingCNavbar from "./docusaurus-config-navbar-doxygen-qar-streaming-c.json";
-import doxygenQarStreamingNavbar from "./docusaurus-config-navbar-doxygen-qar-streaming.json";
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -49,21 +48,21 @@ const config: Config = {
 					editUrl:
 						"https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
 				},
-				blog: {
-					showReadingTime: true,
-					feedOptions: {
-						type: ["rss", "atom"],
-						xslt: true,
-					},
-					// Please change this to your repo.
-					// Remove this to remove the "edit this page" links.
-					editUrl:
-						"https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
-					// Useful options to enforce blogging best practices
-					onInlineTags: "warn",
-					onInlineAuthors: "warn",
-					onUntruncatedBlogPosts: "warn",
-				},
+				// blog: {
+				// 	showReadingTime: true,
+				// 	feedOptions: {
+				// 		type: ["rss", "atom"],
+				// 		xslt: true,
+				// 	},
+				// 	// Please change this to your repo.
+				// 	// Remove this to remove the "edit this page" links.
+				// 	editUrl:
+				// 		"https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
+				// 	// Useful options to enforce blogging best practices
+				// 	onInlineTags: "warn",
+				// 	onInlineAuthors: "warn",
+				// 	onUntruncatedBlogPosts: "warn",
+				// },
 				theme: {
 					customCss: [
 						"./src/css/custom-doxygen2docusaurus.css",
@@ -105,9 +104,8 @@ const config: Config = {
 					label: "Knowledge Base",
 				},
 				doxygenQarStreamingCNavbar,
-				doxygenQarStreamingNavbar,
 				{
-					href: "https://github.com/facebook/docusaurus",
+					href: "https://github.com/quaternar/qaros",
 					label: "GitHub",
 					position: "right",
 				},

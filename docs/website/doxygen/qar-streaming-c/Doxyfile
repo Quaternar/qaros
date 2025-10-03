@@ -13,17 +13,17 @@ CREATE_SUBDIRS         = NO
 OPTIMIZE_OUTPUT_FOR_C  = YES
 OPTIMIZE_OUTPUT_FOR_CPLUS_PLUS = NO
 FULL_PATH_NAMES        = NO
-STRIP_FROM_PATH        = ../../../../libs/qar-streaming-c
-STRIP_FROM_INC_PATH    = ../../../../libs/qar-streaming-c
+STRIP_FROM_PATH        = ../../../../
+STRIP_FROM_INC_PATH    = ../../../../
 
 # Input
-INPUT                  = ../../../../libs/qar-streaming-c/
+INPUT                  = ../../../../qar-streaming-c/include ../../../../qar-streaming-c/examples
 FILE_PATTERNS          = *.h *.c
 RECURSIVE              = YES
 
 # Examples (kept alongside API docs, single Doxygen run)
-EXAMPLE_PATH           = ../../../../examples/qar-streaming-c
-EXAMPLE_PATTERNS       = *.c *.h *.cpp
+EXAMPLE_PATH           = ../../../../qar-streaming-c/examples
+EXAMPLE_PATTERNS       = *.c *.h
 
 # Extraction
 EXTRACT_ALL            = YES

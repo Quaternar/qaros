@@ -1,6 +1,5 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 import doxygenSidebarQarStreamingCItems from './sidebar-category-doxygen-qar-streaming-c.json';
-import doxygenSidebarQarStreamingItems from './sidebar-category-doxygen-qar-streaming.json';
 import fs from 'fs';
 import path from 'path';
 
@@ -76,26 +75,29 @@ const sidebars: SidebarsConfig = {
           items: [{
             id: 'qar-streaming-c/pages/qar-c-tutorial-dynamic-loading',
             type: 'doc',
+            label: 'Dynamic Library Loading',
+          },
+          {
+            id: 'qar-streaming-c/pages/qar-c-tutorial-session-create',
+            type: 'doc',
             label: 'Init Session',
+          },
+          {
+            id: 'qar-streaming-c/pages/qar-c-tutorial-gui-panels',
+            type: 'doc',
+            label: 'Gui Panels',
+          },
+          {
+            id: 'qar-streaming-c/pages/qar-c-tutorial-app-volumes',
+            type: 'doc',
+            label: 'App Volumes',
+          },
+          {
+            id: 'qar-streaming-c/pages/qar-c-tutorial-cpu-rendering',
+            type: 'doc',
+            label: 'Cpu Single User Rendering',
           }
           ],
-        },
-      ],
-    } as any,
-
-    // C++ API: also add a top-level Files category (functions are indexed
-    // under Namespaces/Functions already, but Files is useful navigation)
-    {
-      ...(doxygenSidebarQarStreamingItems as any),
-      items: [
-        ...((doxygenSidebarQarStreamingItems as any).items ?? []),
-        // Quick access to all namespace-level functions
-        {
-          type: 'category',
-          label: 'Files',
-          link: { type: 'doc', id: 'qar-streaming/indices/files/index' },
-          collapsed: true,
-          items: buildFileDocItems('qar-streaming/files'),
         },
       ],
     } as any,

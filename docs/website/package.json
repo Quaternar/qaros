@@ -13,14 +13,10 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "download:host-tools": "cmake -E env cmake -DQAR_BUILD_DIR='../../build/' -P ../../qar-streaming/cmake/HostTools.cmake",
-    "docs:xml:qar-streaming-c": "cmake -E chdir ./doxygen/qar-streaming-c ../../../../build/tools/doxygen/doxygen",
-    "docs:xml:qar-streaming": "cmake -E chdir ./doxygen/qar-streaming ../../../../build/tools/doxygen/doxygen",
-    "docs:convert:c": "npx doxygen2docusaurus --id qar-streaming-c",
-    "docs:convert:cpp": "npx doxygen2docusaurus --id qar-streaming",
-    "docs:convert": "npm run docs:convert:c && npm run docs:convert:cpp",
-    "docs:xml": "npm run docs:xml:qar-streaming-c && npm run docs:xml:qar-streaming",
-    "docs:generate": "npm run download:host-tools && npm run docs:xml && npm run docs:convert"
+    "docs:xml:qar-streaming": "cmake -E chdir ./doxygen/qar-streaming-c doxygen",
+    "docs:xml": "npm run docs:xml:qar-streaming",
+    "docs:convert": "npx doxygen2docusaurus --id qar-streaming-c",
+    "docs:generate": "npm run docs:xml && npm run docs:convert"
   },
   "dependencies": {
     "@docusaurus/core": "^3.9.1",

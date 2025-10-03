@@ -15,22 +15,5 @@
     "listPagesAtTop": false,
     "originalPagesNote": false,
     "suggestToDoDescriptions": false
-  },
-  "qar-streaming": {
-    "doxygenXmlInputFolderPath": "doxygen/qar-streaming/doxygen/xml",
-    "docsFolderPath": "api",
-    "docsBaseUrl": "api",
-    "apiFolderPath": "qar-streaming",
-    "apiBaseUrl": "qar-streaming",
-    "mainPageTitle": "QAR Streaming API",
-    "sidebarCategoryLabel": "QAR Streaming API",
-    "navbarLabel": "QAR Streaming API",
-    "navbarPosition": "left",
-    "imagesFolderPath": "assets/images/doxygen",
-    "renderProgramListing": true,
-    "renderProgramListingInline": true,
-    "listPagesAtTop": true,
-    "originalPagesNote": false,
-    "suggestToDoDescriptions": false
   }
 }

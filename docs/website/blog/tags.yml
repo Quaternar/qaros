@@ -1,4 +1,4 @@
-# facebook:
-#   label: Facebook
-#   permalink: /facebook
-#   description: Facebook tag description
+mixer:
+  label: Mixer
+  permalink: /mixer
+  description: Internal App for mixing multiple source apps into one
