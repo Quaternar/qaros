@@ -38,6 +38,11 @@ jobs:
           cache: npm
           cache-dependency-path: docs/website/package-lock.json
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen cmake
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
