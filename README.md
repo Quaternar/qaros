@@ -1,4 +1,4 @@
-# qaros
+# QarOS
 
 ## Prerequisites
 
