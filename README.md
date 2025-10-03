@@ -5,14 +5,12 @@
 ### Windows
 - CMake 3.29 or newer. Download the installer from https://cmake.org/download/ and make sure it is available from your PATH.
 - Visual Studio Build Tools 2022 with the "Desktop development with C++" workload (MSVC, Windows SDK, and CMake integration). Install from https://visualstudio.microsoft.com/downloads/.
-- [Optional] Doxygen and npm if you want to build a documentation
+- [Optional] npm if you want to build the documentation site
 - [Optional] Clangd, clang-format and clang-tidy if you want to develop in Vscode
 ```
 winget install --id Kitware.CMake ---exact --version "3.31.8"
 winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-winget install --id "DimitriVanHeesch.Doxygen" --exact
 winget install --id OpenJS.NodeJS.LTS ---exact
-winget install --id Yarn.Yarn ---exact
 winget install --id LLVM.LLVM ---exact
 ```
 
