@@ -1,13 +1,12 @@
 import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
-import doxygenQarStreamingCNavbar from "./docusaurus-config-navbar-doxygen-qar-streaming-c.json";
+
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
-
 const config: Config = {
-	title: "Quaternar Docs",
-	tagline: "AR/VR streaming, APIs, and knowledge base",
+	title: "QarOS Docs",
+	tagline: "Don’t Rewrite. Extend.",
 	favicon: "img/favicon.ico",
 
 	// Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -103,7 +102,26 @@ const config: Config = {
 					position: "left",
 					label: "Knowledge Base",
 				},
-				doxygenQarStreamingCNavbar,
+				{
+					type: "dropdown",
+					label: "C API",
+					to: "/api/qar-streaming-c/",
+					position: "left",
+					items: [
+						{
+							label: "C API",
+							to: "/api/qar-streaming-c/groups/qar-c-api/"
+						},
+						{
+							label: "Examples",
+							to: "/api/qar-streaming-c/pages/qar-c-tutorial-dynamic-loading/"
+						},
+						{
+							label: "Files",
+							to: "/api/qar-streaming-c/files/"
+						}
+					]
+				},
 				{
 					href: "https://github.com/quaternar/qaros",
 					label: "GitHub",
