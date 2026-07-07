@@ -78,9 +78,9 @@ const sidebars: SidebarsConfig = {
             label: 'Dynamic Library Loading',
           },
           {
-            id: 'qar-streaming-c/pages/qar-c-tutorial-session-create',
+            id: 'qar-streaming-c/pages/qar-c-tutorial-onboarding',
             type: 'doc',
-            label: 'Init Session',
+            label: 'Onboarding and Rejoin',
           },
           {
             id: 'qar-streaming-c/pages/qar-c-tutorial-gui-panels',

@@ -1,0 +1,16 @@
+CompileFlags:
+  Add: [
+    -std=c11,
+    -I../include,
+    -I.,
+    -DQAR_ENABLE_DYNAMIC_LOADING,
+    -D_CRT_SECURE_NO_WARNINGS
+  ]
+  Remove: [
+    -std=c++17,
+    -Woverloaded-virtual,
+    -Wredundant-move,
+    -Wno-c++98-compat,
+    -Wno-pre-c++20-compat-pedantic,
+    -Wno-c++98-compat-pedantic
+  ]

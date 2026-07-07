@@ -1,0 +1,110 @@
+---
+sidebar_position: 5
+title: Custom GUI Panels
+description: Create shared 2D panels in the 3D room and integrate them with your application's UI.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Custom GUI Panels
+
+GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. Panel content is currently **web content**: the panel renders a URI, which makes any existing web UI immediately usable in the room.
+
+The concepts (identity by common name, top-left-corner pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/user-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
+
+## Creating a panel (idempotent)
+
+Panels are identified by a stable **common name**; `get_or_create` returns the existing panel or creates it — safe to call on every app start:
+
+<Tabs groupId="language">
+<TabItem value="c" label="C">
+
+```c
+QarGuiPanelInit init = qar_gui_panel_init_default();
+init.common_name = "machine-status.myapp.example.com"; /* stable identity */
+init.display_name = "Machine Status";
+
+init.pose = qar_pose_default();
+init.pose.position.y = 1.5f;      /* top-left corner, room space, meters */
+init.pose.position.z = -1.0f;
+
+QarGuiPanelSize size = qar_gui_panel_size_default();
+size.width_meters = 0.8f;
+size.height_meters = 0.5f;
+init.size = size;
+
+QarGuiPanelId panel_id;
+QarResult r = qar_gui_panels_get_or_create(session, &init, &panel_id);
+qar_result_log_if_error(r);
+
+qar_gui_panels_navigate_to_uri(
+    session, &panel_id, "https://myapp.local/status-dashboard");
+```
+
+</TabItem>
+<TabItem value="csharp" label="C#">
+
+```csharp
+// TODO: C# sample pending publication of the qar-streaming-sharp panel
+// bindings in this repository. Flow mirrors the C version:
+// GuiPanels.GetOrCreate(commonName, pose, size) then NavigateToUri(...).
+```
+
+</TabItem>
+</Tabs>
+
+:::tip Choosing common names
+Use a DNS-style, application-scoped name (`<panel>.<app>.<org>`) and keep it constant across versions. The panel's ID is derived deterministically from it — restarting your app reattaches to the same panel instead of spawning duplicates.
+:::
+
+## Manipulating panels
+
+All mutations go through the session and the panel ID:
+
+```c
+qar_gui_panels_update_pose(session, &panel_id, &new_pose);      /* move it   */
+qar_gui_panels_change_size(session, &panel_id, &new_size);      /* resize    */
+qar_gui_panels_set_state(session, &panel_id, QAR_GUI_PANEL_STATE_MINIMIZED);
+qar_gui_panels_navigate_to_uri(session, &panel_id, "https://...");
+qar_gui_panels_close_panel(session, &panel_id);                 /* remove    */
+```
+
+Panel states: `VISIBLE`, `MINIMIZED`, `HIDDEN`, `CLOSED`.
+
+### Per-peer visibility
+
+By default a panel is visible to everyone. Restrict it by editing the visibility set — for example an operator-only control panel:
+
+```c
+const QarPeerId* add[] = { &operator_peer_id };
+qar_gui_panels_update_visible_to(
+    session, &panel_id,
+    add, 1,      /* additions */
+    NULL, 0);    /* removals  */
+```
+
+## Observing panels
+
+Your app can react to panels changing — whether changed by another peer, another app, or a user grabbing the panel in the room:
+
+- `qar_gui_panels_subscribe_updates(session, callback, state)` — all panels,
+- `qar_gui_panels_subscribe_panel_updates(session, &panel_id, callback, state)` — one panel,
+- `qar_query_gui_panels_count` / `qar_query_gui_panels` — enumerate current panels (count-then-fetch),
+- per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_uri`, `_get_visible_to_peers`.
+
+Update callbacks arrive on library threads — see the [callback rules](/docs/developer-guide/api-conventions#4-blocking--async-pairs).
+
+## Integration patterns
+
+**Expose your app's existing web UI.** If your application already serves a web frontend (local status page, embedded HTTP server), a panel is a one-call integration: `get_or_create` + `navigate_to_uri` pointing at your server. Interaction happens directly in the room.
+
+**Drive app state from a panel.** Host a small web page that calls back into your application (REST/WebSocket). The panel is shared, so any user in the room can press the buttons; your app sees the effect and updates its rendered content accordingly.
+
+**Attach a panel to your app volume.** Panels don't parent to volumes automatically, but you can keep one docked: subscribe to your volume's pose updates and reposition the panel relative to it. Remember the differing conventions — panel pose is the **top-left corner**, volume pose is the **center**.
+
+## Compiled tutorial
+
+:::note TODO
+Link the compiled `gui_panel_operations.c` example tutorial page here once it is updated to the onboarding-based session acquisition (its panel sections — create, move, navigate, subscribe — remain representative).
+:::

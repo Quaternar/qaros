@@ -63,6 +63,7 @@
 
 #endif
 
+
 /**
  * @file basic_types.h
  * @brief Public C API data types for qar-streaming-c.
@@ -83,6 +84,17 @@
 #include <stdbool.h>
 #endif
 
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #ifdef QAR_ENABLE_D3D11
 #include <d3d11.h>
 #include <d3d11_1.h>
@@ -100,6 +112,8 @@ extern "C"
 #define QAR_MAX_ID_LENGTH 16
 #define QAR_ID_DEFAULT { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 #define QAR_MAX_STRING_LENGTH 512
+#define QAR_UUID_TEXT_LENGTH 36
+#define QAR_UUID_TEXT_BUFFER_SIZE 37
 #define QAR_MAX_FRAME_VIEWS 8
 #define QAR_MAX_FRAME_TEXTURES 4
 
@@ -115,6 +129,11 @@ typedef struct QarCancelTokenHandle QarCancelToken;
 typedef struct QarRuntimeHandle QarRuntime;
 /// Session instance (opaque)
 typedef struct QarSessionHandle QarSession;
+
+/// Onboarding invite (opaque) — full invite blob for onboarding a sibling
+/// instance (see qar_session_request_onboarding_invite /
+/// qar_runtime_onboard_with_invite).
+typedef struct QarOnboardingInviteHandle QarOnboardingInvite;
 
 /// App volume (opaque)
 typedef struct QarAppVolumeHandle QarAppVolume;
@@ -171,94 +190,38 @@ typedef struct QarStreamId
 // ============================================================================
 
 /**
- * @brief Status codes for API operations (matches qar::StatusCodes in C++ API).
+ * @brief Status codes exposed by the C API.
+ *
+ * The C API intentionally exposes only a subset of the internal status codes.
+ * Any internal error code outside this subset is surfaced to C callers as
+ * `QAR_STATUS_UNCLASSIFIED`.
  */
 typedef enum QarStatusCode
 {
-	// Generic
 	QAR_STATUS_SUCCESS = 0,
 	QAR_STATUS_UNCLASSIFIED = 1,
-	QAR_STATUS_STD_ERROR_CODE = 2,
-	QAR_STATUS_STD_EXCEPTION = 3,
 	QAR_STATUS_NOT_IMPLEMENTED = 4,
 	QAR_STATUS_ARGUMENT_NOT_SUPPORTED = 5,
 	QAR_STATUS_TIMEOUT = 6,
 	QAR_STATUS_LOGIC_ERROR = 7,
-
-	// Message
-	QAR_STATUS_MSG_NOT_CONNECTED = 100,
-	QAR_STATUS_MSG_INTERNAL_ERROR = 101,
-	QAR_STATUS_MSG_KEY_EXPR_INVALID_FORMAT = 102,
-	QAR_STATUS_MSG_UNABLE_TO_SEND = 103,
-	QAR_STATUS_MSG_QUERY_NOT_EXISTENT = 104,
-	QAR_STATUS_MSG_QUERY_UNABLE_TO_REPLY = 105,
-
-	// Session
-	QAR_STATUS_SESS_CANCELLATION_REQUESTED = 200,
-	QAR_STATUS_SESS_CONFIGURATION_ERROR = 201,
-
-	// GUI Panel
-	QAR_STATUS_GUI_PANEL_CANNOT_CREATE = 300,
-	QAR_STATUS_GUI_PANEL_DOES_NOT_EXIST_LOCALLY = 301,
-	QAR_STATUS_GUI_PANEL_CANNOT_CHANGE_STATE = 302,
-	QAR_STATUS_GUI_PANEL_BUILDER_VALIDATION_FAILED = 303,
-	QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED = 304,
 	QAR_STATUS_GUI_PANEL_INVALID_ID = 305,
-
-	// App Volume
-	QAR_STATUS_APP_VOLUME_CANNOT_CREATE = 320,
-	QAR_STATUS_APP_VOLUME_DOES_NOT_EXIST_LOCALLY = 321,
-	QAR_STATUS_APP_VOLUME_CANNOT_CHANGE_STATE = 322,
-	QAR_STATUS_APP_VOLUME_BUILDER_VALIDATION_FAILED = 323,
-	QAR_STATUS_APP_VOLUME_CHANGE_NOT_PERMITTED = 324,
 	QAR_STATUS_APP_VOLUME_INVALID_ID = 325,
-
-	// Channel
-	QAR_STATUS_CHANNEL_IS_CLOSED = 401,
-	QAR_STATUS_CHANNEL_IS_EMPTY = 403,
-	QAR_STATUS_CHANNEL_TAIL_IS_EMPTY = 404,
-
-	// Backend
-	QAR_STATUS_BACKEND_UNABLE_CREATE_D3D11_CONTEXT = 500,
-	QAR_STATUS_BACKEND_UNABLE_LOAD_DEPENDENCIES = 501,
-	QAR_STATUS_BACKEND_FEATURE_NOT_SUPPORTED = 502,
-	QAR_STATUS_BACKEND_UNABLE_TO_CREATE_STREAM = 503,
-	QAR_STATUS_BACKEND_SERIALIZE_DESERIALIZE_FAILED = 504,
-	QAR_STATUS_BACKEND_NO_STREAMING_BACKENDS_SUPPORTED = 505,
-	QAR_STATUS_BACKEND_TRANSFORM_NOT_SUPPORTED = 506,
-	QAR_STATUS_BACKEND_EXHAUSTED_RETRIES_TO_CREATE_STREAM = 507,
-	QAR_STATUS_BACKEND_MEDIA_TRANSFER_ERROR = 508,
-
-	// Media Streaming
-	QAR_STATUS_MEDIA_STREAMING_WRONG_FRAME_LAYOUT = 600,
-	QAR_STATUS_MEDIA_STREAMING_STREAM_IS_CLOSED = 601,
-	QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED = 602,
-
-	// Graphics APIs
-	QAR_STATUS_VULKAN_ERROR = 700,
-	QAR_STATUS_DXGI_ERROR = 701,
-	QAR_STATUS_GPU_FORMAT_MISMATCH = 702,
-	QAR_STATUS_OPENGL_ERROR = 703,
-	QAR_STATUS_EGL_ERROR = 704,
-
-	// Rendering Producer
-	QAR_STATUS_RENDERING_PRODUCER_INTENT_NON_SUPPORTED = 800,
-	QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA = 801,
-	QAR_STATUS_RENDERING_PRODUCER_MISSING_RENDER_REQUEST = 802,
 	QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME = 803,
 	QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED = 804,
-
-	// StereoKit
-	QAR_STATUS_STEREOKIT_ERROR = 900,
-
-	// OpenXR
-	QAR_STATUS_OPENXR_GENERAL_ERROR = 1000, // leave space for around 200 errors
-	QAR_STATUS_OPENXR_SESSION_ENDED = 1001,
-
-	// Texture Mixer
-	QAR_STATUS_TEXTURE_MIXER_GENERAL_ERROR = 1300,
-	QAR_STATUS_TEXTURE_MIXER_INVALID_ID = 1301,
-	QAR_STATUS_TEXTURE_MIXER_INVALID_PARAM = 1302
+	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
+	/// user to re-check the code shown on the hub and retry.
+	QAR_STATUS_PAKE_ERROR = 1600,
+	/// No persisted state for the provided onboarding id — fall back to a full
+	/// onboard (qar_runtime_onboard_with_code / _with_invite).
+	QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND = 1800,
+	/// Generic onboarding failure. Inspect qar_result_message for details.
+	QAR_STATUS_ONBOARDING_FAILED = 1801,
+	/// Discovery could not reach a hub — verify the hub is running (and, when a
+	/// QarOnboardHostExt is chained, the hostname/port) and retry.
+	QAR_STATUS_ONBOARDING_HUB_UNREACHABLE = 1802,
+	/// qar_runtime_forget was called while the slot still has an active
+	/// session — destroy the active session handle first.
+	QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE = 1803
 } QarStatusCode;
 
 /**
@@ -298,6 +261,14 @@ typedef struct QarVector3
 	float y;
 	float z;
 } QarVector3;
+
+/** @brief Double-precision 3D vector. */
+typedef struct QarVector3d
+{
+	double x;
+	double y;
+	double z;
+} QarVector3d;
 
 /** @brief Quaternion for rotations. */
 typedef struct QarQuaternion
@@ -417,11 +388,11 @@ typedef enum QarGraphicsAPI
 
 typedef enum QarPixelFormat
 {
-	QAR_PIXEL_FORMAT_R8 = 0,
 	QAR_PIXEL_FORMAT_R32_FLOAT = 2,
 
 	QAR_PIXEL_FORMAT_R8G8B8A8 = 51,
 	QAR_PIXEL_FORMAT_B8G8R8A8 = 53,
+	QAR_PIXEL_FORMAT_R16G16B16A16 = 55,
 
 	QAR_PIXEL_FORMAT_D32_FLOAT = 101
 } QarPixelFormat;
@@ -454,6 +425,7 @@ typedef struct QarRenderFrameView
 {
 	QarVideoFrameViewType data_type;
 	QarVideoFrameViewEye eye;
+	uint32_t texture_index;
 } QarRenderFrameView;
 
 /** @brief Image size (pixels). */
@@ -475,13 +447,15 @@ typedef struct QarTextureSize
 /**
  * @brief Video sub-stream view into a texture.
  *
- * Defines the rectangular region and texture index/layer for a specific view.
+ * Defines the view rectangle corners in pixels. End values are exclusive and
+ * can be smaller than start values to allow flips.
  */
 typedef struct QarVideoFrameView
 {
 	uint32_t start_x;
 	uint32_t start_y;
-	QarImageSize size;
+	uint32_t end_x;
+	uint32_t end_y;
 	uint32_t texture_index;
 	uint32_t array_layer_index;
 	QarPixelFormat texture_format;
@@ -573,6 +547,46 @@ typedef enum QarGuiPanelState
 } QarGuiPanelState;
 
 // ============================================================================
+// GEO / WORLD COORDINATE TYPES
+// ============================================================================
+
+/** @brief World reference systems for geographic positioning. */
+typedef enum QarWorldReferenceSystem
+{
+	QAR_WORLD_REF_SYSTEM_ECEF_WGS84_METERS =
+		0 // Earth-Centered, Earth-Fixed WGS84 in meters
+} QarWorldReferenceSystem;
+
+/** @brief Coordinate system handedness. */
+typedef enum QarHandedness
+{
+	QAR_HANDEDNESS_RIGHT = 0,
+	QAR_HANDEDNESS_LEFT = 1
+} QarHandedness;
+
+/**
+ * @brief Fully defined anchor frame in world coordinates.
+ *
+ * Specifies origin and local axes in a world reference system (e.g., ECEF
+ * WGS84).
+ */
+typedef struct QarGeoAnchorFrame
+{
+	QarWorldReferenceSystem world_ref_system;
+	QarVector3d origin_world; // Origin in world reference system
+	QarVector3d axis_x_world; // Local +X axis (unit vector)
+	QarVector3d axis_y_world; // Local +Y axis (unit vector)
+	QarVector3d axis_z_world; // Local +Z axis (unit vector)
+	QarHandedness handedness;
+} QarGeoAnchorFrame;
+
+typedef struct QarAppWorldAnchor
+{
+	bool has_anchor;		  // True if anchor is set
+	QarGeoAnchorFrame anchor; // World anchor frame (valid if has_anchor)
+} QarAppWorldAnchor;
+
+// ============================================================================
 // APP VOLUME TYPES
 // ============================================================================
 
@@ -595,26 +609,158 @@ typedef struct QarAppVolumeEditingStatus
 	QarPeerId editor_peer;
 } QarAppVolumeEditingStatus;
 
+typedef enum QarGestureKind
+{
+	/* Short tap/click gesture emitted as an instant event. */
+	QAR_GESTURE_CLICK = 0,
+	/* Single-pointer hover over a targetable surface or volume. */
+	QAR_GESTURE_HOVER = 1,
+	/* Single-pointer 6DoF manipulation gesture.
+	   translation_delta is the accumulated hand-position offset in world space.
+	   rotation_delta is the accumulated hand-orientation offset in world space.
+	 */
+	QAR_GESTURE_SINGLE_POINTER_6DOF = 2,
+	/* Dual-pointer distance-change gesture in the user's head-local frame.
+	   translation_delta stores the accumulated per-axis change of absolute
+	   inter-hand distance: x = left/right spread, y = up/down spread, z =
+	   forward/back spread. */
+	QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE = 3,
+	/* Dual-pointer rotation gesture based on rotation of the inter-hand vector
+	   in head-local space. rotation_delta is expressed in user/head-local axes,
+	   so yaw/pitch/roll extraction matches the user's local y/x/z axes
+	   respectively. */
+	QAR_GESTURE_DUAL_POINTER_ROTATE = 4
+} QarGestureKind;
+
+typedef enum QarGesturePhase
+{
+	/* Matches qar::GesturePhase::Started. Gesture lifecycle entered the active
+	 * state. */
+	QAR_GESTURE_PHASE_STARTED = 0,
+	/* Matches qar::GesturePhase::Updated. Gesture lifecycle produced an update
+	 * while active. */
+	QAR_GESTURE_PHASE_UPDATED = 1,
+	/* Matches qar::GesturePhase::Ended. Gesture lifecycle ended normally. */
+	QAR_GESTURE_PHASE_ENDED = 2,
+	/* Matches qar::GesturePhase::Instant. Gesture completed as a single event.
+	 */
+	QAR_GESTURE_PHASE_INSTANT = 3,
+	/* Matches qar::GesturePhase::Canceled. Gesture lifecycle was canceled. */
+	QAR_GESTURE_PHASE_CANCELED = 4
+} QarGesturePhase;
+
+typedef enum QarAppVolumeAxisFlags
+{
+	QAR_APP_VOLUME_AXIS_NONE = 0,
+	QAR_APP_VOLUME_AXIS_X = 1 << 0,
+	QAR_APP_VOLUME_AXIS_Y = 1 << 1,
+	QAR_APP_VOLUME_AXIS_Z = 1 << 2,
+	QAR_APP_VOLUME_AXIS_ALL = (1 << 3) - 1
+} QarAppVolumeAxisFlags;
+
+typedef enum QarAppScaleSensitivityMode
+{
+	/// Gesture output ignores app_scale. With precision = 1.0, 1 cm hand
+	/// movement produces a 1 cm mapped gesture delta at every app_scale.
+	QAR_APP_SCALE_SENSITIVITY_CONSTANT = 0,
+	/// Gesture output is divided by app_scale. With precision = 1.0 and
+	/// app_scale = 4.0, 1 cm hand movement produces a 0.25 cm mapped gesture
+	/// delta. Since larger app_scale means the app renders bigger, this makes
+	/// gestures slower as the rendered app gets bigger.
+	QAR_APP_SCALE_SENSITIVITY_INVERSE_TO_APP_SCALE = 1,
+	/// Gesture output is multiplied by app_scale. With precision = 1.0 and
+	/// app_scale = 4.0, 1 cm hand movement produces a 4 cm mapped gesture
+	/// delta. Since larger app_scale means the app renders bigger, this makes
+	/// gestures faster as the rendered app gets bigger.
+	QAR_APP_SCALE_SENSITIVITY_BASED_ON_APP_SCALE = 2
+} QarAppScaleSensitivityMode;
+
+typedef enum QarGestureAppTransformMapping
+{
+	QAR_GESTURE_APP_TRANSFORM_MAPPING_NONE = 0,
+	QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_POSE = 1,
+	QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_SCALE = 2
+} QarGestureAppTransformMapping;
+
+typedef enum QarAppVolumeControllerRayLineStyle
+{
+	QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_NONE = 0,
+	QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_SOLID = 1,
+	QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_DOTTED = 2
+} QarAppVolumeControllerRayLineStyle;
+
+typedef struct QarColor
+{
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+	uint8_t a;
+} QarColor;
+
+typedef struct QarAppVolumeControllerRayStyle
+{
+	QarAppVolumeControllerRayLineStyle line_style;
+	QarColor color;
+} QarAppVolumeControllerRayStyle;
+
+typedef struct QarAppVolumeGestureEvent
+{
+	QarPeerId source_peer_id;
+	QarAppVolumeId target_app_volume_id;
+	QarGestureKind gesture_kind;
+	QarGesturePhase state;
+	QarTimePoint timestamp;
+	bool has_start_point;
+	/// Point in room/app-volume space, in meters, where the controller was
+	/// when the gesture started.
+	QarVector3 start_point;
+	bool has_action_point;
+	/// Point in room/app-volume space, in meters, on which the gesture is
+	/// applied. When `has_action_point` is false, receivers should fall back to
+	/// a context-specific default such as the center of the target app volume.
+	QarVector3 action_point;
+	/// Accumulated translation from gesture start, in meters. Dual-pointer
+	/// axial gestures may still report a full 3D separation delta, which can
+	/// later be filtered by app-volume axis constraints.
+	QarVector3 translation_delta;
+	/// Accumulated rotation delta from gesture start, as a quaternion.
+	QarQuaternion rotation_delta;
+	bool was_mapped_to_app_transform;
+} QarAppVolumeGestureEvent;
+
 // ============================================================================
 // INIT STRUCTURES
 // ============================================================================
 
-/** @brief Structure type enumeration for init structures and extensions. */
+/** @brief Structure type enumeration for init structures and extensions.
+ *
+ * Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
+ * 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
+ * 0x2002 (PEER_SPEC_INIT).
+ */
 typedef enum QarStructureType
 {
 	QAR_STRUCTURE_TYPE_UNKNOWN = 0,
 	QAR_STRUCTURE_TYPE_LIBRARY_INIT = 0x0001,
 	QAR_STRUCTURE_TYPE_RUNTIME_INIT = 0x1000,
-	QAR_STRUCTURE_TYPE_SESSION_CREATE_INIT = 0x2000,
-	QAR_STRUCTURE_TYPE_SESSION_JOIN_INIT = 0x2001,
-	QAR_STRUCTURE_TYPE_PEER_SPEC_INIT = 0x2002,
+	QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT = 0x1002,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT = 0x1003,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT = 0x1004,
+	QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT = 0x1005,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT = 0x1006,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_PEER_INIT = 0x2003,
+	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
+	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
+	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
+	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME_VIEW_OVERRIDES_EXT = 0x3004,
 	QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT = 0x4000,
 	QAR_STRUCTURE_TYPE_GUI_PANEL_INIT = 0x5001,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_INIT = 0x5501,
+	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_MAPPING_RULE = 0x5502,
+	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION = 0x5503,
 } QarStructureType;
 
 // All data structures have consistent header
@@ -624,12 +770,76 @@ typedef struct QarStructureHeader
 	void* next; // Extension chain - can be NULL
 } QarStructureHeader;
 
+typedef struct QarAppVolumeGestureMappingRule
+{
+	/// Extensible struct header. Set with
+	/// qar_app_volume_gesture_mapping_rule_default().
+	QarStructureHeader header;
+	QarGestureKind gesture_kind;
+	bool enabled;
+	/// Rule priority is determined by
+	/// QarAppVolumeGestureConfiguration::mapping_rules order. Earlier rules
+	/// have higher priority than later rules. When multiple gestures are
+	/// detected at the same time for the same app volume and source peer, an
+	/// active gesture matching an earlier rule suppresses gestures that only
+	/// match later rules. Gesture precision denominator in the target
+	/// app-volume world. With constant sensitivity, 1.0 maps 1 cm of hand
+	/// movement to 1 cm of app movement, 2.0 maps 1 cm to 0.5 cm, and 0.5 maps
+	/// 1 cm to 2 cm. Scale sensitivity multiplies this result after precision
+	/// is applied.
+	/// Example: precision = 2.0 and based-on-app-scale with app_scale = 4.0
+	/// maps 1 cm hand movement to 2 cm of gesture delta. As app_scale
+	/// increases, the rendered app gets bigger and this mode makes gesture
+	/// response faster.
+	float precision;
+	QarAppScaleSensitivityMode app_scale_sensitivity_mode;
+	/// Bitmask composed from QarAppVolumeAxisFlags values, for example
+	/// QAR_APP_VOLUME_AXIS_X | QAR_APP_VOLUME_AXIS_Y.
+	uint32_t translation_axes;
+	/// Bitmask composed from QarAppVolumeAxisFlags values, for example
+	/// QAR_APP_VOLUME_AXIS_Z or QAR_APP_VOLUME_AXIS_ALL.
+	uint32_t rotation_axes;
+	bool enable_gestures_from_outside_of_volume;
+	QarAppVolumeControllerRayStyle controller_ray_style;
+	QarGestureAppTransformMapping app_transform_mapping;
+} QarAppVolumeGestureMappingRule;
+
+#define QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES 16
+
+typedef struct QarAppVolumeGestureConfiguration
+{
+	/// Extensible struct header. Set with
+	/// qar_app_volume_gesture_configuration_default().
+	QarStructureHeader header;
+	/// Gesture mapping rules in descending priority order. Element 0 has the
+	/// highest priority. If multiple gesture kinds are active simultaneously
+	/// for the same app volume and source peer, the runtime applies only the
+	/// highest- priority active rule and ignores lower-priority rules until the
+	/// higher- priority gesture ends, is canceled, or otherwise becomes
+	/// inactive.
+	QarAppVolumeGestureMappingRule
+		mapping_rules[QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES];
+	size_t mapping_rule_count;
+} QarAppVolumeGestureConfiguration;
+
+/** @brief Logging severity filter. */
+typedef enum QarLogSeverity
+{
+	QAR_LOG_SEVERITY_TRACE = 0,
+	QAR_LOG_SEVERITY_DEBUG = 1,
+	QAR_LOG_SEVERITY_INFO = 2,
+	QAR_LOG_SEVERITY_WARN = 3,
+	QAR_LOG_SEVERITY_ERROR = 4,
+	QAR_LOG_SEVERITY_FATAL = 5
+} QarLogSeverity;
+
 /** @brief Library initialization parameters. */
 typedef struct QarLibraryInit
 {
 	QarStructureHeader header;
 	bool enable_console_logging;
 	const char* log_folder_path;
+	QarLogSeverity log_severity;
 } QarLibraryInit;
 
 /** @brief Runtime initialization parameters. */
@@ -637,37 +847,202 @@ typedef struct QarRuntimeInit
 {
 	QarStructureHeader header;
 	const char* runtime_binaries_folder_path;
+	/// Root directory where device certificates and session state are stored.
+	/// If NULL or empty, defaults to platform specific application data folder.
+	/// For example, on Windows this defaults to
+	/// `%LOCALAPPDATA%\Quaternar\QarOS`.
+	const char* storage_folder_path;
 } QarRuntimeInit;
 
-typedef struct QarSessionInvite
-{
-	QarSessionId session_id;
-	uint8_t* data;
-	size_t data_size;
-} QarSessionInvite;
+// ============================================================================
+// ONBOARDING TYPES
+// ============================================================================
 
-typedef struct QarPeerSpecInit
+/**
+ * @brief Identity slot key, generated by the runtime on first onboard.
+ *
+ * Same shape as QarPeerId / QarSessionId (16-byte UUID). Delivered by the
+ * onboarding functions themselves (out-parameter on the blocking calls, result
+ * callback on the async calls). Persist it as text with qar_uuid_to_string /
+ * qar_uuid_from_string and hand it back to qar_runtime_rejoin /
+ * qar_runtime_forget. A zero id means "no id".
+ */
+typedef struct QarOnboardingId
 {
-	QarStructureHeader header;
-	QarPeerId* id;			  // Optional, can be NULL
-	const char* display_name; // Optional, can be NULL. Will get generated name
-	const char* app_version;  // Optional, can be NULL
-	const char* app_custom_peer_info; // Optional, can be NULL
-} QarPeerSpecInit;
+	uint8_t data[QAR_MAX_ID_LENGTH];
+} QarOnboardingId;
 
-typedef struct QarSessionCreateInit
+/** @brief Mirrors qar::ActionSeverity for progress callbacks. */
+typedef enum QarActionSeverity
 {
-	QarStructureHeader header;
-	QarSessionId* session_id; // Optional session ID
-} QarSessionCreateInit;
+	QAR_ACTION_SEVERITY_INFO = 0,
+	QAR_ACTION_SEVERITY_WARNING = 1,
+	QAR_ACTION_SEVERITY_ERROR = 2,
+	QAR_ACTION_SEVERITY_DONE = 3
+} QarActionSeverity;
 
-typedef struct QarSessionJoinInit
+/**
+ * @brief Shared progress callback (mirrors qar::ActionProgress).
+ *
+ * `message` is valid only for the duration of the callback. Progress
+ * callbacks never fire after the paired result callback fired or the
+ * blocking call returned.
+ */
+typedef void (*qar_progress_callback_t)(
+	QarActionSeverity severity,
+	float percent,
+	const char* message,
+	void* user_state
+);
+
+/**
+ * @brief Which onboarding path a QarOnboardingInvite carries.
+ *
+ * Enum (not bools) so a future method extends the enum instead of breaking
+ * if-not-pake-then-password assumptions.
+ */
+typedef enum QarOnboardingMethod
 {
-	QarStructureHeader header;
-	const uint8_t* invite_data;
-	size_t invite_data_size;
-	QarPeerSpecInit peer_spec_init;
-} QarSessionJoinInit;
+	QAR_ONBOARDING_METHOD_PAKE = 0,	   /**< code-based EC-JPAKE */
+	QAR_ONBOARDING_METHOD_PASSWORD = 1 /**< shared-password channel */
+} QarOnboardingMethod;
+
+/**
+ * @brief Presentation metadata advertised to other peers.
+ *
+ * Header'd so it can grow fields or chain extensions through its own header
+ * without touching the embedding onboarding structs. Never a storage key.
+ * NULL fields mean "keep persisted value, or generate a default on first
+ * onboard". `display_name` also feeds the sanitized debug label embedded in
+ * the certificate CN and storage-slot directory.
+ */
+typedef struct QarPeerPresentation
+{
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_PEER_PRESENTATION */
+	const char* display_name;  /**< optional; human label advertised to peers */
+	const char* app_version;   /**< optional; advertised app version */
+	const char* app_custom_peer_info; /**< optional; app-defined peer metadata
+									   */
+} QarPeerPresentation;
+
+/**
+ * @brief Continue / rejoin the last persisted session (situation: continue).
+ */
+typedef struct QarRejoinInit
+{
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT */
+	/// Required; returned by a previous onboard. Zero id is rejected.
+	QarOnboardingId onboarding_id;
+	QarPeerPresentation presentation; /**< NULL fields keep persisted values */
+} QarRejoinInit;
+
+/**
+ * @brief First connect with a typed code (situation: first connect).
+ *
+ * Always targets the local hub on this PC (loopback + standard discovery
+ * port); to reach a remote hub, chain a QarOnboardHostExt through
+ * header.next.
+ */
+typedef struct QarOnboardWithCodeInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT */
+	/// Zero -> new identity; previously returned id -> re-enroll that slot.
+	QarOnboardingId onboarding_id;
+	/// display_name also feeds the sanitized debug label in cert CN and the
+	/// storage-slot directory.
+	QarPeerPresentation presentation;
+	/// Required; short code shown on the hub onboarding screen. Copied before
+	/// the call returns.
+	const char* code;
+} QarOnboardWithCodeInit;
+
+/**
+ * @brief Extension: override the hub discovery endpoint for
+ * qar_runtime_onboard_with_code.
+ *
+ * Chain into QarOnboardWithCodeInit.header.next; absent -> local hub.
+ */
+typedef struct QarOnboardHostExt
+{
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT
+								*/
+	const char* hostname; /**< required; plain host or IP, no URL formats */
+	uint16_t port;		  /**< 0 -> standard discovery port */
+} QarOnboardHostExt;
+
+/**
+ * @brief Onboard from a full invite blob (situations: sibling app / second
+ * API instance).
+ */
+typedef struct QarOnboardWithInviteInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT */
+	/// Zero -> new identity; previously returned id -> re-enroll that slot.
+	QarOnboardingId onboarding_id;
+	QarPeerPresentation presentation;
+	/// Borrowed for the duration of the call; caller keeps ownership and
+	/// releases it with qar_onboarding_invite_handle_destroy.
+	const QarOnboardingInvite* invite;
+} QarOnboardWithInviteInit;
+
+/**
+ * @brief Mint an invite to hand to a sibling instance (session-scoped).
+ *
+ * Deliberately empty: the invite is always requested from the hub this
+ * session onboarded through, and nothing else is configurable today. The
+ * header keeps it an ABI-safe growth point (new fields or header.next).
+ */
+typedef struct QarRequestInviteInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT */
+} QarRequestInviteInit;
+
+/** @brief Teardown — erase a persisted identity slot. */
+typedef struct QarForgetInit
+{
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT */
+	/// Required; the persisted id. Zero id is rejected.
+	QarOnboardingId onboarding_id;
+} QarForgetInit;
+
+/**
+ * @brief Result callback for the runtime onboarding / rejoin async calls.
+ *
+ * Fires exactly once — on success, on error, and on cancellation. After it
+ * returns, no further callbacks reference `user_state`.
+ *
+ * @param status Success or error code.
+ * @param out_onboarding_id On onboard: the generated (or re-enrolled) id —
+ *   persist it. On rejoin: echoes the input id. Valid only during the
+ *   callback and only when status is success.
+ * @param out_session Valid and owned by the app only on success. Release
+ *   with qar_session_handle_destroy.
+ * @param user_state User pointer passed unchanged.
+ */
+typedef void (*qar_runtime_onboard_result_callback_t)(
+	QarResult status,
+	const QarOnboardingId* out_onboarding_id,
+	QarSession* out_session,
+	void* user_state
+);
+
+/**
+ * @brief Result callback for qar_session_request_onboarding_invite_async.
+ *
+ * Fires exactly once. `out_invite` is valid and owned by the app only on
+ * success (release with qar_onboarding_invite_handle_destroy).
+ */
+typedef void (*qar_session_request_invite_result_callback_t)(
+	QarResult status, QarOnboardingInvite* out_invite, void* user_state
+);
+
+/** Callback invoked when peer invitation completes. Fires exactly once. */
+typedef void (*qar_session_invite_peer_result_callback_t)(
+	QarResult status, const QarPeerId* out_peer_id, void* user_state
+);
 
 typedef struct QarSessionInvitePeerInit
 {
@@ -675,9 +1050,35 @@ typedef struct QarSessionInvitePeerInit
 	const char* connection_string;
 } QarSessionInvitePeerInit;
 
+typedef enum QarGpuDeviceIdType
+{
+	QAR_GPU_DEVICE_ID_TYPE_LUID = 0,
+	QAR_GPU_DEVICE_ID_TYPE_UUID = 1
+} QarGpuDeviceIdType;
+
+#ifdef _WIN32
+typedef LUID QarLuid;
+#else
+typedef struct QarLuid
+{
+	uint8_t data[8];
+} QarLuid;
+#endif
+
+typedef struct QarGraphicsDeviceId
+{
+	QarStructureHeader header;
+	QarGpuDeviceIdType id_type;
+	QarLuid luid;
+	uint8_t uuid[16];
+} QarGraphicsDeviceId;
+
 typedef struct QarGuiPanelInit
 {
 	QarStructureHeader header;
+	/// Required stable identity key used by gui_panels_get_or_create()
+	/// to derive the panel's id. Must not be NULL.
+	const char* common_name;
 	const char* display_name;
 	QarPose pose;
 	QarGuiPanelSize size;
@@ -691,11 +1092,26 @@ typedef struct QarGuiPanelInit
 typedef struct QarAppVolumeInit
 {
 	QarStructureHeader header;
+	/// Required stable identity key used by
+	/// app_volumes_get_or_create() to derive the volume's id. Must not
+	/// be NULL.
+	const char* common_name;
 	const char* display_name;
 	QarPose pose;
 	QarAppVolumeSize size;
 	const QarPeerId** initial_peers;
 	size_t initial_peer_count;
+	QarPose app_pose;
+	/// Room-space-per-app-space scale. 1.0 means 1 m in app coordinates renders
+	/// as 1 m in the app volume. 0.5 means 1 m in app coordinates renders as
+	/// 0.5 m in the app volume, so the app appears smaller. 10.0 means 1 m in
+	/// app coordinates renders as 10 m in the app volume, so the app appears
+	/// bigger. App pose remains in app-volume meters and is not scaled.
+	float app_scale;
+	bool has_app_world_anchor;
+	QarGeoAnchorFrame app_world_anchor;
+	/// Optional gesture configuration
+	const QarAppVolumeGestureConfiguration* gesture_configuration;
 } QarAppVolumeInit;
 
 typedef struct QarRenderSenderInit
@@ -718,7 +1134,7 @@ typedef struct QarRenderSenderInit
 
 	/// Optional app volume ID where this stream will be displayed in the 3D
 	/// scene
-	QarAppVolumeId* app_volume_id;
+	const QarAppVolumeId* app_volume_id;
 
 	/// Color pixel format
 	QarPixelFormat color_format;
@@ -744,18 +1160,43 @@ typedef struct QarStreamParamsD3D11
 } QarStreamParamsD3D11;
 #endif
 
-/** @brief Parameters describing how to present/show a rendered frame. */
+/**
+ * @brief Parameters describing how to present/show a rendered frame.
+ *
+ * Optional extensions (via header.next chain):
+ * - QarRenderFrameShowViewOverridesExt
+ */
 typedef struct QarRenderFrameShow
 {
 	QarStructureHeader header;
 	QarNearFar rendered_near_far;
+	float depth_scale;
 } QarRenderFrameShow;
+
+/** @brief Per-view pose/FOV override entry. */
+typedef struct QarRenderFrameViewOverride
+{
+	size_t view_index;
+	bool override_pose;
+	bool override_fov;
+	QarPose pose;
+	QarFov fov;
+} QarRenderFrameViewOverride;
+
+/** @brief Extension: override per-view pose/FOV for this frame. */
+typedef struct QarRenderFrameShowViewOverridesExt
+{
+	QarStructureHeader header;
+	QarRenderFrameViewOverride view_overrides[QAR_MAX_FRAME_VIEWS];
+	size_t view_overrides_count;
+} QarRenderFrameShowViewOverridesExt;
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif // QAR_TYPES_H
+
 
 /**
  * @defgroup qar_c_api QAR Streaming C API
@@ -868,10 +1309,10 @@ static inline void qar_result_log_if_error(QarResult result);
  * @{ */
 // Forward declarations
 /** @brief Create a new cancellation token (non-signaled). */
-static inline QarResult qar_cancel_token_create(QarCancelToken** token);
+static inline QarResult qar_cancel_token_create(QarCancelToken** out_token);
 /** @brief Create a token that auto-cancels after timeout_ms. */
 static inline QarResult qar_cancel_token_create_with_timeout(
-	QarCancelToken** token, uint32_t timeout_ms
+	QarCancelToken** out_token, uint32_t timeout_ms
 );
 /** @brief Destroy a token handle without canceling. */
 static inline void qar_cancel_token_handle_destroy(QarCancelToken* handle);
@@ -903,26 +1344,275 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
  * @brief Create a runtime instance that can host sessions and streams.
  *
  * @param init Runtime initialization parameters.
- * @param runtime Out pointer receiving the created runtime handle.
+ * @param out_runtime Out pointer receiving the created runtime handle.
  * @return QarResult Success or error code.
  */
 static inline QarResult
-qar_runtime_create(const QarRuntimeInit* init, QarRuntime** runtime);
-
-/**
- * @brief Create a new session invitation on a runtime (host side).
- *
- * The resulting invite can be serialized and sent to peers who will join.
- */
-static inline QarResult qar_runtime_create_session(
-	const QarRuntime* runtime,
-	const QarSessionCreateInit* init,
-	QarSessionInvite** session
-);
+qar_runtime_create(const QarRuntimeInit* init, QarRuntime** out_runtime);
 
 static inline void qar_runtime_destroy(QarRuntime* runtime);
 
 /** @} */ /* end of qar_c_runtime */
+
+// ============================================================================
+// ONBOARDING
+// ============================================================================
+
+/**
+ * @defgroup qar_c_onboarding Onboarding
+ * @ingroup qar_c_api
+ *
+ * Every session is obtained through onboarding. The canonical app startup is:
+ * try qar_runtime_rejoin with the persisted QarOnboardingId; when that fails,
+ * show the onboarding GUI and run qar_runtime_onboard_with_code. Persist the
+ * id the onboard call returns — it is the ticket for every later rejoin /
+ * forget. Destroy the session handle to tear the session down while keeping
+ * persisted state; use qar_runtime_forget for a full reset.
+ * @{ */
+
+/** @brief Zero/invalid onboarding id ("no id"). */
+static inline QarOnboardingId qar_onboarding_id_default(void);
+/** @brief Compare two onboarding ids for equality. */
+static inline bool qar_onboarding_id_equals(
+	const QarOnboardingId* id1, const QarOnboardingId* id2
+);
+/** @brief True if the id is the zero/default id. */
+static inline bool qar_onboarding_id_is_zero(const QarOnboardingId* id);
+
+/** @brief Default init for QarPeerPresentation (stamps type; NULL fields). */
+static inline QarPeerPresentation qar_peer_presentation_default(void);
+/** @brief Default init for QarRejoinInit. */
+static inline QarRejoinInit qar_rejoin_init_default(void);
+/** @brief Default init for QarOnboardWithCodeInit. */
+static inline QarOnboardWithCodeInit qar_onboard_with_code_init_default(void);
+/** @brief Default init for QarOnboardHostExt. */
+static inline QarOnboardHostExt qar_onboard_host_ext_default(void);
+/** @brief Default init for QarOnboardWithInviteInit. */
+static inline QarOnboardWithInviteInit
+qar_onboard_with_invite_init_default(void);
+/** @brief Default init for QarRequestInviteInit. */
+static inline QarRequestInviteInit qar_request_invite_init_default(void);
+/** @brief Default init for QarForgetInit. */
+static inline QarForgetInit qar_forget_init_default(void);
+
+/**
+ * @brief Restore and validate the last persisted session for
+ * init->onboarding_id. Pops no UI.
+ *
+ * Blocks until the restore validated or failed. Progress callbacks fire from
+ * an internal thread while the caller is blocked; the last progress callback
+ * returns before the call does.
+ *
+ * @param runtime Runtime the identity slot belongs to.
+ * @param init Rejoin parameters (fully copied before the call returns).
+ * @param on_progress Optional progress callback (can be NULL).
+ * @param progress_state User pointer passed to on_progress unchanged.
+ * @param cancel Optional cancellation token (can be NULL). Must stay alive
+ *   until the call returned.
+ * @param out_session Receives the restored session handle on success.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero.
+ * @retval QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND no persisted slot for the
+ *   id — fall back to qar_runtime_onboard_with_code.
+ */
+static inline QarResult qar_runtime_rejoin(
+	QarRuntime* runtime,
+	const QarRejoinInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarSession** out_session
+);
+
+/**
+ * @brief Async variant of qar_runtime_rejoin.
+ *
+ * Returns immediately after starting the restore; result_callback fires
+ * exactly once on a background thread (also on cancellation).
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero (the
+ *   callback does not fire in this case).
+ */
+static inline QarResult qar_runtime_rejoin_async(
+	QarRuntime* runtime,
+	const QarRejoinInit* init,
+	qar_runtime_onboard_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Onboard using the short code the hub shows on its onboarding
+ * screen.
+ *
+ * Targets the local hub on this PC (loopback + standard discovery port);
+ * chain a QarOnboardHostExt through init->header.next to reach a remote hub.
+ * Internally fetches the hub's discovery announcement, combines it with the
+ * code into a full onboarding invite, then runs the secure onboarding
+ * handshake.
+ *
+ * @param out_onboarding_id Required; receives the generated (or re-enrolled)
+ *   id. Persist it — it is the ticket for every later rejoin / forget.
+ * @param out_session Receives the onboarded session handle on success.
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
+ *   hub — verify host/port and retry.
+ * @retval QAR_STATUS_PAKE_ERROR the code handshake was rejected or timed
+ *   out — re-prompt the user for the code.
+ */
+static inline QarResult qar_runtime_onboard_with_code(
+	QarRuntime* runtime,
+	const QarOnboardWithCodeInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarOnboardingId* out_onboarding_id,
+	QarSession** out_session
+);
+
+/** @brief Async variant of qar_runtime_onboard_with_code. The result
+ * callback delivers the generated onboarding id — persist it. */
+static inline QarResult qar_runtime_onboard_with_code_async(
+	QarRuntime* runtime,
+	const QarOnboardWithCodeInit* init,
+	qar_runtime_onboard_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Onboard from a complete invite (init->invite) received from a
+ * sibling instance.
+ *
+ * The method (PAKE or password) is auto-detected from the invite. No
+ * discovery, no GUI.
+ *
+ * @param out_onboarding_id Required; receives the generated (or re-enrolled)
+ *   id. Persist it.
+ * @retval QAR_STATUS_PAKE_ERROR the invite handshake was rejected or the
+ *   invite expired — mint a fresh invite on the sibling and retry.
+ */
+static inline QarResult qar_runtime_onboard_with_invite(
+	QarRuntime* runtime,
+	const QarOnboardWithInviteInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarOnboardingId* out_onboarding_id,
+	QarSession** out_session
+);
+
+/** @brief Async variant of qar_runtime_onboard_with_invite. */
+static inline QarResult qar_runtime_onboard_with_invite_async(
+	QarRuntime* runtime,
+	const QarOnboardWithInviteInit* init,
+	qar_runtime_onboard_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Ask the hub this session onboarded through for a fresh onboarding
+ * invite to hand to another instance.
+ *
+ * The hub peer is resolved internally from the session — nothing to
+ * configure. Serialize the delivered invite with
+ * qar_onboarding_invite_serialize and send the bytes to the sibling over
+ * IPC / shared memory / a pipe.
+ *
+ * @param out_invite Receives the minted invite handle; owned by the caller
+ *   (release with qar_onboarding_invite_handle_destroy).
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the hub peer could not be
+ *   resolved from this session (e.g. the hub is not connected right now).
+ */
+static inline QarResult qar_session_request_onboarding_invite(
+	QarSession* session,
+	const QarRequestInviteInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarOnboardingInvite** out_invite
+);
+
+/** @brief Async variant of qar_session_request_onboarding_invite. */
+static inline QarResult qar_session_request_onboarding_invite_async(
+	QarSession* session,
+	const QarRequestInviteInit* init,
+	qar_session_request_invite_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Erase everything stored for this identity slot (certificate,
+ * persisted instance id, session state).
+ *
+ * Works with no active session — e.g. a settings screen "forget this hub"
+ * while disconnected. After forget the only way back in is a full onboard.
+ *
+ * @retval QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE the slot still has an
+ *   active session — destroy the active session handle first.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero.
+ * @retval QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND no persisted slot for the
+ *   id.
+ */
+static inline QarResult
+qar_runtime_forget(QarRuntime* runtime, const QarForgetInit* init);
+
+// ---------------------------------------------------------------------------
+// Onboarding invite handle
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Parse an invite from wire bytes (IPC message, QR payload, config
+ * field).
+ * @retval QAR_STATUS_PAKE_ERROR the wire bytes are not a valid invite.
+ */
+static inline QarResult qar_onboarding_invite_deserialize(
+	const uint8_t* wire_data,
+	size_t wire_data_size,
+	QarOnboardingInvite** out_invite
+);
+
+/** @brief Sizing getter — the API's count-then-fetch convention. */
+static inline QarResult qar_onboarding_invite_serialized_size(
+	const QarOnboardingInvite* invite, size_t* out_size
+);
+
+/**
+ * @brief Serialize the invite to wire bytes so the blob can be handed to a
+ * sibling instance.
+ *
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small —
+ *   *out_bytes_written is still set to the required size; resize and retry.
+ */
+static inline QarResult qar_onboarding_invite_serialize(
+	const QarOnboardingInvite* invite,
+	uint8_t* out_buffer,
+	size_t buffer_size,
+	size_t* out_bytes_written
+);
+
+/** @brief Which onboarding path the invite carries. */
+static inline QarResult qar_onboarding_invite_get_method(
+	const QarOnboardingInvite* invite, QarOnboardingMethod* out_method
+);
+
+/** @brief Expiry (unix seconds) so GUIs can warn before handing out a stale
+ * blob. */
+static inline QarResult qar_onboarding_invite_get_expires_unix(
+	const QarOnboardingInvite* invite, int64_t* out_expires_unix
+);
+
+/** @brief Check if an onboarding invite handle is valid. */
+static inline bool
+qar_onboarding_invite_handle_is_valid(const QarOnboardingInvite* invite);
+/** @brief Destroy an onboarding invite handle. */
+static inline void
+qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
+
+/** @} */ /* end of qar_c_onboarding */
 
 // ============================================================================
 // SESSION MANAGEMENT
@@ -933,42 +1623,37 @@ static inline void qar_runtime_destroy(QarRuntime* runtime);
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Destroy a session opaque handle without leaving the session. */
-static inline void qar_session_handle_destroy(QarSession* handle);
-
 /**
- * @brief Join a session using an invite blob (peer side).
- * @param init Join parameters; includes invite data and peer identity.
- * @param session Out pointer to active session handle.
+ * @brief Destroy a session opaque handle.
+ *
+ * Tears down the active session while keeping persisted state, so a later
+ * qar_runtime_rejoin can restore it without onboarding.
  */
-static inline QarResult
-qar_session_join(const QarSessionJoinInit* init, QarSession** session);
+static inline void qar_session_handle_destroy(QarSession* handle);
 
 /** @brief Get the current session id. */
 static inline QarResult
-qar_session_get_id(const QarSession* session, QarSessionId* session_id);
-/** @brief Size in bytes needed to serialize the invite for this session. */
-static inline size_t
-qar_session_get_invite_data_size(const QarSession* session);
-/** @brief Serialize invite into user-provided buffer. */
-static inline QarResult qar_session_get_invite_data(
-	const QarSession* session, uint8_t* buffer, size_t buffer_size
-);
-/** @brief Leave and destroy a session. */
-static inline void qar_session_destroy(QarSession* session);
-
-/** Callback invoked when peer invitation completes. */
-typedef void (*qar_session_invite_peer_result_callback_t)(
-	QarResult status, const QarPeerId* peer_id, void* user_state
-);
-
-/** Callback invoked when peer invitation progress updates are available. */
-typedef void (*qar_session_invite_peer_update_callback_t)(
-	const char* update_message, void* user_state
-);
+qar_session_get_id(const QarSession* session, QarSessionId* out_session_id);
 
 /**
  * @brief Invite a peer to the current session.
+ * @param session Active session handle.
+ * @param init Invitation parameters containing connection string.
+ * @param cancel Optional cancellation token for invite (can be NULL).
+ * @param out_peer_id Output parameter receiving the invited peer id.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string names an
+ *   unsupported device — rebuild it with a
+ *   qar_session_invite_connection_string_* helper.
+ */
+static inline QarResult qar_session_invite_peer(
+	QarSession* session,
+	const QarSessionInvitePeerInit* init,
+	QarCancelToken* cancel,
+	QarPeerId* out_peer_id
+);
+
+/**
+ * @brief Invite a peer to the current session (async).
  * @param session Active session handle.
  * @param init Invitation parameters containing connection string.
  * @param result_callback Callback receiving completion status and peer id.
@@ -979,42 +1664,40 @@ static inline QarResult qar_session_invite_peer_async(
 	QarSession* session,
 	const QarSessionInvitePeerInit* init,
 	qar_session_invite_peer_result_callback_t result_callback,
-	qar_session_invite_peer_update_callback_t update_callback,
+	qar_progress_callback_t update_callback,
 	void* user_state
 );
 
 /**
  * @brief Build connection string for inviting a HoloLens peer.
  * @param hostname Device hostname (must not be NULL or empty).
- * @param buffer Output buffer for the connection string.
+ * @param out_buffer Output buffer for the connection string.
  * @param buffer_size Size of output buffer.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small.
  */
 static inline QarResult qar_session_invite_connection_string_hololens(
-	const char* hostname, char* buffer, size_t buffer_size
+	const char* hostname, char* out_buffer, size_t buffer_size
 );
 
 /**
  * @brief Build connection string for inviting a Meta Quest device.
  */
-static inline QarResult
-qar_session_invite_connection_string_quest(char* buffer, size_t buffer_size);
+static inline QarResult qar_session_invite_connection_string_quest(
+	char* out_buffer, size_t buffer_size
+);
 
 /**
  * @brief Build connection string for inviting a Visualizer peer.
  */
 static inline QarResult qar_session_invite_connection_string_visualizer(
-	char* buffer, size_t buffer_size
+	char* out_buffer, size_t buffer_size
 );
 
 /**
  * @brief Build connection string for inviting a ZED camera peer.
  */
 static inline QarResult
-qar_session_invite_connection_string_zed(char* buffer, size_t buffer_size);
-
-// Session invite management
-static inline QarSessionInvite qar_session_invite_default(void);
-static inline void qar_session_invite_destroy(QarSessionInvite* invite);
+qar_session_invite_connection_string_zed(char* out_buffer, size_t buffer_size);
 
 /** @} */ /* end of qar_c_session */
 
@@ -1210,8 +1893,9 @@ static inline QarResult qar_render_frame_info_get_view_fov(
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Create a new GUI panel in the session. */
-static inline QarResult qar_gui_panels_add_panel(
+/** @brief Get the panel identified by init->common_name, creating it (via
+ * init) if it does not exist yet. */
+static inline QarResult qar_gui_panels_get_or_create(
 	QarSession* session,
 	const QarGuiPanelInit* init,
 	QarGuiPanelId* out_panel_id
@@ -1324,15 +2008,12 @@ static inline QarResult qar_gui_panel_get_visible_to_peers(
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Create a new app volume. */
-static inline QarResult qar_app_volumes_add_volume(
+/** @brief Get the app volume identified by init->common_name, creating it
+ * (via init) if it does not exist yet. */
+static inline QarResult qar_app_volumes_get_or_create(
 	QarSession* session,
 	const QarAppVolumeInit* init,
 	QarAppVolumeId* out_volume
-);
-/** @brief Update pose of an app volume. */
-static inline QarResult qar_app_volumes_update_pose(
-	QarSession* session, const QarAppVolumeId* volume_id, const QarPose* pose
 );
 static inline QarResult qar_app_volumes_change_display_name(
 	QarSession* session,
@@ -1366,8 +2047,37 @@ static inline QarResult qar_app_volumes_start_editing(
 static inline QarResult qar_app_volumes_stop_editing(
 	QarSession* session, const QarAppVolumeId* volume_id
 );
+
+/** @brief Update app pose for an existing app volume. */
+static inline QarResult qar_app_volumes_change_app_pose(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	const QarPose* app_pose
+);
+/** @brief Low-latency fast-path update for latest app scale. */
+static inline QarResult qar_app_volumes_change_app_scale(
+	QarSession* session, const QarAppVolumeId* volume_id, float scale
+);
+/** @brief Set app world anchor metadata. */
+static inline QarResult qar_app_volumes_change_app_world_anchor(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	const QarGeoAnchorFrame* anchor
+);
+/** @brief Clear app world anchor metadata. */
+static inline QarResult qar_app_volumes_clear_app_world_anchor(
+	QarSession* session, const QarAppVolumeId* volume_id
+);
+/** @brief Low-latency fast-path update for latest pose. */
+static inline QarResult qar_app_volumes_change_pose(
+	QarSession* session, const QarAppVolumeId* volume_id, const QarPose* pose
+);
+
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
+);
+typedef void (*qar_app_volume_gesture_event_callback_t)(
+	const QarAppVolumeGestureEvent* event, void* user_state
 );
 /** @brief Subscribe to updates for app volumes. */
 static inline QarResult qar_app_volumes_subscribe_updates(
@@ -1376,6 +2086,18 @@ static inline QarResult qar_app_volumes_subscribe_updates(
 	void* user_state,
 	QarCancelToken* token
 );
+/** @brief Subscribe to filtered gesture updates for a specific app volume. */
+static inline QarResult qar_app_volumes_subscribe_gesture_updates(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	QarGestureKind gesture_kind,
+	qar_app_volume_gesture_event_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
+// APP VOLUME GETTERS
+
 static inline bool qar_app_volume_handle_is_valid(QarAppVolume* handle);
 static inline void qar_app_volume_handle_destroy(QarAppVolume* handle);
 static inline QarResult
@@ -1420,6 +2142,56 @@ static inline QarResult qar_query_app_volumes(
 	size_t* out_handles_written
 );
 
+/** @brief Get app pose for an app volume handle. */
+static inline QarResult
+qar_app_volume_get_app_pose(QarAppVolume* handle, QarPose* out_pose);
+/** @brief Get app scale for an app volume handle. */
+static inline QarResult
+qar_app_volume_get_app_scale(QarAppVolume* handle, float* out_scale);
+/** @brief Get app world anchor for an app volume handle. */
+static inline QarResult qar_app_volume_get_app_world_anchor(
+	QarAppVolume* handle, QarAppWorldAnchor* out_anchor
+);
+/** @brief Get the latest locally known fast-path app pose for this app volume.
+ */
+static inline QarResult qar_app_volume_get_latest_app_pose(
+	QarSession* session, const QarAppVolumeId* volume_id, QarPose* out_pose
+);
+/** @brief Get the latest locally known fast-path app scale for this app volume.
+ */
+static inline QarResult qar_app_volume_get_latest_app_scale(
+	QarSession* session, const QarAppVolumeId* volume_id, float* out_scale
+);
+/** @brief Get the latest locally known fast-path pose for this app volume. */
+static inline QarResult qar_app_volume_get_latest_pose(
+	QarSession* session, const QarAppVolumeId* volume_id, QarPose* out_pose
+);
+/** @brief Get the latest locally known fast-path size for this app volume. */
+static inline QarResult qar_app_volume_get_latest_size(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	QarAppVolumeSize* out_size
+);
+/** @brief Get gesture configuration for an app volume handle.
+ *
+ * Mapping rules are returned in priority order. Earlier entries in
+ * `mapping_rules` have higher priority than later entries.
+ */
+static inline QarResult qar_app_volume_get_gesture_configuration(
+	QarAppVolume* handle, QarAppVolumeGestureConfiguration* out_config
+);
+/** @brief Update gesture configuration for an existing app volume.
+ *
+ * The order of `config->mapping_rules` defines runtime priority. Earlier rules
+ * have higher priority and can suppress lower-priority gestures when both are
+ * active at the same time for the same app volume and source peer.
+ */
+static inline QarResult qar_app_volumes_change_gesture_configuration(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	const QarAppVolumeGestureConfiguration* config
+);
+
 /** @} */ /* end of qar_c_app_volumes */
 
 // ============================================================================
@@ -1438,12 +2210,6 @@ static inline QarRenderSenderInit qar_render_sender_init_default(void);
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
 static inline QarRuntimeInit qar_runtime_init_default(void);
-/** @brief Default init for QarPeerSpecInit. */
-static inline QarPeerSpecInit qar_peer_spec_init_default(void);
-/** @brief Default init for QarSessionCreateInit. */
-static inline QarSessionCreateInit qar_session_create_init_default(void);
-/** @brief Default init for QarSessionJoinInit. */
-static inline QarSessionJoinInit qar_session_join_init_default(void);
 /** @brief Default init for QarSessionInvitePeerInit. */
 static inline QarSessionInvitePeerInit
 qar_session_invite_peer_init_default(void);
@@ -1512,6 +2278,19 @@ static inline QarAppVolumeSize qar_app_volume_size_default(void);
 /** @brief Default app volume editing status. */
 static inline QarAppVolumeEditingStatus
 qar_app_volume_editing_status_default(void);
+/** @brief Default app volume gesture mapping rule.
+ *
+ * Priority is not stored in the rule itself; it comes from the rule position
+ * inside QarAppVolumeGestureConfiguration::mapping_rules.
+ */
+static inline QarAppVolumeGestureMappingRule
+qar_app_volume_gesture_mapping_rule_default(void);
+/** @brief Default app volume gesture configuration.
+ *
+ * The returned `mapping_rules` array is ordered by descending priority.
+ */
+static inline QarAppVolumeGestureConfiguration
+qar_app_volume_gesture_configuration_default(void);
 
 /** @brief Zero/invalid peer id. */
 static inline QarPeerId qar_peer_id_default(void);
@@ -1532,6 +2311,13 @@ static inline QarGuiPanelId qar_gui_panel_id_unique(void);
 static inline QarAppVolumeId qar_app_volume_id_default(void);
 /** @brief Zero/invalid stream id. */
 static inline QarStreamId qar_stream_id_default(void);
+/** @brief Serialize a UUID (16 bytes) to text representation. */
+static inline QarResult qar_uuid_to_string(
+	const uint8_t* uuid_bytes, char* out_buffer, size_t buffer_size
+);
+/** @brief Parse a UUID text representation into 16 bytes. */
+static inline QarResult
+qar_uuid_from_string(const char* text, uint8_t* out_uuid_bytes);
 
 /** @brief Compare two peer ids for equality. */
 static inline bool
@@ -1550,1108 +2336,403 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 
 /** @} */ /* end of qar_c_api */
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
 // ============================================================================
-// DYNAMIC LOADING IMPLEMENTATION
+// IMPLEMENTATION
 // ============================================================================
-#ifndef QAR_DYNAMIC_LOADING_H
-#define QAR_DYNAMIC_LOADING_H
-
-#include <stdio.h>
-
-#ifdef _WIN32
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-
-#define QAR_DLL_HANDLE_TYPE HMODULE
-#define QAR_LOAD_LIBRARY(path) LoadLibraryA(path)
-#define QAR_GET_SYMBOL(handle, name) GetProcAddress(handle, name)
-#define QAR_UNLOAD_LIBRARY(handle) FreeLibrary(handle)
-
-static inline HMODULE
-qar_loadlib(const char* path)
-{
-	char abs_path[MAX_PATH];
-	DWORD result = GetFullPathNameA(path, MAX_PATH, abs_path, NULL);
-	if(result == 0 || result >= MAX_PATH)
-	{
-		printf(
-			"GetFullPathName failed for '%s': Error %lu\n", path, GetLastError()
-		);
-		return NULL;
-	}
-
-	// LOAD_WITH_ALTERED_SEARCH_PATH adds DLL's directory to dependency search
-	HMODULE handle = LoadLibraryExA(
-		abs_path,
-		NULL,
-		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
-	);
-	if(!handle)
-	{
-		DWORD error = GetLastError();
-		printf("LoadLibraryEx failed for '%s': Error %lu\n", abs_path, error);
-		if(error == ERROR_MOD_NOT_FOUND)
-		{
-			printf(
-				"\nValidate if you have all dependencies and importing correct "
-				"dll filename\n"
-			);
-		}
-	}
-
-	return handle;
-}
-#else
-
-#include <dlfcn.h>
-#include <stdlib.h>
-#define QAR_DLL_HANDLE_TYPE void*
-#define QAR_LOAD_LIBRARY(path) dlopen(path, RTLD_LAZY)
-#define QAR_GET_SYMBOL(handle, name) dlsym(handle, name)
-#define QAR_UNLOAD_LIBRARY(handle) dlclose(handle)
-
-static inline void*
-qar_loadlib(const char* path)
-{
-	char* abs_path = realpath(path, NULL);
-	if(!abs_path)
-	{
-		printf("realpath failed for '%s': %s\n", path, strerror(errno));
-		return NULL;
-	}
-
-	// dlopen automatically searches DLL directory for dependencies
-	void* handle = dlopen(abs_path, RTLD_LAZY);
-	if(!handle)
-	{
-		printf("dlopen failed for '%s': %s\n", abs_path, dlerror());
-	}
-
-	free(abs_path);
-	return handle;
-}
-
-#endif
-
-// Extern declarations for dynamically loaded module function retrieval
-// functions User must add QAR_IMPLEMENT_DYNAMIC_LOADING macro to one of their
-// source files
-extern void* (*qar_get_function_result_ptr)(int);
-extern void* (*qar_get_function_cancelation_token_ptr)(int);
-extern void* (*qar_get_function_runtime_ptr)(int);
-extern void* (*qar_get_function_session_ptr)(int);
-extern void* (*qar_get_function_peer_management_ptr)(int);
-extern void* (*qar_get_function_render_stream_sender_ptr)(int);
-extern void* (*qar_get_function_gui_panels_ptr)(int);
-extern void* (*qar_get_function_app_volumes_ptr)(int);
-extern void* (*qar_get_function_types_ptr)(int);
-
-// Macro to implement the extern function pointers
-// Add this macro to exactly ONE source file in your application (e.g.,
-// main.cpp)
-#define QAR_IMPLEMENT_DYNAMIC_LOADING()                                        \
-	void* (*qar_get_function_result_ptr)(int) = NULL;                          \
-	void* (*qar_get_function_cancelation_token_ptr)(int) = NULL;               \
-	void* (*qar_get_function_runtime_ptr)(int) = NULL;                         \
-	void* (*qar_get_function_session_ptr)(int) = NULL;                         \
-	void* (*qar_get_function_peer_management_ptr)(int) = NULL;                 \
-	void* (*qar_get_function_render_stream_sender_ptr)(int) = NULL;            \
-	void* (*qar_get_function_gui_panels_ptr)(int) = NULL;                      \
-	void* (*qar_get_function_app_volumes_ptr)(int) = NULL;                     \
-	void* (*qar_get_function_types_ptr)(int) = NULL;
-
-#define QAR_IMPL_CALL_DYNAMIC_FUNCTION_ERR_PRINT(FUNC_NAME)                    \
-	do                                                                         \
-	{                                                                          \
-		fprintf(                                                               \
-			stderr,                                                            \
-			"FATAL: %s() called but library not loaded. Call "                 \
-			"qar_library_load() first.\n",                                     \
-			FUNC_NAME                                                          \
-		);                                                                     \
-	}                                                                          \
-	while(0)
-
-// New macro for calling functions through module function retrieval
-#define QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(                                 \
-	FUNC_NAME, MODULE_NAME, INDEX, ...                                         \
-)                                                                              \
-	do                                                                         \
-	{                                                                          \
-		if(qar_get_function_##MODULE_NAME##_ptr == NULL)                       \
-		{                                                                      \
-			QAR_IMPL_CALL_DYNAMIC_FUNCTION_ERR_PRINT("qar_" #FUNC_NAME);       \
-			abort();                                                           \
-		}                                                                      \
-		void* func_ptr = qar_get_function_##MODULE_NAME##_ptr(INDEX);          \
-		if(func_ptr != NULL)                                                   \
-		{                                                                      \
-			qar_##FUNC_NAME##_func_t ptr = (qar_##FUNC_NAME##_func_t)func_ptr; \
-			return ptr(__VA_ARGS__);                                           \
-		}                                                                      \
-		QAR_IMPL_CALL_DYNAMIC_FUNCTION_ERR_PRINT("qar_" #FUNC_NAME);           \
-		abort();                                                               \
-	}                                                                          \
-	while(0)
-
-// Void version for functions that don't return values
-#define QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(                            \
-	FUNC_NAME, MODULE_NAME, INDEX, ...                                         \
-)                                                                              \
-	do                                                                         \
-	{                                                                          \
-		if(qar_get_function_##MODULE_NAME##_ptr == NULL)                       \
-		{                                                                      \
-			QAR_IMPL_CALL_DYNAMIC_FUNCTION_ERR_PRINT("qar_" #FUNC_NAME);       \
-			abort();                                                           \
-		}                                                                      \
-		void* func_ptr = qar_get_function_##MODULE_NAME##_ptr(INDEX);          \
-		if(func_ptr != NULL)                                                   \
-		{                                                                      \
-			qar_##FUNC_NAME##_func_t ptr = (qar_##FUNC_NAME##_func_t)func_ptr; \
-			ptr(__VA_ARGS__);                                                  \
-			return;                                                            \
-		}                                                                      \
-		QAR_IMPL_CALL_DYNAMIC_FUNCTION_ERR_PRINT("qar_" #FUNC_NAME);           \
-		abort();                                                               \
-	}                                                                          \
-	while(0)
-
-static QAR_DLL_HANDLE_TYPE qar_library_handle = NULL;
-
-static inline bool
-qar_library_load(const char* library_path)
-{
-	if(qar_library_handle != NULL)
-	{
-		return true; // Already loaded
-	}
-	// Load the library
-	qar_library_handle = qar_loadlib(library_path);
-	if(qar_library_handle == NULL)
-	{
-		return false;
-	}
-
-	// Load each module's init function and call it
-	typedef bool (*init_func_t)(void*);
-	init_func_t init_result, init_cancelation_token, init_runtime, init_session;
-	init_func_t init_peer_management, init_render_stream_sender,
-		init_gui_panels, init_app_volumes, init_types;
-
-	init_result = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_result"
-	);
-	if(!init_result || !init_result(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_cancelation_token = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_cancelation_token"
-	);
-	if(!init_cancelation_token || !init_cancelation_token(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_runtime = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_runtime"
-	);
-	if(!init_runtime || !init_runtime(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_session = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_session"
-	);
-	if(!init_session || !init_session(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_peer_management = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_peer_management"
-	);
-	if(!init_peer_management || !init_peer_management(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_render_stream_sender = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_render_stream_sender"
-	);
-	if(!init_render_stream_sender
-	   || !init_render_stream_sender(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_gui_panels = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_gui_panels"
-	);
-	if(!init_gui_panels || !init_gui_panels(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_app_volumes = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_app_volumes"
-	);
-	if(!init_app_volumes || !init_app_volumes(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	init_types = (init_func_t)QAR_GET_SYMBOL(
-		qar_library_handle, "qar_init_library_types"
-	);
-	if(!init_types || !init_types(qar_library_handle))
-	{
-		goto cleanup;
-	}
-
-	// Load function retrieval function pointers into extern variables
-	qar_get_function_result_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_result"
-	);
-	if(!qar_get_function_result_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_cancelation_token_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_cancelation_token"
-	);
-	if(!qar_get_function_cancelation_token_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_runtime_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_runtime"
-	);
-	if(!qar_get_function_runtime_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_session_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_session"
-	);
-	if(!qar_get_function_session_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_peer_management_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_peer_management"
-	);
-	if(!qar_get_function_peer_management_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_render_stream_sender_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_render_stream_sender"
-	);
-	if(!qar_get_function_render_stream_sender_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_gui_panels_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_gui_panels"
-	);
-	if(!qar_get_function_gui_panels_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_app_volumes_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_app_volumes"
-	);
-	if(!qar_get_function_app_volumes_ptr)
-	{
-		goto cleanup;
-	}
-
-	qar_get_function_types_ptr = (void* (*)(int))QAR_GET_SYMBOL(
-		qar_library_handle, "qar_get_function_types"
-	);
-	if(!qar_get_function_types_ptr)
-	{
-		goto cleanup;
-	}
-
-	return true;
-
-cleanup:
-	QAR_UNLOAD_LIBRARY(qar_library_handle);
-	qar_library_handle = NULL;
-	return false;
-}
-
-static inline void
-qar_library_unload(void)
-{
-	if(qar_library_handle != NULL)
-	{
-		QAR_UNLOAD_LIBRARY(qar_library_handle);
-		qar_library_handle = NULL;
-	}
-
-	// Clear all extern function pointers
-	qar_get_function_result_ptr = NULL;
-	qar_get_function_cancelation_token_ptr = NULL;
-	qar_get_function_runtime_ptr = NULL;
-	qar_get_function_session_ptr = NULL;
-	qar_get_function_peer_management_ptr = NULL;
-	qar_get_function_render_stream_sender_ptr = NULL;
-	qar_get_function_gui_panels_ptr = NULL;
-	qar_get_function_app_volumes_ptr = NULL;
-	qar_get_function_types_ptr = NULL;
-}
-
-static inline bool
-qar_is_library_loaded(void)
-{
-	return qar_library_handle != NULL;
-}
-
-#endif
-#endif
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_APP_VOLUMES_H
 #define QAR_STREAMING_C_V0_DETAIL_APP_VOLUMES_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
+#pragma once
+
+
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#ifndef QAR_DEPRECATED
+#if defined(__cplusplus) && defined(_MSC_VER)
+#define QAR_DEPRECATED(MSG) [[deprecated(MSG)]]
+#elif defined(__GNUC__) || defined(__clang__)
+#define QAR_DEPRECATED(MSG) __attribute__((deprecated(MSG)))
+#else
+#define QAR_DEPRECATED(MSG)
+#endif
 #endif
 
-// Callback typedefs
+#define QAR_API_MISSING_ERR_PRINT(FUNC_NAME, MODULE_NAME)                      \
+	do                                                                         \
+	{                                                                          \
+		fprintf(                                                               \
+			stderr,                                                            \
+			"FATAL: %s() called but module '%s' is not loaded or "             \
+			"incomplete.\n",                                                   \
+			FUNC_NAME,                                                         \
+			MODULE_NAME                                                        \
+		);                                                                     \
+	}                                                                          \
+	while(0)
+
+#define QAR_DECLARE_FUNC_TYPEDEF_EX(STATUS, RET, NAME, PARAMS, ARGS)           \
+	typedef RET(*qar_##NAME##_func_t) PARAMS;
+
+#define QAR_DECLARE_IMPL_EXTERN_EX(STATUS, RET, NAME, PARAMS, ARGS)            \
+	QAR_C_API RET qar_impl_##NAME PARAMS;
+
+#define QAR_DECLARE_LOADED_FIELD_EX(STATUS, RET, NAME, PARAMS, ARGS)           \
+	qar_##NAME##_func_t NAME;
+
+#define QAR_DECLARE_SYMBOL_NAME_EX(STATUS, RET, NAME, PARAMS, ARGS)            \
+	"qar_impl_" #NAME,
+
+#define QAR_WRAPPER_ATTR_ACTIVE
+#define QAR_WRAPPER_ATTR_DEPRECATED                                            \
+	QAR_DEPRECATED(                                                            \
+		"Deprecated API. The DLL implementation may return a deprecation "     \
+		"error code."                                                          \
+	)
+
+#ifdef QAR_ENABLE_DYNAMIC_LOADING
+
+#define QAR_DECLARE_MODULE_COMMON(                                             \
+	MODULE_UPPER, MODULE_CAMEL, MODULE_LOWER, FUNC_LIST                        \
+)                                                                              \
+	FUNC_LIST(QAR_DECLARE_FUNC_TYPEDEF_EX)                                     \
+                                                                               \
+	typedef struct Qar##MODULE_CAMEL##LoadedApi                                \
+	{                                                                          \
+		FUNC_LIST(QAR_DECLARE_LOADED_FIELD_EX)                                 \
+	} Qar##MODULE_CAMEL##LoadedApi;                                            \
+                                                                               \
+	extern Qar##MODULE_CAMEL##LoadedApi g_qar_##MODULE_LOWER##_api;            \
+                                                                               \
+	static const char* const qar_##MODULE_LOWER##_symbol_names[] = {           \
+		FUNC_LIST(QAR_DECLARE_SYMBOL_NAME_EX)                                  \
+	};                                                                         \
+                                                                               \
+	enum                                                                       \
+	{                                                                          \
+		QAR_##MODULE_UPPER##_FUNC_COUNT =                                      \
+			(int)(sizeof(qar_##MODULE_LOWER##_symbol_names)                    \
+				  / sizeof(qar_##MODULE_LOWER##_symbol_names[0]))              \
+	}
+
+#define QAR_DEFINE_MODULE_STORAGE(MODULE_CAMEL, MODULE_LOWER)                  \
+	Qar##MODULE_CAMEL##LoadedApi g_qar_##MODULE_LOWER##_api = { 0 }
+
+#define QAR_DECLARE_WRAPPER_EX(                                                \
+	MODULE_API_VAR, MODULE_STR, STATUS, RET, NAME, PARAMS, ARGS                \
+)                                                                              \
+	QAR_WRAPPER_ATTR_##STATUS static inline RET qar_##NAME PARAMS              \
+	{                                                                          \
+		if((MODULE_API_VAR).NAME == NULL)                                      \
+		{                                                                      \
+			QAR_API_MISSING_ERR_PRINT("qar_" #NAME, MODULE_STR);               \
+			abort();                                                           \
+		}                                                                      \
+		return (MODULE_API_VAR).NAME ARGS;                                     \
+	}
+
+#else
+
+#define QAR_DECLARE_MODULE_COMMON(                                             \
+	MODULE_UPPER, MODULE_CAMEL, MODULE_LOWER, FUNC_LIST                        \
+)                                                                              \
+	FUNC_LIST(QAR_DECLARE_FUNC_TYPEDEF_EX)
+
+#define QAR_DEFINE_MODULE_STORAGE(MODULE_CAMEL, MODULE_LOWER)
+
+#define QAR_DECLARE_WRAPPER_EX(                                                \
+	MODULE_API_VAR, MODULE_STR, STATUS, RET, NAME, PARAMS, ARGS                \
+)                                                                              \
+	QAR_WRAPPER_ATTR_##STATUS static inline RET qar_##NAME PARAMS              \
+	{                                                                          \
+		return qar_impl_##NAME ARGS;                                           \
+	}
+
+#endif
+
+#define QAR_DECLARE_MODULE_IMPL_EXTERNS(FUNC_LIST)                             \
+	FUNC_LIST(QAR_DECLARE_IMPL_EXTERN_EX)
+
+
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
 );
-
-// Function registry enum for app volumes functions
-typedef enum QarAppVolumesImplFuncIndex
-{
-	QAR_IMPL_FUNC_APP_VOLUMES_UPDATE_POSE = 0,
-	QAR_IMPL_FUNC_APP_VOLUMES_CHANGE_DISPLAY_NAME,
-	QAR_IMPL_FUNC_APP_VOLUMES_CHANGE_SIZE,
-	QAR_IMPL_FUNC_APP_VOLUMES_UPDATE_USED_BY_PEERS,
-	QAR_IMPL_FUNC_APP_VOLUMES_START_EDITING,
-	QAR_IMPL_FUNC_APP_VOLUMES_STOP_EDITING,
-	QAR_IMPL_FUNC_APP_VOLUMES_SUBSCRIBE_UPDATES,
-	QAR_IMPL_FUNC_APP_VOLUME_HANDLE_IS_VALID,
-	QAR_IMPL_FUNC_APP_VOLUME_HANDLE_DESTROY,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_ID,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_DISPLAY_NAME,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_POSE,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_SIZE,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_LIFETIME_STATUS,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_EDITING_STATUS,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_USED_BY_PEERS_COUNT,
-	QAR_IMPL_FUNC_APP_VOLUME_GET_USED_BY_PEERS,
-	QAR_IMPL_FUNC_QUERY_APP_VOLUMES_COUNT,
-	QAR_IMPL_FUNC_QUERY_APP_VOLUMES,
-	QAR_IMPL_FUNC_APP_VOLUMES_ADD_VOLUME,
-	QAR_IMPL_FUNC_APP_VOLUMES_CLOSE_VOLUME,
-	QAR_IMPL_FUNC_APP_VOLUMES_COUNT
-} QarAppVolumesImplFuncIndex;
-
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_APP_VOLUMES_IMPL_FUNCTION_NAMES                                    \
-	"qar_impl_app_volumes_update_pose",                                        \
-		"qar_impl_app_volumes_change_display_name",                            \
-		"qar_impl_app_volumes_change_size",                                    \
-		"qar_impl_app_volumes_update_used_by_peers",                           \
-		"qar_impl_app_volumes_start_editing",                                  \
-		"qar_impl_app_volumes_stop_editing",                                   \
-		"qar_impl_app_volumes_subscribe_updates",                              \
-		"qar_impl_app_volume_handle_is_valid",                                 \
-		"qar_impl_app_volume_handle_destroy", "qar_impl_app_volume_get_id",    \
-		"qar_impl_app_volume_get_display_name",                                \
-		"qar_impl_app_volume_get_pose", "qar_impl_app_volume_get_size",        \
-		"qar_impl_app_volume_get_lifetime_status",                             \
-		"qar_impl_app_volume_get_editing_status",                              \
-		"qar_impl_app_volume_get_used_by_peers_count",                         \
-		"qar_impl_app_volume_get_used_by_peers",                               \
-		"qar_impl_query_app_volumes_count", "qar_impl_query_app_volumes",      \
-		"qar_impl_app_volumes_add_volume", "qar_impl_app_volumes_close_volume"
-
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for app volumes
-typedef QarResult (*qar_app_volumes_update_pose_func_t)(
-	QarSession* session, const QarAppVolumeId* volume_id, const QarPose* pose
-);
-typedef QarResult (*qar_app_volumes_change_display_name_func_t)(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const char* display_name
-);
-typedef QarResult (*qar_app_volumes_change_size_func_t)(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarAppVolumeSize* size
-);
-typedef QarResult (*qar_app_volumes_update_used_by_peers_func_t)(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarPeerId* peer_additions,
-	size_t additions_count,
-	const QarPeerId* peer_removals,
-	size_t removals_count
-);
-typedef QarResult (*qar_app_volumes_start_editing_func_t)(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-typedef QarResult (*qar_app_volumes_stop_editing_func_t)(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-typedef QarResult (*qar_app_volumes_subscribe_updates_func_t)(
-	QarSession* session,
-	qar_app_volume_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
+typedef void (*qar_app_volume_gesture_event_callback_t)(
+	const QarAppVolumeGestureEvent* event, void* user_state
 );
 
-// App volume handle function typedefs
-typedef bool (*qar_app_volume_handle_is_valid_func_t)(QarAppVolume* handle);
-typedef void (*qar_app_volume_handle_destroy_func_t)(QarAppVolume* handle);
-typedef QarResult (*qar_app_volume_get_id_func_t)(
-	QarAppVolume* handle, QarAppVolumeId* out_id
-);
-typedef QarResult (*qar_app_volume_get_display_name_func_t)(
-	QarAppVolume* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_app_volume_get_pose_func_t)(
-	QarAppVolume* handle, QarPose* out_pose
-);
-typedef QarResult (*qar_app_volume_get_size_func_t)(
-	QarAppVolume* handle, QarAppVolumeSize* out_size
-);
-typedef QarResult (*qar_app_volume_get_lifetime_status_func_t)(
-	QarAppVolume* handle, QarAppVolumeLifetimeStatus* out_status
-);
-typedef QarResult (*qar_app_volume_get_editing_status_func_t)(
-	QarAppVolume* handle, QarAppVolumeEditingStatus* out_status
-);
-typedef QarResult (*qar_app_volume_get_used_by_peers_count_func_t)(
-	QarAppVolume* handle, size_t* out_peer_count
-);
-typedef QarResult (*qar_app_volume_get_used_by_peers_func_t)(
-	QarAppVolume* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-);
-typedef QarResult (*qar_query_app_volumes_count_func_t)(
-	QarSession* session, size_t* out_count
-);
-typedef QarResult (*qar_query_app_volumes_func_t)(
-	QarSession* session,
-	QarAppVolume** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-typedef QarResult (*qar_app_volumes_add_volume_func_t)(
-	QarSession* session,
-	const QarAppVolumeInit* init,
-	QarAppVolumeId* out_volume
-);
-typedef QarResult (*qar_app_volumes_close_volume_func_t)(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-#else
+#define QAR_APP_VOLUMES_FUNCTION_LIST(X)                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_display_name,                                         \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const char* display_name),                                              \
+	  (session, volume_id, display_name))                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_size,                                                 \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarAppVolumeSize* size),                                          \
+	  (session, volume_id, size))                                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_update_used_by_peers,                                        \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarPeerId* peer_additions,                                        \
+	   size_t additions_count,                                                 \
+	   const QarPeerId* peer_removals,                                         \
+	   size_t removals_count),                                                 \
+	  (session,                                                                \
+	   volume_id,                                                              \
+	   peer_additions,                                                         \
+	   additions_count,                                                        \
+	   peer_removals,                                                          \
+	   removals_count))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_start_editing,                                               \
+	  (QarSession * session, const QarAppVolumeId* volume_id),                 \
+	  (session, volume_id))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_stop_editing,                                                \
+	  (QarSession * session, const QarAppVolumeId* volume_id),                 \
+	  (session, volume_id))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_subscribe_updates,                                           \
+	  (QarSession * session,                                                   \
+	   qar_app_volume_update_callback_t callback,                              \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, callback, user_state, token))                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_gesture_configuration,                                    \
+	  (QarAppVolume * handle, QarAppVolumeGestureConfiguration * out_config),  \
+	  (handle, out_config))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_gesture_configuration,                                \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarAppVolumeGestureConfiguration* config),                        \
+	  (session, volume_id, config))                                            \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_subscribe_gesture_updates,                                   \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarGestureKind gesture_kind,                                            \
+	   qar_app_volume_gesture_event_callback_t callback,                       \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, volume_id, gesture_kind, callback, user_state, token))         \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  app_volume_handle_is_valid,                                              \
+	  (QarAppVolume * handle),                                                 \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  app_volume_handle_destroy,                                               \
+	  (QarAppVolume * handle),                                                 \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_id,                                                       \
+	  (QarAppVolume * handle, QarAppVolumeId * out_id),                        \
+	  (handle, out_id))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_display_name,                                             \
+	  (QarAppVolume * handle, char* out_buffer, size_t buffer_size),           \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_pose,                                                     \
+	  (QarAppVolume * handle, QarPose * out_pose),                             \
+	  (handle, out_pose))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_size,                                                     \
+	  (QarAppVolume * handle, QarAppVolumeSize * out_size),                    \
+	  (handle, out_size))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_lifetime_status,                                          \
+	  (QarAppVolume * handle, QarAppVolumeLifetimeStatus * out_status),        \
+	  (handle, out_status))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_editing_status,                                           \
+	  (QarAppVolume * handle, QarAppVolumeEditingStatus * out_status),         \
+	  (handle, out_status))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_used_by_peers_count,                                      \
+	  (QarAppVolume * handle, size_t* out_peer_count),                         \
+	  (handle, out_peer_count))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_used_by_peers,                                            \
+	  (QarAppVolume * handle,                                                  \
+	   QarPeerId * out_peers,                                                  \
+	   size_t peers_buffer_size,                                               \
+	   size_t* out_peers_written),                                             \
+	  (handle, out_peers, peers_buffer_size, out_peers_written))               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_app_volumes_count,                                                 \
+	  (QarSession * session, size_t* out_count),                               \
+	  (session, out_count))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_app_volumes,                                                       \
+	  (QarSession * session,                                                   \
+	   QarAppVolume * *out_handles,                                            \
+	   size_t handles_buffer_size,                                             \
+	   size_t* out_handles_written),                                           \
+	  (session, out_handles, handles_buffer_size, out_handles_written))        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_get_or_create,                                               \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeInit* init,                                           \
+	   QarAppVolumeId* out_volume),                                            \
+	  (session, init, out_volume))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_close_volume,                                                \
+	  (QarSession * session, const QarAppVolumeId* volume_id),                 \
+	  (session, volume_id))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_app_pose,                                                 \
+	  (QarAppVolume * handle, QarPose * out_pose),                             \
+	  (handle, out_pose))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_app_pose,                                             \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarPose* app_pose),                                               \
+	  (session, volume_id, app_pose))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_app_scale,                                                \
+	  (QarAppVolume * handle, float* out_scale),                               \
+	  (handle, out_scale))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_app_scale,                                            \
+	  (QarSession * session, const QarAppVolumeId* volume_id, float scale),    \
+	  (session, volume_id, scale))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_app_world_anchor,                                         \
+	  (QarAppVolume * handle, QarAppWorldAnchor * out_anchor),                 \
+	  (handle, out_anchor))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_app_world_anchor,                                     \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarGeoAnchorFrame* anchor),                                       \
+	  (session, volume_id, anchor))                                            \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_clear_app_world_anchor,                                      \
+	  (QarSession * session, const QarAppVolumeId* volume_id),                 \
+	  (session, volume_id))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_pose,                                                 \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarPose* pose),                                                   \
+	  (session, volume_id, pose))                                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_latest_app_pose,                                          \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarPose* out_pose),                                                     \
+	  (session, volume_id, out_pose))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_latest_app_scale,                                         \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   float* out_scale),                                                      \
+	  (session, volume_id, out_scale))                                         \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_latest_pose,                                              \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarPose* out_pose),                                                     \
+	  (session, volume_id, out_pose))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_latest_size,                                              \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarAppVolumeSize* out_size),                                            \
+	  (session, volume_id, out_size))
 
-// Implementation function declarations
-QAR_C_API QarResult qar_impl_app_volumes_update_pose(
-	QarSession* session, const QarAppVolumeId* volume_id, const QarPose* pose
+QAR_DECLARE_MODULE_COMMON(
+	APP_VOLUMES, AppVolumes, app_volumes, QAR_APP_VOLUMES_FUNCTION_LIST
 );
-QAR_C_API QarResult qar_impl_app_volumes_change_display_name(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const char* display_name
-);
-QAR_C_API QarResult qar_impl_app_volumes_change_size(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarAppVolumeSize* size
-);
-QAR_C_API QarResult qar_impl_app_volumes_update_used_by_peers(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarPeerId* peer_additions,
-	size_t additions_count,
-	const QarPeerId* peer_removals,
-	size_t removals_count
-);
-QAR_C_API QarResult qar_impl_app_volumes_start_editing(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-QAR_C_API QarResult qar_impl_app_volumes_stop_editing(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-QAR_C_API QarResult qar_impl_app_volumes_subscribe_updates(
-	QarSession* session,
-	qar_app_volume_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_APP_VOLUMES_FUNCTION_LIST)
 
-// App volume handle implementation functions
-QAR_C_API bool qar_impl_app_volume_handle_is_valid(QarAppVolume* handle);
-QAR_C_API void qar_impl_app_volume_handle_destroy(QarAppVolume* handle);
-QAR_C_API QarResult
-qar_impl_app_volume_get_id(QarAppVolume* handle, QarAppVolumeId* out_id);
-QAR_C_API QarResult qar_impl_app_volume_get_display_name(
-	QarAppVolume* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult
-qar_impl_app_volume_get_pose(QarAppVolume* handle, QarPose* out_pose);
-QAR_C_API QarResult
-qar_impl_app_volume_get_size(QarAppVolume* handle, QarAppVolumeSize* out_size);
-QAR_C_API QarResult qar_impl_app_volume_get_lifetime_status(
-	QarAppVolume* handle, QarAppVolumeLifetimeStatus* out_status
-);
-QAR_C_API QarResult qar_impl_app_volume_get_editing_status(
-	QarAppVolume* handle, QarAppVolumeEditingStatus* out_status
-);
-QAR_C_API QarResult qar_impl_app_volume_get_used_by_peers_count(
-	QarAppVolume* handle, size_t* out_peer_count
-);
-QAR_C_API QarResult qar_impl_app_volume_get_used_by_peers(
-	QarAppVolume* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-);
-QAR_C_API QarResult
-qar_impl_query_app_volumes_count(QarSession* session, size_t* out_count);
-QAR_C_API QarResult qar_impl_query_app_volumes(
-	QarSession* session,
-	QarAppVolume** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-QAR_C_API QarResult qar_impl_app_volumes_add_volume(
-	QarSession* session,
-	const QarAppVolumeInit* init,
-	QarAppVolumeId* out_volume
-);
-QAR_C_API QarResult qar_impl_app_volumes_close_volume(
-	QarSession* session, const QarAppVolumeId* volume_id
-);
-#endif
-// ============================================================================
-// APP VOLUMES DISPATCH FUNCTIONS
-// ============================================================================
+#define QAR_APP_VOLUMES_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)       \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_app_volumes_api, "app_volumes", STATUS, RET, NAME, PARAMS, ARGS  \
+	)
 
-static inline QarResult
-qar_app_volumes_update_pose(
-	QarSession* session, const QarAppVolumeId* volume_id, const QarPose* pose
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_update_pose,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_UPDATE_POSE,
-		session,
-		volume_id,
-		pose
-	);
-#else
-	return qar_impl_app_volumes_update_pose(session, volume_id, pose);
-#endif
-}
+QAR_APP_VOLUMES_FUNCTION_LIST(QAR_APP_VOLUMES_DECLARE_WRAPPER)
 
-static inline QarResult
-qar_app_volumes_change_display_name(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const char* display_name
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_change_display_name,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_CHANGE_DISPLAY_NAME,
-		session,
-		volume_id,
-		display_name
-	);
-#else
-	return qar_impl_app_volumes_change_display_name(
-		session, volume_id, display_name
-	);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_change_size(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarAppVolumeSize* size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_change_size,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_CHANGE_SIZE,
-		session,
-		volume_id,
-		size
-	);
-#else
-	return qar_impl_app_volumes_change_size(session, volume_id, size);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_update_used_by_peers(
-	QarSession* session,
-	const QarAppVolumeId* volume_id,
-	const QarPeerId* peer_additions,
-	size_t additions_count,
-	const QarPeerId* peer_removals,
-	size_t removals_count
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_update_used_by_peers,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_UPDATE_USED_BY_PEERS,
-		session,
-		volume_id,
-		peer_additions,
-		additions_count,
-		peer_removals,
-		removals_count
-	);
-#else
-	return qar_impl_app_volumes_update_used_by_peers(
-		session,
-		volume_id,
-		peer_additions,
-		additions_count,
-		peer_removals,
-		removals_count
-	);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_start_editing(
-	QarSession* session, const QarAppVolumeId* volume_id
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_start_editing,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_START_EDITING,
-		session,
-		volume_id
-	);
-#else
-	return qar_impl_app_volumes_start_editing(session, volume_id);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_stop_editing(
-	QarSession* session, const QarAppVolumeId* volume_id
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_stop_editing,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_STOP_EDITING,
-		session,
-		volume_id
-	);
-#else
-	return qar_impl_app_volumes_stop_editing(session, volume_id);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_subscribe_updates(
-	QarSession* session,
-	qar_app_volume_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_subscribe_updates,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_SUBSCRIBE_UPDATES,
-		session,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_app_volumes_subscribe_updates(
-		session, callback, user_state, token
-	);
-#endif
-}
-
-// App volume handle dispatch functions
-static inline bool
-qar_app_volume_handle_is_valid(QarAppVolume* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_handle_is_valid,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_HANDLE_IS_VALID,
-		handle
-	);
-#else
-	return qar_impl_app_volume_handle_is_valid(handle);
-#endif
-}
-
-static inline void
-qar_app_volume_handle_destroy(QarAppVolume* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		app_volume_handle_destroy,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_app_volume_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_id(QarAppVolume* handle, QarAppVolumeId* out_id)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_id,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_ID,
-		handle,
-		out_id
-	);
-#else
-	return qar_impl_app_volume_get_id(handle, out_id);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_display_name(
-	QarAppVolume* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_display_name,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_DISPLAY_NAME,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_app_volume_get_display_name(
-		handle, out_buffer, buffer_size
-	);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_pose(QarAppVolume* handle, QarPose* out_pose)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_pose,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_POSE,
-		handle,
-		out_pose
-	);
-#else
-	return qar_impl_app_volume_get_pose(handle, out_pose);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_size(QarAppVolume* handle, QarAppVolumeSize* out_size)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_size,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_SIZE,
-		handle,
-		out_size
-	);
-#else
-	return qar_impl_app_volume_get_size(handle, out_size);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_lifetime_status(
-	QarAppVolume* handle, QarAppVolumeLifetimeStatus* out_status
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_lifetime_status,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_LIFETIME_STATUS,
-		handle,
-		out_status
-	);
-#else
-	return qar_impl_app_volume_get_lifetime_status(handle, out_status);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_editing_status(
-	QarAppVolume* handle, QarAppVolumeEditingStatus* out_status
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_editing_status,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_EDITING_STATUS,
-		handle,
-		out_status
-	);
-#else
-	return qar_impl_app_volume_get_editing_status(handle, out_status);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_used_by_peers_count(
-	QarAppVolume* handle, size_t* out_peer_count
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_used_by_peers_count,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_USED_BY_PEERS_COUNT,
-		handle,
-		out_peer_count
-	);
-#else
-	return qar_impl_app_volume_get_used_by_peers_count(handle, out_peer_count);
-#endif
-}
-
-static inline QarResult
-qar_app_volume_get_used_by_peers(
-	QarAppVolume* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volume_get_used_by_peers,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUME_GET_USED_BY_PEERS,
-		handle,
-		out_peers,
-		peers_buffer_size,
-		out_peers_written
-	);
-#else
-	return qar_impl_app_volume_get_used_by_peers(
-		handle, out_peers, peers_buffer_size, out_peers_written
-	);
-#endif
-}
-
-static inline QarResult
-qar_query_app_volumes_count(QarSession* session, size_t* out_count)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_app_volumes_count,
-		app_volumes,
-		QAR_IMPL_FUNC_QUERY_APP_VOLUMES_COUNT,
-		session,
-		out_count
-	);
-#else
-	return qar_impl_query_app_volumes_count(session, out_count);
-#endif
-}
-
-static inline QarResult
-qar_query_app_volumes(
-	QarSession* session,
-	QarAppVolume** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_app_volumes,
-		app_volumes,
-		QAR_IMPL_FUNC_QUERY_APP_VOLUMES,
-		session,
-		out_handles,
-		handles_buffer_size,
-		out_handles_written
-	);
-#else
-	return qar_impl_query_app_volumes(
-		session, out_handles, handles_buffer_size, out_handles_written
-	);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_add_volume(
-	QarSession* session,
-	const QarAppVolumeInit* init,
-	QarAppVolumeId* out_volume
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_add_volume,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_ADD_VOLUME,
-		session,
-		init,
-		out_volume
-	);
-#else
-	return qar_impl_app_volumes_add_volume(session, init, out_volume);
-#endif
-}
-
-static inline QarResult
-qar_app_volumes_close_volume(
-	QarSession* session, const QarAppVolumeId* volume_id
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		app_volumes_close_volume,
-		app_volumes,
-		QAR_IMPL_FUNC_APP_VOLUMES_CLOSE_VOLUME,
-		session,
-		volume_id
-	);
-#else
-	return qar_impl_app_volumes_close_volume(session, volume_id);
-#endif
-}
+#undef QAR_APP_VOLUMES_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_APP_VOLUMES_H
+
 #ifndef QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 #define QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// ============================================================================
-// DYNAMIC LOADING IMPLEMENTATION FOR BASIC TYPES
-// ============================================================================
+#define QAR_TYPES_FUNCTION_LIST(X)                                             \
+	X(ACTIVE, QarPeerId, peer_id_unique, (void), ())                           \
+	X(ACTIVE, QarSessionId, session_unique, (void), ())                        \
+	X(ACTIVE, QarGuiPanelId, gui_panel_id_unique, (void), ())                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  uuid_to_string,                                                          \
+	  (const uint8_t* uuid_bytes, char* out_buffer, size_t buffer_size),       \
+	  (uuid_bytes, out_buffer, buffer_size))                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  uuid_from_string,                                                        \
+	  (const char* text, uint8_t* out_uuid_bytes),                             \
+	  (text, out_uuid_bytes))
 
-// Function registry enum for basic types non-inline functions
-typedef enum QarTypesImplFuncIndex
-{
-	QAR_TYPES_IMPL_FUNC_PEER_ID_UNIQUE = 0,
-	QAR_TYPES_IMPL_FUNC_SESSION_UNIQUE,
-	QAR_TYPES_IMPL_FUNC_GUI_PANEL_ID_UNIQUE,
-	QAR_TYPES_IMPL_FUNC_COUNT
-} QarTypesImplFuncIndex;
+QAR_DECLARE_MODULE_COMMON(TYPES, Types, types, QAR_TYPES_FUNCTION_LIST);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_TYPES_FUNCTION_LIST)
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for basic types non-inline functions
-typedef QarPeerId (*qar_peer_id_unique_func_t)(void);
-typedef QarSessionId (*qar_session_unique_func_t)(void);
-typedef QarGuiPanelId (*qar_gui_panel_id_unique_func_t)(void);
+#define QAR_TYPES_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)             \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_types_api, "types", STATUS, RET, NAME, PARAMS, ARGS              \
+	)
 
-#else
-// Implementation function declarations
-QAR_C_API QarPeerId qar_impl_peer_id_unique(void);
-QAR_C_API QarSessionId qar_impl_session_unique(void);
-QAR_C_API QarGuiPanelId qar_impl_gui_panel_id_unique(void);
-#endif
+QAR_TYPES_FUNCTION_LIST(QAR_TYPES_DECLARE_WRAPPER)
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_TYPES_IMPL_FUNCTION_NAMES                                          \
-	"qar_impl_peer_id_unique", "qar_impl_session_unique",                      \
-		"qar_impl_gui_panel_id_unique"
-
-// ============================================================================
-// DISPATCH FUNCTION IMPLEMENTATIONS FOR BASIC TYPES
-// ============================================================================
-
-// Basic types dispatch functions
-static inline QarPeerId
-qar_peer_id_unique(void)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_id_unique, types, QAR_TYPES_IMPL_FUNC_PEER_ID_UNIQUE
-	);
-#else
-	return qar_impl_peer_id_unique();
-#endif
-}
-
-static inline QarSessionId
-qar_session_unique(void)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_unique, types, QAR_TYPES_IMPL_FUNC_SESSION_UNIQUE
-	);
-#else
-	return qar_impl_session_unique();
-#endif
-}
-
-static inline QarGuiPanelId
-qar_gui_panel_id_unique(void)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_id_unique, types, QAR_TYPES_IMPL_FUNC_GUI_PANEL_ID_UNIQUE
-	);
-#else
-	return qar_impl_gui_panel_id_unique();
-#endif
-}
-
-// ============================================================================
-// INLINE FUNCTION IMPLEMENTATIONS
-// ============================================================================
+#undef QAR_TYPES_DECLARE_WRAPPER
 
 static inline bool
 qar_peer_id_equals(const QarPeerId* id1, const QarPeerId* id2)
@@ -2668,6 +2749,7 @@ qar_peer_id_equals(const QarPeerId* id1, const QarPeerId* id2)
 			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -2686,6 +2768,7 @@ qar_session_identifier_equals(const QarSessionId* id1, const QarSessionId* id2)
 			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -2704,6 +2787,7 @@ qar_app_volume_id_equals(const QarAppVolumeId* id1, const QarAppVolumeId* id2)
 			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -2722,181 +2806,82 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2)
 			return false;
 		}
 	}
+
 	return true;
 }
 
-#endif
+#endif // QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
 #define QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Function registry enum for cancelation token functions
-typedef enum QarCancelationTokenImplFuncIndex
-{
-	QAR_IMPL_FUNC_CANCEL_TOKEN_CREATE = 0,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_CREATE_WITH_TIMEOUT,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_HANDLE_DESTROY,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_CANCEL,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_CANCEL_AFTER,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_IS_CANCELLED,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_IS_TIMEOUT,
-	QAR_IMPL_FUNC_CANCEL_TOKEN_COUNT
-} QarCancelationTokenImplFuncIndex;
+#define QAR_CANCELATION_TOKEN_FUNCTION_LIST(X)                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  cancel_token_create,                                                     \
+	  (QarCancelToken * *token),                                               \
+	  (token))                                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  cancel_token_create_with_timeout,                                        \
+	  (QarCancelToken * *token, uint32_t timeout_ms),                          \
+	  (token, timeout_ms))                                                     \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  cancel_token_handle_destroy,                                             \
+	  (QarCancelToken * handle),                                               \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  cancel_token_cancel,                                                     \
+	  (QarCancelToken * token),                                                \
+	  (token))                                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  cancel_token_cancel_after,                                               \
+	  (QarCancelToken * token, uint32_t timeout_ms),                           \
+	  (token, timeout_ms))                                                     \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  cancel_token_is_cancelled,                                               \
+	  (const QarCancelToken* token),                                           \
+	  (token))                                                                 \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  cancel_token_is_timeout,                                                 \
+	  (const QarCancelToken* token),                                           \
+	  (token))
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_CANCELATION_TOKEN_IMPL_FUNCTION_NAMES                              \
-	"qar_impl_cancel_token_create",                                            \
-		"qar_impl_cancel_token_create_with_timeout",                           \
-		"qar_impl_cancel_token_handle_destroy",                                \
-		"qar_impl_cancel_token_cancel", "qar_impl_cancel_token_cancel_after",  \
-		"qar_impl_cancel_token_is_cancelled",                                  \
-		"qar_impl_cancel_token_is_timeout"
-
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for cancellation system
-typedef QarResult (*qar_cancel_token_create_func_t)(QarCancelToken** token);
-typedef QarResult (*qar_cancel_token_create_with_timeout_func_t)(
-	QarCancelToken** token, uint32_t timeout_ms
+QAR_DECLARE_MODULE_COMMON(
+	CANCELATION_TOKEN,
+	CancelationToken,
+	cancelation_token,
+	QAR_CANCELATION_TOKEN_FUNCTION_LIST
 );
-typedef void (*qar_cancel_token_handle_destroy_func_t)(QarCancelToken* handle);
-typedef QarResult (*qar_cancel_token_cancel_func_t)(QarCancelToken* token);
-typedef QarResult (*qar_cancel_token_cancel_after_func_t)(
-	QarCancelToken* token, uint32_t timeout_ms
-);
-typedef bool (*qar_cancel_token_is_cancelled_func_t)(
-	const QarCancelToken* token
-);
-typedef bool (*qar_cancel_token_is_timeout_func_t)(const QarCancelToken* token);
-#else
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_CANCELATION_TOKEN_FUNCTION_LIST)
 
-// Static implementation function declarations
-QAR_C_API QarResult qar_impl_cancel_token_create(QarCancelToken** token);
-QAR_C_API QarResult qar_impl_cancel_token_create_with_timeout(
-	QarCancelToken** token, uint32_t timeout_ms
-);
-QAR_C_API void qar_impl_cancel_token_handle_destroy(QarCancelToken* handle);
-QAR_C_API QarResult qar_impl_cancel_token_cancel(QarCancelToken* token);
-QAR_C_API QarResult
-qar_impl_cancel_token_cancel_after(QarCancelToken* token, uint32_t timeout_ms);
-QAR_C_API bool qar_impl_cancel_token_is_cancelled(const QarCancelToken* token);
-QAR_C_API bool qar_impl_cancel_token_is_timeout(const QarCancelToken* token);
-#endif
-// Cancellation system dispatch functions
-static inline QarResult
-qar_cancel_token_create(QarCancelToken** token)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_create,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_CREATE,
-		token
-	);
-#else
-	return qar_impl_cancel_token_create(token);
-#endif
-}
+#define QAR_CANCELATION_TOKEN_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS) \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_cancelation_token_api,                                           \
+		"cancelation_token",                                                   \
+		STATUS,                                                                \
+		RET,                                                                   \
+		NAME,                                                                  \
+		PARAMS,                                                                \
+		ARGS                                                                   \
+	)
 
-static inline QarResult
-qar_cancel_token_create_with_timeout(
-	QarCancelToken** token, uint32_t timeout_ms
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_create_with_timeout,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_CREATE_WITH_TIMEOUT,
-		token,
-		timeout_ms
-	);
-#else
-	return qar_impl_cancel_token_create_with_timeout(token, timeout_ms);
-#endif
-}
+QAR_CANCELATION_TOKEN_FUNCTION_LIST(QAR_CANCELATION_TOKEN_DECLARE_WRAPPER)
 
-static inline void
-qar_cancel_token_handle_destroy(QarCancelToken* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		cancel_token_handle_destroy,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_cancel_token_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_cancel_token_cancel(QarCancelToken* token)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_cancel,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_CANCEL,
-		token
-	);
-#else
-	return qar_impl_cancel_token_cancel(token);
-#endif
-}
-
-static inline QarResult
-qar_cancel_token_cancel_after(QarCancelToken* token, uint32_t timeout_ms)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_cancel_after,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_CANCEL_AFTER,
-		token,
-		timeout_ms
-	);
-#else
-	return qar_impl_cancel_token_cancel_after(token, timeout_ms);
-#endif
-}
-
-static inline bool
-qar_cancel_token_is_cancelled(const QarCancelToken* token)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_is_cancelled,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_IS_CANCELLED,
-		token
-	);
-#else
-	return qar_impl_cancel_token_is_cancelled(token);
-#endif
-}
-
-static inline bool
-qar_cancel_token_is_timeout(const QarCancelToken* token)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		cancel_token_is_timeout,
-		cancelation_token,
-		QAR_IMPL_FUNC_CANCEL_TOKEN_IS_TIMEOUT,
-		token
-	);
-#else
-	return qar_impl_cancel_token_is_timeout(token);
-#endif
-}
+#undef QAR_CANCELATION_TOKEN_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
+
 #ifndef QAR_STREAMING_C_V0_DETAIL_DEFAULT_INITS_H
 #define QAR_STREAMING_C_V0_DETAIL_DEFAULT_INITS_H
+
+#include <stddef.h>
 
 static inline QarTimePoint
 qar_time_point_default(void)
@@ -3037,10 +3022,10 @@ static inline QarTextureSize
 qar_texture_size_default(void)
 {
 	QarTextureSize size = {
-		QAR_PIXEL_FORMAT_R8, // format
-		0,					 // width
-		0,					 // height
-		1					 // array_layers
+		QAR_PIXEL_FORMAT_B8G8R8A8, // format
+		0,						   // width
+		0,						   // height
+		1						   // array_layers
 	};
 	return size;
 }
@@ -3049,14 +3034,15 @@ static inline QarVideoFrameView
 qar_video_frame_view_default(void)
 {
 	QarVideoFrameView view = {
-		0,									 // start_x
-		0,									 // start_y
-		{ 0, 0 },							 // size
-		0,									 // texture_index
-		0,									 // array_layer_index
-		QAR_PIXEL_FORMAT_R8,				 // texture_format
-		QAR_VIDEO_FRAME_VIEW_TYPE_GRAYSCALE, // data_type
-		QAR_VIDEO_FRAME_VIEW_EYE_NONE		 // eye
+		0,								 // start_x
+		0,								 // start_y
+		0,								 // end_x
+		0,								 // end_y
+		0,								 // texture_index
+		0,								 // array_layer_index
+		QAR_PIXEL_FORMAT_B8G8R8A8,		 // texture_format
+		QAR_VIDEO_FRAME_VIEW_TYPE_COLOR, // data_type
+		QAR_VIDEO_FRAME_VIEW_EYE_NONE	 // eye
 	};
 	return view;
 }
@@ -3164,6 +3150,50 @@ qar_app_volume_editing_status_default(void)
 	return aves;
 }
 
+static inline QarAppVolumeGestureMappingRule
+qar_app_volume_gesture_mapping_rule_default(void)
+{
+	QarAppVolumeGestureMappingRule rule = {
+		{ QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_MAPPING_RULE, NULL },
+		QAR_GESTURE_CLICK,
+		true,
+		1.0f,
+		QAR_APP_SCALE_SENSITIVITY_CONSTANT,
+		QAR_APP_VOLUME_AXIS_ALL,
+		QAR_APP_VOLUME_AXIS_ALL,
+		true,
+		{
+			QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_SOLID,
+			{ 255, 255, 255, 255 },
+		},
+		QAR_GESTURE_APP_TRANSFORM_MAPPING_NONE
+	};
+	return rule;
+}
+
+static inline QarAppVolumeGestureConfiguration
+qar_app_volume_gesture_configuration_default(void)
+{
+	QarAppVolumeGestureConfiguration config = {
+		{ QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION, NULL }, {}, 2
+	};
+	config.mapping_rules[0] = qar_app_volume_gesture_mapping_rule_default();
+	config.mapping_rules[0].gesture_kind =
+		QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE;
+	config.mapping_rules[0].precision = 2.0f;
+	config.mapping_rules[0].app_scale_sensitivity_mode =
+		QAR_APP_SCALE_SENSITIVITY_BASED_ON_APP_SCALE;
+	config.mapping_rules[0].app_transform_mapping =
+		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_SCALE;
+	config.mapping_rules[1] = qar_app_volume_gesture_mapping_rule_default();
+	config.mapping_rules[1].gesture_kind = QAR_GESTURE_SINGLE_POINTER_6DOF;
+	config.mapping_rules[1].precision = 1.0f;
+	config.mapping_rules[1].app_transform_mapping =
+		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_POSE;
+
+	return config;
+}
+
 // ============================================================================
 // DEFAULT INITIALIZATION HELPER FUNCTIONS
 // ============================================================================
@@ -3174,7 +3204,8 @@ qar_library_init_default(void)
 	QarLibraryInit init = {
 		{ QAR_STRUCTURE_TYPE_LIBRARY_INIT, NULL }, // header
 		true,									   // enable_console_logging
-		NULL									   // log_folder_path
+		NULL,									   // log_folder_path
+		QAR_LOG_SEVERITY_INFO					   // log_severity
 	};
 	return init;
 }
@@ -3184,42 +3215,92 @@ qar_runtime_init_default(void)
 {
 	QarRuntimeInit init = {
 		{ QAR_STRUCTURE_TYPE_RUNTIME_INIT, NULL }, // header
-		NULL // runtime_binaries_folder_path
+		NULL, // runtime_binaries_folder_path
+		NULL  // storage_folder_path
 	};
 	return init;
 }
 
-static inline QarPeerSpecInit
-qar_peer_spec_init_default(void)
+static inline QarOnboardingId
+qar_onboarding_id_default(void)
 {
-	QarPeerSpecInit init = {
-		{ QAR_STRUCTURE_TYPE_PEER_SPEC_INIT, NULL }, // header
-		NULL,										 // id
-		NULL,										 // display_name
-		NULL,										 // app_version
-		NULL										 // app_custom_peer_info
+	QarOnboardingId id = QAR_ID_DEFAULT;
+	return id;
+}
+
+static inline QarPeerPresentation
+qar_peer_presentation_default(void)
+{
+	QarPeerPresentation presentation = {
+		{ QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, // header
+		NULL,											// display_name
+		NULL,											// app_version
+		NULL											// app_custom_peer_info
+	};
+	return presentation;
+}
+
+static inline QarRejoinInit
+qar_rejoin_init_default(void)
+{
+	QarRejoinInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT, NULL }, // header
+		QAR_ID_DEFAULT,									  // onboarding_id
+		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL }
 	};
 	return init;
 }
 
-static inline QarSessionCreateInit
-qar_session_create_init_default(void)
+static inline QarOnboardWithCodeInit
+qar_onboard_with_code_init_default(void)
 {
-	QarSessionCreateInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_CREATE_INIT, NULL }, // header
-		NULL,											  // session_id
+	QarOnboardWithCodeInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT, NULL }, // header
+		QAR_ID_DEFAULT, // onboarding_id (zero -> fresh identity)
+		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL },
+		NULL // code (required, caller must set)
 	};
 	return init;
 }
 
-static inline QarSessionJoinInit
-qar_session_join_init_default(void)
+static inline QarOnboardHostExt
+qar_onboard_host_ext_default(void)
 {
-	QarSessionJoinInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_JOIN_INIT, NULL }, // header
-		NULL,											// invite_data
-		0,												// invite_data_size
-		qar_peer_spec_init_default()					// peer_spec_init
+	QarOnboardHostExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT, NULL }, // header
+		NULL, // hostname (required, caller must set)
+		0	  // port (0 -> standard discovery port)
+	};
+	return ext;
+}
+
+static inline QarOnboardWithInviteInit
+qar_onboard_with_invite_init_default(void)
+{
+	QarOnboardWithInviteInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT, NULL },
+		QAR_ID_DEFAULT, // onboarding_id (zero -> fresh identity)
+		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL },
+		NULL // invite (required, caller must set)
+	};
+	return init;
+}
+
+static inline QarRequestInviteInit
+qar_request_invite_init_default(void)
+{
+	QarRequestInviteInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL } // header
+	};
+	return init;
+}
+
+static inline QarForgetInit
+qar_forget_init_default(void)
+{
+	QarForgetInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT, NULL }, // header
+		QAR_ID_DEFAULT									  // onboarding_id
 	};
 	return init;
 }
@@ -3257,11 +3338,12 @@ qar_gui_panel_init_default(void)
 {
 	QarGuiPanelInit init = {
 		{ QAR_STRUCTURE_TYPE_GUI_PANEL_INIT, NULL }, // header
-		NULL,										 // display_name
-		qar_pose_default(),							 // pose
-		qar_gui_panel_size_default(),				 // size
-		NULL,										 // visible_to_peers
-		0											 // visible_to_peer_count
+		NULL,						  // common_name (required, caller must set)
+		NULL,						  // display_name
+		qar_pose_default(),			  // pose
+		qar_gui_panel_size_default(), // size
+		NULL,						  // visible_to_peers
+		0							  // visible_to_peer_count
 	};
 	return init;
 }
@@ -3271,11 +3353,17 @@ qar_app_volume_init_default(void)
 {
 	QarAppVolumeInit init = {
 		{ QAR_STRUCTURE_TYPE_APP_VOLUME_INIT, NULL }, // header
-		NULL,										  // display_name
-		qar_pose_default(),							  // pose
-		qar_app_volume_size_default(),				  // size
-		NULL,										  // initial_peers
-		0											  // initial_peer_count
+		NULL,				// common_name (required, caller must set)
+		NULL,				// display_name
+		qar_pose_default(), // pose
+		qar_app_volume_size_default(), // size
+		NULL,						   // initial_peers
+		0,							   // initial_peer_count
+		qar_pose_default(),			   // app_pose
+		1.0f,						   // app_scale
+		false,						   // has_app_world_anchor
+		{},							   // app_world_anchor
+		NULL						   // gesture_configuration
 	};
 	return init;
 }
@@ -3285,7 +3373,8 @@ qar_render_frame_show_default(void)
 {
 	QarRenderFrameShow init = {
 		{ QAR_STRUCTURE_TYPE_RENDERING_END_FRAME, NULL }, // header
-		qar_near_far_default()							  // rendered_near_far
+		qar_near_far_default(),							  // rendered_near_far
+		1.0f											  // depth_scale
 	};
 	return init;
 }
@@ -3306,1085 +3395,480 @@ qar_stream_params_d3d11_default(void)
 }
 #endif
 
-// ============================================================================
-// SESSION INVITE HELPER FUNCTIONS
-// ============================================================================
-
-static inline QarSessionInvite
-qar_session_invite_default(void)
-{
-	QarSessionInvite invite = {
-		qar_session_id_default(), // session_id
-		NULL,					  // data
-		0						  // data_size
-	};
-	return invite;
-}
-
-static inline void
-qar_session_invite_destroy(QarSessionInvite* invite)
-{
-	if(invite == NULL)
-	{
-		return;
-	}
-
-	// Free the data if it was allocated
-	if(invite->data != NULL)
-	{
-		free(invite->data);
-		invite->data = NULL;
-	}
-	invite->data_size = 0;
-
-	// Free the invite structure itself
-	free(invite);
-}
-
 #endif // QAR_STREAMING_C_V0_DETAIL_DEFAULT_INITS_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 #define QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Callback typedefs
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
 );
 
-// Function registry enum for GUI panels functions
-typedef enum QarGuiPanelsImplFuncIndex
-{
-	QAR_IMPL_FUNC_GUI_PANELS_ADD_PANEL = 0,
-	QAR_IMPL_FUNC_GUI_PANELS_UPDATE_POSE,
-	QAR_IMPL_FUNC_GUI_PANELS_CHANGE_SIZE,
-	QAR_IMPL_FUNC_GUI_PANELS_SET_STATE,
-	QAR_IMPL_FUNC_GUI_PANELS_CLOSE_PANEL,
-	QAR_IMPL_FUNC_GUI_PANELS_NAVIGATE_TO_URI,
-	QAR_IMPL_FUNC_GUI_PANELS_UPDATE_VISIBLE_TO,
-	QAR_IMPL_FUNC_GUI_PANELS_SUBSCRIBE_UPDATES,
-	QAR_IMPL_FUNC_GUI_PANELS_SUBSCRIBE_PANEL_UPDATES,
-	QAR_IMPL_FUNC_GUI_PANEL_HANDLE_IS_VALID,
-	QAR_IMPL_FUNC_GUI_PANEL_HANDLE_DESTROY,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_ID,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_DISPLAY_NAME,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_POSE,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_SIZE,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_CONTENT_URI,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_STATE,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_VISIBLE_TO_PEERS_COUNT,
-	QAR_IMPL_FUNC_GUI_PANEL_GET_VISIBLE_TO_PEERS,
-	QAR_IMPL_FUNC_QUERY_GUI_PANELS_COUNT,
-	QAR_IMPL_FUNC_QUERY_GUI_PANELS,
-	QAR_IMPL_FUNC_GUI_PANELS_COUNT
-} QarGuiPanelsImplFuncIndex;
+#define QAR_GUI_PANELS_FUNCTION_LIST(X)                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_get_or_create,                                                \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelInit* init,                                            \
+	   QarGuiPanelId* out_panel_id),                                           \
+	  (session, init, out_panel_id))                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_update_pose,                                                  \
+	  (QarSession * session, const QarGuiPanelId* id, const QarPose* pose),    \
+	  (session, id, pose))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_change_size,                                                  \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   const QarGuiPanelSize* size),                                           \
+	  (session, id, size))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_set_state,                                                    \
+	  (QarSession * session, const QarGuiPanelId* id, QarGuiPanelState state), \
+	  (session, id, state))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_close_panel,                                                  \
+	  (QarSession * session, const QarGuiPanelId* id),                         \
+	  (session, id))                                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_navigate_to_uri,                                              \
+	  (QarSession * session, const QarGuiPanelId* id, const char* uri),        \
+	  (session, id, uri))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_update_visible_to,                                            \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   const QarPeerId** peer_ids_additions,                                   \
+	   size_t additions_count,                                                 \
+	   const QarPeerId** peer_ids_removals,                                    \
+	   size_t removals_count),                                                 \
+	  (session,                                                                \
+	   id,                                                                     \
+	   peer_ids_additions,                                                     \
+	   additions_count,                                                        \
+	   peer_ids_removals,                                                      \
+	   removals_count))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_subscribe_updates,                                            \
+	  (QarSession * session,                                                   \
+	   qar_gui_panel_update_callback_t callback,                               \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, callback, user_state, token))                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_subscribe_panel_updates,                                      \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   qar_gui_panel_update_callback_t callback,                               \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, id, callback, user_state, token))                              \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  gui_panel_handle_is_valid,                                               \
+	  (QarGuiPanel * handle),                                                  \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  gui_panel_handle_destroy,                                                \
+	  (QarGuiPanel * handle),                                                  \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_id,                                                        \
+	  (QarGuiPanel * handle, QarGuiPanelId * out_id),                          \
+	  (handle, out_id))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_display_name,                                              \
+	  (QarGuiPanel * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_pose,                                                      \
+	  (QarGuiPanel * handle, QarPose * out_pose),                              \
+	  (handle, out_pose))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_size,                                                      \
+	  (QarGuiPanel * handle, QarGuiPanelSize * out_size),                      \
+	  (handle, out_size))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_content_uri,                                               \
+	  (QarGuiPanel * handle, char* out_uri, size_t buffer_size),               \
+	  (handle, out_uri, buffer_size))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_state,                                                     \
+	  (QarGuiPanel * handle, QarGuiPanelState * out_state),                    \
+	  (handle, out_state))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_visible_to_peers_count,                                    \
+	  (QarGuiPanel * handle, size_t* out_count),                               \
+	  (handle, out_count))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_visible_to_peers,                                          \
+	  (QarGuiPanel * handle,                                                   \
+	   QarPeerId * out_peers,                                                  \
+	   size_t peers_buffer_size,                                               \
+	   size_t* out_peers_written),                                             \
+	  (handle, out_peers, peers_buffer_size, out_peers_written))               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_gui_panels_count,                                                  \
+	  (QarSession * session, size_t* out_count),                               \
+	  (session, out_count))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_gui_panels,                                                        \
+	  (QarSession * session,                                                   \
+	   QarGuiPanel * *out_handles,                                             \
+	   size_t handles_buffer_size,                                             \
+	   size_t* out_handles_written),                                           \
+	  (session, out_handles, handles_buffer_size, out_handles_written))
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_GUI_PANELS_IMPL_FUNCTION_NAMES                                     \
-	"qar_impl_gui_panels_add_panel", "qar_impl_gui_panels_update_pose",        \
-		"qar_impl_gui_panels_change_size", "qar_impl_gui_panels_set_state",    \
-		"qar_impl_gui_panels_close_panel",                                     \
-		"qar_impl_gui_panels_navigate_to_uri",                                 \
-		"qar_impl_gui_panels_update_visible_to",                               \
-		"qar_impl_gui_panels_subscribe_updates",                               \
-		"qar_impl_gui_panels_subscribe_panel_updates",                         \
-		"qar_impl_gui_panel_handle_is_valid",                                  \
-		"qar_impl_gui_panel_handle_destroy", "qar_impl_gui_panel_get_id",      \
-		"qar_impl_gui_panel_get_display_name", "qar_impl_gui_panel_get_pose",  \
-		"qar_impl_gui_panel_get_size", "qar_impl_gui_panel_get_content_uri",   \
-		"qar_impl_gui_panel_get_state",                                        \
-		"qar_impl_gui_panel_get_visible_to_peers_count",                       \
-		"qar_impl_gui_panel_get_visible_to_peers",                             \
-		"qar_impl_query_gui_panels_count", "qar_impl_query_gui_panels"
+QAR_DECLARE_MODULE_COMMON(
+	GUI_PANELS, GuiPanels, gui_panels, QAR_GUI_PANELS_FUNCTION_LIST
+);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_GUI_PANELS_FUNCTION_LIST)
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
+#define QAR_GUI_PANELS_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)        \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_gui_panels_api, "gui_panels", STATUS, RET, NAME, PARAMS, ARGS    \
+	)
 
-// Function typedefs for GUI panel management
-typedef QarResult (*qar_gui_panels_add_panel_func_t)(
-	QarSession* session,
-	const QarGuiPanelInit* init,
-	QarGuiPanelId* out_panel_id
-);
-typedef QarResult (*qar_gui_panels_update_pose_func_t)(
-	QarSession* session, const QarGuiPanelId* id, const QarPose* pose
-);
-typedef QarResult (*qar_gui_panels_change_size_func_t)(
-	QarSession* session, const QarGuiPanelId* id, const QarGuiPanelSize* size
-);
-typedef QarResult (*qar_gui_panels_set_state_func_t)(
-	QarSession* session, const QarGuiPanelId* id, QarGuiPanelState state
-);
-typedef QarResult (*qar_gui_panels_close_panel_func_t)(
-	QarSession* session, const QarGuiPanelId* id
-);
-typedef QarResult (*qar_gui_panels_navigate_to_uri_func_t)(
-	QarSession* session, const QarGuiPanelId* id, const char* uri
-);
-typedef QarResult (*qar_gui_panels_update_visible_to_func_t)(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	const QarPeerId** peer_ids_additions,
-	size_t additions_count,
-	const QarPeerId** peer_ids_removals,
-	size_t removals_count
-);
-typedef QarResult (*qar_gui_panels_subscribe_updates_func_t)(
-	QarSession* session,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-typedef QarResult (*qar_gui_panels_subscribe_panel_updates_func_t)(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
+QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 
-// GUI panel handle function typedefs
-typedef bool (*qar_gui_panel_handle_is_valid_func_t)(QarGuiPanel* handle);
-typedef void (*qar_gui_panel_handle_destroy_func_t)(QarGuiPanel* handle);
-typedef QarResult (*qar_gui_panel_get_id_func_t)(
-	QarGuiPanel* handle, QarGuiPanelId* out_id
-);
-typedef QarResult (*qar_gui_panel_get_display_name_func_t)(
-	QarGuiPanel* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_gui_panel_get_pose_func_t)(
-	QarGuiPanel* handle, QarPose* out_pose
-);
-typedef QarResult (*qar_gui_panel_get_size_func_t)(
-	QarGuiPanel* handle, QarGuiPanelSize* out_size
-);
-typedef QarResult (*qar_gui_panel_get_content_uri_func_t)(
-	QarGuiPanel* handle, char* out_uri, size_t buffer_size
-);
-typedef QarResult (*qar_gui_panel_get_state_func_t)(
-	QarGuiPanel* handle, QarGuiPanelState* out_state
-);
-typedef QarResult (*qar_gui_panel_get_visible_to_peers_count_func_t)(
-	QarGuiPanel* handle, size_t* out_count
-);
-typedef QarResult (*qar_gui_panel_get_visible_to_peers_func_t)(
-	QarGuiPanel* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-);
-typedef QarResult (*qar_query_gui_panels_count_func_t)(
-	QarSession* session, size_t* out_count
-);
-typedef QarResult (*qar_query_gui_panels_func_t)(
-	QarSession* session,
-	QarGuiPanel** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-
-#else
-
-// Static implementation function declarations
-QAR_C_API QarResult qar_impl_gui_panels_add_panel(
-	QarSession* session,
-	const QarGuiPanelInit* init,
-	QarGuiPanelId* out_panel_id
-);
-QAR_C_API QarResult qar_impl_gui_panels_update_pose(
-	QarSession* session, const QarGuiPanelId* id, const QarPose* pose
-);
-QAR_C_API QarResult qar_impl_gui_panels_change_size(
-	QarSession* session, const QarGuiPanelId* id, const QarGuiPanelSize* size
-);
-QAR_C_API QarResult qar_impl_gui_panels_set_state(
-	QarSession* session, const QarGuiPanelId* id, QarGuiPanelState state
-);
-QAR_C_API QarResult
-qar_impl_gui_panels_close_panel(QarSession* session, const QarGuiPanelId* id);
-QAR_C_API QarResult qar_impl_gui_panels_navigate_to_uri(
-	QarSession* session, const QarGuiPanelId* id, const char* uri
-);
-QAR_C_API QarResult qar_impl_gui_panels_update_visible_to(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	const QarPeerId** peer_ids_additions,
-	size_t additions_count,
-	const QarPeerId** peer_ids_removals,
-	size_t removals_count
-);
-QAR_C_API QarResult qar_impl_gui_panels_subscribe_updates(
-	QarSession* session,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-QAR_C_API QarResult qar_impl_gui_panels_subscribe_panel_updates(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-QAR_C_API bool qar_impl_gui_panel_handle_is_valid(QarGuiPanel* handle);
-QAR_C_API void qar_impl_gui_panel_handle_destroy(QarGuiPanel* handle);
-QAR_C_API QarResult
-qar_impl_gui_panel_get_id(QarGuiPanel* handle, QarGuiPanelId* out_id);
-QAR_C_API QarResult qar_impl_gui_panel_get_display_name(
-	QarGuiPanel* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult
-qar_impl_gui_panel_get_pose(QarGuiPanel* handle, QarPose* out_pose);
-QAR_C_API QarResult
-qar_impl_gui_panel_get_size(QarGuiPanel* handle, QarGuiPanelSize* out_size);
-QAR_C_API QarResult qar_impl_gui_panel_get_content_uri(
-	QarGuiPanel* handle, char* out_uri, size_t buffer_size
-);
-QAR_C_API QarResult
-qar_impl_gui_panel_get_state(QarGuiPanel* handle, QarGuiPanelState* out_state);
-QAR_C_API QarResult qar_impl_gui_panel_get_visible_to_peers_count(
-	QarGuiPanel* handle, size_t* out_count
-);
-QAR_C_API QarResult qar_impl_gui_panel_get_visible_to_peers(
-	QarGuiPanel* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-);
-QAR_C_API QarResult
-qar_impl_query_gui_panels_count(QarSession* session, size_t* out_count);
-QAR_C_API QarResult qar_impl_query_gui_panels(
-	QarSession* session,
-	QarGuiPanel** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-#endif
-// ============================================================================
-// GUI PANEL MANAGEMENT DISPATCH FUNCTIONS
-// ============================================================================
-
-static inline QarResult
-qar_gui_panels_add_panel(
-	QarSession* session,
-	const QarGuiPanelInit* init,
-	QarGuiPanelId* out_panel_id
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_add_panel,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_ADD_PANEL,
-		session,
-		init,
-		out_panel_id
-	);
-#else
-	return qar_impl_gui_panels_add_panel(session, init, out_panel_id);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_update_pose(
-	QarSession* session, const QarGuiPanelId* id, const QarPose* pose
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_update_pose,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_UPDATE_POSE,
-		session,
-		id,
-		pose
-	);
-#else
-	return qar_impl_gui_panels_update_pose(session, id, pose);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_change_size(
-	QarSession* session, const QarGuiPanelId* id, const QarGuiPanelSize* size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_change_size,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_CHANGE_SIZE,
-		session,
-		id,
-		size
-	);
-#else
-	return qar_impl_gui_panels_change_size(session, id, size);
-#endif
-}
-static inline QarResult
-qar_gui_panels_set_state(
-	QarSession* session, const QarGuiPanelId* id, QarGuiPanelState state
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_set_state,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_SET_STATE,
-		session,
-		id,
-		state
-	);
-#else
-	return qar_impl_gui_panels_set_state(session, id, state);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_close_panel(QarSession* session, const QarGuiPanelId* id)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_close_panel,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_CLOSE_PANEL,
-		session,
-		id
-	);
-#else
-	return qar_impl_gui_panels_close_panel(session, id);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_navigate_to_uri(
-	QarSession* session, const QarGuiPanelId* id, const char* uri
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_navigate_to_uri,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_NAVIGATE_TO_URI,
-		session,
-		id,
-		uri
-	);
-#else
-	return qar_impl_gui_panels_navigate_to_uri(session, id, uri);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_update_visible_to(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	const QarPeerId** peer_ids_additions,
-	size_t additions_count,
-	const QarPeerId** peer_ids_removals,
-	size_t removals_count
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_update_visible_to,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_UPDATE_VISIBLE_TO,
-		session,
-		id,
-		peer_ids_additions,
-		additions_count,
-		peer_ids_removals,
-		removals_count
-	);
-#else
-	return qar_impl_gui_panels_update_visible_to(
-		session,
-		id,
-		peer_ids_additions,
-		additions_count,
-		peer_ids_removals,
-		removals_count
-	);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_subscribe_updates(
-	QarSession* session,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_subscribe_updates,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_SUBSCRIBE_UPDATES,
-		session,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_gui_panels_subscribe_updates(
-		session, callback, user_state, token
-	);
-#endif
-}
-
-static inline QarResult
-qar_gui_panels_subscribe_panel_updates(
-	QarSession* session,
-	const QarGuiPanelId* id,
-	qar_gui_panel_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panels_subscribe_panel_updates,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANELS_SUBSCRIBE_PANEL_UPDATES,
-		session,
-		id,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_gui_panels_subscribe_panel_updates(
-		session, id, callback, user_state, token
-	);
-#endif
-}
-
-// GUI Panel Handle Management - Dispatch Functions
-static inline bool
-qar_gui_panel_handle_is_valid(QarGuiPanel* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_handle_is_valid,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_HANDLE_IS_VALID,
-		handle
-	);
-#else
-	return qar_impl_gui_panel_handle_is_valid(handle);
-#endif
-}
-
-static inline void
-qar_gui_panel_handle_destroy(QarGuiPanel* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		gui_panel_handle_destroy,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_gui_panel_handle_destroy(handle);
-#endif
-}
-
-// GUI Panel Property Getters - Dispatch Functions
-static inline QarResult
-qar_gui_panel_get_id(QarGuiPanel* handle, QarGuiPanelId* out_id)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_id,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_ID,
-		handle,
-		out_id
-	);
-#else
-	return qar_impl_gui_panel_get_id(handle, out_id);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_display_name(
-	QarGuiPanel* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_display_name,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_DISPLAY_NAME,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_gui_panel_get_display_name(handle, out_buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_pose(QarGuiPanel* handle, QarPose* out_pose)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_pose,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_POSE,
-		handle,
-		out_pose
-	);
-#else
-	return qar_impl_gui_panel_get_pose(handle, out_pose);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_size(QarGuiPanel* handle, QarGuiPanelSize* out_size)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_size,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_SIZE,
-		handle,
-		out_size
-	);
-#else
-	return qar_impl_gui_panel_get_size(handle, out_size);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_content_uri(
-	QarGuiPanel* handle, char* out_uri, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_content_uri,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_CONTENT_URI,
-		handle,
-		out_uri,
-		buffer_size
-	);
-#else
-	return qar_impl_gui_panel_get_content_uri(handle, out_uri, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_state(QarGuiPanel* handle, QarGuiPanelState* out_state)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_state,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_STATE,
-		handle,
-		out_state
-	);
-#else
-	return qar_impl_gui_panel_get_state(handle, out_state);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_visible_to_peers_count(QarGuiPanel* handle, size_t* out_count)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_visible_to_peers_count,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_VISIBLE_TO_PEERS_COUNT,
-		handle,
-		out_count
-	);
-#else
-	return qar_impl_gui_panel_get_visible_to_peers_count(handle, out_count);
-#endif
-}
-
-static inline QarResult
-qar_gui_panel_get_visible_to_peers(
-	QarGuiPanel* handle,
-	QarPeerId* out_peers,
-	size_t peers_buffer_size,
-	size_t* out_peers_written
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		gui_panel_get_visible_to_peers,
-		gui_panels,
-		QAR_IMPL_FUNC_GUI_PANEL_GET_VISIBLE_TO_PEERS,
-		handle,
-		out_peers,
-		peers_buffer_size,
-		out_peers_written
-	);
-#else
-	return qar_impl_gui_panel_get_visible_to_peers(
-		handle, out_peers, peers_buffer_size, out_peers_written
-	);
-#endif
-}
-
-// GUI Panel Query Functions - Dispatch Functions
-static inline QarResult
-qar_query_gui_panels_count(QarSession* session, size_t* out_count)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_gui_panels_count,
-		gui_panels,
-		QAR_IMPL_FUNC_QUERY_GUI_PANELS_COUNT,
-		session,
-		out_count
-	);
-#else
-	return qar_impl_query_gui_panels_count(session, out_count);
-#endif
-}
-
-static inline QarResult
-qar_query_gui_panels(
-	QarSession* session,
-	QarGuiPanel** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_gui_panels,
-		gui_panels,
-		QAR_IMPL_FUNC_QUERY_GUI_PANELS,
-		session,
-		out_handles,
-		handles_buffer_size,
-		out_handles_written
-	);
-#else
-	return qar_impl_query_gui_panels(
-		session, out_handles, handles_buffer_size, out_handles_written
-	);
-#endif
-}
+#undef QAR_GUI_PANELS_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
+
+#ifndef QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
+#define QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
+
+
+#define QAR_ONBOARDING_FUNCTION_LIST(X)                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_rejoin,                                                          \
+	  (QarRuntime * runtime,                                                   \
+	   const QarRejoinInit* init,                                              \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarSession** out_session),                                              \
+	  (runtime, init, on_progress, progress_state, cancel, out_session))       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_rejoin_async,                                                    \
+	  (QarRuntime * runtime,                                                   \
+	   const QarRejoinInit* init,                                              \
+	   qar_runtime_onboard_result_callback_t result_callback,                  \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (runtime, init, result_callback, update_callback, user_state, cancel))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_onboard_with_code,                                               \
+	  (QarRuntime * runtime,                                                   \
+	   const QarOnboardWithCodeInit* init,                                     \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarOnboardingId* out_onboarding_id,                                     \
+	   QarSession** out_session),                                              \
+	  (runtime,                                                                \
+	   init,                                                                   \
+	   on_progress,                                                            \
+	   progress_state,                                                         \
+	   cancel,                                                                 \
+	   out_onboarding_id,                                                      \
+	   out_session))                                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_onboard_with_code_async,                                         \
+	  (QarRuntime * runtime,                                                   \
+	   const QarOnboardWithCodeInit* init,                                     \
+	   qar_runtime_onboard_result_callback_t result_callback,                  \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (runtime, init, result_callback, update_callback, user_state, cancel))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_onboard_with_invite,                                             \
+	  (QarRuntime * runtime,                                                   \
+	   const QarOnboardWithInviteInit* init,                                   \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarOnboardingId* out_onboarding_id,                                     \
+	   QarSession** out_session),                                              \
+	  (runtime,                                                                \
+	   init,                                                                   \
+	   on_progress,                                                            \
+	   progress_state,                                                         \
+	   cancel,                                                                 \
+	   out_onboarding_id,                                                      \
+	   out_session))                                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_onboard_with_invite_async,                                       \
+	  (QarRuntime * runtime,                                                   \
+	   const QarOnboardWithInviteInit* init,                                   \
+	   qar_runtime_onboard_result_callback_t result_callback,                  \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (runtime, init, result_callback, update_callback, user_state, cancel))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_request_onboarding_invite,                                       \
+	  (QarSession * session,                                                   \
+	   const QarRequestInviteInit* init,                                       \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarOnboardingInvite** out_invite),                                      \
+	  (session, init, on_progress, progress_state, cancel, out_invite))        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_request_onboarding_invite_async,                                 \
+	  (QarSession * session,                                                   \
+	   const QarRequestInviteInit* init,                                       \
+	   qar_session_request_invite_result_callback_t result_callback,           \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (session, init, result_callback, update_callback, user_state, cancel))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_forget,                                                          \
+	  (QarRuntime * runtime, const QarForgetInit* init),                       \
+	  (runtime, init))                                                         \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_deserialize,                                           \
+	  (const uint8_t* wire_data,                                               \
+	   size_t wire_data_size,                                                  \
+	   QarOnboardingInvite** out_invite),                                      \
+	  (wire_data, wire_data_size, out_invite))                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_serialized_size,                                       \
+	  (const QarOnboardingInvite* invite, size_t* out_size),                   \
+	  (invite, out_size))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_serialize,                                             \
+	  (const QarOnboardingInvite* invite,                                      \
+	   uint8_t* out_buffer,                                                    \
+	   size_t buffer_size,                                                     \
+	   size_t* out_bytes_written),                                             \
+	  (invite, out_buffer, buffer_size, out_bytes_written))                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_get_method,                                            \
+	  (const QarOnboardingInvite* invite, QarOnboardingMethod* out_method),    \
+	  (invite, out_method))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_get_expires_unix,                                      \
+	  (const QarOnboardingInvite* invite, int64_t* out_expires_unix),          \
+	  (invite, out_expires_unix))                                              \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  onboarding_invite_handle_is_valid,                                       \
+	  (const QarOnboardingInvite* invite),                                     \
+	  (invite))                                                                \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  onboarding_invite_handle_destroy,                                        \
+	  (QarOnboardingInvite * invite),                                          \
+	  (invite))
+
+QAR_DECLARE_MODULE_COMMON(
+	ONBOARDING, Onboarding, onboarding, QAR_ONBOARDING_FUNCTION_LIST
+);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_ONBOARDING_FUNCTION_LIST)
+
+#define QAR_ONBOARDING_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)        \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_onboarding_api, "onboarding", STATUS, RET, NAME, PARAMS, ARGS    \
+	)
+
+QAR_ONBOARDING_FUNCTION_LIST(QAR_ONBOARDING_DECLARE_WRAPPER)
+
+#undef QAR_ONBOARDING_DECLARE_WRAPPER
+
+static inline bool
+qar_onboarding_id_equals(const QarOnboardingId* id1, const QarOnboardingId* id2)
+{
+	if(id1 == NULL || id2 == NULL)
+	{
+		return false;
+	}
+
+	for(size_t i = 0; i < QAR_MAX_ID_LENGTH; i++)
+	{
+		if(id1->data[i] != id2->data[i])
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static inline bool
+qar_onboarding_id_is_zero(const QarOnboardingId* id)
+{
+	if(id == NULL)
+	{
+		return true;
+	}
+
+	for(size_t i = 0; i < QAR_MAX_ID_LENGTH; i++)
+	{
+		if(id->data[i] != 0)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+#endif // QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 #define QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
-
-// Function registry enum for peer management functions
-typedef enum QarPeerManagementImplFuncIndex
-{
-	QAR_IMPL_FUNC_PEER_SPEC_HANDLE_IS_VALID = 0,
-	QAR_IMPL_FUNC_PEER_SPEC_HANDLE_DESTROY,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_ID,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_DISPLAY_NAME,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_APP_VERSION,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_APP_CUSTOM_PEER_INFO,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_APP_STATE,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_VERSION_ID,
-	QAR_IMPL_FUNC_PEER_SPEC_GET_ROOM_TAG,
-	QAR_IMPL_FUNC_SESSION_GET_MY_SPEC,
-	QAR_IMPL_FUNC_QUERY_PEER_SPECS_COUNT,
-	QAR_IMPL_FUNC_QUERY_PEER_SPECS,
-	QAR_IMPL_FUNC_PEER_UPDATE_DISPLAY_NAME,
-	QAR_IMPL_FUNC_PEER_SUBSCRIBE_UPDATES,
-	QAR_IMPL_FUNC_PEER_MANAGEMENT_COUNT
-} QarPeerManagementImplFuncIndex;
-
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_PEER_MANAGEMENT_IMPL_FUNCTION_NAMES                                \
-	"qar_impl_peer_spec_handle_is_valid", "qar_impl_peer_spec_handle_destroy", \
-		"qar_impl_peer_spec_get_id", "qar_impl_peer_spec_get_display_name",    \
-		"qar_impl_peer_spec_get_app_version",                                  \
-		"qar_impl_peer_spec_get_app_custom_peer_info",                         \
-		"qar_impl_peer_spec_get_app_state",                                    \
-		"qar_impl_peer_spec_get_version_id",                                   \
-		"qar_impl_peer_spec_get_room_tag", "qar_impl_session_get_my_spec",     \
-		"qar_impl_query_peer_specs_count", "qar_impl_query_peer_specs",        \
-		"qar_impl_peer_update_display_name", "qar_impl_peer_subscribe_updates"
 
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
 );
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for peer management
-typedef bool (*qar_peer_spec_handle_is_valid_func_t)(QarPeerSpec* handle);
-typedef void (*qar_peer_spec_handle_destroy_func_t)(QarPeerSpec* handle);
-typedef QarResult (*qar_peer_spec_get_id_func_t)(
-	QarPeerSpec* handle, QarPeerId* out_id
-);
-typedef QarResult (*qar_peer_spec_get_display_name_func_t)(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_peer_spec_get_app_version_func_t)(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_peer_spec_get_app_custom_peer_info_func_t)(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_peer_spec_get_app_state_func_t)(
-	QarPeerSpec* handle, QarAppState* out_state
-);
-typedef QarResult (*qar_peer_spec_get_version_id_func_t)(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_peer_spec_get_room_tag_func_t)(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-typedef QarResult (*qar_session_get_my_spec_func_t)(
-	const QarSession* session, QarPeerSpec** out_handle
-);
-typedef QarResult (*qar_query_peer_specs_count_func_t)(
-	QarSession* session, size_t* out_count
-);
-typedef QarResult (*qar_query_peer_specs_func_t)(
-	QarSession* session,
-	QarPeerSpec** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-typedef QarResult (*qar_peer_update_display_name_func_t)(
-	QarSession* session, const char* name
-);
+#define QAR_PEER_MANAGEMENT_FUNCTION_LIST(X)                                   \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  peer_spec_handle_is_valid,                                               \
+	  (QarPeerSpec * handle),                                                  \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  peer_spec_handle_destroy,                                                \
+	  (QarPeerSpec * handle),                                                  \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_id,                                                        \
+	  (QarPeerSpec * handle, QarPeerId * out_id),                              \
+	  (handle, out_id))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_display_name,                                              \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_app_version,                                               \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_app_custom_peer_info,                                      \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_app_state,                                                 \
+	  (QarPeerSpec * handle, QarAppState * out_state),                         \
+	  (handle, out_state))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_version_id,                                                \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_room_tag,                                                  \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_get_my_spec,                                                     \
+	  (const QarSession* session, QarPeerSpec** out_handle),                   \
+	  (session, out_handle))                                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_peer_specs_count,                                                  \
+	  (QarSession * session, size_t* out_count),                               \
+	  (session, out_count))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  query_peer_specs,                                                        \
+	  (QarSession * session,                                                   \
+	   QarPeerSpec * *out_handles,                                             \
+	   size_t handles_buffer_size,                                             \
+	   size_t* out_handles_written),                                           \
+	  (session, out_handles, handles_buffer_size, out_handles_written))        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_update_display_name,                                                \
+	  (QarSession * session, const char* name),                                \
+	  (session, name))                                                         \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_subscribe_updates,                                                  \
+	  (QarSession * session,                                                   \
+	   qar_peer_update_callback_t callback,                                    \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, callback, user_state, token))
 
-typedef QarResult (*qar_peer_subscribe_updates_func_t)(
-	QarSession* session,
-	qar_peer_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
+QAR_DECLARE_MODULE_COMMON(
+	PEER_MANAGEMENT,
+	PeerManagement,
+	peer_management,
+	QAR_PEER_MANAGEMENT_FUNCTION_LIST
 );
-#else
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_PEER_MANAGEMENT_FUNCTION_LIST)
 
-// Static implementation function declarations
-QAR_C_API bool qar_impl_peer_spec_handle_is_valid(QarPeerSpec* handle);
-QAR_C_API void qar_impl_peer_spec_handle_destroy(QarPeerSpec* handle);
-QAR_C_API QarResult
-qar_impl_peer_spec_get_id(QarPeerSpec* handle, QarPeerId* out_id);
-QAR_C_API QarResult qar_impl_peer_spec_get_display_name(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_peer_spec_get_app_version(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_peer_spec_get_app_custom_peer_info(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult
-qar_impl_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state);
-QAR_C_API QarResult qar_impl_peer_spec_get_version_id(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_peer_spec_get_room_tag(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_session_get_my_spec(
-	const QarSession* session, QarPeerSpec** out_handle
-);
-QAR_C_API QarResult
-qar_impl_query_peer_specs_count(QarSession* session, size_t* out_count);
-QAR_C_API QarResult qar_impl_query_peer_specs(
-	QarSession* session,
-	QarPeerSpec** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-);
-QAR_C_API QarResult
-qar_impl_peer_update_display_name(QarSession* session, const char* name);
-QAR_C_API QarResult qar_impl_peer_subscribe_updates(
-	QarSession* session,
-	qar_peer_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-#endif
+#define QAR_PEER_MANAGEMENT_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)   \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_peer_management_api,                                             \
+		"peer_management",                                                     \
+		STATUS,                                                                \
+		RET,                                                                   \
+		NAME,                                                                  \
+		PARAMS,                                                                \
+		ARGS                                                                   \
+	)
 
-// ============================================================================
-// PEER MANAGEMENT DISPATCH FUNCTIONS
-// ============================================================================
+QAR_PEER_MANAGEMENT_FUNCTION_LIST(QAR_PEER_MANAGEMENT_DECLARE_WRAPPER)
 
-static inline bool
-qar_peer_spec_handle_is_valid(QarPeerSpec* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_handle_is_valid,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_HANDLE_IS_VALID,
-		handle
-	);
-#else
-	return qar_impl_peer_spec_handle_is_valid(handle);
-#endif
-}
-
-static inline void
-qar_peer_spec_handle_destroy(QarPeerSpec* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		peer_spec_handle_destroy,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_peer_spec_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_id(QarPeerSpec* handle, QarPeerId* out_id)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_id,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_ID,
-		handle,
-		out_id
-	);
-#else
-	return qar_impl_peer_spec_get_id(handle, out_id);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_display_name(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_display_name,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_DISPLAY_NAME,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_peer_spec_get_display_name(handle, out_buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_app_version(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_app_version,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_APP_VERSION,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_peer_spec_get_app_version(handle, out_buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_app_custom_peer_info(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_app_custom_peer_info,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_APP_CUSTOM_PEER_INFO,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_peer_spec_get_app_custom_peer_info(
-		handle, out_buffer, buffer_size
-	);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_app_state,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_APP_STATE,
-		handle,
-		out_state
-	);
-#else
-	return qar_impl_peer_spec_get_app_state(handle, out_state);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_version_id(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_version_id,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_VERSION_ID,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_peer_spec_get_version_id(handle, out_buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_peer_spec_get_room_tag(
-	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_spec_get_room_tag,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SPEC_GET_ROOM_TAG,
-		handle,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_peer_spec_get_room_tag(handle, out_buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_get_my_spec,
-		peer_management,
-		QAR_IMPL_FUNC_SESSION_GET_MY_SPEC,
-		session,
-		out_handle
-	);
-#else
-	return qar_impl_session_get_my_spec(session, out_handle);
-#endif
-}
-
-static inline QarResult
-qar_query_peer_specs_count(QarSession* session, size_t* out_count)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_peer_specs_count,
-		peer_management,
-		QAR_IMPL_FUNC_QUERY_PEER_SPECS_COUNT,
-		session,
-		out_count
-	);
-#else
-	return qar_impl_query_peer_specs_count(session, out_count);
-#endif
-}
-
-static inline QarResult
-qar_query_peer_specs(
-	QarSession* session,
-	QarPeerSpec** out_handles,
-	size_t handles_buffer_size,
-	size_t* out_handles_written
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		query_peer_specs,
-		peer_management,
-		QAR_IMPL_FUNC_QUERY_PEER_SPECS,
-		session,
-		out_handles,
-		handles_buffer_size,
-		out_handles_written
-	);
-#else
-	return qar_impl_query_peer_specs(
-		session, out_handles, handles_buffer_size, out_handles_written
-	);
-#endif
-}
-
-static inline QarResult
-qar_peer_update_display_name(QarSession* session, const char* name)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_update_display_name,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_UPDATE_DISPLAY_NAME,
-		session,
-		name
-	);
-#else
-	return qar_impl_peer_update_display_name(session, name);
-#endif
-}
-
-static inline QarResult
-qar_peer_subscribe_updates(
-	QarSession* session,
-	qar_peer_update_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		peer_subscribe_updates,
-		peer_management,
-		QAR_IMPL_FUNC_PEER_SUBSCRIBE_UPDATES,
-		session,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_peer_subscribe_updates(
-		session, callback, user_state, token
-	);
-#endif
-}
+#undef QAR_PEER_MANAGEMENT_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
+
 #ifndef QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
 #define QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Callback typedefs
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
 );
@@ -4397,495 +3881,142 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	QarResult status, QarRenderFrameInfo* frame_info, void* user_state
 );
 
-// Function registry enum for render stream sender functions
-typedef enum QarRenderStreamSenderImplFuncIndex
-{
-	QAR_IMPL_FUNC_RENDER_STREAM_HANDLE_DESTROY = 0,
-	QAR_IMPL_FUNC_RENDER_SENDER_LAYOUT,
-	QAR_IMPL_FUNC_RENDER_SENDER_FRAME_D3D11,
-	QAR_IMPL_FUNC_RENDER_SENDER_LAST_HANDS,
-	QAR_IMPL_FUNC_RENDER_SENDER_SHOW_FRAME,
-	QAR_IMPL_FUNC_RENDER_SENDER_CREATE_ASYNC,
-	QAR_IMPL_FUNC_RENDER_SENDER_CHANGE_LAYOUT,
-	QAR_IMPL_FUNC_RENDER_SENDER_CHANGE_LAYOUT_ASYNC,
-	QAR_IMPL_FUNC_RENDER_SENDER_BEGIN_FRAME_ASYNC,
-	QAR_IMPL_FUNC_RENDER_SENDER_CREATE,
-	QAR_IMPL_FUNC_RENDER_SENDER_FRAME_CPU,
-	QAR_IMPL_FUNC_RENDER_SENDER_BEGIN_FRAME,
-	QAR_IMPL_FUNC_RENDER_FRAME_INFO_HANDLE_DESTROY,
-	QAR_IMPL_FUNC_RENDER_FRAME_INFO_GET_VIEW_POSE,
-	QAR_IMPL_FUNC_RENDER_FRAME_INFO_GET_VIEW_FOV,
-	QAR_IMPL_FUNC_RENDER_STREAM_SENDER_COUNT
-} QarRenderStreamSenderImplFuncIndex;
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_BASE(X)                         \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  render_stream_handle_destroy,                                            \
+	  (QarRenderSender * handle),                                              \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_layout,                                                    \
+	  (QarRenderSender * stream, QarVideoFrameLayout * out_layout),            \
+	  (stream, out_layout))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_last_hands,                                                \
+	  (QarRenderSender * stream, QarDeviceHandsWithJoints * out_hands),        \
+	  (stream, out_hands))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_show_frame,                                                \
+	  (QarRenderSender * stream, const QarRenderFrameShow* frame_show),        \
+	  (stream, frame_show))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_create_async,                                              \
+	  (QarSession * session,                                                   \
+	   QarRenderSenderInit * init,                                             \
+	   qar_render_sender_create_callback_t callback,                           \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, init, callback, user_state, token))                            \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_change_layout,                                             \
+	  (QarRenderSender * stream,                                               \
+	   const QarVideoFrameLayout* layout,                                      \
+	   QarCancelToken* token),                                                 \
+	  (stream, layout, token))                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_change_layout_async,                                       \
+	  (QarRenderSender * stream,                                               \
+	   const QarVideoFrameLayout* layout,                                      \
+	   qar_render_sender_change_layout_callback_t callback,                    \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (stream, layout, callback, user_state, token))                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_begin_frame_async,                                         \
+	  (QarRenderSender * stream,                                               \
+	   qar_render_sender_begin_frame_callback_t callback,                      \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (stream, callback, user_state, token))                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_create,                                                    \
+	  (QarSession * session,                                                   \
+	   QarRenderSenderInit * init,                                             \
+	   QarCancelToken * cancel,                                                \
+	   QarRenderSender * *out_stream),                                         \
+	  (session, init, cancel, out_stream))                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_frame_cpu,                                                 \
+	  (QarRenderSender * stream, QarVideoFrameCpu * out_frame),                \
+	  (stream, out_frame))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_begin_frame,                                               \
+	  (QarRenderSender * stream,                                               \
+	   QarCancelToken * token,                                                 \
+	   QarRenderFrameInfo * *out_frame_info),                                  \
+	  (stream, token, out_frame_info))                                         \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  render_frame_info_handle_destroy,                                        \
+	  (QarRenderFrameInfo * handle),                                           \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_frame_info_get_view_pose,                                         \
+	  (QarRenderFrameInfo * handle, size_t view_index, QarPose* out_pose),     \
+	  (handle, view_index, out_pose))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_frame_info_get_view_fov,                                          \
+	  (QarRenderFrameInfo * handle, size_t view_index, QarFov* out_fov),       \
+	  (handle, view_index, out_fov))
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_RENDER_STREAM_SENDER_IMPL_FUNCTION_NAMES                           \
-	"qar_impl_render_stream_handle_destroy", "qar_impl_render_sender_layout",  \
-		"qar_impl_render_sender_frame_d3d11",                                  \
-		"qar_impl_render_sender_last_hands",                                   \
-		"qar_impl_render_sender_show_frame",                                   \
-		"qar_impl_render_sender_create_async",                                 \
-		"qar_impl_render_sender_change_layout",                                \
-		"qar_impl_render_sender_change_layout_async",                          \
-		"qar_impl_render_sender_begin_frame_async",                            \
-		"qar_impl_render_sender_create", "qar_impl_render_sender_frame_cpu",   \
-		"qar_impl_render_sender_begin_frame",                                  \
-		"qar_impl_render_frame_info_handle_destroy",                           \
-		"qar_impl_render_frame_info_get_view_pose",                            \
-		"qar_impl_render_frame_info_get_view_fov"
-
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for render stream management
-typedef void (*qar_render_stream_handle_destroy_func_t)(
-	QarRenderSender* handle
-);
-typedef QarResult (*qar_render_sender_layout_func_t)(
-	QarRenderSender* stream, QarVideoFrameLayout* out_layout
-);
-typedef QarResult (*qar_render_sender_frame_d3d11_func_t)(
-	QarRenderSender* stream, QarVideoFrameD3D11* out_frame
-);
-typedef QarResult (*qar_render_sender_last_hands_func_t)(
-	QarRenderSender* stream, QarDeviceHandsWithJoints* out_hands
-);
-typedef QarResult (*qar_render_sender_show_frame_func_t)(
-	QarRenderSender* stream, const QarRenderFrameShow* frame_show
-);
-typedef QarResult (*qar_render_sender_create_async_func_t)(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	qar_render_sender_create_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-typedef QarResult (*qar_render_sender_change_layout_func_t)(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	QarCancelToken* token
-);
-typedef QarResult (*qar_render_sender_change_layout_async_func_t)(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	qar_render_sender_change_layout_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-typedef QarResult (*qar_render_sender_begin_frame_async_func_t)(
-	QarRenderSender* stream,
-	qar_render_sender_begin_frame_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-typedef QarResult (*qar_render_sender_create_func_t)(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	QarCancelToken* cancel,
-	QarRenderSender** out_stream
-);
-typedef QarResult (*qar_render_sender_frame_cpu_func_t)(
-	QarRenderSender* stream, QarVideoFrameCpu* out_frame
-);
-typedef QarResult (*qar_render_sender_begin_frame_func_t)(
-	QarRenderSender* stream,
-	QarCancelToken* token,
-	QarRenderFrameInfo** out_frame_info
-);
-
-// Frame info handle functions
-typedef void (*qar_render_frame_info_handle_destroy_func_t)(
-	QarRenderFrameInfo* handle
-);
-typedef QarResult (*qar_render_frame_info_get_view_pose_func_t)(
-	QarRenderFrameInfo* handle, size_t view_index, QarPose* out_pose
-);
-typedef QarResult (*qar_render_frame_info_get_view_fov_func_t)(
-	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
-);
-
+#ifdef QAR_ENABLE_D3D11
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_frame_d3d11,                                               \
+	  (QarRenderSender * stream, QarVideoFrameD3D11 * out_frame),              \
+	  (stream, out_frame))
 #else
-// Static implementation function declarations
-QAR_C_API void qar_impl_render_stream_handle_destroy(QarRenderSender* handle);
-QAR_C_API QarResult qar_impl_render_sender_layout(
-	QarRenderSender* stream, QarVideoFrameLayout* out_layout
-);
-QAR_C_API QarResult qar_impl_render_sender_frame_d3d11(
-	QarRenderSender* stream, QarVideoFrameD3D11* out_frame
-);
-QAR_C_API QarResult qar_impl_render_sender_last_hands(
-	QarRenderSender* stream, QarDeviceHandsWithJoints* out_hands
-);
-QAR_C_API QarResult qar_impl_render_sender_show_frame(
-	QarRenderSender* stream, const QarRenderFrameShow* frame_show
-);
-QAR_C_API QarResult qar_impl_render_sender_create_async(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	qar_render_sender_create_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-QAR_C_API QarResult qar_impl_render_sender_change_layout(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	QarCancelToken* token
-);
-QAR_C_API QarResult qar_impl_render_sender_change_layout_async(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	qar_render_sender_change_layout_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-QAR_C_API QarResult qar_impl_render_sender_begin_frame_async(
-	QarRenderSender* stream,
-	qar_render_sender_begin_frame_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-QAR_C_API QarResult qar_impl_render_sender_create(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	QarCancelToken* cancel,
-	QarRenderSender** out_stream
-);
-QAR_C_API QarResult qar_impl_render_sender_frame_cpu(
-	QarRenderSender* stream, QarVideoFrameCpu* out_frame
-);
-QAR_C_API QarResult qar_impl_render_sender_begin_frame(
-	QarRenderSender* stream,
-	QarCancelToken* token,
-	QarRenderFrameInfo** out_frame_info
-);
-
-// Frame info handle functions (static)
-QAR_C_API void
-qar_impl_render_frame_info_handle_destroy(QarRenderFrameInfo* handle);
-QAR_C_API QarResult qar_impl_render_frame_info_get_view_pose(
-	QarRenderFrameInfo* handle, size_t view_index, QarPose* out_pose
-);
-QAR_C_API QarResult qar_impl_render_frame_info_get_view_fov(
-	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
-);
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)
 #endif
-// ============================================================================
-// RENDERING STREAM SENDER DISPATCH FUNCTIONS
-// ============================================================================
 
-static inline void
-qar_render_stream_handle_destroy(QarRenderSender* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		render_stream_handle_destroy,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_STREAM_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_render_stream_handle_destroy(handle);
-#endif
-}
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST(X)                              \
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_BASE(X)                             \
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)
 
-static inline QarResult
-qar_render_sender_layout(
-	QarRenderSender* stream, QarVideoFrameLayout* out_layout
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_layout,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_LAYOUT,
-		stream,
-		out_layout
-	);
-#else
-	return qar_impl_render_sender_layout(stream, out_layout);
-#endif
-}
+QAR_DECLARE_MODULE_COMMON(
+	RENDER_STREAM_SENDER,
+	RenderStreamSender,
+	render_stream_sender,
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST
+);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RENDER_STREAM_SENDER_FUNCTION_LIST)
 
-static inline QarResult
-qar_render_sender_change_layout(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_change_layout,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_CHANGE_LAYOUT,
-		stream,
-		layout,
-		token
-	);
-#else
-	return qar_impl_render_sender_change_layout(stream, layout, token);
-#endif
-}
+#define QAR_RENDER_STREAM_SENDER_DECLARE_WRAPPER(                              \
+	STATUS, RET, NAME, PARAMS, ARGS                                            \
+)                                                                              \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_render_stream_sender_api,                                        \
+		"render_stream_sender",                                                \
+		STATUS,                                                                \
+		RET,                                                                   \
+		NAME,                                                                  \
+		PARAMS,                                                                \
+		ARGS                                                                   \
+	)
 
-static inline QarResult
-qar_render_sender_frame_d3d11(
-	QarRenderSender* stream, QarVideoFrameD3D11* out_frame
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_frame_d3d11,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_FRAME_D3D11,
-		stream,
-		out_frame
-	);
-#else
-	return qar_impl_render_sender_frame_d3d11(stream, out_frame);
-#endif
-}
+QAR_RENDER_STREAM_SENDER_FUNCTION_LIST(QAR_RENDER_STREAM_SENDER_DECLARE_WRAPPER)
 
-static inline QarResult
-qar_render_sender_last_hands(
-	QarRenderSender* stream, QarDeviceHandsWithJoints* out_hands
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_last_hands,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_LAST_HANDS,
-		stream,
-		out_hands
-	);
-#else
-	return qar_impl_render_sender_last_hands(stream, out_hands);
-#endif
-}
+#undef QAR_RENDER_STREAM_SENDER_DECLARE_WRAPPER
+#undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11
+#undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_BASE
 
-static inline QarResult
-qar_render_sender_show_frame(
-	QarRenderSender* stream, const QarRenderFrameShow* frame_show
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_show_frame,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_SHOW_FRAME,
-		stream,
-		frame_show
-	);
-#else
-	return qar_impl_render_sender_show_frame(stream, frame_show);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_create_async(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	qar_render_sender_create_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_create_async,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_CREATE_ASYNC,
-		session,
-		init,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_render_sender_create_async(
-		session, init, callback, user_state, token
-	);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_begin_frame_async(
-	QarRenderSender* stream,
-	qar_render_sender_begin_frame_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_begin_frame_async,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_BEGIN_FRAME_ASYNC,
-		stream,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_render_sender_begin_frame_async(
-		stream, callback, user_state, token
-	);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_change_layout_async(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	qar_render_sender_change_layout_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_change_layout_async,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_CHANGE_LAYOUT_ASYNC,
-		stream,
-		layout,
-		callback,
-		user_state,
-		token
-	);
-#else
-	return qar_impl_render_sender_change_layout_async(
-		stream, layout, callback, user_state, token
-	);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_create(
-	QarSession* session,
-	QarRenderSenderInit* init,
-	QarCancelToken* cancel,
-	QarRenderSender** out_stream
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_create,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_CREATE,
-		session,
-		init,
-		cancel,
-		out_stream
-	);
-#else
-	return qar_impl_render_sender_create(session, init, cancel, out_stream);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_frame_cpu(
-	QarRenderSender* stream, QarVideoFrameCpu* out_frame
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_frame_cpu,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_FRAME_CPU,
-		stream,
-		out_frame
-	);
-#else
-	return qar_impl_render_sender_frame_cpu(stream, out_frame);
-#endif
-}
-
-static inline QarResult
-qar_render_sender_begin_frame(
-	QarRenderSender* stream,
-	QarCancelToken* token,
-	QarRenderFrameInfo** out_frame_info
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_sender_begin_frame,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_SENDER_BEGIN_FRAME,
-		stream,
-		token,
-		out_frame_info
-	);
-#else
-	return qar_impl_render_sender_begin_frame(stream, token, out_frame_info);
-#endif
-}
-
-// Frame info dispatch wrappers
 static inline bool
 qar_render_frame_info_handle_is_valid(QarRenderFrameInfo* handle)
 {
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	// No direct is_valid function; attempt a cheap call by querying view 0
-	// Not ideal for dynamic, provide a local check via destroy no-op
 	return handle != NULL;
-#else
-	return handle != NULL;
-#endif
-}
-
-static inline void
-qar_render_frame_info_handle_destroy(QarRenderFrameInfo* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		render_frame_info_handle_destroy,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_FRAME_INFO_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_render_frame_info_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_render_frame_info_get_view_pose(
-	QarRenderFrameInfo* handle, size_t view_index, QarPose* out_pose
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_frame_info_get_view_pose,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_FRAME_INFO_GET_VIEW_POSE,
-		handle,
-		view_index,
-		out_pose
-	);
-#else
-	return qar_impl_render_frame_info_get_view_pose(
-		handle, view_index, out_pose
-	);
-#endif
-}
-
-static inline QarResult
-qar_render_frame_info_get_view_fov(
-	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		render_frame_info_get_view_fov,
-		render_stream_sender,
-		QAR_IMPL_FUNC_RENDER_FRAME_INFO_GET_VIEW_FOV,
-		handle,
-		view_index,
-		out_fov
-	);
-#else
-	return qar_impl_render_frame_info_get_view_fov(handle, view_index, out_fov);
-#endif
 }
 
 #endif // QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
@@ -4893,612 +4024,372 @@ qar_render_frame_info_get_view_fov(
 #ifndef QAR_STREAMING_C_V0_DETAIL_RESULT_H
 #define QAR_STREAMING_C_V0_DETAIL_RESULT_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Function registry enum for result functions
-typedef enum QarResultImplFuncIndex
-{
-	QAR_IMPL_FUNC_RESULT_SUCCESS = 0,
-	QAR_IMPL_FUNC_RESULT_ERROR,
-	QAR_IMPL_FUNC_RESULT_IS_SUCCESS,
-	QAR_IMPL_FUNC_RESULT_IS_ERROR,
-	QAR_IMPL_FUNC_RESULT_HAS_CODE,
-	QAR_IMPL_FUNC_RESULT_ERROR_WRAP_RESULT,
-	QAR_IMPL_FUNC_RESULT_MESSAGE,
-	QAR_IMPL_FUNC_RESULT_LOG_IF_ERROR,
-	QAR_IMPL_FUNC_RESULT_COUNT
-} QarResultImplFuncIndex;
+#define QAR_RESULT_FUNCTION_LIST(X)                                            \
+	X(ACTIVE, QarResult, result_success, (void), ())                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  result_error,                                                            \
+	  (QarStatusCode code, const char* message),                               \
+	  (code, message))                                                         \
+	X(ACTIVE, bool, result_is_success, (QarResult result), (result))           \
+	X(ACTIVE, bool, result_is_error, (QarResult result), (result))             \
+	X(ACTIVE,                                                                  \
+	  bool,                                                                    \
+	  result_has_code,                                                         \
+	  (QarResult result, QarStatusCode code),                                  \
+	  (result, code))                                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  error_wrap_result,                                                       \
+	  (QarResult inner_result,                                                 \
+	   QarStatusCode new_code,                                                 \
+	   const char* new_message),                                               \
+	  (inner_result, new_code, new_message))                                   \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  result_message,                                                          \
+	  (QarResult result, char* out_buffer, size_t buffer_size),                \
+	  (result, out_buffer, buffer_size))                                       \
+	X(ACTIVE, void, result_log_if_error, (QarResult result), (result))
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_RESULT_IMPL_FUNCTION_NAMES                                         \
-	"qar_impl_result_success", "qar_impl_result_error",                        \
-		"qar_impl_result_is_success", "qar_impl_result_is_error",              \
-		"qar_impl_result_has_code", "qar_impl_error_wrap_result",              \
-		"qar_impl_result_message", "qar_impl_result_log_if_error"
+QAR_DECLARE_MODULE_COMMON(RESULT, Result, result, QAR_RESULT_FUNCTION_LIST);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RESULT_FUNCTION_LIST)
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for error handling
-typedef QarResult (*qar_result_success_func_t)(void);
-typedef QarResult (*qar_result_error_func_t)(
-	QarStatusCode code, const char* message
-);
-typedef bool (*qar_result_is_success_func_t)(QarResult result);
-typedef bool (*qar_result_is_error_func_t)(QarResult result);
-typedef bool (*qar_result_has_code_func_t)(
-	QarResult result, QarStatusCode code
-);
-typedef QarResult (*qar_error_wrap_result_func_t)(
-	QarResult inner_result, QarStatusCode new_code, const char* new_message
-);
-typedef void (*qar_result_message_func_t)(
-	QarResult result, char* out_buffer, size_t buffer_size
-);
-typedef void (*qar_result_log_if_error_func_t)(QarResult result);
-#else
-// Static implementation function declarations
-QAR_C_API QarResult qar_impl_result_success(void);
-QAR_C_API QarResult
-qar_impl_result_error(QarStatusCode code, const char* message);
-QAR_C_API bool qar_impl_result_is_success(QarResult result);
-QAR_C_API bool qar_impl_result_is_error(QarResult result);
-QAR_C_API bool qar_impl_result_has_code(QarResult result, QarStatusCode code);
-QAR_C_API QarResult qar_impl_error_wrap_result(
-	QarResult inner_result, QarStatusCode new_code, const char* new_message
-);
-QAR_C_API void
-qar_impl_result_message(QarResult result, char* out_buffer, size_t buffer_size);
-QAR_C_API void qar_impl_result_log_if_error(QarResult result);
-#endif
-// Error handling dispatch functions
-static inline QarResult
-qar_result_success(void)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		result_success, result, QAR_IMPL_FUNC_RESULT_SUCCESS
-	);
-#else
-	return qar_impl_result_success();
-#endif
-}
+#define QAR_RESULT_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)            \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_result_api, "result", STATUS, RET, NAME, PARAMS, ARGS            \
+	)
 
-static inline QarResult
-qar_result_error(QarStatusCode code, const char* message)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		result_error, result, QAR_IMPL_FUNC_RESULT_ERROR, code, message
-	);
-#else
-	return qar_impl_result_error(code, message);
-#endif
-}
+QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 
-static inline bool
-qar_result_is_success(QarResult result)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		result_is_success, result, QAR_IMPL_FUNC_RESULT_IS_SUCCESS, result
-	);
-#else
-	return qar_impl_result_is_success(result);
-#endif
-}
-
-static inline bool
-qar_result_is_error(QarResult result)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		result_is_error, result, QAR_IMPL_FUNC_RESULT_IS_ERROR, result
-	);
-#else
-	return qar_impl_result_is_error(result);
-#endif
-}
-
-static inline bool
-qar_result_has_code(QarResult result, QarStatusCode code)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		result_has_code, result, QAR_IMPL_FUNC_RESULT_HAS_CODE, result, code
-	);
-#else
-	return qar_impl_result_has_code(result, code);
-#endif
-}
-
-static inline QarResult
-qar_error_wrap_result(
-	QarResult inner_result, QarStatusCode new_code, const char* new_message
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		error_wrap_result,
-		result,
-		QAR_IMPL_FUNC_RESULT_ERROR_WRAP_RESULT,
-		inner_result,
-		new_code,
-		new_message
-	);
-#else
-	return qar_impl_error_wrap_result(inner_result, new_code, new_message);
-#endif
-}
-
-static inline void
-qar_result_message(QarResult result, char* out_buffer, size_t buffer_size)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		result_message,
-		result,
-		QAR_IMPL_FUNC_RESULT_MESSAGE,
-		result,
-		out_buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_result_message(result, out_buffer, buffer_size);
-#endif
-}
-
-static inline void
-qar_result_log_if_error(QarResult result)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		result_log_if_error, result, QAR_IMPL_FUNC_RESULT_LOG_IF_ERROR, result
-	);
-#else
-	qar_impl_result_log_if_error(result);
-#endif
-}
+#undef QAR_RESULT_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_RESULT_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 #define QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Function registry enum for runtime functions
-typedef enum QarRuntimeImplFuncIndex
-{
-	QAR_IMPL_FUNC_RUNTIME_HANDLE_DESTROY = 0,
-	QAR_IMPL_FUNC_RUNTIME_CREATE,
-	QAR_IMPL_FUNC_RUNTIME_CREATE_SESSION,
-	QAR_IMPL_FUNC_RUNTIME_DESTROY,
-	QAR_IMPL_FUNC_LIBRARY_INIT,
-	QAR_IMPL_FUNC_LIBRARY_DESTROY,
-	QAR_IMPL_FUNC_RUNTIME_COUNT
-} QarRuntimeImplFuncIndex;
+#define QAR_RUNTIME_FUNCTION_LIST(X)                                           \
+	X(ACTIVE, void, runtime_handle_destroy, (QarRuntime * handle), (handle))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_create,                                                          \
+	  (const QarRuntimeInit* init, QarRuntime** out_runtime),                  \
+	  (init, out_runtime))                                                     \
+	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
+	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
+	X(ACTIVE, QarResult, library_destroy, (void), ())
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_RUNTIME_IMPL_FUNCTION_NAMES                                        \
-	"qar_impl_runtime_handle_destroy", "qar_impl_runtime_create",              \
-		"qar_impl_runtime_create_session", "qar_impl_runtime_destroy",         \
-		"qar_impl_library_init", "qar_impl_library_destroy"
+QAR_DECLARE_MODULE_COMMON(RUNTIME, Runtime, runtime, QAR_RUNTIME_FUNCTION_LIST);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RUNTIME_FUNCTION_LIST)
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for runtime management
-typedef void (*qar_runtime_handle_destroy_func_t)(QarRuntime* handle);
-typedef QarResult (*qar_runtime_create_func_t)(
-	const QarRuntimeInit* init, QarRuntime** runtime
-);
-typedef QarResult (*qar_runtime_create_session_func_t)(
-	const QarRuntime* runtime,
-	const QarSessionCreateInit* init,
-	QarSessionInvite** session
-);
-typedef void (*qar_runtime_destroy_func_t)(QarRuntime* runtime);
-typedef QarResult (*qar_library_init_func_t)(const QarLibraryInit* init);
-typedef QarResult (*qar_library_destroy_func_t)(void);
-#else
-// Static implementation function declarations
-QAR_C_API void qar_impl_runtime_handle_destroy(QarRuntime* handle);
-QAR_C_API QarResult
-qar_impl_runtime_create(const QarRuntimeInit* init, QarRuntime** runtime);
-QAR_C_API QarResult qar_impl_runtime_create_session(
-	const QarRuntime* runtime,
-	const QarSessionCreateInit* init,
-	QarSessionInvite** session
-);
-QAR_C_API void qar_impl_runtime_destroy(QarRuntime* runtime);
-QAR_C_API QarResult qar_impl_library_init(const QarLibraryInit* init);
-QAR_C_API QarResult qar_impl_library_destroy(void);
-#endif
+#define QAR_RUNTIME_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)           \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_runtime_api, "runtime", STATUS, RET, NAME, PARAMS, ARGS          \
+	)
 
-// ============================================================================
+QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 
-static inline void
-qar_runtime_handle_destroy(QarRuntime* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		runtime_handle_destroy,
-		runtime,
-		QAR_IMPL_FUNC_RUNTIME_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_runtime_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_runtime_create(const QarRuntimeInit* init, QarRuntime** runtime)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		runtime_create, runtime, QAR_IMPL_FUNC_RUNTIME_CREATE, init, runtime
-	);
-#else
-	return qar_impl_runtime_create(init, runtime);
-#endif
-}
-
-static inline QarResult
-qar_runtime_create_session(
-	const QarRuntime* runtime,
-	const QarSessionCreateInit* init,
-	QarSessionInvite** session
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		runtime_create_session,
-		runtime,
-		QAR_IMPL_FUNC_RUNTIME_CREATE_SESSION,
-		runtime,
-		init,
-		session
-	);
-#else
-	return qar_impl_runtime_create_session(runtime, init, session);
-#endif
-}
-
-static inline void
-qar_runtime_destroy(QarRuntime* runtime)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		runtime_destroy, runtime, QAR_IMPL_FUNC_RUNTIME_DESTROY, runtime
-	);
-#else
-	qar_impl_runtime_destroy(runtime);
-#endif
-}
-
-static inline QarResult
-qar_library_init(const QarLibraryInit* init)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		library_init, runtime, QAR_IMPL_FUNC_LIBRARY_INIT, init
-	);
-#else
-	return qar_impl_library_init(init);
-#endif
-}
-
-static inline QarResult
-qar_library_destroy(void)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		library_destroy, runtime, QAR_IMPL_FUNC_LIBRARY_DESTROY
-	);
-#else
-	return qar_impl_library_destroy();
-#endif
-}
+#undef QAR_RUNTIME_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
+
 #ifndef QAR_STREAMING_C_V0_DETAIL_SESSION_H
 #define QAR_STREAMING_C_V0_DETAIL_SESSION_H
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-#endif
 
-// Function registry enum for session functions
-typedef enum QarSessionImplFuncIndex
-{
-	QAR_IMPL_FUNC_SESSION_HANDLE_DESTROY = 0,
-	QAR_IMPL_FUNC_SESSION_JOIN,
-	QAR_IMPL_FUNC_SESSION_GET_ID,
-	QAR_IMPL_FUNC_SESSION_GET_INVITE_DATA_SIZE,
-	QAR_IMPL_FUNC_SESSION_GET_INVITE_DATA,
-	QAR_IMPL_FUNC_SESSION_DESTROY,
-	QAR_IMPL_FUNC_SESSION_INVITE_PEER_ASYNC,
-	QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_HOLOLENS,
-	QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_QUEST,
-	QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_VISUALIZER,
-	QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_ZED,
-	QAR_IMPL_FUNC_SESSION_COUNT
-} QarSessionImplFuncIndex;
+#define QAR_SESSION_FUNCTION_LIST(X)                                           \
+	X(ACTIVE, void, session_handle_destroy, (QarSession * handle), (handle))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_get_id,                                                          \
+	  (const QarSession* session, QarSessionId* out_session_id),               \
+	  (session, out_session_id))                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_peer,                                                     \
+	  (QarSession * session,                                                   \
+	   const QarSessionInvitePeerInit* init,                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarPeerId* out_peer_id),                                                \
+	  (session, init, cancel, out_peer_id))                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_peer_async,                                               \
+	  (QarSession * session,                                                   \
+	   const QarSessionInvitePeerInit* init,                                   \
+	   qar_session_invite_peer_result_callback_t result_callback,              \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state),                                                      \
+	  (session, init, result_callback, update_callback, user_state))           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_connection_string_hololens,                               \
+	  (const char* hostname, char* out_buffer, size_t buffer_size),            \
+	  (hostname, out_buffer, buffer_size))                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_connection_string_quest,                                  \
+	  (char* out_buffer, size_t buffer_size),                                  \
+	  (out_buffer, buffer_size))                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_connection_string_visualizer,                             \
+	  (char* out_buffer, size_t buffer_size),                                  \
+	  (out_buffer, buffer_size))                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_connection_string_zed,                                    \
+	  (char* out_buffer, size_t buffer_size),                                  \
+	  (out_buffer, buffer_size))
 
-// Function names macro for symbol loading (preserves modularity)
-#define QAR_SESSION_IMPL_FUNCTION_NAMES                                        \
-	"qar_impl_session_handle_destroy", "qar_impl_session_join",                \
-		"qar_impl_session_get_id", "qar_impl_session_get_invite_data_size",    \
-		"qar_impl_session_get_invite_data", "qar_impl_session_destroy",        \
-		"qar_impl_session_invite_peer_async",                                  \
-		"qar_impl_session_invite_connection_string_hololens",                  \
-		"qar_impl_session_invite_connection_string_quest",                     \
-		"qar_impl_session_invite_connection_string_visualizer",                \
-		"qar_impl_session_invite_connection_string_zed"
+QAR_DECLARE_MODULE_COMMON(SESSION, Session, session, QAR_SESSION_FUNCTION_LIST);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_SESSION_FUNCTION_LIST)
 
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-// Function typedefs for session management
-typedef void (*qar_session_handle_destroy_func_t)(QarSession* handle);
+#define QAR_SESSION_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)           \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_session_api, "session", STATUS, RET, NAME, PARAMS, ARGS          \
+	)
 
-typedef QarResult (*qar_session_join_func_t)(
-	const QarSessionJoinInit* init, QarSession** session
-);
-typedef QarResult (*qar_session_get_id_func_t)(
-	const QarSession* session, QarSessionId* session_id
-);
-typedef size_t (*qar_session_get_invite_data_size_func_t)(
-	const QarSession* session
-);
-typedef QarResult (*qar_session_get_invite_data_func_t)(
-	const QarSession* session, uint8_t* buffer, size_t buffer_size
-);
-typedef void (*qar_session_destroy_func_t)(QarSession* session);
-typedef QarResult (*qar_session_invite_peer_async_func_t)(
-	QarSession* session,
-	const QarSessionInvitePeerInit* init,
-	qar_session_invite_peer_result_callback_t result_callback,
-	qar_session_invite_peer_update_callback_t update_callback,
-	void* user_state
-);
-typedef QarResult (*qar_session_invite_connection_string_hololens_func_t)(
-	const char* hostname, char* buffer, size_t buffer_size
-);
-typedef QarResult (*qar_session_invite_connection_string_quest_func_t)(
-	char* buffer, size_t buffer_size
-);
-typedef QarResult (*qar_session_invite_connection_string_visualizer_func_t)(
-	char* buffer, size_t buffer_size
-);
-typedef QarResult (*qar_session_invite_connection_string_zed_func_t)(
-	char* buffer, size_t buffer_size
-);
+QAR_SESSION_FUNCTION_LIST(QAR_SESSION_DECLARE_WRAPPER)
 
-#else
-
-// Static implementation function declarations
-QAR_C_API void qar_impl_session_handle_destroy(QarSession* handle);
-QAR_C_API QarResult
-qar_impl_session_join(const QarSessionJoinInit* init, QarSession** session);
-QAR_C_API QarResult
-qar_impl_session_get_id(const QarSession* session, QarSessionId* session_id);
-QAR_C_API size_t
-qar_impl_session_get_invite_data_size(const QarSession* session);
-QAR_C_API QarResult qar_impl_session_get_invite_data(
-	const QarSession* session, uint8_t* buffer, size_t buffer_size
-);
-QAR_C_API void qar_impl_session_destroy(QarSession* session);
-QAR_C_API QarResult qar_impl_session_invite_peer_async(
-	QarSession* session,
-	const QarSessionInvitePeerInit* init,
-	qar_session_invite_peer_result_callback_t result_callback,
-	qar_session_invite_peer_update_callback_t update_callback,
-	void* user_state
-);
-QAR_C_API QarResult qar_impl_session_invite_connection_string_hololens(
-	const char* hostname, char* buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_session_invite_connection_string_quest(
-	char* buffer, size_t buffer_size
-);
-QAR_C_API QarResult qar_impl_session_invite_connection_string_visualizer(
-	char* buffer, size_t buffer_size
-);
-QAR_C_API QarResult
-qar_impl_session_invite_connection_string_zed(char* buffer, size_t buffer_size);
-
-#endif
-// ============================================================================
-// SESSION MANAGEMENT DISPATCH FUNCTIONS
-// ============================================================================
-
-static inline void
-qar_session_handle_destroy(QarSession* handle)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		session_handle_destroy,
-		session,
-		QAR_IMPL_FUNC_SESSION_HANDLE_DESTROY,
-		handle
-	);
-#else
-	qar_impl_session_handle_destroy(handle);
-#endif
-}
-
-static inline QarResult
-qar_session_join(const QarSessionJoinInit* init, QarSession** session)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_join, session, QAR_IMPL_FUNC_SESSION_JOIN, init, session
-	);
-#else
-	return qar_impl_session_join(init, session);
-#endif
-}
-
-static inline QarResult
-qar_session_get_id(const QarSession* session, QarSessionId* session_id)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_get_id,
-		session,
-		QAR_IMPL_FUNC_SESSION_GET_ID,
-		session,
-		session_id
-	);
-#else
-	return qar_impl_session_get_id(session, session_id);
-#endif
-}
-
-static inline size_t
-qar_session_get_invite_data_size(const QarSession* session)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_get_invite_data_size,
-		session,
-		QAR_IMPL_FUNC_SESSION_GET_INVITE_DATA_SIZE,
-		session
-	);
-#else
-	return qar_impl_session_get_invite_data_size(session);
-#endif
-}
-
-static inline QarResult
-qar_session_get_invite_data(
-	const QarSession* session, uint8_t* buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_get_invite_data,
-		session,
-		QAR_IMPL_FUNC_SESSION_GET_INVITE_DATA,
-		session,
-		buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_session_get_invite_data(session, buffer, buffer_size);
-#endif
-}
-
-static inline void
-qar_session_destroy(QarSession* session)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_VOID_FROM_MODULE(
-		session_destroy, session, QAR_IMPL_FUNC_SESSION_DESTROY, session
-	);
-#else
-	qar_impl_session_destroy(session);
-#endif
-}
-
-static inline QarResult
-qar_session_invite_peer_async(
-	QarSession* session,
-	const QarSessionInvitePeerInit* init,
-	qar_session_invite_peer_result_callback_t result_callback,
-	qar_session_invite_peer_update_callback_t update_callback,
-	void* user_state
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_invite_peer_async,
-		session,
-		QAR_IMPL_FUNC_SESSION_INVITE_PEER_ASYNC,
-		session,
-		init,
-		result_callback,
-		update_callback,
-		user_state
-	);
-#else
-	return qar_impl_session_invite_peer_async(
-		session, init, result_callback, update_callback, user_state
-	);
-#endif
-}
-
-static inline QarResult
-qar_session_invite_connection_string_hololens(
-	const char* hostname, char* buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_invite_connection_string_hololens,
-		session,
-		QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_HOLOLENS,
-		hostname,
-		buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_session_invite_connection_string_hololens(
-		hostname, buffer, buffer_size
-	);
-#endif
-}
-
-static inline QarResult
-qar_session_invite_connection_string_quest(char* buffer, size_t buffer_size)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_invite_connection_string_quest,
-		session,
-		QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_QUEST,
-		buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_session_invite_connection_string_quest(buffer, buffer_size);
-#endif
-}
-
-static inline QarResult
-qar_session_invite_connection_string_visualizer(
-	char* buffer, size_t buffer_size
-)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_invite_connection_string_visualizer,
-		session,
-		QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_VISUALIZER,
-		buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_session_invite_connection_string_visualizer(
-		buffer, buffer_size
-	);
-#endif
-}
-
-static inline QarResult
-qar_session_invite_connection_string_zed(char* buffer, size_t buffer_size)
-{
-#ifdef QAR_ENABLE_DYNAMIC_LOADING
-	QAR_CALL_DYNAMIC_FUNCTION_FROM_MODULE(
-		session_invite_connection_string_zed,
-		session,
-		QAR_IMPL_FUNC_SESSION_CONNECTION_STRING_ZED,
-		buffer,
-		buffer_size
-	);
-#else
-	return qar_impl_session_invite_connection_string_zed(buffer, buffer_size);
-#endif
-}
+#undef QAR_SESSION_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_SESSION_H
+
+
+#ifdef QAR_ENABLE_DYNAMIC_LOADING
+#ifndef QAR_DYNAMIC_LOADING_H
+#define QAR_DYNAMIC_LOADING_H
+
+
+#include <stdbool.h>
+#include <stdio.h>
+
+#ifdef _WIN32
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+typedef HMODULE QAR_DLL_HANDLE_TYPE;
+
+static inline HMODULE
+qar_loadlib(const char* path)
+{
+	char abs_path[MAX_PATH];
+	DWORD result = GetFullPathNameA(path, MAX_PATH, abs_path, NULL);
+	if(result == 0 || result >= MAX_PATH)
+	{
+		printf(
+			"GetFullPathName failed for '%s': Error %lu\n", path, GetLastError()
+		);
+		return NULL;
+	}
+
+	return LoadLibraryExA(
+		abs_path,
+		NULL,
+		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+	);
+}
+
+static inline void
+qar_close_library(QAR_DLL_HANDLE_TYPE handle)
+{
+	if(handle != NULL)
+	{
+		FreeLibrary(handle);
+	}
+}
+
+static inline void*
+qar_load_symbol(QAR_DLL_HANDLE_TYPE handle, const char* name)
+{
+	return (void*)GetProcAddress(handle, name);
+}
+
+#else
+
+#include <dlfcn.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef void* QAR_DLL_HANDLE_TYPE;
+
+static inline void*
+qar_loadlib(const char* path)
+{
+	char* abs_path = realpath(path, NULL);
+	if(abs_path == NULL)
+	{
+		printf("realpath failed for '%s': %s\n", path, strerror(errno));
+		return NULL;
+	}
+
+	void* handle = dlopen(abs_path, RTLD_NOW | RTLD_LOCAL);
+	if(handle == NULL)
+	{
+		printf("dlopen failed for '%s': %s\n", abs_path, dlerror());
+	}
+
+	free(abs_path);
+	return handle;
+}
+
+static inline void
+qar_close_library(QAR_DLL_HANDLE_TYPE handle)
+{
+	if(handle != NULL)
+	{
+		dlclose(handle);
+	}
+}
+
+static inline void*
+qar_load_symbol(QAR_DLL_HANDLE_TYPE handle, const char* name)
+{
+	return dlsym(handle, name);
+}
+
+#endif
+
+#define QAR_DYNAMIC_MODULE_LIST(X)                                             \
+	X(RESULT, Result, result)                                                  \
+	X(CANCELATION_TOKEN, CancelationToken, cancelation_token)                  \
+	X(RUNTIME, Runtime, runtime)                                               \
+	X(SESSION, Session, session)                                               \
+	X(ONBOARDING, Onboarding, onboarding)                                      \
+	X(PEER_MANAGEMENT, PeerManagement, peer_management)                        \
+	X(RENDER_STREAM_SENDER, RenderStreamSender, render_stream_sender)          \
+	X(GUI_PANELS, GuiPanels, gui_panels)                                       \
+	X(APP_VOLUMES, AppVolumes, app_volumes)                                    \
+	X(TYPES, Types, types)
+
+extern QAR_DLL_HANDLE_TYPE g_qar_dynamic_library_handle;
+
+#define QAR_IMPLEMENT_DYNAMIC_LOADING()                                        \
+	QAR_DEFINE_MODULE_STORAGE(Result, result);                                 \
+	QAR_DEFINE_MODULE_STORAGE(CancelationToken, cancelation_token);            \
+	QAR_DEFINE_MODULE_STORAGE(Runtime, runtime);                               \
+	QAR_DEFINE_MODULE_STORAGE(Session, session);                               \
+	QAR_DEFINE_MODULE_STORAGE(Onboarding, onboarding);                         \
+	QAR_DEFINE_MODULE_STORAGE(PeerManagement, peer_management);                \
+	QAR_DEFINE_MODULE_STORAGE(RenderStreamSender, render_stream_sender);       \
+	QAR_DEFINE_MODULE_STORAGE(GuiPanels, gui_panels);                          \
+	QAR_DEFINE_MODULE_STORAGE(AppVolumes, app_volumes);                        \
+	QAR_DEFINE_MODULE_STORAGE(Types, types);                                   \
+	QAR_DLL_HANDLE_TYPE g_qar_dynamic_library_handle = NULL;
+
+typedef void (*qar_generic_func_t)(void);
+
+static inline bool
+qar_load_module_symbols(
+	QAR_DLL_HANDLE_TYPE library_handle,
+	const char* module_name,
+	const char* const* symbol_names,
+	size_t symbol_count,
+	qar_generic_func_t* out_functions
+)
+{
+	for(size_t index = 0; index < symbol_count; index++)
+	{
+		out_functions[index] = (qar_generic_func_t)qar_load_symbol(
+			library_handle, symbol_names[index]
+		);
+		if(out_functions[index] == NULL)
+		{
+			fprintf(
+				stderr,
+				"Failed to load symbol '%s' for module '%s'.\n",
+				symbol_names[index],
+				module_name
+			);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static inline void
+qar_clear_module_symbols(size_t symbol_count, qar_generic_func_t* out_functions)
+{
+	for(size_t index = 0; index < symbol_count; index++)
+	{
+		out_functions[index] = NULL;
+	}
+}
+
+#define QAR_LOAD_MODULE_ENTRY(MODULE_UPPER, MODULE_CAMEL, MODULE_LOWER)        \
+	if(!qar_load_module_symbols(                                               \
+		   g_qar_dynamic_library_handle,                                       \
+		   #MODULE_LOWER,                                                      \
+		   qar_##MODULE_LOWER##_symbol_names,                                  \
+		   QAR_##MODULE_UPPER##_FUNC_COUNT,                                    \
+		   (qar_generic_func_t*)&g_qar_##MODULE_LOWER##_api                    \
+	   ))                                                                      \
+	{                                                                          \
+		goto cleanup;                                                          \
+	}
+
+#define QAR_CLEAR_MODULE_ENTRY(MODULE_UPPER, MODULE_CAMEL, MODULE_LOWER)       \
+	qar_clear_module_symbols(                                                  \
+		QAR_##MODULE_UPPER##_FUNC_COUNT,                                       \
+		(qar_generic_func_t*)&g_qar_##MODULE_LOWER##_api                       \
+	);
+
+static inline bool
+qar_library_load(const char* library_path)
+{
+	if(g_qar_dynamic_library_handle != NULL)
+	{
+		return true;
+	}
+
+	g_qar_dynamic_library_handle = qar_loadlib(library_path);
+	if(g_qar_dynamic_library_handle == NULL)
+	{
+		return false;
+	}
+
+	QAR_DYNAMIC_MODULE_LIST(QAR_LOAD_MODULE_ENTRY);
+
+	return true;
+
+cleanup:
+	qar_library_unload();
+	return false;
+}
+
+static inline void
+qar_library_unload(void)
+{
+	QAR_DYNAMIC_MODULE_LIST(QAR_CLEAR_MODULE_ENTRY);
+
+	if(g_qar_dynamic_library_handle != NULL)
+	{
+		qar_close_library(g_qar_dynamic_library_handle);
+		g_qar_dynamic_library_handle = NULL;
+	}
+}
+
+static inline bool
+qar_is_library_loaded(void)
+{
+	return g_qar_dynamic_library_handle != NULL;
+}
+
+#undef QAR_CLEAR_MODULE_ENTRY
+#undef QAR_LOAD_MODULE_ENTRY
+#undef QAR_DYNAMIC_MODULE_LIST
+
+#endif
+
+#endif
 
 #endif // QAR_FUNCTIONS_H

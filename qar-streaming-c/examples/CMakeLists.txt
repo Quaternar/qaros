@@ -1,7 +1,7 @@
 if(BUILD_CORE_EXAMPLES)
   set(QAR_DYNAMIC_EXAMPLES
       dynamic_loading
-      session_create_and_join
+      onboarding_and_rejoin
       app_volume_management
       gui_panel_operations
       cpu_rendering_visualizer)

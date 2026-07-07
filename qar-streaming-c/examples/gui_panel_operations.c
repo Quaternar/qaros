@@ -7,25 +7,29 @@
  * \tableofcontents
  *
  * \section gui_panels_overview Overview
- * - Host and join a session
- * - Add a GUI panel to the scene
+ * - Obtain a session (rejoin, or onboard with the hub pairing code)
+ * - Get-or-create a GUI panel by its stable common name
  * - Adjust pose, size, state, and navigate to content
  * - Enumerate GUI panels to inspect current values
  *
  * \section gui_panels_prereq Prerequisites
  * - Complete the \ref qar_c_tutorial_app_volumes tutorial
+ * - A running QarOS hub (for the first run, read the pairing code off its
+ *   onboarding screen)
  *
  * \section gui_panels_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target gui_panel_operations
  * ./build/x64-windows/Debug/gui_panel_operations.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir]
+ * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
  *
  * \section gui_panels_args Parse Arguments
  * \snippet gui_panel_operations.c gui_args
  *
  * \section gui_panels_setup Set Up the Session
+ * The session is obtained with the shared rejoin-or-onboard helper described
+ * in the \ref qar_c_tutorial_onboarding tutorial.
  * \snippet gui_panel_operations.c gui_setup
  *
  * \section gui_panels_create Create and Update the Panel
@@ -49,8 +53,13 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "gui_panel_operations";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir]\n",
+		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"[pairing-code]\n",
 		name
+	);
+	printf(
+		"The pairing code is required on the first run only; later runs "
+		"rejoin with the persisted onboarding id.\n"
 	);
 }
 
@@ -78,6 +87,8 @@ main(int argc, char** argv)
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
+
+	const char* pairing_code = (argc >= 4) ? argv[3] : NULL;
 	//! [gui_args]
 
 	//! [gui_setup]
@@ -109,39 +120,28 @@ main(int argc, char** argv)
 		return 4;
 	}
 
-	QarSessionCreateInit create_init = qar_session_create_init_default();
-	QarSessionInvite* invite = NULL;
-	QarResult invite_result =
-		qar_runtime_create_session(runtime, &create_init, &invite);
-	if(qar_result_is_error(invite_result) || invite == NULL)
+	QarOnboardingId onboarding_id = qar_onboarding_id_default();
+	QarSession* session = NULL;
+	if(example_obtain_session(
+		   runtime,
+		   pairing_code,
+		   "gui_panel_operations.onboarding-id.txt",
+		   "GUI Panel Peer",
+		   &onboarding_id,
+		   &session
+	   ) != 0
+	   || session == NULL)
 	{
-		log_result("qar_runtime_create_session", invite_result);
 		qar_runtime_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
 	}
-
-	QarSession* session = NULL;
-	QarSessionJoinInit join_init = qar_session_join_init_default();
-	join_init.invite_data = invite->data;
-	join_init.invite_data_size = invite->data_size;
-	join_init.peer_spec_init.display_name = "GUI Panel Peer";
-
-	QarResult join_result = qar_session_join(&join_init, &session);
-	log_result("qar_session_join", join_result);
-	qar_session_invite_destroy(invite);
-	if(qar_result_is_error(join_result) || session == NULL)
-	{
-		qar_runtime_destroy(runtime);
-		qar_library_destroy();
-		qar_library_unload();
-		return 6;
-	}
 	//! [gui_setup]
 
 	//! [gui_create]
 	QarGuiPanelInit panel_init = qar_gui_panel_init_default();
+	panel_init.common_name = "tutorial-panel.examples.qaros";
 	panel_init.display_name = "Tutorial Panel";
 	panel_init.pose = qar_pose_default();
 	panel_init.pose.position.x = 0.5f;
@@ -152,10 +152,10 @@ main(int argc, char** argv)
 	panel_init.size.height_meters = 0.7f;
 
 	QarGuiPanelId panel_id = qar_gui_panel_id_default();
-	QarResult add_result =
-		qar_gui_panels_add_panel(session, &panel_init, &panel_id);
-	log_result("qar_gui_panels_add_panel", add_result);
-	if(qar_result_is_success(add_result))
+	QarResult create_result =
+		qar_gui_panels_get_or_create(session, &panel_init, &panel_id);
+	log_result("qar_gui_panels_get_or_create", create_result);
+	if(qar_result_is_success(create_result))
 	{
 		printf("Created GUI panel with id: ");
 		print_hex_id(panel_id.data, QAR_MAX_ID_LENGTH);
@@ -254,7 +254,8 @@ main(int argc, char** argv)
 	);
 	//! [gui_list]
 
-	qar_session_destroy(session);
+	log_result("qar_session_leave", qar_session_leave(session));
+	qar_session_handle_destroy(session);
 	qar_runtime_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);

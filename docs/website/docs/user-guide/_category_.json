@@ -1,0 +1,10 @@
+{
+	"label": "User Guide",
+	"position": 2,
+	"collapsed": false,
+	"link": {
+		"type": "generated-index",
+		"title": "QarOS User Guide",
+		"description": "What the QAROS world is made of, how it behaves, and how to operate it: entities, coordinate spaces, security, the Hub, device onboarding, the mixer, and deployment."
+	}
+}

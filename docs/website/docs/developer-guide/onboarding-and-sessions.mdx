@@ -1,0 +1,189 @@
+---
+sidebar_position: 3
+title: Onboarding and Sessions
+description: Obtain a session — rejoin, onboard with a code, sibling invites — and tear it down correctly.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Onboarding and Sessions
+
+In QarOS you never "create" or "join" a session directly — **every session is obtained through onboarding**. This page covers the four situations an integrated application encounters and the teardown rules. The security machinery behind these calls is described in [Security and Onboarding](/docs/user-guide/security-and-onboarding); from the API's perspective it is completely hidden.
+
+## The canonical startup flow
+
+Persist exactly one thing: the **onboarding ID** (a 16-byte UUID) returned by your first successful onboard. Then, on every start:
+
+```
+saved id? ──yes──> qar_runtime_rejoin ──ok──> session ✓
+   │                     │
+   no          SESSION_NOT_FOUND
+   │                     │
+   └────────> show code-entry UI ──> qar_runtime_onboard_with_code
+                                          │
+                                     persist new id ──> session ✓
+```
+
+<Tabs groupId="language">
+<TabItem value="c" label="C">
+
+```c
+static QarResult obtain_session(
+    QarRuntime* runtime,
+    QarOnboardingId* io_saved_id,     /* loaded from your app's settings */
+    const char* code_from_user,       /* NULL until you prompted the user */
+    QarSession** out_session)
+{
+    QarPeerPresentation who = qar_peer_presentation_default();
+    who.display_name = "My CAD Tool";
+    who.app_version = "2.4.0";
+
+    if (not qar_onboarding_id_is_zero(io_saved_id))
+    {
+        QarRejoinInit rejoin = qar_rejoin_init_default();
+        rejoin.onboarding_id = *io_saved_id;
+        rejoin.presentation = who;
+
+        QarResult r = qar_runtime_rejoin(
+            runtime, &rejoin, NULL, NULL, NULL, out_session);
+        if (qar_result_is_success(r))
+            return r; /* silent reconnect — the normal path */
+        if (not qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
+            return r; /* real error (hub unreachable, ...) */
+        /* no persisted slot -> fall through to onboarding */
+    }
+
+    QarOnboardWithCodeInit onboard = qar_onboard_with_code_init_default();
+    onboard.presentation = who;
+    onboard.code = code_from_user; /* the short code shown by the hub */
+
+    QarResult r = qar_runtime_onboard_with_code(
+        runtime, &onboard, NULL, NULL, NULL, io_saved_id, out_session);
+    if (qar_result_has_code(r, QAR_STATUS_PAKE_ERROR))
+    {
+        /* wrong or expired code — re-prompt the user and call again */
+    }
+    /* on success: persist *io_saved_id before returning */
+    return r;
+}
+```
+
+</TabItem>
+<TabItem value="csharp" label="C#">
+
+```csharp
+// TODO: C# sample pending — the qar-streaming-sharp binding surface for the
+// new onboarding API (Rejoin / OnboardWithCode / onboarding-id persistence)
+// is not yet published in this repository. The flow is identical to the C
+// version: persist the OnboardingId, try Rejoin, fall back to
+// OnboardWithCode on SESSION_NOT_FOUND, re-prompt on PAKE_ERROR.
+```
+
+</TabItem>
+</Tabs>
+
+Key points:
+
+- `qar_runtime_rejoin` pops no UI and is silent — call it optimistically on every start.
+- `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: it means "this identity has no persisted slot here — onboard instead".
+- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (codes live ~10 seconds) — just re-prompt.
+- `qar_runtime_onboard_with_code` targets the **local Hub** by default. To reach a remote Hub, chain a `QarOnboardHostExt` with the hostname into `init.header.next` (see [API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader)).
+- Both calls have `_async` variants whose result callback delivers the same `(onboarding_id, session)` pair exactly once — use those to keep your UI thread responsive, and pass a `QarCancelToken` so the user can abort.
+
+## Sibling onboarding: one app, several API instances
+
+If your application hosts a *second* QarOS API instance — a helper process, a plugin sandbox, or a C# binding living next to native code — that instance must not pair with a code again. Instead, the already-onboarded instance mints an **invite** and hands it over.
+
+The complete pattern is:
+
+1. Instance A starts with the normal rejoin-or-onboard flow and gets a `QarSession*`.
+2. Instance A calls `qar_session_request_onboarding_invite`.
+3. Instance A serializes the returned `QarOnboardingInvite` and sends the bytes over your IPC boundary.
+4. Instance B creates its own `QarRuntime` with its own storage root.
+5. Instance B deserializes the invite and calls `qar_runtime_onboard_with_invite`.
+6. Instance B persists its own returned `QarOnboardingId` for future rejoins.
+
+The primary instance side looks like this:
+
+```c
+/* In the onboarded instance: */
+QarRequestInviteInit req = qar_request_invite_init_default();
+QarOnboardingInvite* invite = NULL;
+qar_session_request_onboarding_invite(session, &req, NULL, NULL, NULL, &invite);
+
+size_t size = 0;
+qar_onboarding_invite_serialized_size(invite, &size);
+uint8_t* blob = malloc(size);
+size_t written = 0;
+qar_onboarding_invite_serialize(invite, blob, size, &written);
+/* ship `blob` over your IPC of choice, then: */
+qar_onboarding_invite_handle_destroy(invite);
+```
+
+```c
+/* In the sibling instance: */
+QarOnboardingInvite* invite = NULL;
+qar_onboarding_invite_deserialize(blob, blob_size, &invite);
+
+QarOnboardWithInviteInit init = qar_onboard_with_invite_init_default();
+init.presentation = who;
+init.invite = invite;
+
+QarOnboardingId my_id = qar_onboarding_id_default();
+QarSession* session = NULL;
+qar_runtime_onboard_with_invite(
+    runtime, &init, NULL, NULL, NULL, &my_id, &session);
+qar_onboarding_invite_handle_destroy(invite); /* caller keeps ownership */
+```
+
+Two constraints matter here:
+
+- Give each runtime instance its own `storage_folder_path` or its own persisted onboarding-id file. The tutorial example uses `onboarding_and_rejoin.primary-state` and `onboarding_and_rejoin.sibling-state`.
+- Invites expire (`qar_onboarding_invite_get_expires_unix`) — mint them on demand, move them immediately, and do not stockpile them.
+
+The compiled example in this repo now demonstrates the full two-instance path end to end:
+
+- Source: `qaros/qar-streaming-c/examples/onboarding_and_rejoin.c`
+- API docs page: [Onboarding and Rejoin](/api/qar-streaming-c/pages/qar-c-tutorial-onboarding/)
+
+## Inviting devices into the session
+
+An onboarded application can pull *devices* into the session with `qar_session_invite_peer`, using a device **connection string** built by the helpers:
+
+```c
+char conn[256];
+qar_session_invite_connection_string_hololens("192.168.1.7", conn, sizeof(conn));
+
+QarSessionInvitePeerInit invite = qar_session_invite_peer_init_default();
+invite.connection_string = conn;   /* "hololens:192.168.1.7" */
+
+QarPeerId new_peer = qar_peer_id_default();
+qar_session_invite_peer(session, &invite, NULL, NULL, NULL, &new_peer);
+```
+
+Available helpers: `_hololens(hostname)` (hostname required), `_quest()`, `_visualizer()`, `_zed()` — and the generic string form accepts `android:<hostname>`.
+
+## Teardown: destroy vs. forget
+
+Teardown is two *separate* decisions:
+
+| Call | Effect | When |
+|---|---|---|
+| `qar_session_handle_destroy(session)` | Tears down the active session but **keeps the persisted identity**, so the next start can rejoin silently. | Every normal shutdown |
+| `qar_runtime_forget(runtime, &forget_init)` | **Erases the persisted identity slot** (certificate + state). Next start requires a fresh pairing code. Rejected with `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` while the session is active — destroy the session handle first. | "Sign out" / "unpair this device" |
+
+```c
+qar_session_handle_destroy(session);
+/* only for an explicit un-pair: */
+QarForgetInit forget = qar_forget_init_default();
+forget.onboarding_id = saved_id;
+qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
+```
+
+## Compiled tutorial
+
+This page is backed by the compiled example `onboarding_and_rejoin.c`, including the sibling-instance onboarding flow. Use it as the reference implementation when wiring two QarOS API instances into the same application:
+
+- [Onboarding and Rejoin](/api/qar-streaming-c/pages/qar-c-tutorial-onboarding/)
+- [Dynamic Loading tutorial](/api/qar-streaming-c/pages/qar-c-tutorial-dynamic-loading/) for the DLL bootstrap used by the example

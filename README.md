@@ -32,6 +32,10 @@ packages
 
 - The authoritative, always up-to-date documentation is hosted at https://docs.quaternar.com/.
 - A local copy of the documentation lives in `docs/website/` and can be built with the Docusaurus toolchain for offline browsing and authoring.
+- The documentation is split by audience:
+  - **User Guide** (`docs/website/docs/user-guide/`) — the QAROS world without code: entities (Hub, peers, sessions, app volumes, GUI panels, streams), coordinate systems, security and onboarding, the mixer, operating the Hub, onboarding devices, deployment.
+  - **Developer Guide** (`docs/website/docs/developer-guide/`) — integrating the C API: getting started, API conventions, onboarding and sessions, peers, GUI panels, app volumes, rendering streams, bindings, troubleshooting.
+  - **C API Reference** — generated with Doxygen from the headers and the example sources in `qar-streaming-c/examples/`. The examples are compiled by this repository's build, so every tutorial snippet is guaranteed-valid code. Note the examples take an optional `[pairing-code]` argument for the first run; later runs rejoin with the persisted onboarding id.
 
 ## Repository structure
 

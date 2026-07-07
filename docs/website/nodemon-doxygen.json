@@ -1,0 +1,15 @@
+{
+  "watch": [
+    "../../qar-streaming-c/include",
+    "../../qar-streaming-c/examples",
+    "doxygen/qar-streaming-c/Doxyfile",
+    "doxygen2docusaurus.json"
+  ],
+  "ext": "h,c,hpp,cpp,json",
+  "ignore": [
+    "doxygen/qar-streaming-c/doxygen/**",
+    "api/**"
+  ],
+  "delay": 500,
+  "exec": "npm run docs:generate"
+}

@@ -1,43 +1,37 @@
 ---
 sidebar_position: 1
-title: Quaternar Platform Overview
-description: High level summary of the Quaternar AR/VR middleware and guiding principles.
+title: Welcome to QarOS
+description: What QarOS is, who this documentation is for, and where to start.
 ---
 
-Quaternar delivers middleware, runtimes, and APIs that let software teams add AR/VR capabilities to existing 3D applications without rebuilding their codebases. The solution targets professional developers who need a fast, reliable path to multi-device immersive experiences.
+# Welcome to QarOS
 
-## Value Proposition
+QarOS is Quaternar's AR/VR middleware: it lets you add multi-device, multi-user AR/VR capabilities to an existing 3D application without rebuilding it. Your application keeps rendering the way it always has; QarOS streams its output to headsets, tablets, and phones, composites content from several applications into one coherent shared space, and handles discovery, security, input, and session management for you.
 
-- Remove the steep learning curve of raw OpenXR by providing a layered API focused on developer productivity.
-- Support both tethered headsets (Valve Index, Varjo, HTC Vive…) and remotely connected devices (Meta Quest, HoloLens, tablets, phones, Apple Vision Pro).
-- Package remote rendering, multi-user collaboration, and rich 3D UI components as first-class features.
-- Keep simple use cases simple: a new developer should be able to add basic AR/VR support in a single day.
+**Don't rewrite. Extend.**
 
-## Product Objectives
+## How this documentation is organized
 
-- Ship an approachable AR/VR API and runtime stack that covers a wide device spectrum.
-- Offer optional advanced features—remote rendering, multi-device orchestration, multi-user sessions—without burdening basic scenarios.
-- Deliver comprehensive documentation, samples, and integrations with popular open-source tools (Blender, ParaView, CloudCompare, …).
-- Maintain compatibility with OpenXR while extending the ecosystem with Quaternar-specific UI, networking, and device services.
-- Provide high quality visuals for demos and marketing, including full-HD remote streams with alpha and depth channels for superior capture.
+The documentation is split by audience:
 
-## Core Capabilities
+- **[User Guide](/docs/category/user-guide)** — for operators, project managers, and anyone evaluating or running QarOS. It explains the QAROS world without code: what entities exist (Hub, devices, sessions, app volumes, GUI panels, streams), how they behave, how coordinate spaces relate, how security and onboarding work, what the mixer does, and how to install and run the system.
+- **[Developer Guide](/docs/category/developer-guide)** — for engineers integrating the QarOS C API into their application. It covers SDK setup, API conventions, onboarding and sessions, streaming rendered frames, creating GUI panels, and working with app volumes. Tutorials are backed by example programs that are compiled as part of this repository, so every referenced snippet is real, valid code.
+- **[C API Reference](/api/qar-streaming-c/)** — the complete API reference, generated from the C headers with Doxygen.
 
-- **Remote Rendering:** Stream high fidelity frames (RGB/A/D) from powerful source machines to lightweight clients.
-- **3D UI & Debug Tooling:** Inject interactive panels, adjust transforms live, and iterate without recompiling.
-- **Mixer Pipeline:** Combine multiple 2D/3D applications into tailored output streams per user.
-- **Device & Session Management:** Discover devices, connect/disconnect, and sync head pose, controllers, and sensor data.
-- **Extensible Runtime:** Blend Quaternar APIs with native OpenXR when specific functionality is required.
+## The elevator pitch, in one diagram
 
-## Key Terminology
+A **Hub** (a powerful workstation) runs your 3D applications and the QarOS runtime. Devices — HoloLens, Android phones and tablets, VR headsets, desktop viewers — **onboard** to the Hub with a short pairing code and join a shared **session**. Each application renders into an **app volume** (a 3D region of the shared room); the **mixer** composites all volumes into one personalized, latency-compensated view per user, and **GUI panels** provide shared 2D interfaces floating in 3D space.
 
-- **Device:** Any AR/VR headset or companion screen (tethered or standalone).
-- **Source Machine:** Windows/Linux workstation that runs the customer’s 3D application.
-- **Source App:** Customer application that renders AR/VR frames; can be monolithic or split via plugins.
-- **Source App Plugin:** Integration layer providing Quaternar APIs and debug tooling inside the source app.
-- **Player App:** Quaternar runtime deployed on the headset/tablet/phone to receive streams and report user input.
-- **Mixer App:** Service that merges multiple inputs into unique outputs for each participant.
-- **State App:** Stores shared scene state and supports backup/restore via API.
-- **Session:** Connected group of cooperating source, mixer, player, and UI components.
+![QAROS world overview](/img/diagrams/qaros-world-overview.svg)
 
-Use this overview as the entry point for the rest of the knowledge base.
+## Where to start
+
+| I want to… | Start here |
+|---|---|
+| Understand what QarOS is made of | [The QAROS World](/docs/user-guide/qaros-world) |
+| Install and run a Hub | [Deployment and Installation](/docs/user-guide/deployment-and-installation) |
+| Connect a HoloLens / Android device | [Onboarding Devices](/docs/user-guide/onboarding-devices) |
+| Understand the security model | [Security and Onboarding](/docs/user-guide/security-and-onboarding) |
+| Integrate the C API into my app | [Developer Guide: Getting Started](/docs/developer-guide/getting-started) |
+| Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |
+| Browse the full C API | [C API Reference](/api/qar-streaming-c/) |
