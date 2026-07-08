@@ -3137,11 +3137,13 @@ qar_app_volume_gesture_configuration_default(void)
 	config.mapping_rules[0].precision = 2.0f;
 	config.mapping_rules[0].app_scale_sensitivity_mode =
 		QAR_APP_SCALE_SENSITIVITY_BASED_ON_APP_SCALE;
+	config.mapping_rules[0].rotation_axes = QAR_APP_VOLUME_AXIS_NONE;
 	config.mapping_rules[0].app_transform_mapping =
 		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_SCALE;
 	config.mapping_rules[1] = qar_app_volume_gesture_mapping_rule_default();
 	config.mapping_rules[1].gesture_kind = QAR_GESTURE_SINGLE_POINTER_6DOF;
 	config.mapping_rules[1].precision = 1.0f;
+	config.mapping_rules[1].rotation_axes = QAR_APP_VOLUME_AXIS_NONE;
 	config.mapping_rules[1].app_transform_mapping =
 		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_POSE;
 
