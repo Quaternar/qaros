@@ -1,0 +1,49 @@
+---
+sidebar_position: 10
+title: Language Bindings
+description: Using QarOS from C++, C# / .NET, and Unity.
+---
+
+# Language Bindings
+
+QarOS ships a single stable C ABI (`qar_streaming.h`). Every other binding is a
+thin layer over it, so all languages share the same concepts — runtime, session,
+peers, panels, app volumes, render senders — described in [Concepts](/docs/developer-guide/concepts).
+Because the DLL exports plain named functions and structs only ever grow through
+the extension-chain mechanism, bindings stay compatible across runtime updates.
+
+Pick your language's setup path in [Getting Started](/docs/developer-guide/getting-started).
+
+## C — the native ABI
+
+The C API is the source of truth: one generated header, one shared library
+(`qar-streaming-c`). Results are returned **by value** (`QarResult`), init structs
+carry a `{type, next}` header that must be stamped via the `qar_*_default()`
+helpers, and callbacks fire on library threads. Any language with a C FFI (Rust
+`bindgen`, Python `cffi`, …) can consume it directly by replicating those three
+conventions.
+
+## C# / .NET and Unity
+
+The managed binding lives in the `Qar` namespace: types drop the `Qar` prefix,
+handles become `IDisposable` / `SafeHandle`-backed classes, and `QarResult` maps
+to a `Result<T>` type (`.IsSuccess`, `.Value`, `.ValueOrThrow()`, `.Info`).
+Enumerations return ready-made arrays (`Result<PeerSpec[]>`), continuous updates
+surface as C# `event`s and disposable `SubscribeUpdates(...)` subscriptions, and
+`...Async` variants return `Task<Result<T>>`.
+
+It targets **netstandard2.0**, **netstandard2.1**, and **net8.0**, and loads the
+same native `qar-streaming-c` DLL. Unity uses this same C# package, so the API is
+identical there. See the per-language snippets throughout this guide —
+[Peers](/docs/developer-guide/peers), [GUI Panels](/docs/developer-guide/gui-panels),
+[App Volumes](/docs/developer-guide/app-volumes), and
+[Rendering Streams](/docs/developer-guide/rendering-streams) — for idiomatic usage.
+
+## C++
+
+There is no separate C++ binding: the C header compiles cleanly as C++, so
+consume it directly and add your own RAII wrappers. The recommended idioms:
+
+- wrap each handle in a small RAII type that calls the matching `qar_*_handle_destroy`,
+- wrap `QarResult` in a checker that throws or logs via `qar_result_log_if_error`,
+- keep all calls on one thread and marshal callback data through your own queue.

@@ -1,0 +1,298 @@
+---
+sidebar_position: 3
+title: API Conventions
+description: The patterns every QarOS module follows in C and C# — handles, results, extensible init structs, async pairs, enumeration, and ownership.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
+
+# API Conventions
+
+<LanguageSwitcher />
+
+The API is deliberately uniform: once you know these six patterns, every module
+(onboarding, panels, volumes, streams, peers) reads the same way. The concepts
+are identical across languages; the idioms differ. Pick your language above.
+
+## 1. Opaque handles and value IDs
+
+Two kinds of identifiers exist everywhere. **Opaque handles** are references to
+library-owned objects — you never inspect them, you pass them back to the API and
+release them. **Value IDs** are small copyable UUID values you can store,
+compare, stringify, and persist.
+
+The key rule: **releasing a handle is not the same as destroying the thing it
+refers to.** Tearing down your reference to a session keeps your persisted
+identity intact (so you can rejoin silently next time); actually erasing that
+identity is a separate, explicit call.
+
+<CodeTabs>
+<Lang value="c">
+
+- **Opaque handles**: `QarRuntime*`, `QarSession*`, `QarGuiPanel*`,
+  `QarAppVolume*`, `QarPeerSpec*`, `QarCancelToken*`, `QarOnboardingInvite*`.
+  Release with the matching `qar_*_handle_destroy()`.
+- **Value IDs**: `QarPeerId`, `QarSessionId`, `QarGuiPanelId`, `QarAppVolumeId`,
+  `QarStreamId`, `QarOnboardingId`. Compare with `qar_*_id_equals`, render with
+  `qar_uuid_to_string`.
+
+```c
+// Releasing the handle tears down the live session but KEEPS the identity:
+qar_session_handle_destroy(session);
+
+// Erasing the persisted identity is a separate, explicit call on the runtime:
+QarForgetInit forget = qar_forget_init_default();
+forget.onboarding_id = saved_id;
+qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
+
+// Likewise the runtime distinguishes releasing your handle
+// (qar_runtime_handle_destroy) from full runtime shutdown (qar_runtime_destroy).
+```
+
+</Lang>
+<Lang value="csharp">
+
+- **Opaque handles** are `SafeHandle`-backed classes implementing `IDisposable`:
+  `Runtime`, `Session`, `SessionInvite`, `RenderSender`, `RenderFrameInfo`.
+  `Dispose()` (or a `using` block) releases the handle.
+- **Value IDs** are `readonly struct`s — `PeerId`, `SessionId`, `GuiPanelId`,
+  `AppVolumeId`, `StreamId` — with `ToString()`, `Parse`/`TryParse`,
+  `ToByteArray()`, and equality **by byte content**. (`PeerId`, `SessionId`, and
+  `GuiPanelId` also expose a static `Unique()`.)
+
+```csharp
+// Disposing the Session tears down the live session but KEEPS the identity:
+session.Dispose();
+
+// Erasing the persisted identity is a separate call on the runtime:
+runtime.Forget(savedOnboardingId).EnsureSuccess();
+
+// IDs compare by value:
+if (a == b) { /* same peer */ }
+```
+
+</Lang>
+</CodeTabs>
+
+## 2. Results and status
+
+Every fallible call reports success or failure by value — never by throwing for
+an *expected* native condition. Some status codes are **expected control flow**,
+not errors: a rejoin that reports "session not found" means "onboard instead",
+and a pairing error means "re-prompt the user for the code".
+
+<CodeTabs>
+<Lang value="c">
+
+Every fallible function returns a **`QarResult` by value**:
+
+```c
+QarResult r = qar_some_call(...);
+if (qar_result_is_error(r)) { /* handle */ }
+if (qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND)) { /* onboard */ }
+qar_result_log_if_error(r);   // convenience: log if it was an error
+```
+
+`qar_result_is_success` / `qar_result_is_error` test the outcome;
+`qar_result_has_code` matches a specific `QarStatusCode`.
+
+</Lang>
+<Lang value="csharp">
+
+Fallible calls return **`Result<T>`** (or `Result<Unit>` for void-like
+operations). No exception is thrown for a native failure — you inspect the
+result:
+
+```csharp
+Result<Session> r = runtime.Rejoin(rejoinOptions);
+if (!r.IsSuccess)
+{
+    ResultInfo info = r.Info;           // info.StatusCode, info.Message
+    if (info.StatusCode == StatusCode.OnboardingSessionNotFound) { /* onboard */ }
+}
+
+// Or take the value, throwing NativeCallException on failure:
+using var session = r.ValueOrThrow();
+
+// Or assert success on a void-like call:
+runtime.Forget(id).EnsureSuccess();
+```
+
+</Lang>
+</CodeTabs>
+
+## 3. Extensible init structs (`QarStructureHeader`)
+
+Optional capabilities are added by **chaining extension structures** onto a base
+init struct — the same pattern OpenXR and Vulkan use. This is how the API grows
+without ever changing a signature: new capabilities appear as new extension
+structs. For example, onboarding targets the local Hub by default; an extension
+redirects it to a remote host.
+
+<CodeTabs>
+<Lang value="c">
+
+Every `...Init` struct begins with a `QarStructureHeader { type, next }`. Always
+build it with its `qar_*_default()` helper (which zero-fills and stamps `type`),
+then chain extensions through `next`:
+
+```c
+QarOnboardInit init = qar_onboard_init_default();
+QarOnboardCodeExt code = qar_onboard_code_ext_default();
+QarOnboardHostExt host = qar_onboard_host_ext_default();
+
+code.code = "ABCD-EFGH";
+host.hostname = "192.168.1.50";
+code.header.next = &host.header;   // chain code -> host
+init.header.next = &code.header;   // chain init -> code
+```
+
+</Lang>
+<Lang value="csharp">
+
+Extensions are modelled as managed `Structure` descriptors (each with a
+`StructureType`). Options objects expose a nullable `Extension` you set to the
+descriptor; the binding marshals the chain into the native `next` pointers for
+you and frees the unmanaged memory afterwards:
+
+```csharp
+var options = new RuntimeOnboardOptions
+{
+    Code = "ABCD-EFGH",
+    Extension = new OnboardHost { Hostname = "192.168.1.50" },
+};
+```
+
+</Lang>
+</CodeTabs>
+
+## 4. Blocking / async pairs
+
+Every long-running operation exists twice: a **blocking** form and an **async**
+form. The blocking form can report progress while you wait; the async form
+returns immediately and delivers its outcome later, exactly once, including on
+cancellation.
+
+<CodeTabs>
+<Lang value="c">
+
+- **Blocking**: `qar_runtime_onboard(...)` blocks until done; an
+  optional *progress callback* fires from an internal thread while you wait.
+- **Async**: `qar_runtime_onboard_async(...)` returns immediately; a
+  *result callback* fires **exactly once** on a background thread — on success,
+  error, *and* cancellation. After it returns, the library never touches your
+  `user_state` again.
+
+Both accept an optional **`QarCancelToken`** (`qar_cancel_token_create` /
+`_with_timeout`), which you may cancel from any thread and must keep alive until
+the operation finishes. Progress callbacks share one signature delivering a
+severity, a percentage, and a message.
+
+</Lang>
+<Lang value="csharp">
+
+- **Blocking**: synchronous methods return `Result<T>`.
+- **Async**: `...Async` variants return `Task<Result<T>>` and accept a
+  `System.Threading.CancellationToken`, which bridges to the native cancel token.
+
+The distinction that trips people up: a **native failure completes the Task
+successfully** with a `Result` whose `IsSuccess` is `false` (the task itself is
+not faulted); only **managed cancellation** produces a canceled task.
+
+```csharp
+CancellationToken ct = /* your token */;
+Result<Session> r = await runtime.RejoinAsync(rejoinOptions, ct);
+if (!r.IsSuccess) { /* native failure — inspect r.Info */ }
+```
+
+(One exception: `Session.InvitePeerAsync` takes an `IProgress<string>` for
+progress and no cancellation token, because the underlying native call has none.)
+
+</Lang>
+</CodeTabs>
+
+:::warning Callback threading
+Result and progress callbacks (C) and subscription/event callbacks (both
+languages) arrive on **library threads**. Do not call blocking QarOS functions
+from inside them, and marshal to your own thread before touching single-threaded
+application state.
+:::
+
+## 5. Enumeration and string getters
+
+Reading a variable-size collection or string is a snapshot operation in both
+languages — the shape of the call differs, the meaning does not.
+
+<CodeTabs>
+<Lang value="c">
+
+Enumerations use the two-call **count-then-fetch** idiom; string getters take a
+caller-provided buffer plus size; serialization uses `*_serialized_size` then
+`*_serialize`:
+
+```c
+size_t count = 0;
+qar_query_peer_specs_count(session, &count);          // 1: ask for the size
+QarPeerSpec** specs = malloc(count * sizeof(*specs));
+qar_query_peer_specs(session, specs, count, &count);  // 2: fetch
+// ... use ...
+for (size_t i = 0; i < count; ++i) qar_peer_spec_handle_destroy(specs[i]);
+free(specs);
+```
+
+</Lang>
+<Lang value="csharp">
+
+Enumerations return an immutable snapshot as `Result<T[]>`; strings return
+`Result<string>`. On `net8.0` there is also an `IAsyncEnumerable<T>` for live
+updates, and on `netstandard2.1`/`net8.0` the ID types offer `Span<byte>`
+overloads.
+
+```csharp
+Result<PeerSpec[]> peers = session.Peers.GetAll();
+foreach (PeerSpec p in peers.ValueOrThrow())
+{
+    // p is an immutable snapshot — safe to keep
+}
+```
+
+</Lang>
+</CodeTabs>
+
+## 6. Ownership and lifetime
+
+The lifetime discipline is the same idea in both languages: you own what you
+receive, borrowed things handed to you inside a callback are valid only for that
+callback, and teardown runs in reverse of setup.
+
+<CodeTabs>
+<Lang value="c">
+
+- Init structs and the strings they point to are **copied before the call
+  returns** — stack-allocate freely.
+- Out-handles are **owned by you**: release every handle you receive (from calls
+  *and* from result callbacks) with its `*_handle_destroy`.
+- Handles delivered *inside* a callback are **borrowed** — read what you need
+  during the callback; do not store the handle.
+- A session handle keeps the runtime alive internally, so destruction-order
+  mistakes don't dangle — but the intended order is: destroy session handle →
+  destroy runtime → destroy library.
+- The API is designed for **single-threaded use** per runtime; callbacks are the
+  only cross-thread surface.
+
+</Lang>
+<Lang value="csharp">
+
+- Every handle type is `IDisposable` — use `using`, or dispose explicitly. The
+  underlying `SafeHandle.ReleaseHandle` calls the matching native destroy.
+- **Subscriptions are `IDisposable`**: disposing one stops native delivery.
+- Values handed to you inside an event/callback are already **immutable DTO
+  snapshots** (`PeerSpec`, `GuiPanel`, `AppVolume`) — safe to keep; there is no
+  borrowed native handle to worry about.
+- `ObjectDisposedException` is thrown only for **managed misuse** (using an
+  object after you disposed it), never for native failures.
+- Dispose in reverse: session, then runtime, then `Library.Shutdown()`.
+
+</Lang>
+</CodeTabs>

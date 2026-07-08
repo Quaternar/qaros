@@ -1,95 +1,108 @@
 ---
 sidebar_position: 1
 title: The QAROS World
-description: The entities that make up a QarOS deployment — Hub, devices, sessions, peers, app volumes, GUI panels, and streams — and how they behave.
+description: A high-level picture of the Hub, devices, the Shared Space, app volumes, GUI panels, and streams.
 ---
 
 # The QAROS World
 
-Before touching any API, it helps to understand the cast of characters. A running QarOS deployment is a small world with a fixed set of entity kinds. Each entity has an identity, a lifecycle, and a clear set of responsibilities.
+This page is the non-technical view of QarOS: what is in the Shared Space, who participates, and how it behaves for everyday users.
 
-![QAROS world overview](/img/diagrams/qaros-world-overview.svg)
+![QAROS world overview](/img/diagrams/qaros-world-overview.png)
 
 ## The Hub
 
-The **Hub** is the heart of a deployment: a powerful workstation (Windows or Linux) that runs your 3D applications, the QarOS runtime services, and the security infrastructure. One Hub serves one physical room of collaborating users.
+The **Hub** is the central workstation that runs the QarOS runtime and the applications whose content is shared into the Shared Space.
 
-The Hub is responsible for:
+From a user's point of view, the Hub:
 
-- **Discovery** — it broadcasts a beacon on the local network so devices can find it without any configuration.
-- **Onboarding** — it displays a short **pairing code** and runs the secure pairing protocol when a new device wants to join.
-- **Identity** — it operates its own private Certificate Authority (CA) and issues a certificate to every device it accepts. All later traffic is mutually authenticated with these certificates.
-- **Session hosting** — it hosts the shared session that all peers participate in, and routes all session traffic over an encrypted (mTLS) message bus.
-- **Compute** — it runs the source applications and the mixer, so lightweight devices only need to decode video.
+- lets devices find and connect to the Shared Space,
+- manages the Shared Space that everyone joins,
+- runs the heavy rendering and mixing work,
+- sends each device its own live view of the shared space.
 
-Hubs can also connect to *each other*. When two Hubs federate, they merge their trust bundles, so a device onboarded to one Hub is accepted by the other. Each Hub still issues certificates only for its own devices.
+## Devices in the Shared Space
 
-## Devices and peers
+A **device** is anything that joins the Hub's Shared Space: an AR headset, a VR headset, an Android phone or tablet, the desktop visualizer, or a camera source.
 
-A **device** is anything that joins the Hub's world: an AR headset (HoloLens), a VR headset, an Android phone or tablet, a desktop visualizer window, or a camera. Once a device has onboarded, it participates in the session as a **peer**.
+In practical terms, devices in QarOS usually fall into two roles:
 
-A **peer** is the session-level identity of a participant — a user's device or an application. Every peer:
+- **Source apps** add content into the Shared Space.
+- **Target devices** view the Shared Space and send back user input such as head pose, hands, or controller actions.
 
-- has a stable **peer ID** and a certificate binding that identity cryptographically,
-- advertises *presentation* metadata: a display name, application version, custom application info, and an application state (initializing / running / shutting down),
-- can be enumerated and observed by every other peer — your application can list who is in the session and react when peers join, leave, or change state.
+You will also see the terms **target app** and **player**:
 
-Two broad kinds of peers exist in practice:
+- A **player** is the small companion app that runs on an AR/VR device or Android phone.
+- A **target app** is the broader runtime term for anything that receives the mixed output from the Hub. That includes players, but it can also include the desktop visualizer.
 
-- **Source peers** — applications that *produce* content: they render frames into an app volume.
-- **Target peers** — devices that *consume* content: they display the mixed result to a user and send back input (head pose, hands, controllers).
+If you are integrating against the API and need the exact object model and naming, see [Concepts](/docs/developer-guide/concepts).
 
-A single machine can host several peers: for example, the Hub itself runs source applications, a mixer, and possibly a desktop visualizer, each participating as its own peer.
+## Shared Space and session
 
-## Sessions
+The **Shared Space** is the collaborative place people join and work in together. Everyone in it sees the same app volumes and GUI panels, but from their own viewpoint.
 
-A **session** is the shared collaborative space — the group of peers that see the same room, the same app volumes, and the same GUI panels. In QarOS you do not "create" or "join" a session by hand: a session membership is the *result of onboarding*. When a device pairs with the Hub, it receives a certificate and enters the Hub's session; when it reconnects later, it *rejoins* the same session using its persisted identity, with no user interaction.
+In the Developer Guide and API, this same concept maps to a **session**. For basic use, it is enough to think of a session as the runtime's name for one Shared Space.
 
-Session state is persistent. When a peer leaves, its identity slot (certificate, instance state, last-session state) stays on disk, so it can rejoin seamlessly. Only an explicit *forget* wipes that identity.
+The **room** is only part of that idea: it is the physical area where people collaborate. One Shared Space can span multiple rooms while still sharing the same content in its app volumes.
+
+From a user's perspective, joining a Shared Space is simple:
+
+- you connect a device to the Hub,
+- you enter or scan a pairing code when needed,
+- after that first successful join, the device usually reconnects automatically.
+
+The operator controls which devices are accepted, removed, or re-invited.
+
+## Shared Space alignment
+
+Multiple AR devices can be aligned into the same physical space with a synchronization QR code.
+
+- Download and print the QR code: [room-sync QR code](https://drive.google.com/file/d/1auIbOQZTqQ-4FCTpde53D-Mp1pJ_YFX4/view?usp=sharing).
+- If you need to generate your own, encode the text `qar-remoting:0_0_0_0;S`.
+- Keep the white margins around the QR code intact. They make tracking faster and more reliable.
+- The QR code is typically needed **once per device and per location**. After a device has scanned it in that room, it should not need to scan it again unless tracking is lost or the environment changes significantly.
+- Place it on a horizontal surface that does not move over time. Tape it to a table or laptop so it stays fixed.
+- If tracking is lost, walk back toward the QR code's position to reacquire it. You may occasionally be prompted to rescan it, but this is usually only needed in extreme cases.
 
 ## App volumes
 
-An **app volume** is a 3D region of the shared room where one application renders its content — think of it as a window, except it is a box in space rather than a rectangle on a screen.
+An **app volume** is a 3D area in the Shared Space where one application's content appears.
 
-Key behaviors:
+You can think of an app volume as a shared holographic workspace:
 
-- **Identity by name.** A volume is identified by a stable *common name* (for example `cad-review.hub1.example.com`). Asking for the same name always yields the same volume, so applications can restart and reattach without creating duplicates.
-- **Placed in the room.** A volume has a pose (position + orientation) and a size (width × length × height in meters) in room space. Users or applications can move and resize it.
-- **Contains app content at its own scale.** Inside the volume, the application's own coordinate system lives at an adjustable position and scale — a whole factory model can be shrunk into a tabletop box. See [Coordinate Systems](/docs/user-guide/coordinate-systems).
-- **Interactive.** Volumes support a configurable gesture system: users can click, hover, grab and move, rotate, and scale the volume (or the app content inside it) with one or two hands, with per-axis constraints and precision settings.
-- **Access-aware.** A volume tracks which peers are using it, and an editing lock reports which peer is currently manipulating it, so two users don't fight over the same object.
-- **Streamed and mixed.** Each app volume is the unit of streaming: the mixer composites one stream per volume into each user's personal view. See [The Mixer](/docs/user-guide/the-mixer).
+- it has a position and size in the Shared Space,
+- users can move or resize it,
+- it can contain anything from a tabletop model to a large immersive scene,
+- the same volume is visible to everyone in the Shared Space.
+
+If you need the exact coordinate and identity rules for app volumes, see [App Volumes](/docs/developer-guide/app-volumes) and [Coordinate Systems](/docs/developer-guide/coordinate-systems).
 
 ## GUI panels
 
-A **GUI panel** is a 2D interface floating in 3D space — settings pages, dashboards, web content, control surfaces. Panels are shared session state: every participant sees the same panel in the same place (unless it is hidden from them).
+A **GUI panel** is a 2D interface floating in the Shared Space, such as a settings page, dashboard, or web-based control surface.
 
-- Panels use the same *common name* identity model as app volumes — recreate-by-name is idempotent.
-- A panel has a pose in the room, a physical size in meters plus a content scale, and a display state (visible, minimized, hidden, closed).
-- Panel content is currently a **website URI** — the panel renders a web page, and applications can navigate it remotely. This makes panels the easiest way to give your existing web UI a presence in the 3D room.
-- Visibility is **per peer**: a panel can be shown to everyone or restricted to a chosen set of peers (for example, an operator-only control panel).
+Panels let people interact with tools and controls without leaving the shared space:
+
+- panels appear at a specific place in the Shared Space,
+- everyone can see the same panel unless it is intentionally restricted,
+- panel content is typically a web page rendered into the shared environment.
+
+For implementation details, see [GUI Panels](/docs/developer-guide/gui-panels).
 
 ## Streams
 
-A **stream** carries rendered frames from a source application to the room. The source application drives a simple frame loop — begin a frame, render into the provided textures (CPU buffers or GPU textures), and show the frame with its projection parameters. QarOS handles encoding, transport, decoding, warping, and compositing.
+A **stream** carries rendered content from a source app into the Shared Space.
 
-Streams carry more than color: frames can include **alpha** and **depth** channels, which is what allows the mixer to correctly occlude and blend multiple applications in one space, and to reproject frames to the viewer's latest head pose. In return, the source application can read back the viewer's **hand tracking** data (26 joints per hand) and pose information to make its content interactive.
+Users usually do not need to think about streams directly; what matters is that QarOS:
+
+- sends each participant a live view,
+- keeps the view responsive as they move,
+- combines content from several sources into one coherent scene.
 
 ## The mixer
 
-The **mixer** is the per-user compositor. Every user gets their own mixer instance which takes all the app-volume streams, re-projects (warps) each one to that user's freshest head pose, masks each stream to its volume's box, depth-sorts and blends them, and outputs a single stereo color+depth frame for that user's device. This is what makes multiple independent applications appear as one coherent, low-latency world. Details in [The Mixer](/docs/user-guide/the-mixer).
+The **mixer** is the Hub component that combines multiple source streams into one final view for each user.
 
-## Identity and trust, in one paragraph
+This is why two people can look at the same Shared Space, from different places, and still each get the correct perspective on the same content.
 
-Every entity that participates in a session has a cryptographic identity issued by the Hub's private CA during onboarding. The pairing code a user types is never sent over the network — it feeds a password-authenticated key exchange, which bootstraps an encrypted channel, over which the device receives its certificate. From then on, all session traffic is mutual-TLS. The full story is in [Security and Onboarding](/docs/user-guide/security-and-onboarding).
-
-## Lifecycle summary
-
-| Entity | Created by | Identity | Persists across restarts? |
-|---|---|---|---|
-| Hub | Operator installs & starts it | Its CA root + server ID | Yes |
-| Peer | Onboarding a device/app | Peer ID + certificate | Yes (until *forget*) |
-| Session | The Hub | Session ID | Yes |
-| App volume | An application, by common name | Common name → deterministic ID | Yes (until closed) |
-| GUI panel | An application, by common name | Common name → deterministic ID | Yes (until closed) |
-| Stream | A source application, per target | Stream ID | No — recreated per run |
+For the operational and rendering details, see [The Mixer](/docs/operator-guide/the-mixer) or [Rendering Streams](/docs/developer-guide/rendering-streams).

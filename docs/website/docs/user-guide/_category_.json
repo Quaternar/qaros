@@ -1,10 +1,10 @@
 {
 	"label": "User Guide",
-	"position": 2,
+	"position": 1,
 	"collapsed": false,
 	"link": {
 		"type": "generated-index",
 		"title": "QarOS User Guide",
-		"description": "What the QAROS world is made of, how it behaves, and how to operate it: entities, coordinate spaces, security, the Hub, device onboarding, the mixer, and deployment."
+		"description": "For people who join a QarOS Hub from a device, and for anyone wanting a non-technical picture of how it works: what the QAROS world is, joining your first session, connecting to the Hub, onboarding your device, understanding the shared space, working in a session, and troubleshooting from the user's side. No code."
 	}
 }

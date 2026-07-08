@@ -132,7 +132,7 @@ typedef struct QarSessionHandle QarSession;
 
 /// Onboarding invite (opaque) — full invite blob for onboarding a sibling
 /// instance (see qar_session_request_onboarding_invite /
-/// qar_runtime_onboard_with_invite).
+/// qar_runtime_onboard).
 typedef struct QarOnboardingInviteHandle QarOnboardingInvite;
 
 /// App volume (opaque)
@@ -146,6 +146,9 @@ typedef struct QarPeerSpecHandle QarPeerSpec;
 
 /// Render stream sender (opaque)
 typedef struct QarRenderStreamSenderHandle QarRenderSender;
+
+/// Pending render stream request (opaque)
+typedef struct QarRenderStreamRequestHandle QarRenderStreamRequest;
 
 /// Frame info for current render (opaque)
 typedef struct QarRenderFrameInfoHandle QarRenderFrameInfo;
@@ -212,7 +215,7 @@ typedef enum QarStatusCode
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
 	/// No persisted state for the provided onboarding id — fall back to a full
-	/// onboard (qar_runtime_onboard_with_code / _with_invite).
+	/// onboard (qar_runtime_onboard).
 	QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND = 1800,
 	/// Generic onboarding failure. Inspect qar_result_message for details.
 	QAR_STATUS_ONBOARDING_FAILED = 1801,
@@ -744,11 +747,11 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_LIBRARY_INIT = 0x0001,
 	QAR_STRUCTURE_TYPE_RUNTIME_INIT = 0x1000,
 	QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT = 0x1002,
-	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT = 0x1003,
-	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT = 0x1004,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INIT = 0x1003,
 	QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT = 0x1005,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT = 0x1006,
-	QAR_STRUCTURE_TYPE_SESSION_INVITE_PEER_INIT = 0x2003,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT = 0x1007,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
@@ -937,31 +940,44 @@ typedef struct QarRejoinInit
 } QarRejoinInit;
 
 /**
- * @brief First connect with a typed code (situation: first connect).
+ * @brief Base init for full onboarding.
  *
- * Always targets the local hub on this PC (loopback + standard discovery
- * port); to reach a remote hub, chain a QarOnboardHostExt through
- * header.next.
+ * The actual onboarding mode is selected by chaining exactly one of the mode
+ * extensions through header.next:
+ * - QarOnboardCodeExt for code onboarding
+ * - QarOnboardInviteExt for a full invite blob
  */
-typedef struct QarOnboardWithCodeInit
+typedef struct QarOnboardInit
 {
-	QarStructureHeader
-		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT */
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INIT */
 	/// Zero -> new identity; previously returned id -> re-enroll that slot.
 	QarOnboardingId onboarding_id;
 	/// display_name also feeds the sanitized debug label in cert CN and the
 	/// storage-slot directory.
 	QarPeerPresentation presentation;
+} QarOnboardInit;
+
+/**
+ * @brief Extension: onboard with the short code shown on the hub onboarding
+ * screen.
+ *
+ * Always targets the local hub on this PC (loopback + standard discovery
+ * port); to reach a remote hub, also chain QarOnboardHostExt.
+ */
+typedef struct QarOnboardCodeExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
 	/// Required; short code shown on the hub onboarding screen. Copied before
 	/// the call returns.
 	const char* code;
-} QarOnboardWithCodeInit;
+} QarOnboardCodeExt;
 
 /**
  * @brief Extension: override the hub discovery endpoint for
- * qar_runtime_onboard_with_code.
+ * qar_runtime_onboard when QarOnboardCodeExt is chained.
  *
- * Chain into QarOnboardWithCodeInit.header.next; absent -> local hub.
+ * Chain into QarOnboardInit.header.next; absent -> local hub.
  */
 typedef struct QarOnboardHostExt
 {
@@ -972,20 +988,17 @@ typedef struct QarOnboardHostExt
 } QarOnboardHostExt;
 
 /**
- * @brief Onboard from a full invite blob (situations: sibling app / second
- * API instance).
+ * @brief Extension: onboard from a full invite blob (sibling app / second API
+ * instance).
  */
-typedef struct QarOnboardWithInviteInit
+typedef struct QarOnboardInviteExt
 {
 	QarStructureHeader
-		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT */
-	/// Zero -> new identity; previously returned id -> re-enroll that slot.
-	QarOnboardingId onboarding_id;
-	QarPeerPresentation presentation;
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT */
 	/// Borrowed for the duration of the call; caller keeps ownership and
 	/// releases it with qar_onboarding_invite_handle_destroy.
 	const QarOnboardingInvite* invite;
-} QarOnboardWithInviteInit;
+} QarOnboardInviteExt;
 
 /**
  * @brief Mint an invite to hand to a sibling instance (session-scoped).
@@ -1038,17 +1051,6 @@ typedef void (*qar_runtime_onboard_result_callback_t)(
 typedef void (*qar_session_request_invite_result_callback_t)(
 	QarResult status, QarOnboardingInvite* out_invite, void* user_state
 );
-
-/** Callback invoked when peer invitation completes. Fires exactly once. */
-typedef void (*qar_session_invite_peer_result_callback_t)(
-	QarResult status, const QarPeerId* out_peer_id, void* user_state
-);
-
-typedef struct QarSessionInvitePeerInit
-{
-	QarStructureHeader header;
-	const char* connection_string;
-} QarSessionInvitePeerInit;
 
 typedef enum QarGpuDeviceIdType
 {
@@ -1144,6 +1146,11 @@ typedef struct QarRenderSenderInit
 
 	QarGraphicsAPI graphics_api;
 } QarRenderSenderInit;
+
+/** Callback invoked for each pending render stream request. */
+typedef void (*qar_render_sender_request_callback_t)(
+	QarRenderStreamRequest* request, void* user_state
+);
 
 #ifdef QAR_ENABLE_D3D11
 typedef struct QarStreamParamsD3D11
@@ -1364,7 +1371,7 @@ static inline void qar_runtime_destroy(QarRuntime* runtime);
  *
  * Every session is obtained through onboarding. The canonical app startup is:
  * try qar_runtime_rejoin with the persisted QarOnboardingId; when that fails,
- * show the onboarding GUI and run qar_runtime_onboard_with_code. Persist the
+ * show the onboarding GUI and run qar_runtime_onboard. Persist the
  * id the onboard call returns — it is the ticket for every later rejoin /
  * forget. Destroy the session handle to tear the session down while keeping
  * persisted state; use qar_runtime_forget for a full reset.
@@ -1383,13 +1390,14 @@ static inline bool qar_onboarding_id_is_zero(const QarOnboardingId* id);
 static inline QarPeerPresentation qar_peer_presentation_default(void);
 /** @brief Default init for QarRejoinInit. */
 static inline QarRejoinInit qar_rejoin_init_default(void);
-/** @brief Default init for QarOnboardWithCodeInit. */
-static inline QarOnboardWithCodeInit qar_onboard_with_code_init_default(void);
+/** @brief Default init for QarOnboardInit. */
+static inline QarOnboardInit qar_onboard_init_default(void);
+/** @brief Default init for QarOnboardCodeExt. */
+static inline QarOnboardCodeExt qar_onboard_code_ext_default(void);
 /** @brief Default init for QarOnboardHostExt. */
 static inline QarOnboardHostExt qar_onboard_host_ext_default(void);
-/** @brief Default init for QarOnboardWithInviteInit. */
-static inline QarOnboardWithInviteInit
-qar_onboard_with_invite_init_default(void);
+/** @brief Default init for QarOnboardInviteExt. */
+static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
 /** @brief Default init for QarForgetInit. */
@@ -1412,7 +1420,7 @@ static inline QarForgetInit qar_forget_init_default(void);
  * @param out_session Receives the restored session handle on success.
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero.
  * @retval QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND no persisted slot for the
- *   id — fall back to qar_runtime_onboard_with_code.
+ *   id — fall back to qar_runtime_onboard.
  */
 static inline QarResult qar_runtime_rejoin(
 	QarRuntime* runtime,
@@ -1441,26 +1449,26 @@ static inline QarResult qar_runtime_rejoin_async(
 );
 
 /**
- * @brief Onboard using the short code the hub shows on its onboarding
- * screen.
+ * @brief Run full onboarding using exactly one chained mode extension.
  *
- * Targets the local hub on this PC (loopback + standard discovery port);
- * chain a QarOnboardHostExt through init->header.next to reach a remote hub.
- * Internally fetches the hub's discovery announcement, combines it with the
- * code into a full onboarding invite, then runs the secure onboarding
- * handshake.
+ * Chain one of:
+ * - QarOnboardCodeExt: PAKE code shown on the hub onboarding screen
+ * - QarOnboardInviteExt: full invite blob from a sibling instance
+ *
+ * QarOnboardHostExt is optional and only applies when QarOnboardCodeExt is
+ * chained.
  *
  * @param out_onboarding_id Required; receives the generated (or re-enrolled)
  *   id. Persist it — it is the ticket for every later rejoin / forget.
  * @param out_session Receives the onboarded session handle on success.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
  *   hub — verify host/port and retry.
- * @retval QAR_STATUS_PAKE_ERROR the code handshake was rejected or timed
+ * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected, the invite expired,
  *   out — re-prompt the user for the code.
  */
-static inline QarResult qar_runtime_onboard_with_code(
+static inline QarResult qar_runtime_onboard(
 	QarRuntime* runtime,
-	const QarOnboardWithCodeInit* init,
+	const QarOnboardInit* init,
 	qar_progress_callback_t on_progress,
 	void* progress_state,
 	QarCancelToken* cancel,
@@ -1468,11 +1476,11 @@ static inline QarResult qar_runtime_onboard_with_code(
 	QarSession** out_session
 );
 
-/** @brief Async variant of qar_runtime_onboard_with_code. The result
+/** @brief Async variant of qar_runtime_onboard. The result
  * callback delivers the generated onboarding id — persist it. */
-static inline QarResult qar_runtime_onboard_with_code_async(
+static inline QarResult qar_runtime_onboard_async(
 	QarRuntime* runtime,
-	const QarOnboardWithCodeInit* init,
+	const QarOnboardInit* init,
 	qar_runtime_onboard_result_callback_t result_callback,
 	qar_progress_callback_t update_callback,
 	void* user_state,
@@ -1491,25 +1499,6 @@ static inline QarResult qar_runtime_onboard_with_code_async(
  * @retval QAR_STATUS_PAKE_ERROR the invite handshake was rejected or the
  *   invite expired — mint a fresh invite on the sibling and retry.
  */
-static inline QarResult qar_runtime_onboard_with_invite(
-	QarRuntime* runtime,
-	const QarOnboardWithInviteInit* init,
-	qar_progress_callback_t on_progress,
-	void* progress_state,
-	QarCancelToken* cancel,
-	QarOnboardingId* out_onboarding_id,
-	QarSession** out_session
-);
-
-/** @brief Async variant of qar_runtime_onboard_with_invite. */
-static inline QarResult qar_runtime_onboard_with_invite_async(
-	QarRuntime* runtime,
-	const QarOnboardWithInviteInit* init,
-	qar_runtime_onboard_result_callback_t result_callback,
-	qar_progress_callback_t update_callback,
-	void* user_state,
-	QarCancelToken* cancel
-);
 
 /**
  * @brief Ask the hub this session onboarded through for a fresh onboarding
@@ -1645,60 +1634,6 @@ qar_session_get_id(const QarSession* session, QarSessionId* out_session_id);
  *   unsupported device — rebuild it with a
  *   qar_session_invite_connection_string_* helper.
  */
-static inline QarResult qar_session_invite_peer(
-	QarSession* session,
-	const QarSessionInvitePeerInit* init,
-	QarCancelToken* cancel,
-	QarPeerId* out_peer_id
-);
-
-/**
- * @brief Invite a peer to the current session (async).
- * @param session Active session handle.
- * @param init Invitation parameters containing connection string.
- * @param result_callback Callback receiving completion status and peer id.
- * @param update_callback Optional progress callback (can be NULL).
- * @param user_state User pointer passed to callbacks unchanged.
- */
-static inline QarResult qar_session_invite_peer_async(
-	QarSession* session,
-	const QarSessionInvitePeerInit* init,
-	qar_session_invite_peer_result_callback_t result_callback,
-	qar_progress_callback_t update_callback,
-	void* user_state
-);
-
-/**
- * @brief Build connection string for inviting a HoloLens peer.
- * @param hostname Device hostname (must not be NULL or empty).
- * @param out_buffer Output buffer for the connection string.
- * @param buffer_size Size of output buffer.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small.
- */
-static inline QarResult qar_session_invite_connection_string_hololens(
-	const char* hostname, char* out_buffer, size_t buffer_size
-);
-
-/**
- * @brief Build connection string for inviting a Meta Quest device.
- */
-static inline QarResult qar_session_invite_connection_string_quest(
-	char* out_buffer, size_t buffer_size
-);
-
-/**
- * @brief Build connection string for inviting a Visualizer peer.
- */
-static inline QarResult qar_session_invite_connection_string_visualizer(
-	char* out_buffer, size_t buffer_size
-);
-
-/**
- * @brief Build connection string for inviting a ZED camera peer.
- */
-static inline QarResult
-qar_session_invite_connection_string_zed(char* out_buffer, size_t buffer_size);
-
 /** @} */ /* end of qar_c_session */
 
 // ============================================================================
@@ -1783,6 +1718,27 @@ static inline QarResult qar_peer_subscribe_updates(
 // Forward declarations
 /** @brief Destroy a render stream sender handle. */
 static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
+/** @brief Subscribe to pending render stream requests for this session. */
+static inline QarResult qar_render_sender_subscribe_requests(
+	QarSession* session,
+	qar_render_sender_request_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+/** @brief Check if a render stream request handle is valid. */
+static inline bool
+qar_render_request_handle_is_valid(QarRenderStreamRequest* request);
+/** @brief Destroy a render stream request handle. */
+static inline void
+qar_render_request_handle_destroy(QarRenderStreamRequest* request);
+/** @brief Get the target peer id from a render request. */
+static inline QarResult qar_render_request_get_target_peer_id(
+	QarRenderStreamRequest* request, QarPeerId* out_peer_id
+);
+/** @brief Get the stream id from a render request. */
+static inline QarResult qar_render_request_get_stream_id(
+	QarRenderStreamRequest* request, QarStreamId* out_stream_id
+);
 /**
  * @brief Create a rendering stream sender bound to a session.
  * @param session Active session handle.
@@ -1799,6 +1755,7 @@ static inline QarResult qar_render_sender_create(
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
 );
+/** @brief Async variant of qar_render_sender_create. */
 static inline QarResult qar_render_sender_create_async(
 	QarSession* session,
 	QarRenderSenderInit* init,
@@ -2210,9 +2167,6 @@ static inline QarRenderSenderInit qar_render_sender_init_default(void);
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
 static inline QarRuntimeInit qar_runtime_init_default(void);
-/** @brief Default init for QarSessionInvitePeerInit. */
-static inline QarSessionInvitePeerInit
-qar_session_invite_peer_init_default(void);
 /** @brief Default init for QarRenderFrameShow. */
 static inline QarRenderFrameShow qar_render_frame_show_default(void);
 /** @brief Default init for QarGuiPanelInit. */
@@ -3251,16 +3205,25 @@ qar_rejoin_init_default(void)
 	return init;
 }
 
-static inline QarOnboardWithCodeInit
-qar_onboard_with_code_init_default(void)
+static inline QarOnboardInit
+qar_onboard_init_default(void)
 {
-	QarOnboardWithCodeInit init = {
-		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_CODE_INIT, NULL }, // header
+	QarOnboardInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INIT, NULL }, // header
 		QAR_ID_DEFAULT, // onboarding_id (zero -> fresh identity)
-		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL },
-		NULL // code (required, caller must set)
+		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL }
 	};
 	return init;
+}
+
+static inline QarOnboardCodeExt
+qar_onboard_code_ext_default(void)
+{
+	QarOnboardCodeExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT, NULL }, // header
+		NULL // code (required, caller must set)
+	};
+	return ext;
 }
 
 static inline QarOnboardHostExt
@@ -3274,16 +3237,14 @@ qar_onboard_host_ext_default(void)
 	return ext;
 }
 
-static inline QarOnboardWithInviteInit
-qar_onboard_with_invite_init_default(void)
+static inline QarOnboardInviteExt
+qar_onboard_invite_ext_default(void)
 {
-	QarOnboardWithInviteInit init = {
-		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_WITH_INVITE_INIT, NULL },
-		QAR_ID_DEFAULT, // onboarding_id (zero -> fresh identity)
-		{ { QAR_STRUCTURE_TYPE_PEER_PRESENTATION, NULL }, NULL, NULL, NULL },
+	QarOnboardInviteExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT, NULL },
 		NULL // invite (required, caller must set)
 	};
-	return init;
+	return ext;
 }
 
 static inline QarRequestInviteInit
@@ -3301,16 +3262,6 @@ qar_forget_init_default(void)
 	QarForgetInit init = {
 		{ QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT, NULL }, // header
 		QAR_ID_DEFAULT									  // onboarding_id
-	};
-	return init;
-}
-
-static inline QarSessionInvitePeerInit
-qar_session_invite_peer_init_default(void)
-{
-	QarSessionInvitePeerInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_INVITE_PEER_INIT, NULL }, // header
-		NULL, // connection_string
 	};
 	return init;
 }
@@ -3582,9 +3533,9 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  (runtime, init, result_callback, update_callback, user_state, cancel))   \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  runtime_onboard_with_code,                                               \
+	  runtime_onboard,                                                         \
 	  (QarRuntime * runtime,                                                   \
-	   const QarOnboardWithCodeInit* init,                                     \
+	   const QarOnboardInit* init,                                             \
 	   qar_progress_callback_t on_progress,                                    \
 	   void* progress_state,                                                   \
 	   QarCancelToken* cancel,                                                 \
@@ -3599,36 +3550,9 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	   out_session))                                                           \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  runtime_onboard_with_code_async,                                         \
+	  runtime_onboard_async,                                                   \
 	  (QarRuntime * runtime,                                                   \
-	   const QarOnboardWithCodeInit* init,                                     \
-	   qar_runtime_onboard_result_callback_t result_callback,                  \
-	   qar_progress_callback_t update_callback,                                \
-	   void* user_state,                                                       \
-	   QarCancelToken* cancel),                                                \
-	  (runtime, init, result_callback, update_callback, user_state, cancel))   \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  runtime_onboard_with_invite,                                             \
-	  (QarRuntime * runtime,                                                   \
-	   const QarOnboardWithInviteInit* init,                                   \
-	   qar_progress_callback_t on_progress,                                    \
-	   void* progress_state,                                                   \
-	   QarCancelToken* cancel,                                                 \
-	   QarOnboardingId* out_onboarding_id,                                     \
-	   QarSession** out_session),                                              \
-	  (runtime,                                                                \
-	   init,                                                                   \
-	   on_progress,                                                            \
-	   progress_state,                                                         \
-	   cancel,                                                                 \
-	   out_onboarding_id,                                                      \
-	   out_session))                                                           \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  runtime_onboard_with_invite_async,                                       \
-	  (QarRuntime * runtime,                                                   \
-	   const QarOnboardWithInviteInit* init,                                   \
+	   const QarOnboardInit* init,                                             \
 	   qar_runtime_onboard_result_callback_t result_callback,                  \
 	   qar_progress_callback_t update_callback,                                \
 	   void* user_state,                                                       \
@@ -3889,6 +3813,29 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	  (handle))                                                                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
+	  render_sender_subscribe_requests,                                        \
+	  (QarSession * session,                                                   \
+	   qar_render_sender_request_callback_t callback,                          \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, callback, user_state, token))                                  \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  render_request_handle_destroy,                                           \
+	  (QarRenderStreamRequest * request),                                      \
+	  (request))                                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_request_get_target_peer_id,                                       \
+	  (QarRenderStreamRequest * request, QarPeerId * out_peer_id),             \
+	  (request, out_peer_id))                                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_request_get_stream_id,                                            \
+	  (QarRenderStreamRequest * request, QarStreamId * out_stream_id),         \
+	  (request, out_stream_id))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
 	  render_sender_layout,                                                    \
 	  (QarRenderSender * stream, QarVideoFrameLayout * out_layout),            \
 	  (stream, out_layout))                                                    \
@@ -4019,6 +3966,12 @@ qar_render_frame_info_handle_is_valid(QarRenderFrameInfo* handle)
 	return handle != NULL;
 }
 
+static inline bool
+qar_render_request_handle_is_valid(QarRenderStreamRequest* handle)
+{
+	return handle != NULL;
+}
+
 #endif // QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_RESULT_H
@@ -4106,44 +4059,7 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 	  QarResult,                                                               \
 	  session_get_id,                                                          \
 	  (const QarSession* session, QarSessionId* out_session_id),               \
-	  (session, out_session_id))                                               \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_peer,                                                     \
-	  (QarSession * session,                                                   \
-	   const QarSessionInvitePeerInit* init,                                   \
-	   QarCancelToken* cancel,                                                 \
-	   QarPeerId* out_peer_id),                                                \
-	  (session, init, cancel, out_peer_id))                                    \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_peer_async,                                               \
-	  (QarSession * session,                                                   \
-	   const QarSessionInvitePeerInit* init,                                   \
-	   qar_session_invite_peer_result_callback_t result_callback,              \
-	   qar_progress_callback_t update_callback,                                \
-	   void* user_state),                                                      \
-	  (session, init, result_callback, update_callback, user_state))           \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_connection_string_hololens,                               \
-	  (const char* hostname, char* out_buffer, size_t buffer_size),            \
-	  (hostname, out_buffer, buffer_size))                                     \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_connection_string_quest,                                  \
-	  (char* out_buffer, size_t buffer_size),                                  \
-	  (out_buffer, buffer_size))                                               \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_connection_string_visualizer,                             \
-	  (char* out_buffer, size_t buffer_size),                                  \
-	  (out_buffer, buffer_size))                                               \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_invite_connection_string_zed,                                    \
-	  (char* out_buffer, size_t buffer_size),                                  \
-	  (out_buffer, buffer_size))
+	  (session, out_session_id))
 
 QAR_DECLARE_MODULE_COMMON(SESSION, Session, session, QAR_SESSION_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_SESSION_FUNCTION_LIST)

@@ -1,5 +1,5 @@
 /** \file cpu_rendering_visualizer.c
- *  \brief Invites a Visualizer peer and submits CPU-rendered frames.
+ *  \brief Waits for a render stream request and submits CPU-rendered frames.
  *  \example cpu_rendering_visualizer.c
  */
 
@@ -8,13 +8,16 @@
  *
  * \section cpu_rendering_overview Overview
  * - Obtain a session as in earlier tutorials (rejoin or onboard)
- * - Invite a Visualizer peer using a connection string
- * - Create a CPU render sender and submit a short gradient animation
+ * - Subscribe to incoming render stream requests and wait for a peer (e.g. a
+ *   Visualizer) to request one
+ * - Create a CPU render sender for the requesting peer and submit a short
+ *   gradient animation
  *
  * \section cpu_rendering_prereq Prerequisites
  * - Complete the \ref qar_c_tutorial_gui_panels tutorial
  * - A running QarOS hub (for the first run, read the pairing code off its
- *   onboarding screen)
+ *   onboarding screen), with a peer that requests a render stream from this
+ *   application once it is running
  *
  * \section cpu_rendering_build Build and Run
  * \code{.bash}
@@ -31,14 +34,16 @@
  * in the \ref qar_c_tutorial_onboarding tutorial.
  * \snippet cpu_rendering_visualizer.c cpu_setup
  *
- * \section cpu_rendering_invite Invite the Visualizer Peer
- * \snippet cpu_rendering_visualizer.c cpu_invite
+ * \section cpu_rendering_request Wait for a Render Stream Request
+ * \snippet cpu_rendering_visualizer.c cpu_request
  *
  * \section cpu_rendering_frames Render and Submit Frames
  * \snippet cpu_rendering_visualizer.c cpu_frames
  */
 
 #include "common.h"
+
+#include <windows.h>
 
 #ifndef QAR_ENABLE_DYNAMIC_LOADING
 #define QAR_ENABLE_DYNAMIC_LOADING
@@ -62,38 +67,38 @@ print_usage(const char* program_name)
 	);
 }
 
-static char g_visualizer_connection[QAR_MAX_STRING_LENGTH] = { 0 };
+typedef struct RenderRequestState
+{
+	bool has_request;
+	QarPeerId target_peer_id;
+} RenderRequestState;
 
 static void
-on_invite_result(QarResult status, const QarPeerId* peer_id, void* user_state)
+on_render_request(QarRenderStreamRequest* request, void* user_state)
 {
-	(void)user_state;
-	if(qar_result_is_success(status) && peer_id)
+	RenderRequestState* state = (RenderRequestState*)user_state;
+
+	QarPeerId target_peer_id = qar_peer_id_default();
+	QarResult peer_result =
+		qar_render_request_get_target_peer_id(request, &target_peer_id);
+	log_result("qar_render_request_get_target_peer_id", peer_result);
+
+	QarStreamId stream_id = qar_stream_id_default();
+	log_result(
+		"qar_render_request_get_stream_id",
+		qar_render_request_get_stream_id(request, &stream_id)
+	);
+
+	if(qar_result_is_success(peer_result) && !state->has_request)
 	{
-		printf("Visualizer invite accepted by peer ");
-		print_hex_id(peer_id->data, QAR_MAX_ID_LENGTH);
+		printf("Render stream requested by peer ");
+		print_hex_id(target_peer_id.data, QAR_MAX_ID_LENGTH);
 		printf("\n");
+		state->target_peer_id = target_peer_id;
+		state->has_request = true;
 	}
-	else
-	{
-		log_result("qar_session_invite_peer_async(result)", status);
-	}
-}
 
-static void
-on_invite_update(
-	QarActionSeverity severity,
-	float percent,
-	const char* message,
-	void* user_state
-)
-{
-	(void)severity;
-	(void)user_state;
-	if(message)
-	{
-		printf("Invite update (%.0f%%): %s\n", (double)percent, message);
-	}
+	qar_render_request_handle_destroy(request);
 }
 
 static void
@@ -208,31 +213,27 @@ main(int argc, char** argv)
 	}
 	//! [cpu_setup]
 
-	//! [cpu_invite]
-	QarResult connection_result =
-		qar_session_invite_connection_string_visualizer(
-			g_visualizer_connection, sizeof(g_visualizer_connection)
-		);
-	log_result(
-		"qar_session_invite_connection_string_visualizer", connection_result
+	//! [cpu_request]
+	RenderRequestState request_state = { false, qar_peer_id_default() };
+	QarResult subscribe_result = qar_render_sender_subscribe_requests(
+		session, on_render_request, &request_state, NULL
 	);
-	if(qar_result_is_success(connection_result))
-	{
-		printf("Visualizer connection string: %s\n", g_visualizer_connection);
-		QarSessionInvitePeerInit invite_peer =
-			qar_session_invite_peer_init_default();
-		invite_peer.connection_string = g_visualizer_connection;
+	log_result("qar_render_sender_subscribe_requests", subscribe_result);
 
-		QarResult invite_peer_result = qar_session_invite_peer_async(
-			session, &invite_peer, on_invite_result, on_invite_update, NULL
-		);
-		log_result("qar_session_invite_peer_async", invite_peer_result);
+	printf(
+		"Waiting for a peer to request a render stream (e.g. open a "
+		"Visualizer on the hub) ...\n"
+	);
+	while(!request_state.has_request)
+	{
+		Sleep(50);
 	}
-	//! [cpu_invite]
+	//! [cpu_request]
 
 	//! [cpu_frames]
 	QarRenderSenderInit sender_init = qar_render_sender_init_default();
 	sender_init.graphics_api = QAR_GRAPHICS_API_CPU;
+	sender_init.peer_id = request_state.target_peer_id;
 
 	QarRenderSender* sender = NULL;
 	QarResult sender_result =

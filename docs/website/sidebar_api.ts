@@ -68,37 +68,11 @@ const sidebars: SidebarsConfig = {
           collapsed: true,
           items: buildFileDocItems('qar-streaming-c/files'),
         },
-        {
-          type: 'category',
-          label: 'Examples',
-          collapsed: false,
-          items: [{
-            id: 'qar-streaming-c/pages/qar-c-tutorial-dynamic-loading',
-            type: 'doc',
-            label: 'Dynamic Library Loading',
-          },
-          {
-            id: 'qar-streaming-c/pages/qar-c-tutorial-onboarding',
-            type: 'doc',
-            label: 'Onboarding and Rejoin',
-          },
-          {
-            id: 'qar-streaming-c/pages/qar-c-tutorial-gui-panels',
-            type: 'doc',
-            label: 'Gui Panels',
-          },
-          {
-            id: 'qar-streaming-c/pages/qar-c-tutorial-app-volumes',
-            type: 'doc',
-            label: 'App Volumes',
-          },
-          {
-            id: 'qar-streaming-c/pages/qar-c-tutorial-cpu-rendering',
-            type: 'doc',
-            label: 'Cpu Single User Rendering',
-          }
-          ],
-        },
+        // The compiled-example tutorials (doxygen "Pages") live in the Knowledge
+        // Base under Developer Guide > Examples > C instead of here — see
+        // docs/developer-guide/examples/c/*.mdx. They stay reachable at their
+        // /api/qar-streaming-c/pages/... URLs (linked from those pages' "Source"
+        // line) but are intentionally left out of this sidebar.
       ],
     } as any,
   ],

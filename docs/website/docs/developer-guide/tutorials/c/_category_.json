@@ -1,0 +1,10 @@
+{
+	"label": "C",
+	"position": 1,
+	"collapsed": false,
+	"link": {
+		"type": "generated-index",
+		"title": "C Examples",
+		"description": "Compiled tutorials for the qar-streaming-c examples, built from the same source comments that document each example."
+	}
+}

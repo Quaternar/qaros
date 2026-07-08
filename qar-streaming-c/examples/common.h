@@ -137,15 +137,17 @@ example_obtain_session(
 		return 1;
 	}
 
-	QarOnboardWithCodeInit onboard_init = qar_onboard_with_code_init_default();
+	QarOnboardInit onboard_init = qar_onboard_init_default();
+	QarOnboardCodeExt onboard_code = qar_onboard_code_ext_default();
 	onboard_init.presentation = presentation;
-	onboard_init.code = pairing_code;
+	onboard_code.code = pairing_code;
+	onboard_init.header.next = &onboard_code.header;
 
 	QarOnboardingId new_id = qar_onboarding_id_default();
-	QarResult onboard_result = qar_runtime_onboard_with_code(
+	QarResult onboard_result = qar_runtime_onboard(
 		runtime, &onboard_init, NULL, NULL, NULL, &new_id, out_session
 	);
-	log_result("qar_runtime_onboard_with_code", onboard_result);
+	log_result("qar_runtime_onboard", onboard_result);
 	if(qar_result_is_error(onboard_result))
 	{
 		if(qar_result_has_code(onboard_result, QAR_STATUS_PAKE_ERROR))

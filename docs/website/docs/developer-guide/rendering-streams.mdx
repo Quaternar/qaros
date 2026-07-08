@@ -1,20 +1,49 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: Rendering Streams
 description: Stream your rendered frames into the room — the render sender, frame loop, layouts, CPU and D3D11 paths, and hand tracking.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 # Rendering Streams
 
-The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QarOS takes care of encoding, transport, and — via the [mixer](/docs/user-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
+<LanguageSwitcher />
+
+The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QarOS takes care of encoding, transport, and — via the [mixer](/docs/operator-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
+
+## Accepting render stream requests
+
+There is no API for pulling a peer into your stream by address — instead, a peer that wants your content (a Visualizer app volume, a headset viewer, ...) sends a **render stream request**, and your application subscribes to be notified of these:
+
+```c
+static void on_render_request(QarRenderStreamRequest* request, void* user_state)
+{
+    QarPeerId target_peer_id = qar_peer_id_default();
+    qar_result_log_if_error(
+        qar_render_request_get_target_peer_id(request, &target_peer_id));
+
+    QarStreamId stream_id = qar_stream_id_default();
+    qar_result_log_if_error(
+        qar_render_request_get_stream_id(request, &stream_id));
+
+    /* Create the sender for this peer, e.g. by handing target_peer_id off
+       to your render thread — see "Creating a sender" below. */
+
+    qar_render_request_handle_destroy(request);
+}
+
+qar_result_log_if_error(
+    qar_render_sender_subscribe_requests(session, on_render_request, NULL, NULL));
+```
+
+The callback fires once per incoming request for as long as the subscription is alive (until the session is destroyed or you cancel it via the optional `QarCancelToken`). Each request carries the requesting peer's ID — pass it as `init.peer_id` when you create the matching sender — and a `QarStreamId` you can use to correlate multiple requests. Always destroy the request handle once you are done reading it.
 
 ## Creating a sender
 
-<Tabs groupId="language">
-<TabItem value="c" label="C">
+<CodeTabs>
+<Lang value="c">
 
 ```c
 QarRenderSenderInit init = qar_render_sender_init_default();
@@ -39,20 +68,48 @@ qar_result_log_if_error(
     qar_render_sender_create(session, &init, &sender));
 ```
 
-</TabItem>
-<TabItem value="csharp" label="C#">
+</Lang>
+<Lang value="csharp">
 
 ```csharp
-// TODO: C# sample pending publication of the qar-streaming-sharp render
-// sender bindings in this repository. Flow mirrors the C version.
+var options = new RenderSenderOptions
+{
+    PeerId              = targetPeerId,   // who receives this stream
+    EnableAutoReconnects = true,          // survive network hiccups
+    AppVolumeId         = volumeId,       // composite into our app volume
+    GraphicsApi         = GraphicsApi.Cpu,
+    ColorFormat         = PixelFormat.R8G8B8A8,
+    DepthFormat         = PixelFormat.R32Float,
+
+    // Describe the views inside one video frame: stereo color + depth.
+    TextureLayout = FrameLayout.SideBySide,
+    FrameViews = new[]
+    {
+        new RenderFrameView
+        {
+            DataType     = VideoFrameViewType.Color,
+            Eye          = VideoFrameViewEye.Left,
+            TextureIndex = 0,
+        },
+        // ... one entry per view (right eye, depth views, ...) ...
+    },
+};
+
+// RenderSender is IDisposable — dispose it to release the native sender.
+using RenderSender sender = session.RenderSenders.Create(options).ValueOrThrow();
 ```
 
-</TabItem>
-</Tabs>
+</Lang>
+</CodeTabs>
+
+:::info
+The C# snippet above is illustrative — it tracks the `Qar` binding surface but
+is not yet compiled from a published sample project.
+:::
 
 Key choices:
 
-- **Target peer** — a sender streams to one peer (get peer IDs from [peer enumeration](/docs/developer-guide/onboarding-and-sessions) or your own invite result).
+- **Target peer** — a sender streams to one peer: the requesting peer's ID from the [render stream request](#accepting-render-stream-requests) above, or one obtained through [peer enumeration](/docs/developer-guide/peers).
 - **App volume** — pass your volume's ID so the mixer composites the stream inside that box; see [App Volumes](/docs/developer-guide/app-volumes).
 - **Graphics API** — `QAR_GRAPHICS_API_CPU` (portable, always available) or `QAR_GRAPHICS_API_D3D11` (Windows, zero-copy GPU textures; chain a `QarStreamParamsD3D11` extension with your device/context into `init.header.next`).
 - **Frame layout** — how views pack into textures: `SIDE_BY_SIDE` (both eyes in one texture), `SEPARATED_TEXTURES`, or `LAYERED` (texture array). The negotiated layout can be queried (`qar_render_sender_layout`) and changed at runtime (`qar_render_sender_change_layout`).
@@ -135,6 +192,7 @@ This is how a source application implements grabbing, pointing, and touch agains
 
 ## Compiled tutorial
 
-:::note TODO
-Link the compiled `cpu_rendering_visualizer.c` tutorial page here once it is updated to onboarding-based session acquisition; extend it with Doxygen snippet sections for the frame loop and a D3D11 variant example.
-:::
+This page is backed by the compiled example `cpu_rendering_visualizer.c`, which obtains a session, subscribes to render stream requests, and streams a CPU-rendered gradient to the requesting peer:
+
+- Source: `qaros/qar-streaming-c/examples/cpu_rendering_visualizer.c`
+- Example walkthrough: [CPU Rendering with a Visualizer](/docs/developer-guide/tutorials/c/cpu-rendering)

@@ -1,0 +1,96 @@
+---
+sidebar_position: 11
+title: Troubleshooting
+description: Common failures during integration — what they mean and what to do.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
+
+# Troubleshooting
+
+<LanguageSwitcher />
+
+## Status codes that are part of normal flow
+
+| Status | Meaning | What to do |
+|---|---|---|
+| `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` | The onboarding ID has no persisted slot on this machine | Fall back to `qar_runtime_onboard` — this is the expected first-run path |
+| `QAR_STATUS_PAKE_ERROR` | Pairing code wrong or expired (codes live ~10 s) | Re-prompt the user for the current code and retry |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Discovery couldn't reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
+| `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` | `forget` called while the session is active | Call `qar_session_handle_destroy` first, then `forget` |
+
+## Checking results
+
+Every fallible call reports success or failure the same way — inspect it rather than assuming success. The status code is what you branch on to tell a normal-flow condition (above) apart from a real error:
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+QarRejoinInit rejoin = qar_rejoin_init_default();
+rejoin.onboarding_id = onboarding_id;
+QarResult r = qar_runtime_rejoin(runtime, &rejoin, NULL, NULL, NULL, &session);
+if (qar_result_is_success(r))
+{
+    /* use session */
+}
+else if (qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
+{
+    /* expected first-run: fall back to qar_runtime_onboard */
+}
+else
+{
+    qar_result_log_if_error(r); /* log status code + message */
+}
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+Result<Session> result = runtime.Rejoin(new RejoinOptions { OnboardingId = onboardingId });
+if (!result.IsSuccess)
+{
+    ResultInfo info = result.Info;
+    if (info.StatusCode == StatusCode.OnboardingSessionNotFound)
+    {
+        // expected first-run: fall back to the binding's onboard flow
+    }
+    else
+    {
+        // log info.StatusCode and info.Message
+    }
+}
+
+// Or, to turn any failure into a NativeCallException:
+using Session session = result.ValueOrThrow();
+```
+
+</Lang>
+</CodeTabs>
+
+:::info
+The C# snippet above is illustrative — it tracks the `Qar` binding surface but
+is not yet compiled from a published sample project.
+:::
+
+## Frequent integration mistakes
+
+- **Forgetting to persist the onboarding ID.** The ID returned by onboarding is the *only* key to the persisted identity. Losing it means pairing again.
+- **Calling API functions from inside callbacks.** Result/progress/update callbacks run on library threads; blocking API calls from there can deadlock. Queue to your own thread.
+- **Zero-initializing init structs by hand.** Always use `qar_*_default()` — it stamps `header.type`, without which calls fail.
+- **Mismatched projection metadata.** If streamed content "swims" or sits at the wrong depth, your `show_frame` near/far or per-view poses don't match what you actually rendered with. This is a metadata bug, not a network problem — see [Rendering Streams](/docs/developer-guide/rendering-streams#the-frame-loop).
+- **Confusing panel and volume pose conventions.** Panel pose = top-left corner; volume pose = cuboid center.
+- **Destroying the runtime while async operations run.** Cancel (and wait for the exactly-once result callback) before teardown.
+
+## Where to look
+
+- **Library logs** — enable with `QarLibraryInit.enable_console_logging` and/or `log_folder_path`.
+- **Hub-side logs** — the QarOS Hub log folder on the Hub machine.
+- **Warping monitor** — the visualizer's timing view shows per-volume stream latency/FPS/jitter, which quickly separates "my app renders slowly" from "the network is dropping frames".
+
+## Getting help
+
+- GitHub Issues on this repository for bugs and feature requests.
+- GitHub Discussions for integration questions.

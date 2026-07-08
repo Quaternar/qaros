@@ -1,0 +1,209 @@
+---
+sidebar_position: 1
+title: Getting Started
+description: Set up the QarOS SDK in C or C# — the package, static vs. dynamic loading, and your first program.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
+
+# Getting Started
+
+<LanguageSwitcher />
+
+QarOS ships a native **C API** and an idiomatic **C#/.NET binding** over it. Pick
+your language above — the selection follows you across the whole Developer Guide.
+Whichever you choose, the simplest integration is genuinely simple: initialize
+the library, create a runtime, obtain a session, do work, tear down in reverse.
+
+This guide is self-contained. If you want the mental model first, read
+[Concepts](/docs/developer-guide/concepts); otherwise start here.
+
+## Setting up
+
+<CodeTabs>
+<Lang value="c">
+
+The C SDK consists of:
+
+- **`qar_streaming.h`** — a single amalgamated header containing the complete v0
+  C API. It is auto-generated from the authoritative API sources on every
+  runtime build, so the header in a given package always matches its binaries
+  exactly. **Never edit it.**
+- **`qar-streaming-c.dll` / `.so`** — the library your app links against or loads
+  at runtime.
+- **Runtime binaries** — the services the library spawns/uses, in the binary
+  package's `bin/` folder.
+- **Examples** — small, self-contained C programs in `qar-streaming-c/examples/`,
+  compiled as part of this repository so they are always valid against the
+  current header. The [Tutorials](/docs/developer-guide/tutorials/c/dynamic-loading)
+  are built from them.
+
+### Static linking vs. dynamic loading
+
+Both modes expose identical function names.
+
+| | Static / import-library linking | Dynamic loading |
+|---|---|---|
+| How | Link `qar-streaming-c.lib`, call functions directly | Define `QAR_ENABLE_DYNAMIC_LOADING`, load the DLL at runtime |
+| Startup dependency | DLL must be present at process start | Your app starts without QarOS; loads it on demand |
+| Failure mode | Loader error dialog | You handle a `bool` load failure gracefully |
+| Recommended for | Tools that always ship with QarOS | Plugins and apps where AR/VR is optional |
+
+Dynamic loading is recommended for integrating into an existing application: your
+software keeps working on machines without QarOS installed.
+
+```c
+// Dynamic-loading mode: one macro before the include, one macro in ONE .c file.
+#define QAR_ENABLE_DYNAMIC_LOADING
+#include <qar_streaming.h>
+
+QAR_IMPLEMENT_DYNAMIC_LOADING() // exactly once per application
+
+int main(int argc, char** argv)
+{
+    if (not qar_library_load("path/to/qar-streaming-c.dll"))
+    {
+        // QarOS not present — run without AR/VR features
+        return 1;
+    }
+    // ... use the API exactly as in static mode ...
+    qar_library_unload();
+    return 0;
+}
+```
+
+Functions are loaded from the DLL *by symbol name* into application-owned
+function tables — there is no loader struct in the ABI, so newer DLLs keep
+working with older applications and vice versa. Full walkthrough:
+[Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading).
+
+### Building the examples
+
+```powershell
+# 1. Drop the QarOS binary package into ./package (see the Operator Guide's
+#    Installation page for the package layout).
+# 2. Configure and build
+cmake --preset x64-windows
+cmake --build --preset x64-windows-debug
+
+# 3. Run an example
+./build/x64-windows/Debug/dynamic_loading.exe ./package/bin/qar-streaming-c.dll
+```
+
+</Lang>
+<Lang value="csharp">
+
+The C# binding wraps the native C API in the `Qar` namespace with `SafeHandle`s,
+`IDisposable`, and a `Result<T>` return type — no manual pointers, no exceptions
+for expected native failures.
+
+- **NuGet package** — reference it from your project. It multi-targets
+  **`netstandard2.0`**, **`netstandard2.1`**, and **`net8.0`**, so it works in
+  Unity (via .NET Standard 2.0/2.1) and modern .NET alike. Unsafe blocks are
+  enabled internally for zero-copy frame access.
+- **Native library** — the managed assembly P/Invokes into the native
+  **`qar-streaming-c`** library. Place that DLL/.so where the .NET runtime can
+  resolve it (next to your executable, or on the platform's library search
+  path); the C# package does not carry it.
+
+```xml
+<!-- your .csproj -->
+<ItemGroup>
+  <PackageReference Include="QarStreamingSharp" Version="0.*" />
+</ItemGroup>
+```
+
+:::info
+The C# snippets in this guide are accurate to the shipping binding surface but
+are illustrative — a compiled C# examples project is not yet published in this
+repository, so treat exact member signatures as a guide rather than copy-paste
+gospel. See [Language Bindings](/docs/developer-guide/language-bindings).
+:::
+
+Your first runtime and session, with `Result<T>` and `using` for disposal:
+
+```csharp
+using Qar;
+
+Library.Initialize(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
+
+using var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow();
+
+// Obtain a session by onboarding — see Onboarding & Sessions.
+// using var session = ...;
+
+// On scope exit, `using` disposes the session then the runtime, then:
+Library.Shutdown();
+```
+
+Unity uses this same package; see [Language Bindings](/docs/developer-guide/language-bindings)
+for Unity lifecycle notes.
+
+</Lang>
+</CodeTabs>
+
+## The canonical program skeleton
+
+Every QarOS application has the same shape: **library init → runtime → session →
+work → teardown in reverse.**
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+#include <qar_streaming.h>
+
+int main(void)
+{
+    // 1. Library init (process-wide, once)
+    QarLibraryInit lib_init = qar_library_init_default();
+    lib_init.enable_console_logging = true;
+    qar_result_log_if_error(qar_library_init(&lib_init));
+
+    // 2. Runtime create (your process's QarOS context)
+    QarRuntimeInit rt_init = qar_runtime_init_default();
+    QarRuntime* runtime = NULL;
+    qar_result_log_if_error(qar_runtime_create(&rt_init, &runtime));
+
+    // 3. Obtain a session: rejoin if we onboarded before, else onboard
+    //    (see Onboarding and Sessions)
+
+    // 4. Do work: streams, panels, volumes, peers
+
+    // 5. Teardown, in reverse
+    qar_runtime_destroy(runtime);
+    qar_result_log_if_error(qar_library_destroy());
+    return 0;
+}
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+using Qar;
+
+Library.Initialize(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
+
+// `using` guarantees teardown in reverse construction order.
+using (var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow())
+{
+    // Obtain a session: rejoin if we onboarded before, else onboard
+    // (see Onboarding and Sessions)
+    // using var session = ...;
+
+    // Do work: streams, panels, volumes, peers
+}
+
+Library.Shutdown();
+```
+
+</Lang>
+</CodeTabs>
+
+Steps 3 and 4 are what the rest of this guide is about. Read
+[API Conventions](/docs/developer-guide/api-conventions) once — the API follows a
+handful of strict patterns in both languages, and knowing them makes every module
+predictable. Then continue to
+[Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).

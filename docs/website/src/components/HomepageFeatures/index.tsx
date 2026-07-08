@@ -10,36 +10,36 @@ type FeatureItem = {
 };
 
 const FeatureList: FeatureItem[] = [
-  // {
-  //   title: 'Easy to Use',
-  //   Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
-  //   description: (
-  //     <>
-  //       Docusaurus was designed from the ground up to be easily installed and
-  //       used to get your website up and running quickly.
-  //     </>
-  //   ),
-  // },
-  // {
-  //   title: 'Focus on What Matters',
-  //   Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
-  //   description: (
-  //     <>
-  //       Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-  //       ahead and move your docs into the <code>docs</code> directory.
-  //     </>
-  //   ),
-  // },
-  // {
-  //   title: 'Powered by React',
-  //   Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
-  //   description: (
-  //     <>
-  //       Extend or customize your website layout by reusing React. Docusaurus can
-  //       be extended while reusing the same header and footer.
-  //     </>
-  //   ),
-  // },
+  {
+    title: 'Extend, Don’t Rewrite',
+    Svg: require('@site/static/img/feature-extend.svg').default,
+    description: (
+      <>
+        Add AR/VR support to your existing 3D applications without major code
+        rewrites. QarOS plugs into what you already have.
+      </>
+    ),
+  },
+  {
+    title: 'Low-Latency Streaming',
+    Svg: require('@site/static/img/feature-stream.svg').default,
+    description: (
+      <>
+        Remote-render on powerful workstations and stream to a wide range of
+        AR/VR devices with low latency.
+      </>
+    ),
+  },
+  {
+    title: 'Multi-User Collaboration',
+    Svg: require('@site/static/img/feature-collaborate.svg').default,
+    description: (
+      <>
+        Bring up to eight users into a shared, synchronized space across
+        different platforms and devices.
+      </>
+    ),
+  },
 ];
 
 function Feature({title, Svg, description}: FeatureItem) {

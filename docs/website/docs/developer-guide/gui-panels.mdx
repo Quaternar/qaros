@@ -1,24 +1,26 @@
 ---
-sidebar_position: 5
+sidebar_position: 7
 title: Custom GUI Panels
 description: Create shared 2D panels in the 3D room and integrate them with your application's UI.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 # Custom GUI Panels
 
+<LanguageSwitcher />
+
 GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. Panel content is currently **web content**: the panel renders a URI, which makes any existing web UI immediately usable in the room.
 
-The concepts (identity by common name, top-left-corner pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/user-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
+The concepts (identity by common name, top-left-corner pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
 
 ## Creating a panel (idempotent)
 
 Panels are identified by a stable **common name**; `get_or_create` returns the existing panel or creates it — safe to call on every app start:
 
-<Tabs groupId="language">
-<TabItem value="c" label="C">
+<CodeTabs>
+<Lang value="c">
 
 ```c
 QarGuiPanelInit init = qar_gui_panel_init_default();
@@ -42,17 +44,34 @@ qar_gui_panels_navigate_to_uri(
     session, &panel_id, "https://myapp.local/status-dashboard");
 ```
 
-</TabItem>
-<TabItem value="csharp" label="C#">
+</Lang>
+<Lang value="csharp">
 
 ```csharp
-// TODO: C# sample pending publication of the qar-streaming-sharp panel
-// bindings in this repository. Flow mirrors the C version:
-// GuiPanels.GetOrCreate(commonName, pose, size) then NavigateToUri(...).
+var options = new GuiPanelOptions
+{
+    CommonName  = "machine-status.myapp.example.com", // stable identity
+    DisplayName = "Machine Status",
+    // Pose is the top-left corner, room space, meters.
+    Pose = new Pose { Position = new Vec3(0f, 1.5f, -1.0f) },
+    Size = new GuiPanelSize { WidthMeters = 0.8f, HeightMeters = 0.5f },
+};
+
+// get_or_create: returns the existing panel or creates it. Idempotent.
+Result<GuiPanelId> created = session.GuiPanels.GetOrCreate(options);
+GuiPanelId panelId = created.ValueOrThrow();
+
+session.GuiPanels.NavigateToUri(panelId, "https://myapp.local/status-dashboard")
+    .EnsureSuccess();
 ```
 
-</TabItem>
-</Tabs>
+</Lang>
+</CodeTabs>
+
+:::info
+The C# snippets on this page are illustrative — they track the `Qar` binding
+surface but are not yet compiled from a published sample project.
+:::
 
 :::tip Choosing common names
 Use a DNS-style, application-scoped name (`<panel>.<app>.<org>`) and keep it constant across versions. The panel's ID is derived deterministically from it — restarting your app reattaches to the same panel instead of spawning duplicates.
@@ -105,6 +124,7 @@ Update callbacks arrive on library threads — see the [callback rules](/docs/de
 
 ## Compiled tutorial
 
-:::note TODO
-Link the compiled `gui_panel_operations.c` example tutorial page here once it is updated to the onboarding-based session acquisition (its panel sections — create, move, navigate, subscribe — remain representative).
-:::
+This page is backed by the compiled example `gui_panel_operations.c`, covering panel create, move, navigate, and subscribe:
+
+- Source: `qaros/qar-streaming-c/examples/gui_panel_operations.c`
+- Example walkthrough: [GUI Panel Operations](/docs/developer-guide/tutorials/c/gui-panel-operations)

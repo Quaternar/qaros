@@ -50,7 +50,7 @@
  * A second API instance in the same application (another process, or a C#
  * binding next to native code) must not pair with a code again. The primary
  * onboarded instance requests an invite, serializes it, and the sibling
- * instance consumes it with qar_runtime_onboard_with_invite:
+ * instance consumes it with qar_runtime_onboard:
  * \snippet onboarding_and_rejoin.c onboarding_invite
  *
  * \section onboarding_teardown Destroy and Forget
@@ -249,16 +249,18 @@ main(int argc, char** argv)
 				if(qar_result_is_success(deserialize_result)
 				   && sibling_invite != NULL)
 				{
-					QarOnboardWithInviteInit sibling_init =
-						qar_onboard_with_invite_init_default();
+					QarOnboardInit sibling_init = qar_onboard_init_default();
+					QarOnboardInviteExt sibling_mode =
+						qar_onboard_invite_ext_default();
 					sibling_init.presentation.display_name =
 						"Sibling Tutorial Peer";
-					sibling_init.invite = sibling_invite;
+					sibling_mode.invite = sibling_invite;
+					sibling_init.header.next = &sibling_mode.header;
 
 					QarOnboardingId sibling_onboarding_id =
 						qar_onboarding_id_default();
 					QarSession* sibling_session = NULL;
-					QarResult sibling_result = qar_runtime_onboard_with_invite(
+					QarResult sibling_result = qar_runtime_onboard(
 						sibling_runtime,
 						&sibling_init,
 						NULL,
@@ -267,9 +269,7 @@ main(int argc, char** argv)
 						&sibling_onboarding_id,
 						&sibling_session
 					);
-					log_result(
-						"qar_runtime_onboard_with_invite", sibling_result
-					);
+					log_result("qar_runtime_onboard", sibling_result);
 					if(qar_result_is_success(sibling_result)
 					   && sibling_session != NULL)
 					{

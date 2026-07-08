@@ -82,14 +82,62 @@ const config: Config = {
 				sidebarPath: "./sidebar_api.ts",
 			},
 		],
+		// Keep bookmarks and external links working after the three-guide
+		// restructure moved several pages between guides. `onBrokenLinks: "throw"`
+		// guards internal links; these client-side redirects cover the published
+		// URLs that changed. Keep trailing slashes (`trailingSlash: true`).
+		[
+			"@docusaurus/plugin-client-redirects",
+			{
+				redirects: [
+					{ from: "/docs/user-guide/coordinate-systems", to: "/docs/developer-guide/coordinate-systems" },
+					{ from: "/docs/user-guide/security-and-onboarding", to: "/docs/operator-guide/security-model" },
+					{ from: "/docs/user-guide/the-mixer", to: "/docs/operator-guide/the-mixer" },
+					{ from: "/docs/user-guide/using-the-hub", to: "/docs/operator-guide/running-the-hub" },
+					{ from: "/docs/user-guide/deployment-and-installation", to: "/docs/operator-guide/installation" },
+					{ from: "/docs/user-guide/glossary", to: "/docs/glossary" },
+					{ from: "/docs/developer-guide/examples/c/dynamic-loading", to: "/docs/developer-guide/tutorials/c/dynamic-loading" },
+					{ from: "/docs/developer-guide/examples/c/onboarding-and-rejoin", to: "/docs/developer-guide/tutorials/c/onboarding-and-rejoin" },
+					{ from: "/docs/developer-guide/examples/c/gui-panel-operations", to: "/docs/developer-guide/tutorials/c/gui-panel-operations" },
+					{ from: "/docs/developer-guide/examples/c/app-volume-management", to: "/docs/developer-guide/tutorials/c/app-volume-management" },
+					{ from: "/docs/developer-guide/examples/c/cpu-rendering", to: "/docs/developer-guide/tutorials/c/cpu-rendering" },
+				],
+			},
+		],
+	],
+
+	// Theme-aware favicon: the cube mark has a black wireframe on light tab
+	// strips and a white wireframe on dark ones. The favicon.ico above stays as
+	// the universal fallback (bookmarks, older browsers, RSS). These PNGs are
+	// generated once from the logo and committed under static/img — not on build.
+	// hrefs are baseUrl-absolute ("/qaros/") because headTags are not baseUrl-prefixed.
+	headTags: [
+		{
+			tagName: "link",
+			attributes: {
+				rel: "icon",
+				type: "image/png",
+				href: "/qaros/img/favicon-light.png",
+				media: "(prefers-color-scheme: light)",
+			},
+		},
+		{
+			tagName: "link",
+			attributes: {
+				rel: "icon",
+				type: "image/png",
+				href: "/qaros/img/favicon-dark.png",
+				media: "(prefers-color-scheme: dark)",
+			},
+		},
 	],
 
 	themeConfig: {
 		colorMode: {
 			respectPrefersColorScheme: true
 		},
-		// Replace with your project's social card
-		image: "img/docusaurus-social-card.jpg",
+		// Social share card (Open Graph / Twitter)
+		image: "img/social-card.jpg",
 		navbar: {
 			logo: {
 				alt: "Quaternar Logo",
@@ -99,9 +147,21 @@ const config: Config = {
 			items: [
 				{
 					type: "docSidebar",
-					sidebarId: "tutorialSidebar",
+					sidebarId: "userSidebar",
 					position: "left",
-					label: "Knowledge Base",
+					label: "User Guide",
+				},
+				{
+					type: "docSidebar",
+					sidebarId: "developerSidebar",
+					position: "left",
+					label: "Developer Guide",
+				},
+				{
+					type: "docSidebar",
+					sidebarId: "operatorSidebar",
+					position: "left",
+					label: "Admin & Operator",
 				},
 				{
 					type: "dropdown",
@@ -114,14 +174,19 @@ const config: Config = {
 							to: "/api/qar-streaming-c/groups/qar-c-api/"
 						},
 						{
-							label: "Examples",
-							to: "/api/qar-streaming-c/pages/qar-c-tutorial-dynamic-loading/"
+							label: "Tutorials",
+							to: "/docs/developer-guide/tutorials/c/dynamic-loading/"
 						},
 						{
 							label: "Files",
 							to: "/api/qar-streaming-c/files/"
 						}
 					]
+				},
+				{
+					to: "/docs/glossary",
+					label: "Glossary",
+					position: "right",
 				},
 				{
 					href: "https://github.com/quaternar/qaros",
@@ -151,7 +216,7 @@ const config: Config = {
 						},
 						{
 							label: "Contact",
-							href: "mailto:contact@quaternar.com",
+							href: "https://quaternar.com/#contact-us",
 						},
 					],
 				},

@@ -1,22 +1,24 @@
 ---
-sidebar_position: 6
+sidebar_position: 9
 title: App Volumes and Gestures
 description: Create the 3D region your app renders into, control content placement and scale, and wire up user gestures.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 # App Volumes and Gestures
 
-An **app volume** is your application's home in the room: a named 3D box that holds your rendered content, defines where the mixer composites your stream, and mediates how users grab, move, and scale your content. Read the conceptual model first: [The QAROS World](/docs/user-guide/qaros-world#app-volumes) and [Coordinate Systems](/docs/user-guide/coordinate-systems).
+<LanguageSwitcher />
+
+An **app volume** is your application's home in the room: a named 3D box that holds your rendered content, defines where the mixer composites your stream, and mediates how users grab, move, and scale your content. Read the conceptual model first: [The QAROS World](/docs/user-guide/qaros-world#app-volumes) and [Coordinate Systems](/docs/developer-guide/coordinate-systems).
 
 ## Creating a volume (idempotent)
 
 Like panels, volumes are identified by a stable **common name**:
 
-<Tabs groupId="language">
-<TabItem value="c" label="C">
+<CodeTabs>
+<Lang value="c">
 
 ```c
 QarAppVolumeInit init = qar_app_volume_init_default();
@@ -41,16 +43,39 @@ qar_result_log_if_error(
     qar_app_volumes_get_or_create(session, &init, &volume_id));
 ```
 
-</TabItem>
-<TabItem value="csharp" label="C#">
+</Lang>
+<Lang value="csharp">
 
 ```csharp
-// TODO: C# sample pending publication of the qar-streaming-sharp app-volume
-// bindings in this repository. Flow mirrors the C version.
+var options = new AppVolumeOptions
+{
+    CommonName  = "assembly-view.myapp.example.com",
+    DisplayName = "Assembly View",
+
+    // Pose is the cuboid CENTER, room space.
+    Pose = new Pose { Position = new Vec3(0f, 1.2f, 0f) },
+    Size = new AppVolumeSize
+    {
+        WidthMeters  = 1.0f,
+        LengthMeters = 1.0f,
+        HeightMeters = 0.8f,
+    },
+
+    AppPose  = new Pose(),  // app origin inside the box
+    AppScale = 0.01f,       // 1 app-meter -> 1 room-cm: a 100 m model fits the box
+};
+
+Result<AppVolumeId> created = session.AppVolumes.GetOrCreate(options);
+AppVolumeId volumeId = created.ValueOrThrow();
 ```
 
-</TabItem>
-</Tabs>
+</Lang>
+</CodeTabs>
+
+:::info
+The C# snippet above is illustrative — it tracks the `Qar` binding surface but
+is not yet compiled from a published sample project.
+:::
 
 The `volume_id` is what you pass to the render sender (`QarRenderSenderInit.app_volume_id`) so your stream is composited inside this box — see [Rendering Streams](/docs/developer-guide/rendering-streams).
 
@@ -63,7 +88,7 @@ Because other peers (and gestures) can change these too, read the *live* values 
 
 ## World anchors
 
-To pin a volume to a geographic pose (ECEF WGS84 — see [Coordinate Systems](/docs/user-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
+To pin a volume to a geographic pose (ECEF WGS84 — see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
 
 ```c
 QarGeoAnchorFrame frame = qar_geo_anchor_frame_default();
@@ -109,14 +134,11 @@ static void on_gesture(const QarAppVolumeGestureEvent* ev, void* state)
 qar_app_volumes_subscribe_gesture_updates(session, &volume_id, on_gesture, NULL);
 ```
 
-To hit-test a click against your content, transform `action_point` from room space into your app space using the volume's latest pose, `app_pose`, and `app_scale`.
-
-:::note TODO
-Add a worked hit-testing example (room-space point → app-space point, including the center-of-cuboid convention) to the compiled `app_volume_management.c` example, with a Doxygen snippet section referenced here. Verify exact field names of `QarAppVolumeGestureEvent` against the header when writing it.
-:::
+To hit-test a click against your content, transform `action_point` from room space into your app space using the volume's latest pose, `app_pose`, and `app_scale`. Remember the cuboid convention: the volume pose is its **center**, so account for the half-extents when mapping a room-space point into the volume's local frame.
 
 ## Compiled tutorial
 
-:::note TODO
-Link the compiled `app_volume_management.c` tutorial page here once it is updated to onboarding-based session acquisition and extended with gesture configuration + world-anchor sections.
-:::
+This page is backed by the compiled example `app_volume_management.c`:
+
+- Source: `qaros/qar-streaming-c/examples/app_volume_management.c`
+- Example walkthrough: [App Volume Management](/docs/developer-guide/tutorials/c/app-volume-management)

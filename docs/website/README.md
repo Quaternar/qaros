@@ -28,6 +28,25 @@ harmless.
 To point at a different Doxygen binary (e.g. on an unsupported platform),
 set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
 
+### Diagrams (SVG source, PNG on the site)
+
+The hand-drawn diagrams live as SVG under `assets/diagrams/` — deliberately
+*outside* `static/`, which Docusaurus copies into the built site verbatim, so
+the editable source is never itself shipped to the browser. Doc pages embed
+the `.png` rasterized from each SVG instead, since Docusaurus-hosted static
+sites don't reliably serve/display raw SVGs everywhere they're linked.
+`npm run docs:diagrams` (via `sharp`, a dependency already declared in
+`package.json`) renders every `assets/diagrams/*.svg` into a same-named
+`.png` under `static/img/diagrams/`; that output directory is gitignored in
+full and regenerated on every build — never edit or commit a `.png` there
+directly. It runs automatically as part of `npm run docs:generate`, so
+`npm run start` / `npm run build` / `npm run dev` all keep the PNGs in sync
+with their SVG sources — edit the `.svg` under `assets/diagrams/` and rerun
+one of those (or just `npm run docs:diagrams` directly).
+
+The SVGs are tracked in Git LFS, via the repo-wide `*.svg`/`*.png` rule in
+the top-level `.gitattributes` (see `qaros/.gitattributes`).
+
 ## Installation
 
 ```bash
@@ -45,12 +64,13 @@ npm run start
 
 This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
 
-`npm run start` runs the Doxygen -> XML -> Markdown conversion once up front,
-then leaves it alone — editing a hand-written `.md`/`.mdx` page under `docs/`
-hot-reloads, but editing `qar-streaming-c/include/qar_streaming.h`,
-`qar-streaming-c/examples/*.c`, the Doxyfile, or `doxygen2docusaurus.json`
-does not, since those only feed the generated `api/` tree through
-`npm run docs:generate`.
+`npm run start` runs the Doxygen -> XML -> Markdown conversion and the SVG ->
+PNG diagram rasterization once up front, then leaves them alone — editing a
+hand-written `.md`/`.mdx` page under `docs/` hot-reloads, but editing
+`qar-streaming-c/include/qar_streaming.h`, `qar-streaming-c/examples/*.c`,
+the Doxyfile, `doxygen2docusaurus.json`, or a diagram `.svg` under
+`assets/diagrams/` does not, since those only feed the generated `api/` tree
+and `static/img/diagrams/*.png` through `npm run docs:generate`.
 
 For that, use:
 
@@ -60,11 +80,12 @@ npm run dev
 
 This runs `docusaurus start` and a file watcher (`nodemon-doxygen.json`) side
 by side: any change under `qar-streaming-c/include`, `qar-streaming-c/examples`,
-the Doxyfile, or `doxygen2docusaurus.json` re-runs `docs:generate`
-(Doxygen -> XML -> Markdown), and Docusaurus's own dev server then picks up
-the regenerated `api/` markdown and hot-reloads as usual. Run
-`npm run docs:watch` on its own if you only want the watcher (e.g. alongside
-a separately running `docusaurus start`).
+the Doxyfile, `doxygen2docusaurus.json`, or `assets/diagrams/*.svg`
+re-runs `docs:generate` (Doxygen -> XML -> Markdown, plus the diagram PNGs),
+and Docusaurus's own dev server then picks up the regenerated `api/` markdown
+and PNGs and hot-reloads as usual. Run `npm run docs:watch` on its own if you
+only want the watcher (e.g. alongside a separately running `docusaurus
+start`).
 
 ## Build
 

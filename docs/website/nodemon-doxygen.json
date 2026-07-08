@@ -3,9 +3,10 @@
     "../../qar-streaming-c/include",
     "../../qar-streaming-c/examples",
     "doxygen/qar-streaming-c/Doxyfile",
-    "doxygen2docusaurus.json"
+    "doxygen2docusaurus.json",
+    "assets/diagrams"
   ],
-  "ext": "h,c,hpp,cpp,json",
+  "ext": "h,c,hpp,cpp,json,svg",
   "ignore": [
     "doxygen/qar-streaming-c/doxygen/**",
     "api/**"

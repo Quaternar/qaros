@@ -1,0 +1,10 @@
+{
+	"label": "Admin & Operator Guide",
+	"position": 3,
+	"collapsed": false,
+	"link": {
+		"type": "generated-index",
+		"title": "QarOS Administrator & Operator Guide",
+		"description": "Install, secure, configure, run, and maintain a QarOS Hub: system requirements, installation, Hub operation, networking and Hub federation, the security model, device management, the mixer, and maintenance and updates."
+	}
+}
