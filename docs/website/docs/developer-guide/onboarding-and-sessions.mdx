@@ -78,17 +78,21 @@ static QarResult obtain_session(
 
 ```csharp
 // The same flow: persist the OnboardingId, try Rejoin, fall back to
-// OnboardWithCode on OnboardingSessionNotFound, re-prompt on a pairing error.
+// Onboard on OnboardingSessionNotFound, re-prompt on a pairing error.
 static Result<Session> ObtainSession(
     Runtime runtime,
     ref OnboardingId savedId,   // loaded from your app's settings
     string? codeFromUser)       // null until you prompted the user
 {
-    var who = new PeerPresentation { DisplayName = "My CAD Tool", AppVersion = "2.4.0" };
+    var who = new PeerPresentationOptions
+    {
+        DisplayName = "My CAD Tool",
+        AppVersion = "2.4.0"
+    };
 
     if (savedId != OnboardingId.Default)
     {
-        var rejoin = runtime.Rejoin(new RejoinOptions { OnboardingId = savedId, Presentation = who });
+        var rejoin = runtime.Rejoin(new RejoinOptions(savedId).WithPresentation(who));
         if (rejoin.IsSuccess)
             return rejoin;                       // silent reconnect — the normal path
         if (rejoin.Info.StatusCode != StatusCode.OnboardingSessionNotFound)
@@ -96,14 +100,17 @@ static Result<Session> ObtainSession(
         // no persisted slot -> fall through to onboarding
     }
 
-    var onboard = runtime.OnboardWithCode(new OnboardWithCodeOptions
+    var onboard = runtime.Onboard(
+        new OnboardOptions
     {
         Presentation = who,
-        Code = codeFromUser,                     // the short code shown by the hub
-    });
+    }.UseCode(codeFromUser!));
+    if (!onboard.IsSuccess)
+        return Result<Session>.Failure(onboard.Info);
     // onboard.Info carries the new OnboardingId on success — persist it before returning.
     // A pairing error means the code was wrong or expired (~10 s) — re-prompt and retry.
-    return onboard;
+    savedId = onboard.Value.OnboardingId;       // persist before returning
+    return Result<Session>.Success(onboard.Info, onboard.Value.Session);
 }
 ```
 

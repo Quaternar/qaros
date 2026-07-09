@@ -54,7 +54,7 @@ qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
 <Lang value="csharp">
 
 - **Opaque handles** are `SafeHandle`-backed classes implementing `IDisposable`:
-  `Runtime`, `Session`, `SessionInvite`, `RenderSender`, `RenderFrameInfo`.
+  `Runtime`, `Session`, `OnboardingInvite`, `RenderSender`, `RenderFrameInfo`.
   `Dispose()` (or a `using` block) releases the handle.
 - **Value IDs** are `readonly struct`s — `PeerId`, `SessionId`, `GuiPanelId`,
   `AppVolumeId`, `StreamId` — with `ToString()`, `Parse`/`TryParse`,
@@ -66,7 +66,7 @@ qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
 session.Dispose();
 
 // Erasing the persisted identity is a separate call on the runtime:
-runtime.Forget(savedOnboardingId).EnsureSuccess();
+runtime.Forget(new ForgetOptions(savedOnboardingId)).EnsureSuccess();
 
 // IDs compare by value:
 if (a == b) { /* same peer */ }
@@ -152,16 +152,16 @@ init.header.next = &code.header;   // chain init -> code
 <Lang value="csharp">
 
 Extensions are modelled as managed `Structure` descriptors (each with a
-`StructureType`). Options objects expose a nullable `Extension` you set to the
-descriptor; the binding marshals the chain into the native `next` pointers for
-you and frees the unmanaged memory afterwards:
+`StructureType`), but normal C# callers do not wire native chains directly.
+Instead, options objects expose fluent builder methods such as
+`WithExtension(...)`, `WithHost(...)`, or `WithViewOverrides(...)`. The binding
+marshals the resulting chain into the native `next` pointers and frees the
+unmanaged memory afterwards:
 
 ```csharp
-var options = new RuntimeOnboardOptions
-{
-    Code = "ABCD-EFGH",
-    Extension = new OnboardHost { Hostname = "192.168.1.50" },
-};
+var options = new OnboardOptions()
+    .UseCode("ABCD-EFGH")
+    .WithHost("192.168.1.50");
 ```
 
 </Lang>
@@ -202,12 +202,9 @@ not faulted); only **managed cancellation** produces a canceled task.
 
 ```csharp
 CancellationToken ct = /* your token */;
-Result<Session> r = await runtime.RejoinAsync(rejoinOptions, ct);
+Result<Session> r = await runtime.RejoinAsync(rejoinOptions, cancellationToken: ct);
 if (!r.IsSuccess) { /* native failure — inspect r.Info */ }
 ```
-
-(One exception: `Session.InvitePeerAsync` takes an `IProgress<string>` for
-progress and no cancellation token, because the underlying native call has none.)
 
 </Lang>
 </CodeTabs>
@@ -292,7 +289,7 @@ callback, and teardown runs in reverse of setup.
   borrowed native handle to worry about.
 - `ObjectDisposedException` is thrown only for **managed misuse** (using an
   object after you disposed it), never for native failures.
-- Dispose in reverse: session, then runtime, then `Library.Shutdown()`.
+- Dispose in reverse: session, then runtime, then `Library.Destroy()`.
 
 </Lang>
 </CodeTabs>

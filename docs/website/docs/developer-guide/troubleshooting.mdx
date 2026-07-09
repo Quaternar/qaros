@@ -49,7 +49,7 @@ else
 <Lang value="csharp">
 
 ```csharp
-Result<Session> result = runtime.Rejoin(new RejoinOptions { OnboardingId = onboardingId });
+Result<Session> result = runtime.Rejoin(new RejoinOptions(onboardingId));
 if (!result.IsSuccess)
 {
     ResultInfo info = result.Info;

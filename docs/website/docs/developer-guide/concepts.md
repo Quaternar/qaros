@@ -75,7 +75,7 @@ functions.
 | Library init/logging | `qar_library_*` | `Library` (static) | [Getting Started](/docs/developer-guide/getting-started) |
 | Process context | `QarRuntime*` | `Runtime : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions) |
 | Room membership | `QarSession*` | `Session : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions) |
-| Onboarding invite | `QarOnboardingInvite*` | `SessionInvite : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions#sibling-onboarding-one-app-several-api-instances) |
+| Onboarding invite | `QarOnboardingInvite*` | `OnboardingInvite : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions#sibling-onboarding-one-app-several-api-instances) |
 | Participant snapshot | `QarPeerSpec*` | `PeerSpec` (DTO); ops via `session.Peers` | [Peers](/docs/developer-guide/peers) |
 | Shared 2-D panel | `QarGuiPanel*` | `GuiPanel` (DTO); ops via `session.GuiPanels` | [GUI Panels](/docs/developer-guide/gui-panels) |
 | Application's 3-D box | `QarAppVolume*` | `AppVolume` (DTO); ops via `session.AppVolumes` | [App Volumes](/docs/developer-guide/app-volumes) |

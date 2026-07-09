@@ -126,7 +126,7 @@ Your first runtime and session, with `Result<T>` and `using` for disposal:
 ```csharp
 using Qar;
 
-Library.Initialize(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
+Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
 
 using var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow();
 
@@ -134,7 +134,7 @@ using var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow();
 // using var session = ...;
 
 // On scope exit, `using` disposes the session then the runtime, then:
-Library.Shutdown();
+Library.Destroy().EnsureSuccess();
 ```
 
 Unity uses this same package; see [Language Bindings](/docs/developer-guide/language-bindings)
@@ -184,7 +184,7 @@ int main(void)
 ```csharp
 using Qar;
 
-Library.Initialize(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
+Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
 
 // `using` guarantees teardown in reverse construction order.
 using (var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow())
@@ -196,7 +196,7 @@ using (var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow())
     // Do work: streams, panels, volumes, peers
 }
 
-Library.Shutdown();
+Library.Destroy().EnsureSuccess();
 ```
 
 </Lang>
