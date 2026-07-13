@@ -18,7 +18,7 @@ const config: Config = {
 	url: "https://docs.quaternar.com",
 	// Set the /<baseUrl>/ pathname under which your site is served
 	// For GitHub pages deployment, it is often '/<projectName>/'
-	baseUrl: "/qaros/",
+	baseUrl: "/",
 
 	// GitHub pages deployment config.
 	// If you aren't using GitHub pages, you don't need these.
@@ -110,14 +110,13 @@ const config: Config = {
 	// strips and a white wireframe on dark ones. The favicon.ico above stays as
 	// the universal fallback (bookmarks, older browsers, RSS). These PNGs are
 	// generated once from the logo and committed under static/img — not on build.
-	// hrefs are baseUrl-absolute ("/qaros/") because headTags are not baseUrl-prefixed.
 	headTags: [
 		{
 			tagName: "link",
 			attributes: {
 				rel: "icon",
 				type: "image/png",
-				href: "/qaros/img/favicon-light.png",
+				href: "/img/favicon-light.png",
 				media: "(prefers-color-scheme: light)",
 			},
 		},
@@ -126,7 +125,7 @@ const config: Config = {
 			attributes: {
 				rel: "icon",
 				type: "image/png",
-				href: "/qaros/img/favicon-dark.png",
+				href: "/img/favicon-dark.png",
 				media: "(prefers-color-scheme: dark)",
 			},
 		},
