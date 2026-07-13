@@ -8,25 +8,32 @@
   text-align: center;
   position: relative;
   overflow: hidden;
-  color: #fff;
+  color: var(--q-ice-50, #f1f0f8);
   background:
     radial-gradient(
       circle at 15% 15%,
-      rgba(0, 170, 255, 0.35),
+      rgba(75, 165, 220, 0.28),
       transparent 45%
     ),
     radial-gradient(
       circle at 85% 25%,
-      rgba(0, 124, 186, 0.4),
+      rgba(21, 101, 177, 0.32),
       transparent 50%
     ),
-    linear-gradient(140deg, #00243a 0%, #003c5b 45%, #005a87 100%);
+    linear-gradient(140deg, #05070d 0%, #0d1320 45%, #1d2f74 100%);
 }
 
 .heroInner {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.heroLogo {
+  width: 180px;
+  height: auto;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 0 48px rgba(75, 165, 220, 0.18));
 }
 
 .heroEyebrow {
@@ -49,6 +56,10 @@
   font-weight: 800;
   max-width: 20ch;
   margin-bottom: 1.25rem;
+  /* The hero gradient is always dark in both color modes, so the title must
+     stay light — otherwise it inherits the dark heading color in light mode
+     and disappears. */
+  color: var(--q-ice-50, #f1f0f8);
 }
 
 .heroSubtitle {
@@ -63,7 +74,7 @@
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--ifm-color-primary-lightest);
+  color: var(--q-sky-300, #7cc2ea);
   margin-bottom: 2rem;
 }
 
@@ -100,6 +111,10 @@
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 3.5rem 1.5rem;
+  }
+
+  .heroLogo {
+    width: 132px;
   }
 
   .heroTitle {
@@ -142,7 +157,7 @@
 
 .pathCard:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(0, 60, 91, 0.18);
+  box-shadow: 0 12px 28px rgba(21, 101, 177, 0.18);
   border-color: var(--ifm-color-primary-light);
 }
 
@@ -154,7 +169,7 @@
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--ifm-color-primary);
-  background: rgba(0, 124, 186, 0.1);
+  background: rgba(21, 101, 177, 0.1);
   padding: 0.25rem 0.65rem;
   border-radius: 999px;
   margin-bottom: 1rem;

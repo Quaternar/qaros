@@ -1,30 +1,73 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global theme. Colors, typography, and surfaces are aligned with the primary
+ * marketing site (quaternar.com): the QAROS "ink" dark surfaces, the sky-blue
+ * accent ramp, and the Geologica / Manrope / IBM Plex Mono type system.
  */
 
-/* You can override the default Infima variables here. */
+@import url("https://fonts.googleapis.com/css2?family=Geologica:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+/* ---- Brand palette (mirrors quaternar.com design tokens) ---- */
 :root {
-  --ifm-color-primary: #007cba;
-  --ifm-color-primary-dark: #006ba1;
-  --ifm-color-primary-darker: #005a87;
-  --ifm-color-primary-darkest: #003c5b;
-  --ifm-color-primary-light: #0087cb;
-  --ifm-color-primary-lighter: #0098e5;
-  --ifm-color-primary-lightest: #00aaff;
+  --q-sky-300: #7cc2ea;
+  --q-sky-400: #4ba5dc;
+  --q-cobalt-500: #1565b1;
+  --q-cobalt-600: #11538f;
+  --q-royal-700: #263e98;
+  --q-royal-800: #1d2f74;
+  --q-ice-50: #f1f0f8;
+  --q-ice-100: #e2e2ef;
+  --q-ice-200: #cbcedf;
+  --q-ice-400: #9298b6;
+  --q-ink-700: #1a2438;
+  --q-ink-800: #121a2b;
+  --q-ink-850: #0d1320;
+  --q-ink-900: #090d16;
+  --q-ink-950: #05070d;
+
+  /* Typography — brand fonts with the same fallbacks the marketing site uses. */
+  --ifm-font-family-base: "Manrope", "Segoe UI", system-ui, -apple-system,
+    sans-serif;
+  --ifm-heading-font-family: "Geologica", "Manrope", "Segoe UI", system-ui,
+    sans-serif;
+  --ifm-font-family-monospace: "IBM Plex Mono", ui-monospace, "SF Mono",
+    SFMono-Regular, monospace;
+  --ifm-heading-font-weight: 700;
+
+  /* Light-mode primary: a darker cobalt keeps links/buttons readable on white
+     (the marketing site's sky accent is tuned for dark surfaces only). */
+  --ifm-color-primary: #1565b1;
+  --ifm-color-primary-dark: #135aa0;
+  --ifm-color-primary-darker: #11538f;
+  --ifm-color-primary-darkest: #0d3f72;
+  --ifm-color-primary-light: #1671c7;
+  --ifm-color-primary-lighter: #1a7bd8;
+  --ifm-color-primary-lightest: #3d97e0;
+
+  --ifm-heading-color: var(--q-ink-800);
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-code-background: rgba(21, 101, 177, 0.08);
+  --docusaurus-highlighted-code-line-bg: rgba(21, 101, 177, 0.1);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
-[data-theme='dark'] {
-  --ifm-color-primary: #007cba;
-  --ifm-color-primary-dark: #006ba1;
-  --ifm-color-primary-darker: #005a87;
-  --ifm-color-primary-darkest: #003c5b;
-  --ifm-color-primary-light: #0087cb;
-  --ifm-color-primary-lighter: #0098e5;
-  --ifm-color-primary-lightest: #00aaff;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+/* For readability on dark surfaces, brighten the primary to the sky accent and
+   swap the page/surface colors to the QAROS ink scale. */
+[data-theme="dark"] {
+  --ifm-color-primary: #4ba5dc;
+  --ifm-color-primary-dark: #3596d4;
+  --ifm-color-primary-darker: #2b8fce;
+  --ifm-color-primary-darkest: #1f6fa5;
+  --ifm-color-primary-light: #63b3e3;
+  --ifm-color-primary-lighter: #7cc2ea;
+  --ifm-color-primary-lightest: #9dd3f0;
+
+  --ifm-background-color: var(--q-ink-900);
+  --ifm-background-surface-color: var(--q-ink-850);
+  --ifm-navbar-background-color: var(--q-ink-850);
+  --ifm-footer-background-color: var(--q-ink-950);
+  --ifm-card-background-color: var(--q-ink-850);
+
+  --ifm-font-color-base: var(--q-ice-100);
+  --ifm-heading-color: var(--q-ice-50);
+  --ifm-code-background: rgba(124, 194, 234, 0.1);
+  --docusaurus-highlighted-code-line-bg: rgba(124, 194, 234, 0.15);
 }

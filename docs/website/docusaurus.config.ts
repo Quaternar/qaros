@@ -2,6 +2,14 @@ import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
+// Harden fs against EMFILE ("too many open files"). On Windows the dev server
+// reopens all generated API doc pages at once on hot reload, which can exceed
+// the OS file-handle limit and crash the `docs@api` plugin. graceful-fs queues
+// and retries those operations. Docusaurus evaluates this config in-process
+// before the dev server / build touch any files, so patching here covers both.
+const nodeFs = require("fs");
+require("graceful-fs").gracefulify(nodeFs);
+
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 const config: Config = {

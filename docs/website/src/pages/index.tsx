@@ -1,6 +1,7 @@
 import type {ReactNode} from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
@@ -9,9 +10,17 @@ import Heading from '@theme/Heading';
 import styles from './index.module.css';
 
 function HomepageHeader() {
+  const logoUrl = useBaseUrl('/img/brand/qaros-vertical-split.png');
   return (
     <header className={clsx('hero', styles.heroBanner)}>
       <div className={clsx('container', styles.heroInner)}>
+        <img
+          className={styles.heroLogo}
+          src={logoUrl}
+          alt="QAROS"
+          width={180}
+          height={180}
+        />
         <span className={styles.heroEyebrow}>Documentation &amp; Knowledge Base</span>
         <Heading as="h1" className={styles.heroTitle}>
           AR/VR for the 3D software you already have

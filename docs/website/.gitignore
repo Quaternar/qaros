@@ -26,5 +26,6 @@ docusaurus-config-navbar-*
 sidebar-category-doxygen-*
 
 # Rasterized by docs:diagrams from the editable SVG sources in
-# assets/diagrams; never committed, regenerated on every build.
+# assets/diagrams and assets/brand; never committed, regenerated on every build.
 static/img/diagrams/
+static/img/brand/
