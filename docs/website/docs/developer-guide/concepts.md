@@ -6,7 +6,7 @@ description: The QAROS world mapped to API objects - how Hubs, sessions, peers, 
 
 # Concepts
 
-This guide is self-contained: you do not need the User Guide to integrate QarOS.
+This guide is self-contained: you do not need the User Guide to integrate QAROS.
 This page maps the [QAROS world](/docs/user-guide/qaros-world) onto the API
 objects you actually call, in both supported languages. The prose is
 language-neutral; only the name table at the end is paired C <-> C#.
@@ -16,8 +16,8 @@ language-neutral; only the name table at the end is paired C <-> C#.
 - **Library** - process-wide initialization and logging. You initialize it once
   at startup and tear it down last. It owns no session state; it is the entry
   point that makes every other call valid.
-- **Runtime** - your process's QarOS context: its identity store, its connection
-  to a Hub, and the factory for sessions. One runtime per logical QarOS instance
+- **Runtime** - your process's QAROS context: its identity store, its connection
+  to a Hub, and the factory for sessions. One runtime per logical QAROS instance
   (see [sibling onboarding](/docs/developer-guide/onboarding-and-sessions#sibling-onboarding-one-app-several-api-instances)
   when you need more than one in the same process).
 - **Session** - the developer/runtime representation of a Hub's Shared Space, always obtained

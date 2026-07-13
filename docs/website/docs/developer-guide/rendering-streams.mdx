@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QarOS takes care of encoding, transport, and — via the [mixer](/docs/operator-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
+The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QAROS takes care of encoding, transport, and — via the [mixer](/docs/operator-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
 
 ## Accepting render stream requests
 
@@ -164,7 +164,7 @@ d3d.d3d11_device = my_device1;
 d3d.d3d11_context = my_context1;
 d3d.color_bind_flags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 d3d.depth_bind_flags = D3D11_BIND_DEPTH_STENCIL;
-d3d.acquire_keyed_mutex_sync = true; /* let QarOS manage keyed-mutex sync */
+d3d.acquire_keyed_mutex_sync = true; /* let QAROS manage keyed-mutex sync */
 init.header.next = &d3d.header;
 ```
 

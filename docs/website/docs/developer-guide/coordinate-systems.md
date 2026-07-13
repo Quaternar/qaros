@@ -6,7 +6,7 @@ description: How world (geo), room, app-volume, and app-content spaces relate, a
 
 # Coordinate Systems
 
-Everything in QarOS is placed somewhere, and "somewhere" always means *a pose in a specific space*. There are four nested spaces you need to know. Getting them straight makes the whole API — app volumes, panels, gestures, streaming poses — fall into place.
+Everything in QAROS is placed somewhere, and "somewhere" always means *a pose in a specific space*. There are four nested spaces you need to know. Getting them straight makes the whole API — app volumes, panels, gestures, streaming poses — fall into place.
 
 ![Coordinate spaces](/img/diagrams/coordinate-spaces.png)
 
@@ -28,9 +28,9 @@ Conventions:
 
 - **Units are meters**, everywhere. Sizes, positions, and gesture points are all metric.
 - Poses are a **position vector + orientation quaternion** (`QarPose`). Quaternions are stored as `{x, y, z, w}` (scalar last).
-- Room space follows **OpenXR conventions: right-handed, Y-up, −Z forward**. The QarOS math types deliberately mirror OpenXR's (`XrPosef`, `XrVector3f`), and the room frame is the runtime's OpenXR reference space.
+- Room space follows **OpenXR conventions: right-handed, Y-up, −Z forward**. The QAROS math types deliberately mirror OpenXR's (`XrPosef`, `XrVector3f`), and the room frame is the runtime's OpenXR reference space.
 
-The room origin itself is established by the underlying XR runtime and the platform's relocalization — it is not something applications set through the API. How multiple headsets co-locate to the same room origin is therefore a property of each device platform's relocalization, not of the QarOS API. The room-space axis convention is inherited from OpenXR (right-handed, Y-up, −Z forward) rather than restated normatively in the C headers.
+The room origin itself is established by the underlying XR runtime and the platform's relocalization — it is not something applications set through the API. How multiple headsets co-locate to the same room origin is therefore a property of each device platform's relocalization, not of the QAROS API. The room-space axis convention is inherited from OpenXR (right-handed, Y-up, −Z forward) rather than restated normatively in the C headers.
 
 ### World space — pinning the room to the Earth
 

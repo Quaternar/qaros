@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 sidebar_position: 7
-description: Common issues when joining or using a QarOS session, and how to fix them from the user's side.
+description: Common issues when joining or using a QAROS session, and how to fix them from the user's side.
 ---
 
 # Troubleshooting

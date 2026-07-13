@@ -1,6 +1,6 @@
 ---
 title: P&C Solutions METALENSE 2
-description: Install the QarOS player APK onto a P&C Solutions METALENSE 2 device with ADB.
+description: Install the QAROS player APK onto a P&C Solutions METALENSE 2 device with ADB.
 ---
 
 # P&C Solutions METALENSE 2

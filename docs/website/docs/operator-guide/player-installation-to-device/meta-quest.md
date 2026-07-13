@@ -1,6 +1,6 @@
 ---
 title: Meta Quest
-description: Install the QarOS player APK onto a Meta Quest device with ADB.
+description: Install the QAROS player APK onto a Meta Quest device with ADB.
 ---
 
 # Meta Quest

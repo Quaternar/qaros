@@ -16,7 +16,7 @@ const FeatureList: FeatureItem[] = [
     description: (
       <>
         Add AR/VR support to your existing 3D applications without major code
-        rewrites. QarOS plugs into what you already have.
+        rewrites. QAROS plugs into what you already have.
       </>
     ),
   },

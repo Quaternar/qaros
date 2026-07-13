@@ -1,18 +1,18 @@
 ---
 title: Networking & Federation
 sidebar_position: 6
-description: Ports and firewall rules, LAN vs cloud-relay deployment, discovery scope, and connecting two QarOS Hubs into a federated trust domain.
+description: Ports and firewall rules, LAN vs cloud-relay deployment, discovery scope, and connecting two QAROS Hubs into a federated trust domain.
 ---
 
 # Networking & Federation
 
-A QarOS Hub and its devices are built to share a LAN. This page covers the ports you must open, the two deployment models, and how to connect two Hubs so devices onboarded to either are accepted by both.
+A QAROS Hub and its devices are built to share a LAN. This page covers the ports you must open, the two deployment models, and how to connect two Hubs so devices onboarded to either are accepted by both.
 
 ## Ports and firewall
 
 | Traffic | Protocol / port | Notes |
 |---|---|---|
-| QarOS service range | TCP + UDP **7440–7460** | The general range the Hub's services use. Open it once for the Hub machine. |
+| QAROS service range | TCP + UDP **7440–7460** | The general range the Hub's services use. Open it once for the Hub machine. |
 | Discovery beacon | UDP multicast **`239.77.77.77:7445`** | The Hub broadcasts a beacon roughly every 30 seconds so devices find it with zero configuration. |
 | Discovery requests | TCP **7445** (framed) | Framed TCP discovery runs on the same port as the multicast beacon. |
 | Session traffic | mTLS **`7447`** (Zenoh) | All in-session communication, mutually authenticated with Hub-issued certificates. |

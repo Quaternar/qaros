@@ -6,13 +6,13 @@ description: A high-level picture of the Hub, devices, the Shared Space, app vol
 
 # The QAROS World
 
-This page is the non-technical view of QarOS: what is in the Shared Space, who participates, and how it behaves for everyday users.
+This page is the non-technical view of QAROS: what is in the Shared Space, who participates, and how it behaves for everyday users.
 
 ![QAROS world overview](/img/diagrams/qaros-world-overview.png)
 
 ## The Hub
 
-The **Hub** is the central workstation that runs the QarOS runtime and the applications whose content is shared into the Shared Space.
+The **Hub** is the central workstation that runs the QAROS runtime and the applications whose content is shared into the Shared Space.
 
 From a user's point of view, the Hub:
 
@@ -25,7 +25,7 @@ From a user's point of view, the Hub:
 
 A **device** is anything that joins the Hub's Shared Space: an AR headset, a VR headset, an Android phone or tablet, the desktop visualizer, or a camera source.
 
-In practical terms, devices in QarOS usually fall into two roles:
+In practical terms, devices in QAROS usually fall into two roles:
 
 - **Source apps** add content into the Shared Space.
 - **Target devices** view the Shared Space and send back user input such as head pose, hands, or controller actions.
@@ -93,7 +93,7 @@ For implementation details, see [GUI Panels](/docs/developer-guide/gui-panels).
 
 A **stream** carries rendered content from a source app into the Shared Space.
 
-Users usually do not need to think about streams directly; what matters is that QarOS:
+Users usually do not need to think about streams directly; what matters is that QAROS:
 
 - sends each participant a live view,
 - keeps the view responsive as they move,

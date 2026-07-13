@@ -1,18 +1,18 @@
 ---
 title: Onboarding Devices
-description: Supported device types for joining a QarOS Hub.
+description: Supported device types for joining a QAROS Hub.
 ---
 
 # Onboarding Devices
 
-QarOS supports several device types for joining a Hub session. The exact installation and deployment steps are handled by the Hub operator and depend on the device class.
+QAROS supports several device types for joining a Hub session. The exact installation and deployment steps are handled by the Hub operator and depend on the device class.
 
 ## Supported devices
 
-- **HoloLens 2** - runs the sideloaded QarOS HoloLens Player app.
-- **Meta Quest** - runs the QarOS player app as a native OpenXR app.
-- **P&C Solutions METALENSE 2** - runs the QarOS player app as a native OpenXR app.
-- **Android phones and tablets** - run the QarOS Android player.
+- **HoloLens 2** - runs the sideloaded QAROS HoloLens Player app.
+- **Meta Quest** - runs the QAROS player app as a native OpenXR app.
+- **P&C Solutions METALENSE 2** - runs the QAROS player app as a native OpenXR app.
+- **Android phones and tablets** - run the QAROS Android player.
 - **Desktop visualizer** - joins on the Hub or another desktop machine.
 - **ZED stereo camera** - joins as a camera-visualizer peer.
 

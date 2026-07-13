@@ -1,14 +1,14 @@
 ---
 title: Overview
 sidebar_position: 1
-description: The operator's mental model of a QarOS Hub - its processes, data, and responsibilities - and an index to the rest of this guide.
+description: The operator's mental model of a QAROS Hub - its processes, data, and responsibilities - and an index to the rest of this guide.
 ---
 
 # Overview
 
-This guide is for the people who install, secure, configure, run, and maintain a QarOS **Hub** - the machine that brings applications and devices together into one shared, streamed room. This page gives you the mental model; the rest of the guide fills in the detail.
+This guide is for the people who install, secure, configure, run, and maintain a QAROS **Hub** - the machine that brings applications and devices together into one shared, streamed room. This page gives you the mental model; the rest of the guide fills in the detail.
 
-![QarOS world overview](/img/diagrams/qaros-world-overview.png)
+![QAROS world overview](/img/diagrams/qaros-world-overview.png)
 
 ## The Hub is three processes
 
@@ -39,7 +39,7 @@ Everything the Hub writes at runtime - identity slots, CA state, session state, 
 Four things are yours to manage:
 
 - **Configuration** - source apps, target devices, and other Hub behavior, managed through the Hub UI and persisted across restarts.
-- **Network and ports** - firewall rules for the QarOS port range, discovery scope, and (for off-LAN) relay or Hub federation.
+- **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) relay or Hub federation.
 - **Device trust** - minting and reading pairing codes, connecting peers, and forgetting or blacklisting devices.
 - **Updates** - moving between versions across the ZIP / MSIX / APK artifact matrix, and backing up Hub identity.
 

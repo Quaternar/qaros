@@ -1,18 +1,18 @@
 ---
 title: The Shared Space
 sidebar_position: 5
-description: A plain-language tour of the QarOS Shared Space — how everyone occupies the same space and sees the same layout from their own viewpoint.
+description: A plain-language tour of the QAROS Shared Space — how everyone occupies the same space and sees the same layout from their own viewpoint.
 ---
 
 # The Shared Space
 
-When you join QarOS, you step into a **Shared Space**. Think of it like a shared collaborative environment: everyone is in the same space at the same time, standing in their own spot, looking in their own direction, but seeing the same content together.
+When you join QAROS, you step into a **Shared Space**. Think of it like a shared collaborative environment: everyone is in the same space at the same time, standing in their own spot, looking in their own direction, but seeing the same content together.
 
 ## The room inside the Shared Space
 
 The room is the physical part of the Shared Space. It has a fixed sense of where "here" is, so that when someone places something in the middle of the table, it is in the middle of the table for everyone in that room. You move through it by moving your own body or device; the room itself stays put.
 
-Everyone sees the Shared Space from their own viewpoint. Just as two people across a real table see the same coffee cup from different angles, two QarOS participants see the same content from wherever they happen to be standing.
+Everyone sees the Shared Space from their own viewpoint. Just as two people across a real table see the same coffee cup from different angles, two QAROS participants see the same content from wherever they happen to be standing.
 
 ## App volumes
 
@@ -34,7 +34,7 @@ The Hub keeps one authoritative picture of the Shared Space — where each volum
 
 ## Why your view stays smooth
 
-Your head moves constantly, even when you think you're holding still. To keep the picture glued to the world instead of lagging behind, QarOS gently re-aims each frame to match where you're actually looking at the last possible moment — a technique called asynchronous warping. The result is that content stays anchored in place and feels stable as you move, rather than swimming or juddering.
+Your head moves constantly, even when you think you're holding still. To keep the picture glued to the world instead of lagging behind, QAROS gently re-aims each frame to match where you're actually looking at the last possible moment — a technique called asynchronous warping. The result is that content stays anchored in place and feels stable as you move, rather than swimming or juddering.
 
 ## Going deeper
 

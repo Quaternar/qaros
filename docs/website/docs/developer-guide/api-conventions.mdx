@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 title: API Conventions
-description: The patterns every QarOS module follows in C and C# — handles, results, extensible init structs, async pairs, enumeration, and ownership.
+description: The patterns every QAROS module follows in C and C# — handles, results, extensible init structs, async pairs, enumeration, and ownership.
 ---
 
 import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
@@ -211,7 +211,7 @@ if (!r.IsSuccess) { /* native failure — inspect r.Info */ }
 
 :::warning Callback threading
 Result and progress callbacks (C) and subscription/event callbacks (both
-languages) arrive on **library threads**. Do not call blocking QarOS functions
+languages) arrive on **library threads**. Do not call blocking QAROS functions
 from inside them, and marshal to your own thread before touching single-threaded
 application state.
 :::

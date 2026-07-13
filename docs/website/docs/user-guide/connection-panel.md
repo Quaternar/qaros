@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 title: Connecting to the Hub
-description: Connecting to the QarOS Hub — conenction via QR code, floating code or direct IP address invite
+description: Connecting to the QAROS Hub — conenction via QR code, floating code or direct IP address invite
 ---
 # Connection Panel
 

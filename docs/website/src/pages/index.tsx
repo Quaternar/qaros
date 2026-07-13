@@ -17,7 +17,7 @@ function HomepageHeader() {
           AR/VR for the 3D software you already have
         </Heading>
         <p className={styles.heroSubtitle}>
-          QarOS is Quaternar&rsquo;s AR/VR middleware. It streams your existing
+          QAROS is Quaternar&rsquo;s AR/VR middleware. It streams your existing
           application to headsets, tablets, and phones, composites several apps
           into one shared space, and handles discovery, security, and multi-user
           sessions &mdash; with no engine migration and no reimplementation.
@@ -69,7 +69,7 @@ const PathList: PathItem[] = [
     audience: 'Developers',
     title: 'Integrate the API',
     description:
-      'Add QarOS to your application with the C or C#/.NET SDK: onboarding, sessions, streaming rendered frames, GUI panels, and app volumes. Every snippet is backed by a compiled example.',
+      'Add QAROS to your application with the C or C#/.NET SDK: onboarding, sessions, streaming rendered frames, GUI panels, and app volumes. Every snippet is backed by a compiled example.',
     to: '/docs/developer-guide/getting-started',
     cta: 'Open the Developer Guide',
   },
@@ -77,7 +77,7 @@ const PathList: PathItem[] = [
     audience: 'Administrators & Operators',
     title: 'Install & run a Hub',
     description:
-      'Install, secure, configure, and maintain a QarOS Hub: system requirements, the runtime launcher and its configuration, networking and Hub federation, the security model, and device management.',
+      'Install, secure, configure, and maintain a QAROS Hub: system requirements, the runtime launcher and its configuration, networking and Hub federation, the security model, and device management.',
     to: '/docs/operator-guide/overview',
     cta: 'Open the Operator Guide',
   },
@@ -90,7 +90,7 @@ function HomepagePaths(): ReactNode {
         <div className={styles.pathsHeader}>
           <Heading as="h2">Find your path</Heading>
           <p>
-            This site is where teams learn how QarOS works. For product details
+            This site is where teams learn how QAROS works. For product details
             and pricing, visit{' '}
             <Link href="https://quaternar.com">quaternar.com</Link>.
           </p>
@@ -121,7 +121,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={`${siteConfig.title} — Don’t Rewrite. Extend.`}
-      description="QarOS is Quaternar’s AR/VR middleware for existing 3D applications: stream to headsets, tablets, and phones, composite apps into one shared space, and run secure multi-user sessions.">
+      description="QAROS is Quaternar’s AR/VR middleware for existing 3D applications: stream to headsets, tablets, and phones, composite apps into one shared space, and run secure multi-user sessions.">
       <HomepageHeader />
       <main>
         <HomepageFeatures />

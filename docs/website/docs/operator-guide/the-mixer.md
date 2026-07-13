@@ -1,7 +1,7 @@
 ---
 sidebar_position: 9
 title: The Mixer
-description: How QarOS composites multiple application streams into one personalized, latency-compensated view per user.
+description: How QAROS composites multiple application streams into one personalized, latency-compensated view per user.
 ---
 
 # The Mixer

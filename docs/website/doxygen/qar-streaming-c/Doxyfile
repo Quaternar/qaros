@@ -7,7 +7,7 @@
 
 # Project
 PROJECT_NAME           = "qar-streaming-c"
-PROJECT_BRIEF          = "C API for Quaternar QarOS streaming and runtime services"
+PROJECT_BRIEF          = "C API for Quaternar QAROS streaming and runtime services"
 OUTPUT_DIRECTORY       = ./doxygen
 CREATE_SUBDIRS         = NO
 OPTIMIZE_OUTPUT_FOR_C  = YES

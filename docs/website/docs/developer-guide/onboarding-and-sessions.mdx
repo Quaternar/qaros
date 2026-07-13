@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-In QarOS you never "create" or "join" a session directly — **every session is obtained through onboarding**. This page covers the four situations an integrated application encounters and the teardown rules. The security machinery behind these calls is described in [Security and Onboarding](/docs/operator-guide/security-model); from the API's perspective it is completely hidden.
+In QAROS you never "create" or "join" a session directly — **every session is obtained through onboarding**. This page covers the four situations an integrated application encounters and the teardown rules. The security machinery behind these calls is described in [Security and Onboarding](/docs/operator-guide/security-model); from the API's perspective it is completely hidden.
 
 ## The canonical startup flow
 
@@ -132,7 +132,7 @@ Key points:
 
 ## Sibling onboarding: one app, several API instances
 
-If your application hosts a *second* QarOS API instance — a helper process, a plugin sandbox, or a C# binding living next to native code — that instance must not pair with a code again. Instead, the already-onboarded instance mints an **invite** and hands it over.
+If your application hosts a *second* QAROS API instance — a helper process, a plugin sandbox, or a C# binding living next to native code — that instance must not pair with a code again. Instead, the already-onboarded instance mints an **invite** and hands it over.
 
 The complete pattern is:
 
@@ -211,7 +211,7 @@ qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
 
 ## Compiled tutorial
 
-This page is backed by the compiled example `onboarding_and_rejoin.c`, including the sibling-instance onboarding flow. Use it as the reference implementation when wiring two QarOS API instances into the same application:
+This page is backed by the compiled example `onboarding_and_rejoin.c`, including the sibling-instance onboarding flow. Use it as the reference implementation when wiring two QAROS API instances into the same application:
 
 - [Onboarding and Rejoin](/docs/developer-guide/tutorials/c/onboarding-and-rejoin)
 - [Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading) for the DLL bootstrap used by the example

@@ -1,11 +1,11 @@
 ---
 title: HoloLens 2
-description: Sideload the QarOS HoloLens Player app onto HoloLens 2 through the Device Portal.
+description: Sideload the QAROS HoloLens Player app onto HoloLens 2 through the Device Portal.
 ---
 
 # HoloLens 2
 
-HoloLens 2 runs the **QarOS HoloLens Player** app, shipped as *QuaternAR Player* or *Skyline Player*. You sideload this app onto the device, then the Hub-side `qar-hololens-desktop` service connects to it over the network, streams the mixed view to it, and reads back head pose and hands.
+HoloLens 2 runs the **QAROS HoloLens Player** app, shipped as *QuaternAR Player* or *Skyline Player*. You sideload this app onto the device, then the Hub-side `qar-hololens-desktop` service connects to it over the network, streams the mixed view to it, and reads back head pose and hands.
 
 We support only the sideloaded Quaternar player app on HoloLens. The Microsoft Holographic Remoting Player is not part of this setup.
 

@@ -1,12 +1,12 @@
 ---
 sidebar_position: 7
 title: Security Model
-description: The QarOS trust model — pairing codes, password-authenticated key exchange, per-Hub certificate authority, and mTLS sessions.
+description: The QAROS trust model — pairing codes, password-authenticated key exchange, per-Hub certificate authority, and mTLS sessions.
 ---
 
 # Security and Onboarding
 
-QarOS deployments often run on factory floors, in hospitals, and on corporate networks — places where "trust the LAN" is not acceptable. The security model is therefore built on a simple promise: **a short pairing code, typed once, bootstraps a full cryptographic identity — and the code itself never travels over the network.**
+QAROS deployments often run on factory floors, in hospitals, and on corporate networks — places where "trust the LAN" is not acceptable. The security model is therefore built on a simple promise: **a short pairing code, typed once, bootstraps a full cryptographic identity — and the code itself never travels over the network.**
 
 ## The four layers
 

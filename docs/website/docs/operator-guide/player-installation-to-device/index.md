@@ -9,6 +9,6 @@ This section covers operator-side installation of device players onto supported 
 
 ## Device pages
 
-- [HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2) - sideload the QarOS HoloLens Player through the Device Portal.
+- [HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2) - sideload the QAROS HoloLens Player through the Device Portal.
 - [Meta Quest](/docs/operator-guide/player-installation-to-device/meta-quest) - install the Quest APK with ADB after enabling Developer Mode.
 - [P&C Solutions METALENSE 2](/docs/operator-guide/player-installation-to-device/metalense-2) - install the METALENSE 2 APK with ADB.

@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 title: Running the Hub
-description: Running the QarOS Hub - tray service, runtime launcher, and the visualizer.
+description: Running the QAROS Hub - tray service, runtime launcher, and the visualizer.
 ---
 
 # Using the Hub
@@ -20,7 +20,7 @@ The Hub is not a single program but three cooperating processes that ship togeth
 2. **Left-click the tray icon** to open the visualizer window.
 3. The tray menu offers: *Open visualizer*, *Restart launcher*, *Connect to other Hub*, and *Exit*.
 
-On startup the launcher restores its previous session (or creates a fresh one), registers the configured source app volumes, starts the streaming services, begins broadcasting the discovery beacon (default display name "QarOS Hub"), and starts the onboarding services. By default it also invites a local visualizer into the session automatically.
+On startup the launcher restores its previous session (or creates a fresh one), registers the configured source app volumes, starts the streaming services, begins broadcasting the discovery beacon (default display name "QAROS Hub"), and starts the onboarding services. By default it also invites a local visualizer into the session automatically.
 
 Hub configuration is managed through the Hub UI and persists across restarts.
 

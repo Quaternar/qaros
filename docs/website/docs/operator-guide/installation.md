@@ -1,12 +1,12 @@
 ---
 sidebar_position: 3
 title: Installation
-description: How QarOS is distributed and installed - ZIP runtime, NuGet SDK, MSIX installer - and where its data lives.
+description: How QAROS is distributed and installed - ZIP runtime, NuGet SDK, MSIX installer - and where its data lives.
 ---
 
 # Deployment and Installation
 
-QarOS is distributed in three artifact types, each aimed at a different consumer:
+QAROS is distributed in three artifact types, each aimed at a different consumer:
 
 | Artifact | For whom | Contents |
 |---|---|---|
@@ -18,9 +18,9 @@ QarOS is distributed in three artifact types, each aimed at a different consumer
 ## Installing a Hub from the ZIP (recommended today)
 
 1. Unzip the archive to a writable location.
-2. Start `bin/qaros-hub-service.exe`. It starts the launcher and puts the QarOS icon in the tray.
+2. Start `bin/qaros-hub-service.exe`. It starts the launcher and puts the QAROS icon in the tray.
 3. Open the Hub UI and configure your source apps and target devices there. Hub configuration is persistent across restarts.
-4. Make sure the firewall permits the QarOS port range **7440-7460 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The MSIX package registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
+4. Make sure the firewall permits the QAROS port range **7440-7460 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The MSIX package registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
 
 Data written at runtime (identity slots, CA state, session state, logs, and persisted Hub configuration) is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`), so upgrading is "replace the folder".
 
@@ -38,7 +38,7 @@ For **HoloLens 2**, **P&C Solutions METALENSE 2**, and **Meta Quest**, use the d
 
 This repository (`qaros`) is the public SDK: it contains the C API headers (including the single-file `qar_streaming.h`), compiled examples, the C# bindings, and this documentation. The proprietary runtime binaries are delivered separately:
 
-1. Request the QarOS binary package from [quaternar.com](https://www.quaternar.com/).
+1. Request the QAROS binary package from [quaternar.com](https://www.quaternar.com/).
 2. Unzip it into the repository's `package/` directory, giving:
 
 ```text

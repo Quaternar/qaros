@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: Getting Started
-description: Set up the QarOS SDK in C or C# — the package, static vs. dynamic loading, and your first program.
+description: Set up the QAROS SDK in C or C# — the package, static vs. dynamic loading, and your first program.
 ---
 
 import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-QarOS ships a native **C API** and an idiomatic **C#/.NET binding** over it. Pick
+QAROS ships a native **C API** and an idiomatic **C#/.NET binding** over it. Pick
 your language above — the selection follows you across the whole Developer Guide.
 Whichever you choose, the simplest integration is genuinely simple: initialize
 the library, create a runtime, obtain a session, do work, tear down in reverse.
@@ -46,12 +46,12 @@ Both modes expose identical function names.
 | | Static / import-library linking | Dynamic loading |
 |---|---|---|
 | How | Link `qar-streaming-c.lib`, call functions directly | Define `QAR_ENABLE_DYNAMIC_LOADING`, load the DLL at runtime |
-| Startup dependency | DLL must be present at process start | Your app starts without QarOS; loads it on demand |
+| Startup dependency | DLL must be present at process start | Your app starts without QAROS; loads it on demand |
 | Failure mode | Loader error dialog | You handle a `bool` load failure gracefully |
-| Recommended for | Tools that always ship with QarOS | Plugins and apps where AR/VR is optional |
+| Recommended for | Tools that always ship with QAROS | Plugins and apps where AR/VR is optional |
 
 Dynamic loading is recommended for integrating into an existing application: your
-software keeps working on machines without QarOS installed.
+software keeps working on machines without QAROS installed.
 
 ```c
 // Dynamic-loading mode: one macro before the include, one macro in ONE .c file.
@@ -64,7 +64,7 @@ int main(int argc, char** argv)
 {
     if (not qar_library_load("path/to/qar-streaming-c.dll"))
     {
-        // QarOS not present — run without AR/VR features
+        // QAROS not present — run without AR/VR features
         return 1;
     }
     // ... use the API exactly as in static mode ...
@@ -81,7 +81,7 @@ working with older applications and vice versa. Full walkthrough:
 ### Building the examples
 
 ```powershell
-# 1. Drop the QarOS binary package into ./package (see the Operator Guide's
+# 1. Drop the QAROS binary package into ./package (see the Operator Guide's
 #    Installation page for the package layout).
 # 2. Configure and build
 cmake --preset x64-windows
@@ -145,7 +145,7 @@ for Unity lifecycle notes.
 
 ## The canonical program skeleton
 
-Every QarOS application has the same shape: **library init → runtime → session →
+Every QAROS application has the same shape: **library init → runtime → session →
 work → teardown in reverse.**
 
 <CodeTabs>
@@ -161,7 +161,7 @@ int main(void)
     lib_init.enable_console_logging = true;
     qar_result_log_if_error(qar_library_init(&lib_init));
 
-    // 2. Runtime create (your process's QarOS context)
+    // 2. Runtime create (your process's QAROS context)
     QarRuntimeInit rt_init = qar_runtime_init_default();
     QarRuntime* runtime = NULL;
     qar_result_log_if_error(qar_runtime_create(&rt_init, &runtime));

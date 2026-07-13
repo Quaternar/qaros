@@ -1,7 +1,7 @@
 ---
 sidebar_position: 8
 title: Glossary
-description: Short definitions of every QarOS term used in this documentation.
+description: Short definitions of every QAROS term used in this documentation.
 ---
 
 # Glossary
@@ -24,7 +24,7 @@ description: Short definitions of every QarOS term used in this documentation.
 
 **GUI panel** — a shared 2D interface quad (currently web content) placed directly in room space.
 
-**Hub** — the workstation that runs the QarOS runtime, source applications, mixer, CA, and session; the trust root of a deployment.
+**Hub** — the workstation that runs the QAROS runtime, source applications, mixer, CA, and session; the trust root of a deployment.
 
 **Mixer** — the per-user compositor that warps, masks, depth-sorts, and blends all app-volume streams into one stereo color+depth frame per user.
 

@@ -28,7 +28,7 @@ Some panels may be shown only to certain people. If a panel you expect isn't the
 To make a large model easier to discuss, grab it and shrink it onto a tabletop, or scale it up to walk through it. Everyone sees the change, so the whole group stays on the same page.
 :::
 
-If someone else is already manipulating a volume, QarOS keeps you from fighting over it at the same instant — one person adjusts, everyone sees the result.
+If someone else is already manipulating a volume, QAROS keeps you from fighting over it at the same instant — one person adjusts, everyone sees the result.
 
 ## Leaving versus staying onboarded
 

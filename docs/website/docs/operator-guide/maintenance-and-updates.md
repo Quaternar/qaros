@@ -10,11 +10,11 @@ This page covers keeping a Hub running over time: how to upgrade, what compatibi
 
 ## Upgrading across the artifact matrix
 
-QarOS ships as several artifacts (see [Installation](/docs/operator-guide/installation)); each upgrades differently:
+QAROS ships as several artifacts (see [Installation](/docs/operator-guide/installation)); each upgrades differently:
 
 - **ZIP (Hub runtime).** Upgrading is "replace the folder." All runtime state lives outside the install directory under the per-user application-data root, so unzipping a new version over a fresh location and pointing the tray service at it preserves identity, CA state, session state, and persisted Hub configuration.
 - **MSIX (packaged Hub).** Install the new `.msixbundle`; Windows handles the in-place package upgrade and the firewall/autostart declarations. Release and demo package identities are distinct and upgrade independently.
-- **APK (device players).** Update the QarOS player app on each P&C Solutions METALENSE 2, Meta Quest, or Android device by installing the new APK.
+- **APK (device players).** Update the QAROS player app on each P&C Solutions METALENSE 2, Meta Quest, or Android device by installing the new APK.
 
 ## Compatibility promise
 

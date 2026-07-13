@@ -1,4 +1,4 @@
-# QarOS Documentation — Deferred Work (TODO)
+# QAROS Documentation — Deferred Work (TODO)
 
 This file tracks documentation work that is **known but not yet doable** — content
 that could not be verified in the codebase, depends on unshipped product features,
