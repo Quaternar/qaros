@@ -37,7 +37,7 @@ The shared key encrypts a private channel (AES-256-GCM, separate keys per direct
 
 ### Layer 3 — Session traffic (mutual TLS)
 
-All session communication runs over the messaging bus (port `7447`) with **mutual TLS**: both sides present their Hub-issued certificates. From this point on, pairing codes play no role — identity is the certificate, and rejoining after a restart is silent.
+All session communication runs over the Zenoh messaging bus on TCP `19120-19200` with **mutual TLS**: both sides present their Hub-issued certificates. Hub, launched apps, and devices run as Zenoh peers, connecting to known endpoints and listening for full-mesh peer links in that bounded range. From this point on, pairing codes play no role - identity is the certificate, and rejoining after a restart is silent.
 
 ## The per-Hub Certificate Authority
 

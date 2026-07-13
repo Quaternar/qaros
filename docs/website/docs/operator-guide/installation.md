@@ -20,7 +20,7 @@ QAROS is distributed in three artifact types, each aimed at a different consumer
 1. Unzip the archive to a writable location.
 2. Start `bin/qaros-hub-service.exe`. It starts the launcher and puts the QAROS icon in the tray.
 3. Open the Hub UI and configure your source apps and target devices there. Hub configuration is persistent across restarts.
-4. Make sure the firewall permits the QAROS port range **7440-7460 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The MSIX package registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
+4. Make sure the firewall permits the QAROS port range **19120-19200 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The MSIX package registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
 
 Data written at runtime (identity slots, CA state, session state, logs, and persisted Hub configuration) is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`), so upgrading is "replace the folder".
 
