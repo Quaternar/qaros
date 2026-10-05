@@ -184,11 +184,19 @@ struct Target
 		std::array<CameraView, 2> cameras{};
 		for(size_t eye = 0; success && eye < 2; ++eye)
 		{
-			success = Check(qar_render_frame_info_get_view_pose(
-						  info, eye * 2, &cameras[eye].pose
+			// The eye's color view: the sender orders the frame's views.
+			const int view = FindFrameView(
+				*frame,
+				eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
+						 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT,
+				QAR_VIDEO_FRAME_VIEW_TYPE_COLOR
+			);
+			success = view >= 0
+					  && Check(qar_render_frame_info_get_view_pose(
+						  info, static_cast<size_t>(view), &cameras[eye].pose
 					  ))
 					  && Check(qar_render_frame_info_get_view_fov(
-						  info, eye * 2, &cameras[eye].fov
+						  info, static_cast<size_t>(view), &cameras[eye].fov
 					  ));
 		}
 		if(success)

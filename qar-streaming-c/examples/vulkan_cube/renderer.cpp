@@ -448,6 +448,23 @@ CubeCamera::CreatePipeline()
 	return success;
 }
 
+int
+FindFrameView(
+	const QarVideoFrameVulkan& frame,
+	const QarVideoFrameViewEye eye,
+	const QarVideoFrameViewType type
+)
+{
+	for(size_t i = 0; i < frame.texture_views_count; ++i)
+	{
+		if(frame.texture_views[i].eye == eye
+		   && frame.texture_views[i].data_type == type)
+		{
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
 void
 CubeCamera::ClearTargets()
 {
@@ -570,7 +587,7 @@ CubeCamera::Submit(
 		static_cast<uint32_t>(acquire.size()),
 		acquire.data()
 	);
-	// Explicit separated textures, color/depth pairs for left and right eyes.
+	// Separated textures: one color and one depth texture per eye.
 	if(frame.texture_views_count != 4 || frame.textures_count != 4)
 	{
 		std::cerr << "Expected separated stereo color/depth layout\n";
@@ -578,7 +595,18 @@ CubeCamera::Submit(
 	}
 	for(size_t eye = 0; eye < 2; ++eye)
 	{
-		const size_t colorIndex = eye * 2, depthIndex = colorIndex + 1;
+		const QarVideoFrameViewEye viewEye =
+			eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
+					 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
+		const int colorIndex =
+			FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_COLOR);
+		const int depthIndex =
+			FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH);
+		if(colorIndex < 0 || depthIndex < 0)
+		{
+			std::cerr << "Frame lacks a color or depth view for an eye\n";
+			return false;
+		}
 		const auto& colorView = frame.texture_views[colorIndex];
 		const auto& depthView = frame.texture_views[depthIndex];
 		std::array<VkImageView, 2> views{};

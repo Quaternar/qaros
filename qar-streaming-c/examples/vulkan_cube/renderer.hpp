@@ -32,6 +32,15 @@ struct VulkanDevice
 	~VulkanDevice();
 };
 
+// Index in `frame.texture_views` of the view showing `type` for `eye`, or -1.
+// The sender lays the frame out itself, so its views need not follow the order
+// QarRenderSenderInit::frame_views asked for: find views by what they show.
+int FindFrameView(
+	const QarVideoFrameVulkan& frame,
+	QarVideoFrameViewEye eye,
+	QarVideoFrameViewType type
+);
+
 // Lowercase hex of `bytes`, the QAR_GPU_ADAPTER_ID format.
 std::string AdapterIdHex(const uint8_t* bytes, size_t count);
 

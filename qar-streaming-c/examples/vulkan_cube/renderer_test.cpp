@@ -59,7 +59,9 @@ struct Images
 		frame.textures_count = frame.texture_views_count = 4;
 		for(size_t i = 0; i < 4; ++i)
 		{
-			const bool depth = i % 2 == 1;
+			// The render sender's own order: both color views, then both
+			// depth views. The camera must find views by eye and type.
+			const bool depth = i >= 2;
 			auto& texture = frame.textures[i];
 			texture.size = { depth ? QAR_PIXEL_FORMAT_D32_FLOAT
 								   : QAR_PIXEL_FORMAT_R8G8B8A8,
@@ -74,8 +76,8 @@ struct Images
 			view.texture_format = texture.size.format;
 			view.data_type = depth ? QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH
 								   : QAR_VIDEO_FRAME_VIEW_TYPE_COLOR;
-			view.eye = i < 2 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
-							 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
+			view.eye = i % 2 == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
+								  : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
 			VkExternalMemoryImageCreateInfo external{
 				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO
 			};
@@ -291,7 +293,8 @@ struct Readback
 		}
 		for(size_t i = 0; i < 2; ++i)
 		{
-			const auto& texture = images.frame.textures[i];
+			// The left eye's color, then its depth.
+			const auto& texture = images.frame.textures[i == 0 ? 0 : 2];
 			if(texture.layout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 			   || texture.queue_family_index != VK_QUEUE_FAMILY_EXTERNAL)
 			{
