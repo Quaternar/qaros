@@ -5,6 +5,10 @@
   "builtin-baseline": "c82f74667287d3dc386bce81e44964370c91a289",
   "dependencies": [],
   "features": {
+    "examples-vulkan": {
+      "description": "Vulkan multi-user cube source and shader compiler",
+      "dependencies": ["glm", "shaderc", "vulkan-headers", "vulkan-loader"]
+    },
     "examples-core": {
       "description": "",
       "dependencies": []

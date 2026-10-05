@@ -12,6 +12,45 @@
  * manage runtimes/sessions, and produce rendering frames for streaming. Only
  * symbols declared in this header (and the companion basic_types.h) are
  * considered stable for C consumers.
+ *
+ * @par Shipping the binaries
+ * The SDK is one folder (`bin/` in the package) holding the shared library
+ * (`qar-streaming-c.dll` / `libqar-streaming-c.so`), `qar-runtime-launcher`
+ * and every dependency the two need. Deploy it whole and unmodified; do not
+ * copy individual files out of it into your own application folder.
+ *
+ * @par Prefer dynamic loading
+ * Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
+ * in exactly one translation unit, and call qar_library_load() before any
+ * other API call. The application then carries no link-time dependency on the
+ * SDK, chooses the SDK folder at run time, and lets the SDK's own dependency
+ * libraries resolve out of that folder instead of out of the application's.
+ * Link-time linking also works, but then the whole `bin/` content has to sit
+ * next to the executable or on the library search path.
+ *
+ * @par The two paths you must set
+ * qar_library_load() takes the library **file**:
+ * `<sdk>/bin/qar-streaming-c.dll`. QarRuntimeInit::runtime_binaries_folder_path
+ * takes the **folder** that file came from: `<sdk>/bin`. Relative paths resolve
+ * against the current working directory, so derive both from the install
+ * location. Leaving the folder empty starts no launcher, and peer invites then
+ * never complete.
+ *
+ * @par Basic flow: get a session, get a target app, stream to it
+ * 1. qar_library_init() - once per process.
+ * 2. qar_runtime_create() - with runtime_binaries_folder_path set as above.
+ * 3. qar_runtime_onboard() with exactly one chained mode extension, or
+ *    qar_runtime_rejoin() with a previously persisted QarOnboardingId -
+ *    **the only calls that produce an active `QarSession*`**. There is no
+ *    "current session" getter, so keep the returned pointer: it is the first
+ *    argument of nearly every other call, and qar_session_destroy() ends it.
+ *    Persist the onboarding id the onboard call returns; it is the ticket for
+ *    every later rejoin.
+ * 4. qar_session_invite_target_app() (or its async form) - **the only source
+ *    of a target `QarPeerId`**. The hub remembers every invited device
+ *    (ADR hub/0008).
+ * 5. qar_app_volumes_get_or_create(), then qar_render_sender_create() with the
+ *    peer id from step 4 and the app volume id from this step.
  */
 #ifndef QAR_FUNCTIONS_H
 #define QAR_FUNCTIONS_H
@@ -65,12 +104,49 @@
 
 
 /**
- * @file basic_types.h
+ * @file types.h
  * @brief Public C API data types for qar-streaming-c.
  *
  * This header defines opaque handles, identifiers, status/result structures,
  * math types, graphics & video frame descriptions, and initialization
  * structures used by the public API functions.
+ *
+ * @section qar_coordinate_systems Coordinate systems
+ *
+ * The spaces are the ones the developer guide describes, under the same names:
+ * https://docs.quaternar.com/docs/developer-guide/coordinate-systems/
+ *
+ * A QarVector3, QarQuaternion or QarPose carries no space of its own. Every
+ * field and function that holds one names the space it is in, with one of the
+ * names below. The C API converts no coordinates: each value is exactly what
+ * the library produced.
+ *
+ * Every 3D space follows OpenXR: right-handed, Y-up, -Z forward, so a view
+ * looks along -Z. A pose is a position vector plus an orientation quaternion,
+ * stored x, y, z, w.
+ *
+ * - **World space.** Optional, Earth-fixed: ECEF WGS84, metres, double
+ *   precision. A world anchor pins an app volume to it. See QarGeoAnchorFrame.
+ * - **Room space.** The shared frame every peer in a session places things in,
+ *   in metres. App volume poses (QarAppVolumeInit::pose) and GUI panel poses
+ *   (QarGuiPanelInit::pose) are in it. Its origin is set by the XR runtime's
+ *   relocalization, not by applications.
+ * - **App volume space.** One app volume's local frame, a box in the room:
+ *   origin at the cuboid centre, +X along width, +Y up along height, +Z along
+ *   length, in metres. The app pose (QarAppVolumeInit::app_pose) and the deltas
+ *   of a mapped app volume gesture are in it. See QarAppVolumeSize.
+ * - **App content space.** The application's own world inside the box, the
+ *   space it renders in: app volume space taken into the app pose, positions
+ *   divided by the app scale, so in app metres. A render sender bound to an app
+ *   volume hands out its view poses and hand poses in it, and a mapped app
+ *   volume gesture's start and action points are in it, so an application uses
+ *   them as they come.
+ * - **View space.** One render view's camera frame, looking along -Z. QarFov
+ *   angles are in it, in radians.
+ * - **Panel space** and **panel content space.** A GUI panel's local frame in
+ *   metres, and the pixel raster drawn onto it. See QarGuiPanelSize.
+ * - **Texture pixels.** Positions inside a video texture, for frame layouts.
+ *   See QarVideoFrameView.
  */
 #ifndef QAR_TYPES_H
 #define QAR_TYPES_H
@@ -98,6 +174,10 @@
 #ifdef QAR_ENABLE_D3D11
 #include <d3d11.h>
 #include <d3d11_1.h>
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+#include <vulkan/vulkan_core.h>
 #endif
 
 #ifdef __cplusplus
@@ -141,6 +221,16 @@ typedef struct QarAppVolumeHandle QarAppVolume;
 /// GUI panel (opaque)
 typedef struct QarGuiPanelHandle QarGuiPanel;
 
+/// One recognised gesture on a GUI panel (opaque). Valid only for the duration
+/// of the callback it is handed to; see
+/// qar_gui_panels_subscribe_gesture_events.
+typedef struct QarGuiPanelGestureHandle QarGuiPanelGesture;
+
+/// One mapped gesture on an app volume (opaque). Valid only for the duration of
+/// the callback it is handed to; see
+/// qar_app_volumes_subscribe_gesture_events.
+typedef struct QarAppVolumeGestureHandle QarAppVolumeGesture;
+
 /// Peer spec (opaque)
 typedef struct QarPeerSpecHandle QarPeerSpec;
 
@@ -152,6 +242,9 @@ typedef struct QarRenderStreamRequestHandle QarRenderStreamRequest;
 
 /// Frame info for current render (opaque)
 typedef struct QarRenderFrameInfoHandle QarRenderFrameInfo;
+
+/// Producer-owned logical video sender (opaque).
+typedef struct QarVideoSenderHandle QarVideoSender;
 /** @} */
 
 /**
@@ -207,8 +300,23 @@ typedef enum QarStatusCode
 	QAR_STATUS_ARGUMENT_NOT_SUPPORTED = 5,
 	QAR_STATUS_TIMEOUT = 6,
 	QAR_STATUS_LOGIC_ERROR = 7,
+	QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED = 304,
 	QAR_STATUS_GUI_PANEL_INVALID_ID = 305,
 	QAR_STATUS_APP_VOLUME_INVALID_ID = 325,
+	/** A gesture configuration was refused because a rule in it could never
+	 * work, such as an enabled two-hand rotate that moves the app with no
+	 * rotation axis allowed. The volume keeps its previous configuration; the
+	 * result's message names the rule. */
+	QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID = 326,
+	/** A gesture mode was named -- to select, remove or read it -- that the
+	 * volume does not define. Nothing was changed; define the mode first with
+	 * qar_app_volumes_change_gesture_mode(). */
+	QAR_STATUS_APP_VOLUME_GESTURE_MODE_UNKNOWN = 327,
+	QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING = 603,
+	QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS = 604,
+	QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED = 605,
+	QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED = 606,
+	QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED = 607,
 	QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME = 803,
 	QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED = 804,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
@@ -244,7 +352,9 @@ typedef enum QarAppState
 	QAR_APP_STATE_UNKNOWN = 0,
 	QAR_APP_STATE_INITIALIZING = 1,
 	QAR_APP_STATE_RUNNING = 10,
-	QAR_APP_STATE_SHUTTING_DOWN = 100
+	QAR_APP_STATE_SHUTTING_DOWN = 100,
+	/** The peer left for good and never comes back under its id. */
+	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
 
 /** @brief Time point with variable precision. */
@@ -258,6 +368,8 @@ typedef struct QarTimePoint
 // MATH TYPES
 // ============================================================================
 
+/** @brief 3D vector. Its space is named by the field or function holding it;
+ *  see @ref qar_coordinate_systems. */
 typedef struct QarVector3
 {
 	float x;
@@ -273,7 +385,8 @@ typedef struct QarVector3d
 	double z;
 } QarVector3d;
 
-/** @brief Quaternion for rotations. */
+/** @brief Rotation quaternion, Hamilton, stored x, y, z, w. Its space is named
+ *  by the field or function holding it; see @ref qar_coordinate_systems. */
 typedef struct QarQuaternion
 {
 	float x;
@@ -282,13 +395,17 @@ typedef struct QarQuaternion
 	float w;
 } QarQuaternion;
 
-/** @brief Pose combining position and orientation. */
+/** @brief Pose combining position and orientation. Its space is named by the
+ *  field or function holding it; see @ref qar_coordinate_systems. */
 typedef struct QarPose
 {
 	QarQuaternion orientation;
 	QarVector3 position;
 } QarPose;
 
+/** @brief Field of view of one render view, in view space: angles in radians
+ *  from the view's -Z axis, OpenXR signs - left and down negative, right and
+ *  up positive. */
 typedef struct QarFov
 {
 	float angle_left;
@@ -297,6 +414,9 @@ typedef struct QarFov
 	float angle_down;
 } QarFov;
 
+/** @brief Near and far clip distances along a view's -Z, in the units of the
+ *  poses the view was rendered with: app units for a render sender bound to
+ *  an app volume. near > far declares reverse-Z. */
 typedef struct QarNearFar
 {
 	float near_plane;
@@ -312,6 +432,13 @@ typedef struct QarNearFar
 #define QAR_POSITION_VALID_BIT 0x00000002ULL
 #define QAR_ORIENTATION_TRACKED_BIT 0x00000004ULL
 #define QAR_POSITION_TRACKED_BIT 0x00000008ULL
+
+/** @brief Which of a peer's two hands something came from. */
+typedef enum QarHand
+{
+	QAR_HAND_LEFT = 0,
+	QAR_HAND_RIGHT = 1
+} QarHand;
 
 typedef enum QarHandJoint
 {
@@ -344,28 +471,41 @@ typedef enum QarHandJoint
 	QAR_HAND_JOINT_MAX_ENUM_EXT = 0x7FFFFFFF
 } QarHandJoint;
 
+/** @brief One XR_EXT_hand_tracking joint. */
 typedef struct QarHandJointLocation
 {
 	uint32_t joint_id;
 	uint64_t location_flags;
+	/// In the space of the QarHandJoints holding it: app content space when it
+	/// comes from qar_render_sender_last_hands().
 	QarPose pose;
+	/// Joint radius in room metres. Not converted into app content space: with
+	/// an app scale other than 1 it does not match the app-content-space pose.
 	float radius;
 } QarHandJointLocation;
 
+/** @brief Velocity of one joint. */
 typedef struct QarHandJointVelocity
 {
 	uint32_t joint_id;
 	uint64_t flags;
+	/// Room-space axes, metres per second. Not converted into app content
+	/// space.
 	QarVector3 linear_velocity;
+	/// Room-space axes, radians per second. Not converted into app content
+	/// space.
 	QarVector3 angular_velocity;
 } QarHandJointVelocity;
 
 #define QAR_HAND_JOINT_COUNT 26
 
+/** @brief One hand's tracking state. */
 typedef struct QarHandJoints
 {
 	bool is_tracked;
 	bool is_active;
+	/// The hand's aim pose, the OpenXR /input/aim/pose: its -Z is the hand ray.
+	/// App content space when it comes from qar_render_sender_last_hands().
 	QarPose pose;
 	QarHandJointLocation joint_locations[QAR_HAND_JOINT_COUNT];
 	bool has_velocity;
@@ -387,6 +527,8 @@ typedef enum QarGraphicsAPI
 {
 	QAR_GRAPHICS_API_CPU = 0,
 	QAR_GRAPHICS_API_D3D11 = 4,
+	QAR_GRAPHICS_API_VULKAN = 6,
+	QAR_GRAPHICS_API_OPENGL = 7,
 } QarGraphicsAPI;
 
 typedef enum QarPixelFormat
@@ -396,6 +538,8 @@ typedef enum QarPixelFormat
 	QAR_PIXEL_FORMAT_R8G8B8A8 = 51,
 	QAR_PIXEL_FORMAT_B8G8R8A8 = 53,
 	QAR_PIXEL_FORMAT_R16G16B16A16 = 55,
+	// Four-byte BGR color with an unused X byte. X is not alpha.
+	QAR_PIXEL_FORMAT_B8G8R8X8 = 56,
 
 	QAR_PIXEL_FORMAT_D32_FLOAT = 101
 } QarPixelFormat;
@@ -529,14 +673,123 @@ typedef struct QarVideoFrameD3D11
 
 #endif // QAR_ENABLE_D3D11
 
+#ifdef QAR_ENABLE_OPENGL
+typedef struct QarVideoTextureOpenGl
+{
+	QarTextureSize size;
+	uint32_t texture;
+} QarVideoTextureOpenGl;
+
+typedef struct QarVideoFrameOpenGl
+{
+	QarVideoFrameView texture_views[QAR_MAX_FRAME_VIEWS];
+	size_t texture_views_count;
+	QarVideoTextureOpenGl textures[QAR_MAX_FRAME_TEXTURES];
+	size_t textures_count;
+} QarVideoFrameOpenGl;
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+typedef struct QarVideoTextureVulkan
+{
+	QarTextureSize size;
+	VkImage image;
+	VkDeviceMemory image_memory;
+	VkFormatFeatureFlags format_features;
+	VkImageLayout layout;
+	uint32_t queue_family_index;
+} QarVideoTextureVulkan;
+
+typedef struct QarSyncFrameVulkan
+{
+	VkSemaphore semaphore;
+	VkFence fence;
+} QarSyncFrameVulkan;
+
+typedef struct QarVideoFrameVulkan
+{
+	QarVideoFrameView texture_views[QAR_MAX_FRAME_VIEWS];
+	size_t texture_views_count;
+	QarVideoTextureVulkan textures[QAR_MAX_FRAME_TEXTURES];
+	size_t textures_count;
+	QarSyncFrameVulkan synchronization;
+} QarVideoFrameVulkan;
+#endif
+
 // ============================================================================
 // GUI PANEL TYPES
 // ============================================================================
 
+typedef enum QarGesturePhase
+{
+	/* Matches qar::GesturePhase::Started. Gesture lifecycle entered the active
+	 * state. */
+	QAR_GESTURE_PHASE_STARTED = 0,
+	/* Matches qar::GesturePhase::Updated. Gesture lifecycle produced an update
+	 * while active. */
+	QAR_GESTURE_PHASE_UPDATED = 1,
+	/* Matches qar::GesturePhase::Ended. Gesture lifecycle ended normally. */
+	QAR_GESTURE_PHASE_ENDED = 2,
+	/* Matches qar::GesturePhase::Instant. Gesture completed as a single event.
+	 */
+	QAR_GESTURE_PHASE_INSTANT = 3,
+	/* Matches qar::GesturePhase::Canceled. Gesture lifecycle was canceled. */
+	QAR_GESTURE_PHASE_CANCELED = 4
+} QarGesturePhase;
+
+/**
+ * @brief The three frames every GUI panel API is expressed in.
+ *
+ * **Room space** is the session's shared tracking space: right-handed, metres,
+ * +Y up. Every QarPose in the GUI panel API - QarGuiPanelInit::pose,
+ * qar_gui_panels_update_pose(), qar_gui_panel_get_pose() - is given in it.
+ *
+ * **Panel space** is the frame that pose defines. Its origin is the midpoint of
+ * the panel's top edge - the top *centre*, not a corner - and its axes are
+ * right-handed, described here as a viewer facing the panel front sees them:
+ * - +X runs along the top edge to the viewer's left,
+ * - +Y runs up,
+ * - **-Z** is the front-face normal and points at the viewer.
+ * The front normal is -Z, not +Z: left x up points *away* from the viewer, so a
+ * +Z viewer-facing normal would not be right-handed. The renderer agrees - the
+ * panel surface sits at its bounds' minimum Z and the interaction volume grows
+ * along StereoKit's vec3_forward, (0, 0, -1).
+ * The panel surface therefore covers x in [-width_meters/2, +width_meters/2]
+ * and y in [-height_meters, 0], hanging below its own pose.
+ *
+ * **Panel content space** is the 2D pixel raster drawn onto that surface: the
+ * browser bitmap of a QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI panel, or the
+ * decoded video image of a QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID one. Its origin
+ * is the panel's top-left corner as the viewer sees it, +X runs right and +Y
+ * runs down, and it is the frame QarGuiPanelPoint reports positions in. Panel
+ * content space runs backwards along both panel axes: content x = 0 sits at
+ * panel-space +width_meters/2 and content y = 0 at panel-space 0, the top edge,
+ * so content x advances along panel-space -X and content y along panel-space
+ * -Y. Panel content space is mapped onto panel space by
+ * QarGuiPanelSize::content_scale.
+ */
 typedef struct QarGuiPanelSize
 {
+	/// Extent of the panel surface along panel-space X, in metres.
 	float width_meters;
+	/// Extent of the panel surface along panel-space -Y, in metres. The surface
+	/// hangs below the pose, which sits on its top edge.
 	float height_meters;
+	/// Panel-content-space-per-panel-space zoom of the rendered raster. 1.0
+	/// fits the content across the full panel surface, 2.0 shows it at twice
+	/// the size so only half of it fits, and 0.5 shows it at half size. It
+	/// changes how the content is drawn and how a contact maps back to content
+	/// pixels; it does not change width_meters or height_meters.
+	///
+	/// A QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI panel takes it as the page's
+	/// zoom, as a desktop browser's Ctrl+ and Ctrl- do: the page is drawn that
+	/// much larger and reflowed to the panel's width, so nothing is cut off at
+	/// the sides. Only the application sets it; the panel's + and - buttons
+	/// resize the panel instead (ADR-0165, ADR-0167).
+	///
+	/// A QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID panel ignores it: its video is
+	/// always drawn at the full panel width and scrolled vertically by the
+	/// renderer when it is taller than the panel (ADR-0150).
 	float content_scale;
 } QarGuiPanelSize;
 
@@ -548,6 +801,55 @@ typedef enum QarGuiPanelState
 	QAR_GUI_PANEL_STATE_HIDDEN = 2,
 	QAR_GUI_PANEL_STATE_CLOSED = 3
 } QarGuiPanelState;
+
+typedef enum QarGuiPanelContentType
+{
+	QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI = 0,
+	QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID = 1
+} QarGuiPanelContentType;
+
+/** @brief What a contact on a GUI panel was recognised as. */
+typedef enum QarGuiPanelGestureKind
+{
+	/// Fingertip inside the hover volume. A lifecycle:
+	/// QAR_GESTURE_PHASE_STARTED on entry, QAR_GESTURE_PHASE_UPDATED as the
+	/// content position changes, QAR_GESTURE_PHASE_ENDED on exit. It stays open
+	/// while the same fingertip is touching, so a highlight under the finger
+	/// survives a press.
+	QAR_GUI_PANEL_GESTURE_KIND_HOVER = 0,
+	/// Touched and released with little travel and before the long-press
+	/// duration. Instant.
+	QAR_GUI_PANEL_GESTURE_KIND_TAP = 1,
+	/// Touched and held in place for the long-press duration. Instant, once per
+	/// contact; the contact may still become a drag afterwards.
+	QAR_GUI_PANEL_GESTURE_KIND_LONG_PRESS = 2,
+	/// A contact that travelled past the tap threshold. A lifecycle: started at
+	/// the threshold crossing, updated per changed content position, ended on
+	/// release, canceled when the contact is taken away.
+	QAR_GUI_PANEL_GESTURE_KIND_DRAG = 3
+} QarGuiPanelGestureKind;
+
+/**
+ * @brief A position on a GUI panel, in panel-content-space pixels.
+ *
+ * Panel content space (see QarGuiPanelSize): origin at the top-left corner of
+ * the displayed image as the viewer sees it, x increasing right and y
+ * increasing down. Both are clamped to the image, so x_pixels is in [0,
+ * content_width - 1] and y_pixels in [0, content_height - 1] of the image the
+ * renderer is currently displaying - for a stream panel, the video exactly as
+ * its sender draws it: the renderer receives it at the sender's own resolution
+ * (ADR-0149), and a position on a video the renderer has scrolled is the pixel
+ * under the finger, not one relative to the visible part (ADR-0150).
+ *
+ * Signed for headroom, and a closed pair: a contact's depth off the glass, if
+ * it is ever reported, arrives as its own accessor rather than as a member
+ * here.
+ */
+typedef struct QarGuiPanelPoint
+{
+	int32_t x_pixels;
+	int32_t y_pixels;
+} QarGuiPanelPoint;
 
 // ============================================================================
 // GEO / WORLD COORDINATE TYPES
@@ -576,7 +878,7 @@ typedef enum QarHandedness
 typedef struct QarGeoAnchorFrame
 {
 	QarWorldReferenceSystem world_ref_system;
-	QarVector3d origin_world; // Origin in world reference system
+	QarVector3d origin_world; // Origin in world reference system (ECEF metres)
 	QarVector3d axis_x_world; // Local +X axis (unit vector)
 	QarVector3d axis_y_world; // Local +Y axis (unit vector)
 	QarVector3d axis_z_world; // Local +Z axis (unit vector)
@@ -593,10 +895,43 @@ typedef struct QarAppWorldAnchor
 // APP VOLUME TYPES
 // ============================================================================
 
+/**
+ * @brief The three frames every app volume API is expressed in.
+ *
+ * An app volume is a cuboid placed in the room that reserves the region a
+ * remote 3D application renders into.
+ *
+ * **Room space** is the session's shared tracking space: right-handed, metres,
+ * +Y up. QarAppVolumeInit::pose, qar_app_volumes_change_pose() and
+ * qar_app_volume_get_pose() are given in it.
+ *
+ * **App volume space** is the frame that pose defines. Its origin is the
+ * *centre of the cuboid* - not a corner, and not a point on the floor - and its
+ * axes are right-handed, laid out so that an unrotated volume stands upright in
+ * the room:
+ * - +X spans width_meters,
+ * - +Y spans height_meters and points up,
+ * - +Z spans length_meters, the horizontal depth.
+ * The cuboid therefore covers x in [-width_meters/2, +width_meters/2], y in
+ * [-height_meters/2, +height_meters/2] and z in
+ * [-length_meters/2, +length_meters/2].
+ *
+ * **App content space** is the coordinate system of the application rendering
+ * into the volume. QarAppVolumeInit::app_pose and
+ * qar_app_volumes_change_app_pose() place that application's origin inside app
+ * volume space, in volume metres; QarAppVolumeInit::app_scale converts app
+ * metres into volume metres. Nothing clips the application to the cuboid - the
+ * volume states where the app is meant to be, and gestures and layout are
+ * derived from it.
+ */
 typedef struct QarAppVolumeSize
 {
+	/// Cuboid extent along app-volume-space X, in metres.
 	float width_meters;
+	/// Cuboid extent along app-volume-space Z - the horizontal depth - in
+	/// metres.
 	float length_meters;
+	/// Cuboid extent along app-volume-space Y - the vertical rise - in metres.
 	float height_meters;
 } QarAppVolumeSize;
 
@@ -606,6 +941,9 @@ typedef enum QarAppVolumeLifetimeStatus
 	QAR_APP_VOLUME_CLOSED = 1
 } QarAppVolumeLifetimeStatus;
 
+/** @brief Whether a peer is editing the volume itself - moving or resizing its
+ *  box. A peer manipulating the app with a gesture is not editing it; see
+ *  qar_app_volume_get_gesture_holder(). */
 typedef struct QarAppVolumeEditingStatus
 {
 	bool is_being_edited;
@@ -619,38 +957,24 @@ typedef enum QarGestureKind
 	/* Single-pointer hover over a targetable surface or volume. */
 	QAR_GESTURE_HOVER = 1,
 	/* Single-pointer 6DoF manipulation gesture.
-	   translation_delta is the accumulated hand-position offset in world space.
-	   rotation_delta is the accumulated hand-orientation offset in world space.
+	   translation_delta is the accumulated hand-position offset, and
+	   rotation_delta the accumulated hand-orientation offset, both in the
+	   target volume's app volume space and shaped by its mapping rule.
 	 */
 	QAR_GESTURE_SINGLE_POINTER_6DOF = 2,
-	/* Dual-pointer distance-change gesture in the user's head-local frame.
-	   translation_delta stores the accumulated per-axis change of absolute
-	   inter-hand distance: x = left/right spread, y = up/down spread, z =
-	   forward/back spread. */
+	/* Dual-pointer distance-change gesture in the user's head-yaw frame.
+	   translation_delta stores the accumulated change of the distance between
+	   the two hands as a vector along their separation: every component is
+	   that change weighted by the axis' share of the separation (x =
+	   left/right, y = up/down, z = forward/back), all share one sign, and the
+	   vector's length is the distance change. Measured between the hands, not
+	   between the points their rays strike. */
 	QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE = 3,
-	/* Dual-pointer rotation gesture based on rotation of the inter-hand vector
-	   in head-local space. rotation_delta is expressed in user/head-local axes,
-	   so yaw/pitch/roll extraction matches the user's local y/x/z axes
-	   respectively. */
+	/* Dual-pointer rotation gesture based on rotation of the inter-hand vector.
+	   The rotation is recognised about the user's head-yaw axes; rotation_delta
+	   reports it in the target volume's app volume space. */
 	QAR_GESTURE_DUAL_POINTER_ROTATE = 4
 } QarGestureKind;
-
-typedef enum QarGesturePhase
-{
-	/* Matches qar::GesturePhase::Started. Gesture lifecycle entered the active
-	 * state. */
-	QAR_GESTURE_PHASE_STARTED = 0,
-	/* Matches qar::GesturePhase::Updated. Gesture lifecycle produced an update
-	 * while active. */
-	QAR_GESTURE_PHASE_UPDATED = 1,
-	/* Matches qar::GesturePhase::Ended. Gesture lifecycle ended normally. */
-	QAR_GESTURE_PHASE_ENDED = 2,
-	/* Matches qar::GesturePhase::Instant. Gesture completed as a single event.
-	 */
-	QAR_GESTURE_PHASE_INSTANT = 3,
-	/* Matches qar::GesturePhase::Canceled. Gesture lifecycle was canceled. */
-	QAR_GESTURE_PHASE_CANCELED = 4
-} QarGesturePhase;
 
 typedef enum QarAppVolumeAxisFlags
 {
@@ -706,31 +1030,6 @@ typedef struct QarAppVolumeControllerRayStyle
 	QarColor color;
 } QarAppVolumeControllerRayStyle;
 
-typedef struct QarAppVolumeGestureEvent
-{
-	QarPeerId source_peer_id;
-	QarAppVolumeId target_app_volume_id;
-	QarGestureKind gesture_kind;
-	QarGesturePhase state;
-	QarTimePoint timestamp;
-	bool has_start_point;
-	/// Point in room/app-volume space, in meters, where the controller was
-	/// when the gesture started.
-	QarVector3 start_point;
-	bool has_action_point;
-	/// Point in room/app-volume space, in meters, on which the gesture is
-	/// applied. When `has_action_point` is false, receivers should fall back to
-	/// a context-specific default such as the center of the target app volume.
-	QarVector3 action_point;
-	/// Accumulated translation from gesture start, in meters. Dual-pointer
-	/// axial gestures may still report a full 3D separation delta, which can
-	/// later be filtered by app-volume axis constraints.
-	QarVector3 translation_delta;
-	/// Accumulated rotation delta from gesture start, as a quaternion.
-	QarQuaternion rotation_delta;
-	bool was_mapped_to_app_transform;
-} QarAppVolumeGestureEvent;
-
 // ============================================================================
 // INIT STRUCTURES
 // ============================================================================
@@ -752,18 +1051,30 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT = 0x1006,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT = 0x1007,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
+	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME_VIEW_OVERRIDES_EXT = 0x3004,
+	QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT = 0x3005,
 	QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT = 0x4000,
+	/// 0x4001 was QarStreamParamsOpenGl, one struct for all three context
+	/// types. Retired rather than reused: the layout behind it changed.
+	QAR_STRUCTURE_TYPE_STREAM_OPENGL_EGL_PARAMS_EXT = 0x4003,
+	QAR_STRUCTURE_TYPE_STREAM_OPENGL_WGL_PARAMS_EXT = 0x4004,
+	QAR_STRUCTURE_TYPE_STREAM_OPENGL_GLX_PARAMS_EXT = 0x4005,
+	QAR_STRUCTURE_TYPE_STREAM_VULKAN_PARAMS_EXT = 0x4002,
 	QAR_STRUCTURE_TYPE_GUI_PANEL_INIT = 0x5001,
+	QAR_STRUCTURE_TYPE_GUI_PANEL_STREAM_ID_EXT = 0x5002,
+	QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT = 0x5003,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_INIT = 0x5501,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_MAPPING_RULE = 0x5502,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION = 0x5503,
+	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_ALLOWED_PEERS_EXT = 0x5504,
 } QarStructureType;
 
 // All data structures have consistent header
@@ -809,6 +1120,20 @@ typedef struct QarAppVolumeGestureMappingRule
 
 #define QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES 16
 
+/**
+ * @brief Names one of an app volume's gesture modes.
+ *
+ * A mode is one set of mapping rules a volume's peers can be switched between.
+ * Ids other than QAR_APP_VOLUME_GESTURE_MODE_DEFAULT are the application's to
+ * choose.
+ */
+typedef uint32_t QarAppVolumeGestureModeId;
+
+/** @brief The mode every app volume has and cannot remove, and the one every
+ * peer is in until it is switched. QarAppVolumeInit::gesture_configuration and
+ * qar_app_volumes_change_gesture_configuration() set its rules. */
+#define QAR_APP_VOLUME_GESTURE_MODE_DEFAULT ((QarAppVolumeGestureModeId)0)
+
 typedef struct QarAppVolumeGestureConfiguration
 {
 	/// Extensible struct header. Set with
@@ -824,6 +1149,28 @@ typedef struct QarAppVolumeGestureConfiguration
 		mapping_rules[QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES];
 	size_t mapping_rule_count;
 } QarAppVolumeGestureConfiguration;
+
+/**
+ * @brief Extension: the peers whose gestures may move or scale the app.
+ *
+ * Chain from QarAppVolumeGestureConfiguration::header.next. A configuration
+ * without it, or with no peers in it, lets every peer's gestures move and
+ * scale the app. A gesture from a peer not in the list still reaches the
+ * app, unmapped, so the app knows about it; only the app transform is kept
+ * from it. A configuration is replaced whole, so chain the extension every
+ * time the configuration is changed. Read the list back with
+ * qar_app_volume_get_gesture_allowed_peers().
+ *
+ * Whatever the list, only one peer at a time manipulates a volume: the first
+ * whose manipulation binds holds it until that manipulation ends. See
+ * qar_app_volume_get_gesture_holder().
+ */
+typedef struct QarAppVolumeGestureAllowedPeersExt
+{
+	QarStructureHeader header;
+	const QarPeerId* allowed_peers;
+	size_t allowed_peer_count;
+} QarAppVolumeGestureAllowedPeersExt;
 
 /** @brief Logging severity filter. */
 typedef enum QarLogSeverity
@@ -849,6 +1196,9 @@ typedef struct QarLibraryInit
 typedef struct QarRuntimeInit
 {
 	QarStructureHeader header;
+	/// The SDK `bin` folder - the one the shared library was loaded from, not
+	/// the application folder. The runtime starts `qar-runtime-launcher` from
+	/// here, and without it qar_session_invite_peer() never completes.
 	const char* runtime_binaries_folder_path;
 	/// Root directory where device certificates and session state are stored.
 	/// If NULL or empty, defaults to platform specific application data folder.
@@ -860,6 +1210,16 @@ typedef struct QarRuntimeInit
 // ============================================================================
 // ONBOARDING TYPES
 // ============================================================================
+#if 0 // Obsolete pre-onboarding session API.
+typedef struct QarRuntimeJoinInit
+{
+	// Attach QarGraphicsDeviceId through header.next to select the adapter.
+	QarStructureHeader header;
+	const char*
+		launcher_config_json; // Optional JSON object for launcher config
+} QarRuntimeJoinInit;
+
+#endif // Obsolete pre-onboarding session API.
 
 /**
  * @brief Identity slot key, generated by the runtime on first onboard.
@@ -897,6 +1257,53 @@ typedef void (*qar_progress_callback_t)(
 	const char* message,
 	void* user_state
 );
+
+#if 0 // Obsolete pre-onboarding session API.
+/**
+ * @brief Legacy presentation arguments for qar_session_join.
+ *
+ * Retained for ABI compatibility. New onboarding callers use
+ * QarPeerPresentation instead.
+ */
+typedef struct QarPeerSpecInit
+{
+	QarStructureHeader header;
+	QarPeerId* id;			  // Optional, can be NULL
+	const char* display_name; // Optional, can be NULL. Will get generated name
+	const char* app_version;  // Optional, can be NULL
+	const char* app_custom_peer_info; // Optional, can be NULL
+} QarPeerSpecInit;
+
+typedef struct QarSessionCreateInit
+{
+	// Attach QarGraphicsDeviceId through header.next to select the adapter.
+	QarStructureHeader header;
+	QarSessionId* session_id; // Optional session ID
+	const char*
+		launcher_config_json; // Optional JSON object for launcher config
+} QarSessionCreateInit;
+
+typedef struct QarSessionJoinInit
+{
+	// Attach QarGraphicsDeviceId through header.next to select the adapter.
+	QarStructureHeader header;
+	const uint8_t* invite_data;
+	size_t invite_data_size;
+	QarPeerSpecInit peer_spec_init;
+} QarSessionJoinInit;
+
+/**
+ * @brief Legacy connection-string invite arguments.
+ *
+ * Retained for ABI compatibility; new callers request QarOnboardingInvite.
+ */
+typedef struct QarSessionInvitePeerInit
+{
+	QarStructureHeader header;
+	const char* connection_string;
+} QarSessionInvitePeerInit;
+
+#endif // Obsolete pre-onboarding session API.
 
 /**
  * @brief Which onboarding path a QarOnboardingInvite carries.
@@ -1001,6 +1408,23 @@ typedef struct QarOnboardInviteExt
 } QarOnboardInviteExt;
 
 /**
+ * @brief Extension: join the session under a peer id chosen by the caller.
+ *
+ * Chain into QarOnboardInit.header.next, next to the mode extension. For a
+ * process whose peer id was planned by someone else - the runtime launcher
+ * assigns one to every process it starts and reports it to the rest of the
+ * session - so the process must appear under that id. Absent, onboarding mints
+ * a fresh id. The id is persisted with the slot, so a later rejoin keeps it.
+ */
+typedef struct QarOnboardPeerIdExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT */
+	/// Required; a zero id is rejected.
+	QarPeerId peer_id;
+} QarOnboardPeerIdExt;
+
+/**
  * @brief Mint an invite to hand to a sibling instance (session-scoped).
  *
  * Deliberately empty: the invite is always requested from the hub this
@@ -1012,6 +1436,58 @@ typedef struct QarRequestInviteInit
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT */
 } QarRequestInviteInit;
+
+/**
+ * @brief Ask this machine's hub to start a target app for one AR device.
+ *
+ * `connection_string` names the device kind and its address:
+ *   - `"hololens:<host>"` — HoloLens
+ *   - `"quest:<host>"`    — Meta Quest
+ *   - `"android:<host>"`  — Android streamer
+ * `<host>` is a hostname or an IP address; the two are interchangeable. A bare
+ * `"<host>"` with no scheme is accepted as the legacy spelling of
+ * `"hololens:<host>"`.
+ *
+ * Only these device kinds can be invited. Anything else — a visualizer, a
+ * desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ *
+ * The invite is served only by the hub running on this machine, and is always a
+ * one-time invite: the hub remembers the device so it is visible in the
+ * visualizer, but never marks it for automatic re-invite. Only an operator
+ * acting in the visualizer can do that.
+ *
+ * If another hub in the federation is already hosting a target app for the same
+ * host, that one is stopped before this one starts — a device is served by one
+ * hub at a time.
+ */
+typedef struct QarSessionInviteTargetAppInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT */
+	/// Required; see above for the accepted spellings.
+	const char* connection_string;
+} QarSessionInviteTargetAppInit;
+
+/**
+ * @brief Result callback for qar_session_invite_target_app_async.
+ *
+ * Fires exactly once — on success, on error, and on cancellation. `peer_id` is
+ * valid only during the callback and only when `status` is success.
+ */
+typedef void (*qar_target_app_invite_result_callback_t)(
+	QarResult status, const QarPeerId* peer_id, void* user_state
+);
+
+/**
+ * @brief Result callback for qar_session_kill_target_app_async.
+ *
+ * Fires exactly once. A request for a target app this machine's hub did not
+ * start is neither served nor refused by any hub, so it completes with a
+ * timeout rather than an authorization error.
+ */
+typedef void (*qar_target_app_kill_result_callback_t)(
+	QarResult status, const QarPeerId* peer_id, void* user_state
+);
 
 /** @brief Teardown — erase a persisted identity slot. */
 typedef struct QarForgetInit
@@ -1067,6 +1543,15 @@ typedef struct QarLuid
 } QarLuid;
 #endif
 
+/**
+ * @brief Selects the graphics adapter used while initializing a C API session.
+ *
+ * Chain this extension from QarOnboardInit or QarRejoinInit. The session's
+ * Vulkan and D3D11 devices, and with them every render sender's frame
+ * textures, are created on this adapter; absent, the library picks one.
+ * Windows accepts a LUID; other platforms accept a UUID.
+ * The C API currently supports NVIDIA adapters only.
+ */
 typedef struct QarGraphicsDeviceId
 {
 	QarStructureHeader header;
@@ -1077,6 +1562,12 @@ typedef struct QarGraphicsDeviceId
 
 typedef struct QarGuiPanelInit
 {
+	/**
+	 * Chain exactly one supported content extension through header.next:
+	 * QarGuiPanelUrlExt for browser content or QarGuiPanelStreamIdExt for video
+	 * stream content. With no content extension, a browser panel is created
+	 * with the default URL.
+	 */
 	QarStructureHeader header;
 	/// Required stable identity key used by gui_panels_get_or_create()
 	/// to derive the panel's id. Must not be NULL.
@@ -1088,7 +1579,31 @@ typedef struct QarGuiPanelInit
 	size_t visible_to_peer_count;
 } QarGuiPanelInit;
 
-// TODO: add header extentions for different content types
+/**
+ * @brief Extension that creates a GUI panel showing a logical video stream.
+ *
+ * Chain this structure from QarGuiPanelInit::header.next. Without this
+ * extension, qar_gui_panels_add_panel() creates the existing website-content
+ * panel. The stream must identify a video sender owned by the same session;
+ * the panel receiver is allocated from that sender's layout.
+ */
+typedef struct QarGuiPanelStreamIdExt
+{
+	QarStructureHeader header;
+	QarStreamId stream_id;
+} QarGuiPanelStreamIdExt;
+
+/**
+ * @brief Extension that creates a GUI panel showing a website URL.
+ *
+ * Chain this structure from QarGuiPanelInit::header.next. The URL string is
+ * copied during qar_gui_panels_add_panel() and need not remain alive afterward.
+ */
+typedef struct QarGuiPanelUrlExt
+{
+	QarStructureHeader header;
+	const char* url;
+} QarGuiPanelUrlExt;
 
 // Volume initialization parameters
 typedef struct QarAppVolumeInit
@@ -1099,13 +1614,21 @@ typedef struct QarAppVolumeInit
 	/// be NULL.
 	const char* common_name;
 	const char* display_name;
+	/// Placement of the cuboid's centre in room space, and the rotation taking
+	/// app volume space into room space. See the QarAppVolumeSize
+	/// documentation.
 	QarPose pose;
+	/// Cuboid extents, in metres, along app-volume-space X/Z/Y.
 	QarAppVolumeSize size;
 	const QarPeerId** initial_peers;
 	size_t initial_peer_count;
+	/// Origin of the rendering application inside app volume space, in volume
+	/// metres, relative to the cuboid centre. Unlike `pose` this is not a room
+	/// -space pose, and app_scale does not scale it.
 	QarPose app_pose;
-	/// Room-space-per-app-space scale. 1.0 means 1 m in app coordinates renders
-	/// as 1 m in the app volume. 0.5 means 1 m in app coordinates renders as
+	/// Room-metres per app-metre: the factor between app content space and app
+	/// volume space. 1.0 means 1 m in app coordinates renders as 1 m in the app
+	/// volume. 0.5 means 1 m in app coordinates renders as
 	/// 0.5 m in the app volume, so the app appears smaller. 10.0 means 1 m in
 	/// app coordinates renders as 10 m in the app volume, so the app appears
 	/// bigger. App pose remains in app-volume meters and is not scaled.
@@ -1116,10 +1639,40 @@ typedef struct QarAppVolumeInit
 	const QarAppVolumeGestureConfiguration* gesture_configuration;
 } QarAppVolumeInit;
 
+/**
+ * @brief Rendering stream sender configuration.
+ *
+ * Backend-specific graphics context/device configuration is supplied through
+ * `header.next`. Exactly one extension is required for a GPU API:
+ * - QAR_GRAPHICS_API_D3D11 requires QarStreamParamsD3D11.
+ * - QAR_GRAPHICS_API_OPENGL requires exactly one of
+ *   QarStreamParamsOpenGlEgl, QarStreamParamsOpenGlWgl or
+ *   QarStreamParamsOpenGlGlx, whichever matches the context you own.
+ * - QAR_GRAPHICS_API_VULKAN requires QarStreamParamsVulkan.
+ * QAR_GRAPHICS_API_CPU supports no extension and requires `header.next` to be
+ * null. The selected extension's `header.next` must also be null.
+ */
 typedef struct QarRenderSenderInit
 {
+	/// Extensible header; see the backend-specific stream parameter structs.
 	QarStructureHeader header;
-	// Required: Who is target peer id this stream should streaming for
+	/// Required. The peer this stream renders *for* - the headset or viewer
+	/// that will receive these frames, never this process' own peer id.
+	///
+	/// Subscribe with qar_render_sender_subscribe_requests() to discover peers
+	/// requesting this application's content. In each callback read
+	/// qar_render_request_get_target_peer_id(), then create one sender and a
+	/// camera per target on the application's render thread. Keep subscribing
+	/// so later users get their own cameras too; deduplicate repeated requests.
+	///
+	/// When the application invites a device itself,
+	/// qar_session_invite_target_app() also returns a usable target peer id.
+	/// Peer updates describe state changes; a peer joining alone does not mean
+	/// that it requested this application's rendered content.
+	///
+	/// qar_peer_id_unique() does **not** produce a usable value here: it mints
+	/// a fresh id belonging to no peer, so a stream created with one is
+	/// negotiated with nobody and never produces a frame.
 	QarPeerId peer_id;
 
 	/// In case of stream failure caused by network issue or other side crash we
@@ -1134,8 +1687,12 @@ typedef struct QarRenderSenderInit
 	QarRenderFrameView frame_views[QAR_MAX_FRAME_VIEWS];
 	size_t frame_views_count;
 
-	/// Optional app volume ID where this stream will be displayed in the 3D
-	/// scene
+	/// Required. The app volume this stream is displayed in, which is what
+	/// places it in the session's shared 3D scene. Create the volume first with
+	/// qar_app_volumes_get_or_create() and pass the id it wrote out; a stream
+	/// without one is not positioned in the scene and no viewer can show it.
+	///
+	/// NULL is rejected with QAR_STATUS_APP_VOLUME_INVALID_ID.
 	const QarAppVolumeId* app_volume_id;
 
 	/// Color pixel format
@@ -1144,6 +1701,8 @@ typedef struct QarRenderSenderInit
 	/// Depth pixel format
 	QarPixelFormat depth_format;
 
+	/// Selects the backend and therefore the matching optional header
+	/// extension.
 	QarGraphicsAPI graphics_api;
 } QarRenderSenderInit;
 
@@ -1167,6 +1726,169 @@ typedef struct QarStreamParamsD3D11
 } QarStreamParamsD3D11;
 #endif
 
+#ifdef QAR_ENABLE_OPENGL
+/**
+ * @brief The thread's current OpenGL binding, as the library saw it.
+ *
+ * Handed to QarOpenGlContextCallbacks::capture_current to be filled, and back
+ * to ::restore_current to be put back, so the library can make its own context
+ * current on a thread the application also uses and leave that thread as it
+ * found it. The field names are deliberately generic because one struct serves
+ * all three context types: read them according to the extension you passed.
+ */
+typedef struct QarOpenGlContextThreadState
+{
+	/// EGLDisplay, HDC or Display* according to the extension in use.
+	void* display_or_device_context;
+	/// EGLSurface or GLXDrawable. Unused for WGL.
+	uintptr_t draw_surface;
+	/// EGLSurface. Unused for WGL and GLX.
+	uintptr_t read_surface;
+	/// EGLContext, HGLRC or GLXContext according to the extension in use.
+	void* context;
+	/// False when the thread had no context bound. The other fields are then
+	/// meaningless; see ::restore_current for what to do with it.
+	bool has_context;
+} QarOpenGlContextThreadState;
+
+typedef void* (*qar_opengl_get_proc_address_callback_t)(
+	void* user_state, const char* name
+);
+typedef bool (*qar_opengl_context_action_callback_t)(void* user_state);
+typedef QarOpenGlContextThreadState (*qar_opengl_capture_current_callback_t)(
+	void* user_state
+);
+typedef bool (*qar_opengl_restore_current_callback_t)(
+	void* user_state, const QarOpenGlContextThreadState* state
+);
+
+/**
+ * @brief Optional context-aware overrides, shared by every OpenGL extension.
+ *
+ * All of them are optional and all are called on the library's internal
+ * graphics thread. Leave one NULL and the library uses its own platform
+ * implementation for that step. Supply them when the application owns the
+ * context and wants every make-current to go through its own bookkeeping.
+ *
+ * These four are what the library actually calls, through
+ * qar::opengl::ScopedOpenGlContextBinding: it captures what is current, makes
+ * the application's context current, and restores afterwards.
+ *
+ * They come as one struct so that the three context-type extensions carry an
+ * identical control surface; only the handles differ between them.
+ */
+typedef struct QarOpenGlContextCallbacks
+{
+	/// Passed unchanged to every callback below; may be NULL.
+	void* user_state;
+	/// Resolves a GL entry point: eglGetProcAddress, wglGetProcAddress or
+	/// glXGetProcAddressARB. NULL uses the platform loader.
+	qar_opengl_get_proc_address_callback_t get_proc_address;
+	/// Binds the extension's context to the calling thread: eglMakeCurrent,
+	/// wglMakeCurrent or glXMakeContextCurrent with the handles you passed.
+	qar_opengl_context_action_callback_t make_current;
+	/// Reads the thread's current binding before ::make_current replaces it:
+	/// eglGetCurrentDisplay/Surface/Context, wglGetCurrentDC/Context or
+	/// glXGetCurrentDisplay/Drawable/Context.
+	qar_opengl_capture_current_callback_t capture_current;
+	/// Re-binds what ::capture_current read, once the library is done: the same
+	/// MakeCurrent call with the state's fields.
+	///
+	/// If `has_context` is false the thread had nothing bound, so bind nothing:
+	/// eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT),
+	/// wglMakeCurrent(NULL, NULL) or glXMakeContextCurrent(dpy, None, None,
+	/// NULL).
+	qar_opengl_restore_current_callback_t restore_current;
+} QarOpenGlContextCallbacks;
+
+/**
+ * @brief Extension: adopt an existing EGL context.
+ *
+ * Chain on QarRenderSenderInit::header.next or
+ * QarVideoSenderInit::header.next with QAR_GRAPHICS_API_OPENGL.
+ */
+typedef struct QarStreamParamsOpenGlEgl
+{
+	/// Set with qar_stream_params_opengl_egl_default().
+	QarStructureHeader header;
+	/// EGLDisplay.
+	void* display;
+	/// EGLSurface used for drawing.
+	uintptr_t draw_surface;
+	/// EGLSurface used for reading.
+	uintptr_t read_surface;
+	/// EGLContext. Required; a null context is rejected.
+	void* context;
+	QarOpenGlContextCallbacks callbacks;
+} QarStreamParamsOpenGlEgl;
+
+/**
+ * @brief Extension: adopt an existing WGL context.
+ *
+ * Chain on QarRenderSenderInit::header.next or
+ * QarVideoSenderInit::header.next with QAR_GRAPHICS_API_OPENGL.
+ */
+typedef struct QarStreamParamsOpenGlWgl
+{
+	/// Set with qar_stream_params_opengl_wgl_default().
+	QarStructureHeader header;
+	/// HDC the context was created against.
+	void* device_context;
+	/// HGLRC. Required; a null context is rejected.
+	void* context;
+	QarOpenGlContextCallbacks callbacks;
+} QarStreamParamsOpenGlWgl;
+
+/**
+ * @brief Extension: adopt an existing GLX context.
+ *
+ * Chain on QarRenderSenderInit::header.next or
+ * QarVideoSenderInit::header.next with QAR_GRAPHICS_API_OPENGL.
+ */
+typedef struct QarStreamParamsOpenGlGlx
+{
+	/// Set with qar_stream_params_opengl_glx_default().
+	QarStructureHeader header;
+	/// X11 Display*.
+	void* display;
+	/// GLXDrawable.
+	uintptr_t drawable;
+	/// GLXContext. Required; a null context is rejected.
+	void* context;
+	QarOpenGlContextCallbacks callbacks;
+} QarStreamParamsOpenGlGlx;
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+typedef struct QarStreamParamsVulkan
+{
+	QarStructureHeader header;
+	VkPhysicalDevice physical_device;
+	VkDevice device;
+} QarStreamParamsVulkan;
+#endif
+
+/**
+ * Configuration for a logical video sender whose StreamId is generated by the
+ * library. Exactly one extension is required for a GPU API:
+ * - QAR_GRAPHICS_API_D3D11 requires QarStreamParamsD3D11.
+ * - QAR_GRAPHICS_API_OPENGL requires exactly one of
+ *   QarStreamParamsOpenGlEgl, QarStreamParamsOpenGlWgl or
+ *   QarStreamParamsOpenGlGlx, whichever matches the context you own.
+ * - QAR_GRAPHICS_API_VULKAN requires QarStreamParamsVulkan.
+ * QAR_GRAPHICS_API_CPU supports no extension and requires `header.next` to be
+ * null. The selected extension's `header.next` must also be null. Retrieve the
+ * generated id with qar_video_sender_stream_id().
+ */
+typedef struct QarVideoSenderInit
+{
+	QarStructureHeader header;
+	QarVideoFrameLayout layout;
+	bool enable_reconnects;
+	uint64_t reconnect_timeout_ms;
+	QarGraphicsAPI graphics_api;
+} QarVideoSenderInit;
+
 /**
  * @brief Parameters describing how to present/show a rendered frame.
  *
@@ -1176,7 +1898,10 @@ typedef struct QarStreamParamsD3D11
 typedef struct QarRenderFrameShow
 {
 	QarStructureHeader header;
+	/// The near and far the frame was rendered with, in app units.
 	QarNearFar rendered_near_far;
+	/// Factor from the depth buffer's units to the view poses' units. The
+	/// sender folds in the app scale itself; do not include it here.
 	float depth_scale;
 } QarRenderFrameShow;
 
@@ -1186,7 +1911,10 @@ typedef struct QarRenderFrameViewOverride
 	size_t view_index;
 	bool override_pose;
 	bool override_fov;
+	/// The pose the view was really rendered with, in app content space, the
+	/// space qar_render_frame_info_get_view_pose() hands it out in.
 	QarPose pose;
+	/// In view space.
 	QarFov fov;
 } QarRenderFrameViewOverride;
 
@@ -1220,7 +1948,15 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @ingroup qar_c_api
  * @brief Dynamic library load/unload helpers for the C API.
  * @{ */
-/** @brief Load the shared library from a custom path for dynamic mode. */
+/**
+ * @brief Load the shared library from a custom path for dynamic mode.
+ *
+ * @param library_path Path to the library **file** itself, for example
+ *        `<sdk>/bin/qar-streaming-c.dll`, absolute or relative to the current
+ *        working directory. The SDK's own dependency libraries are resolved
+ *        from that same folder, so the folder must stay intact.
+ * @return true on success. Call this before qar_library_init().
+ */
 static inline bool qar_library_load(const char* library_path);
 /** @brief Unload the shared library previously loaded. */
 static inline void qar_library_unload(void);
@@ -1350,6 +2086,12 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
 /**
  * @brief Create a runtime instance that can host sessions and streams.
  *
+ * QarRuntimeInit::runtime_binaries_folder_path must name the SDK `bin` folder,
+ * the one the shared library itself was loaded from. That is where the runtime
+ * finds `qar-runtime-launcher`, the process that answers
+ * qar_session_invite_target_app() and starts the device applications. Left
+ * empty, the runtime still creates sessions but no peer can ever be invited.
+ *
  * @param init Runtime initialization parameters.
  * @param out_runtime Out pointer receiving the created runtime handle.
  * @return QarResult Success or error code.
@@ -1398,9 +2140,15 @@ static inline QarOnboardCodeExt qar_onboard_code_ext_default(void);
 static inline QarOnboardHostExt qar_onboard_host_ext_default(void);
 /** @brief Default init for QarOnboardInviteExt. */
 static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
+/** @brief Default init for QarOnboardPeerIdExt (zero peer id; set it). */
+static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
 /** @brief Default init for QarForgetInit. */
+/** @brief Default init for QarSessionInviteTargetAppInit. */
+static inline QarSessionInviteTargetAppInit
+qar_session_invite_target_app_init_default(void);
+
 static inline QarForgetInit qar_forget_init_default(void);
 
 /**
@@ -1410,6 +2158,9 @@ static inline QarForgetInit qar_forget_init_default(void);
  * Blocks until the restore validated or failed. Progress callbacks fire from
  * an internal thread while the caller is blocked; the last progress callback
  * returns before the call does.
+ *
+ * Chain QarGraphicsDeviceId on init->header.next to create the session's GPU
+ * devices on that adapter. The peer id is the one persisted by the onboard.
  *
  * @param runtime Runtime the identity slot belongs to.
  * @param init Rejoin parameters (fully copied before the call returns).
@@ -1458,6 +2209,13 @@ static inline QarResult qar_runtime_rejoin_async(
  * QarOnboardHostExt is optional and only applies when QarOnboardCodeExt is
  * chained.
  *
+ * Optional, alongside the mode extension:
+ * - QarOnboardPeerIdExt: join under a caller-chosen peer id instead of a fresh
+ *   one; the id is persisted with the slot and kept by every later rejoin.
+ * - QarGraphicsDeviceId: create the session's GPU devices on this adapter.
+ *
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED QarOnboardPeerIdExt carries a zero
+ *   peer id, or QarGraphicsDeviceId names an unsupported adapter.
  * @param out_onboarding_id Required; receives the generated (or re-enrolled)
  *   id. Persist it — it is the ticket for every later rejoin / forget.
  * @param out_session Receives the onboarded session handle on success.
@@ -1624,17 +2382,157 @@ static inline void qar_session_handle_destroy(QarSession* handle);
 static inline QarResult
 qar_session_get_id(const QarSession* session, QarSessionId* out_session_id);
 
-/**
- * @brief Invite a peer to the current session.
- * @param session Active session handle.
- * @param init Invitation parameters containing connection string.
- * @param cancel Optional cancellation token for invite (can be NULL).
- * @param out_peer_id Output parameter receiving the invited peer id.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string names an
- *   unsupported device — rebuild it with a
- *   qar_session_invite_connection_string_* helper.
+/** @brief Find an already-connected render target from its connection string.
  */
+static inline QarResult qar_session_find_render_target(
+	const QarSession* session, const char* connection, QarPeerId* out_peer
+);
+
 /** @} */ /* end of qar_c_session */
+
+// ============================================================================
+// TARGET APPS
+// ============================================================================
+
+/**
+ * @defgroup qar_c_target_apps Target Apps
+ * @ingroup qar_c_api
+ *
+ * Starting and stopping the target app for one AR device. A *target app* is the
+ * process a hub runs on this machine to drive a HoloLens or an Android headset;
+ * the hub owns its whole lifecycle, and these calls ask the hub to act.
+ *
+ * Two rules hold for every call in this group.
+ *
+ * - **Only this machine's hub answers.** Both the invite and the kill carry
+ * this machine's hardware id, and every other hub in the session ignores them.
+ * An application can start and stop target apps on its own hub and no other. An
+ *   operator working in the QAROS Visualizer can reach any hub; an application
+ *   cannot, by construction.
+ * - **An invite is one-time.** The hub remembers the device so it shows up in
+ *   the visualizer's device list, but never marks it for automatic re-invite.
+ *   Only an operator in the visualizer can do that.
+ *
+ * A device is served by one hub at a time. Inviting a device that another hub
+ * is already hosting stops it there first, then starts it here.
+ * @{ */
+
+/**
+ * @brief Ask this machine's hub to start the target app for one AR device.
+ *
+ * Blocking form of qar_session_invite_target_app_async. Returns once the hub
+ * has started the target app and its peer has joined the session.
+ *
+ * @param session Active session handle.
+ * @param init Invite parameters; see QarSessionInviteTargetAppInit.
+ * @param on_progress Optional progress callback (can be NULL). Never fires
+ *   after this call returns.
+ * @param progress_state User pointer passed to on_progress unchanged.
+ * @param cancel Optional cancellation token (can be NULL).
+ * @param out_peer Receives the target app's peer id. Untouched on failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string is malformed,
+ *   or names a device kind that cannot be invited - rebuild it with a
+ *   qar_target_app_connection_string_* helper.
+ */
+static inline QarResult qar_session_invite_target_app(
+	QarSession* session,
+	const QarSessionInviteTargetAppInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarPeerId* out_peer
+);
+
+/**
+ * @brief Ask this machine's hub to start the target app for one AR device.
+ * @param session Active session handle.
+ * @param init Invite parameters; see QarSessionInviteTargetAppInit.
+ * @param result_callback Fires exactly once with the outcome. Required.
+ * @param update_callback Optional progress callback (can be NULL).
+ * @param user_state User pointer passed to both callbacks unchanged.
+ * @param cancel Optional cancellation token (can be NULL).
+ */
+static inline QarResult qar_session_invite_target_app_async(
+	QarSession* session,
+	const QarSessionInviteTargetAppInit* init,
+	qar_target_app_invite_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Ask this machine's hub to stop a target app it started.
+ *
+ * Stops the target app and the whole streaming pipeline feeding it. A request
+ * for a target app this machine's hub did not start is not served by any hub,
+ * so it ends in a timeout rather than an authorization error - there is
+ * deliberately no way for an application to learn about, or act on, another
+ * hub's target apps.
+ *
+ * @param session Active session handle.
+ * @param target_app Peer id returned by qar_session_invite_target_app.
+ * @param on_progress Optional progress callback (can be NULL).
+ * @param progress_state User pointer passed to on_progress unchanged.
+ * @param cancel Optional cancellation token (can be NULL).
+ */
+static inline QarResult qar_session_kill_target_app(
+	QarSession* session,
+	const QarPeerId* target_app,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Ask this machine's hub to stop a target app it started.
+ * @param session Active session handle.
+ * @param target_app Peer id returned by qar_session_invite_target_app.
+ * @param result_callback Fires exactly once with the outcome. Required.
+ * @param update_callback Optional progress callback (can be NULL).
+ * @param user_state User pointer passed to both callbacks unchanged.
+ * @param cancel Optional cancellation token (can be NULL).
+ */
+static inline QarResult qar_session_kill_target_app_async(
+	QarSession* session,
+	const QarPeerId* target_app,
+	qar_target_app_kill_result_callback_t result_callback,
+	qar_progress_callback_t update_callback,
+	void* user_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Build the connection string for a HoloLens target app.
+ * @param host Device hostname or IP address. Must not be NULL or empty.
+ * @param buffer Output buffer for the NUL-terminated connection string.
+ * @param buffer_size Size of buffer in bytes.
+ */
+static inline QarResult qar_target_app_connection_string_hololens(
+	const char* host, char* buffer, size_t buffer_size
+);
+
+/**
+ * @brief Build the connection string for a Meta Quest target app.
+ * @param host Device hostname or IP address. Must not be NULL or empty.
+ * @param buffer Output buffer for the NUL-terminated connection string.
+ * @param buffer_size Size of buffer in bytes.
+ */
+static inline QarResult qar_target_app_connection_string_quest(
+	const char* host, char* buffer, size_t buffer_size
+);
+
+/**
+ * @brief Build the connection string for an Android streamer target app.
+ * @param host Device hostname or IP address. Must not be NULL or empty.
+ * @param buffer Output buffer for the NUL-terminated connection string.
+ * @param buffer_size Size of buffer in bytes.
+ */
+static inline QarResult qar_target_app_connection_string_android(
+	const char* host, char* buffer, size_t buffer_size
+);
+
+/** @} */ /* end of qar_c_target_apps */
 
 // ============================================================================
 // PEER MANAGEMENT
@@ -1683,7 +2581,15 @@ qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
 /** @brief Query number of known peer specs. */
 static inline QarResult
 qar_query_peer_specs_count(QarSession* session, size_t* out_count);
-/** @brief Enumerate peer specs into user-provided array. */
+/**
+ * @brief Enumerate peer specs into user-provided array.
+ *
+ * Size the array with qar_query_peer_specs_count(). The list also contains this
+ * process' own peer; qar_session_get_my_spec() identifies it. Match
+ * qar_peer_spec_get_id() against the id qar_session_invite_target_app()
+ * returned to find an invited peer, and read qar_peer_spec_get_app_state() to
+ * see whether it is ready.
+ */
 static inline QarResult qar_query_peer_specs(
 	QarSession* session,
 	QarPeerSpec** out_handles,
@@ -1697,7 +2603,13 @@ qar_peer_update_display_name(QarSession* session, const char* name);
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
 );
-/** @brief Subscribe for asynchronous peer spec updates. */
+/**
+ * @brief Subscribe for asynchronous peer spec updates.
+ *
+ * The push form of qar_query_peer_specs(), and the way to learn that a peer
+ * invited with qar_session_invite_target_app() has joined and reached
+ * QAR_APP_STATE_RUNNING.
+ */
 static inline QarResult qar_peer_subscribe_updates(
 	QarSession* session,
 	qar_peer_update_callback_t callback,
@@ -1718,7 +2630,30 @@ static inline QarResult qar_peer_subscribe_updates(
 // Forward declarations
 /** @brief Destroy a render stream sender handle. */
 static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
-/** @brief Subscribe to pending render stream requests for this session. */
+/** @brief Discover rendering targets by subscribing to their render stream
+ * requests.
+ *
+ * Subscribe once after obtaining a session and keep the subscription alive to
+ * discover further viewers as they request this application's content. A peer
+ * merely joining the session is not a render request.
+ *
+ * In the callback, read qar_render_request_get_target_peer_id(), then enqueue
+ * that id for the application's render thread. Create one sender (and a camera
+ * using its per-frame pose/FOV) per target peer, with that id in
+ * QarRenderSenderInit::peer_id. Create the app volume before creating senders.
+ * Repeated requests for a target already served do not require another sender.
+ *
+ * Callbacks run asynchronously, so synchronize handoff to the render thread.
+ * Release each delivered request with qar_render_request_handle_destroy().
+ * Keep user_state alive until subscription teardown has completed.
+ *
+ * @param session Active session.
+ * @param callback Required callback for each pending request.
+ * @param user_state Application state passed unchanged to the callback.
+ * @param token Optional cancellation token; otherwise subscription lasts until
+ * session teardown.
+ * @return Success when subscribed, or a subscription setup error.
+ */
 static inline QarResult qar_render_sender_subscribe_requests(
 	QarSession* session,
 	qar_render_sender_request_callback_t callback,
@@ -1741,10 +2676,28 @@ static inline QarResult qar_render_request_get_stream_id(
 );
 /**
  * @brief Create a rendering stream sender bound to a session.
+ *
+ * **`init->peer_id` is the peer this stream renders for**, not this process'
+ * own id. It comes from qar_session_invite_target_app(), which brings the peer
+ * into the session and writes its id out; the async form hands it to the result
+ * callback. Create one sender per invited peer.
+ * qar_render_sender_subscribe_requests() discovers targets requesting this
+ * application's content; read qar_render_request_get_target_peer_id() in its
+ * callback and create one sender per target. qar_peer_subscribe_updates() is
+ * the secondary path for observing peer state. A fresh qar_peer_id_unique()
+ * belongs to no peer: a stream created with one negotiates with nobody and
+ * never produces a frame.
+ *
+ * **`init->app_volume_id` must name an app volume that already exists.** The
+ * volume is what places the stream in the shared 3D scene, so create it first
+ * with qar_app_volumes_get_or_create() and pass the id it returns.
+ *
  * @param session Active session handle.
- * @param init Stream configuration (views, formats, target peer, etc.).
+ * @param init Stream configuration (views, formats, target peer, app volume).
  * @param cancel Optional cancellation token for creation.
  * @param out_stream Receives the created stream sender handle.
+ * @return QarResult QAR_STATUS_APP_VOLUME_INVALID_ID when no app volume id is
+ *         given.
  */
 static inline QarResult qar_render_sender_create(
 	QarSession* session,
@@ -1763,35 +2716,68 @@ static inline QarResult qar_render_sender_create_async(
 	void* user_state,
 	QarCancelToken* token
 );
-/** @brief Retrieve the current video frame layout. */
+/**
+ * @brief Retrieve the negotiated video frame layout.
+ *
+ * Available as soon as the sender exists: it is what the stream request settled
+ * on, so it can be read before the first begin-frame and while a transfer is
+ * reconnecting. Size lasting resources from this rather than from a frame that
+ * has not arrived yet.
+ */
 static inline QarResult qar_render_sender_layout(
 	QarRenderSender* stream, QarVideoFrameLayout* out_layout
 );
-/** @brief Request a layout change for subsequent frames. */
+/**
+ * @brief Request a layout change for subsequent frames.
+ *
+ * Not callable inside a frame cycle: between a successful begin-frame and its
+ * qar_render_sender_show_frame() it returns QAR_STATUS_LOGIC_ERROR and changes
+ * nothing.
+ */
 static inline QarResult qar_render_sender_change_layout(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	QarCancelToken* token
+	QarRenderSender* stream, const QarVideoFrameLayout* layout
 );
-typedef void (*qar_render_sender_change_layout_callback_t)(
-	QarResult status, void* user_state
-);
-/** @brief Async version of change_layout. */
-static inline QarResult qar_render_sender_change_layout_async(
-	QarRenderSender* stream,
-	const QarVideoFrameLayout* layout,
-	qar_render_sender_change_layout_callback_t callback,
-	void* user_state,
-	QarCancelToken* token
-);
-/** @brief Get CPU-backed frame write access. */
+/**
+ * @brief Get CPU-backed frame access.
+ *
+ * The frame exists from creation, so it may be read -- textures, views, sizes
+ * -- before the first begin-frame. Its contents and synchronization may be
+ * written only inside a frame cycle.
+ */
 static inline QarResult qar_render_sender_frame_cpu(
 	QarRenderSender* stream, QarVideoFrameCpu* out_frame
 );
 #ifdef QAR_ENABLE_D3D11
-/** @brief Get D3D11-backed frame write access. */
+/**
+ * @brief Get D3D11-backed frame access. Readable before the first begin-frame;
+ * writable only inside a frame cycle.
+ */
 static inline QarResult qar_render_sender_frame_d3d11(
 	QarRenderSender* stream, QarVideoFrameD3D11* out_frame
+);
+#endif
+#ifdef QAR_ENABLE_OPENGL
+/**
+ * @brief Get OpenGL-backed frame access. Readable before the first begin-frame;
+ * writable only inside a frame cycle.
+ */
+static inline QarResult qar_render_sender_frame_opengl(
+	QarRenderSender* stream, QarVideoFrameOpenGl* out_frame
+);
+#endif
+#ifdef QAR_ENABLE_VULKAN
+/**
+ * @brief Get sender-owned Vulkan frame access and current image state.
+ *
+ * Readable from creation, before the first begin-frame, so a caller can create
+ * its own resources against the real images during initialization. The returned
+ * pointer remains valid until the next call to this function or sender
+ * destruction. Update final layouts, queue ownership, and synchronization on
+ * this frame -- inside a frame cycle -- before calling
+ * qar_render_sender_show_frame().
+ */
+static inline QarResult qar_render_sender_frame_vulkan(
+	QarRenderSender* stream, QarVideoFrameVulkan** out_frame
 );
 #endif
 
@@ -1804,6 +2790,23 @@ static inline QarResult qar_render_sender_begin_frame(
 	QarRenderSender* stream,
 	QarCancelToken* token,
 	QarRenderFrameInfo** out_frame_info
+);
+/**
+ * @brief Non-blocking attempt to begin producing a new frame.
+ *
+ * Starts the begin-frame wait on the first call and polls it on every call
+ * without blocking. When the wait has completed, @p out_ready is set to true
+ * and
+ * @p out_frame_info receives the per-frame information; otherwise @p out_ready
+ * is set to false and the caller should poll again later. The returned
+ * QarResult reports only real failures (invalid arguments, a failed
+ * begin-frame); a still-pending wait is reported through @p out_ready, not as
+ * an error. Poll with the same @p stream until @p out_ready becomes true.
+ */
+static inline QarResult qar_render_sender_try_begin_frame(
+	QarRenderSender* stream,
+	QarRenderFrameInfo** out_frame_info,
+	bool* out_ready
 );
 typedef void (*qar_render_sender_begin_frame_callback_t)(
 	QarResult status, QarRenderFrameInfo* frame_info, void* user_state
@@ -1822,7 +2825,22 @@ static inline QarResult qar_render_sender_show_frame(
 	QarRenderSender* stream, const QarRenderFrameShow* frame_show
 );
 /**
- * @brief Query the last tracked hands data associated with the stream.
+ * @brief Query the newest hands data the device sent since the previous call.
+ *
+ * Drains everything that arrived and returns the last sample. The poses are in
+ * the bound app volume's app content space, like the view poses; joint radii
+ * and velocities are not converted and stay in room metres and room axes.
+ * Samples arrive only while the target peer is focused on the volume and not
+ * editing it. When nothing arrived since the previous call, the last sample is
+ * returned again while it is younger than a second, so polling faster than the
+ * device sends never blinks the hands out between its samples. Once no sample
+ * has arrived for a second, both hands are reported untracked: a device that
+ * stopped sending has no hands. Poll it once per frame.
+ *
+ * @param stream The render sender.
+ * @param out_hands Receives the newest sample, the last one while it is younger
+ * than a second, or a sample with both hands untracked.
+ * @return Success, or an error once the hand stream has closed.
  */
 static inline QarResult qar_render_sender_last_hands(
 	QarRenderSender* stream, QarDeviceHandsWithJoints* out_hands
@@ -1832,14 +2850,108 @@ static inline bool
 qar_render_frame_info_handle_is_valid(QarRenderFrameInfo* handle);
 static inline void
 qar_render_frame_info_handle_destroy(QarRenderFrameInfo* handle);
+/**
+ * @brief The pose to render one view with, in the bound app volume's app
+ * content space.
+ *
+ * The sender has already taken the viewer's room-space pose through the
+ * volume's pose, app pose and app scale, so the application renders its scene
+ * in its own coordinates. A view of eye QAR_VIDEO_FRAME_VIEW_EYE_NONE gets the
+ * head pose.
+ */
 static inline QarResult qar_render_frame_info_get_view_pose(
 	QarRenderFrameInfo* handle, size_t view_index, QarPose* out_pose
 );
+/**
+ * @brief The field of view of one view, in view space, in radians. A view of
+ *        eye QAR_VIDEO_FRAME_VIEW_EYE_NONE gets the left eye's.
+ */
 static inline QarResult qar_render_frame_info_get_view_fov(
 	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
 );
 
 /** @} */ /* end of qar_c_render_sender */
+
+// ============================================================================
+// VIDEO SENDER API
+// ============================================================================
+
+/**
+ * @defgroup qar_c_video_sender Video Sender
+ * @ingroup qar_c_api
+ * @{ */
+
+/** Destroy a logical video sender handle. */
+static inline void qar_video_sender_handle_destroy(QarVideoSender* handle);
+
+/**
+ * @brief Create a producer-owned logical video stream.
+ *
+ * Unlike QarRenderSender, which answers a receiver-driven render request and
+ * supplies per-frame tracking data for stereoscopic rendering, QarVideoSender
+ * owns a library-generated StreamId and may exist before any receiver connects.
+ * Its caller supplies an arbitrary video layout, begins a cycle only when at
+ * least one destination is ready, writes the sender-owned frame, and shows it
+ * without render poses, FOVs, or presentation metadata. Use QarRenderSender for
+ * remote-rendering frames requested by a particular consumer; use
+ * QarVideoSender for application-owned video such as GUI panel content.
+ *
+ * Select CPU, D3D11, OpenGL, or Vulkan ingress through
+ * QarVideoSenderInit::graphics_api and attach the matching stream-parameter
+ * extension when external graphics objects are required. Call
+ * qar_video_sender_stream_id() to publish the generated identity.
+ */
+static inline QarResult qar_video_sender_create(
+	QarSession* session,
+	const QarVideoSenderInit* init,
+	QarVideoSender** out_sender
+);
+
+/** Retrieve the sender-owned CPU frame during an acquired send cycle. */
+static inline QarResult
+qar_video_sender_frame_cpu(QarVideoSender* sender, QarVideoFrameCpu* out_frame);
+
+#ifdef QAR_ENABLE_D3D11
+static inline QarResult qar_video_sender_frame_d3d11(
+	QarVideoSender* sender, QarVideoFrameD3D11* out_frame
+);
+#endif
+#ifdef QAR_ENABLE_OPENGL
+static inline QarResult qar_video_sender_frame_opengl(
+	QarVideoSender* sender, QarVideoFrameOpenGl* out_frame
+);
+#endif
+#ifdef QAR_ENABLE_VULKAN
+static inline QarResult qar_video_sender_frame_vulkan(
+	QarVideoSender* sender, QarVideoFrameVulkan** out_frame
+);
+#endif
+
+/** Retrieve the stable logical StreamId. */
+static inline QarResult
+qar_video_sender_stream_id(QarVideoSender* sender, QarStreamId* out_stream_id);
+
+/** Retrieve or change the CPU ingress layout. */
+static inline QarResult qar_video_sender_layout(
+	QarVideoSender* sender, QarVideoFrameLayout* out_layout
+);
+static inline QarResult qar_video_sender_change_layout(
+	QarVideoSender* sender, const QarVideoFrameLayout* layout
+);
+
+/**
+ * @brief Non-blocking attempt to begin producing a new frame.
+ *
+ * Sets @p out_ready to true when a send cycle was reserved. When false, no
+ * frame cycle exists and the caller should poll again later.
+ */
+static inline QarResult
+qar_video_sender_try_begin_frame(QarVideoSender* sender, bool* out_ready);
+
+/** Show the produced frame to the destinations reserved by try_begin_frame. */
+static inline QarResult qar_video_sender_show_frame(QarVideoSender* sender);
+
+/** @} */ /* end of qar_c_video_sender */
 
 // ============================================================================
 // GUI PANELS API
@@ -1851,7 +2963,13 @@ static inline QarResult qar_render_frame_info_get_view_fov(
  * @{ */
 // Forward declarations
 /** @brief Get the panel identified by init->common_name, creating it (via
- * init) if it does not exist yet. */
+ * init) if it does not exist yet.
+ * QarGuiPanelInit supports QarGuiPanelUrlExt for browser content and
+ * QarGuiPanelStreamIdExt for logical-stream content. Chain exactly one through
+ * QarGuiPanelInit::header.next. With neither extension, the panel starts with
+ * the default website content. Stream receiver resolution is taken from the
+ * session-owned sender identified by QarGuiPanelStreamIdExt::stream_id.
+ */
 static inline QarResult qar_gui_panels_get_or_create(
 	QarSession* session,
 	const QarGuiPanelInit* init,
@@ -1876,9 +2994,23 @@ static inline QarResult qar_gui_panels_set_state(
 static inline QarResult
 qar_gui_panels_close_panel(QarSession* session, const QarGuiPanelId* id);
 
-/** @brief Navigate a panel to a given URI (e.g., web content). */
+/**
+ * @brief Navigate an existing website panel to a URI.
+ *
+ * Stream panels return QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED because a
+ * panel's content type is fixed at creation.
+ */
 static inline QarResult qar_gui_panels_navigate_to_uri(
 	QarSession* session, const QarGuiPanelId* id, const char* uri
+);
+
+/**
+ * Replace an existing stream panel's StreamId. The ID must identify a video
+ * sender owned by this session; its current layout determines receiver
+ * resolution. Website panels return QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED.
+ */
+static inline QarResult qar_gui_panels_set_stream(
+	QarSession* session, const QarGuiPanelId* id, const QarStreamId* stream_id
 );
 
 /** @brief Update which peers can see the panel. */
@@ -1907,6 +3039,228 @@ static inline QarResult qar_gui_panels_subscribe_panel_updates(
 	qar_gui_panel_update_callback_t callback,
 	void* user_state,
 	QarCancelToken* token
+);
+
+/**
+ * @brief Receives one recognised gesture on a subscribed GUI panel.
+ *
+ * @p gesture is an opaque handle to library-owned storage, valid **only for the
+ * duration of this call**. Read what you need through the
+ * qar_gui_panel_gesture_get_*() accessors and copy anything the application
+ * keeps; the handle must not be stored. @p user_state is the pointer handed to
+ * the subscribe call. The callback runs on a library background thread, so it
+ * must not block and must not call back into a subscribe function.
+ *
+ * It is a handle rather than a struct so the event can gain fields - a
+ * contact's depth off the glass, a pressure, a viewport rect - by appending an
+ * accessor, which is an additive change, instead of growing a struct, which
+ * would break every compiled consumer.
+ */
+typedef void (*qar_gui_panel_gesture_event_callback_t)(
+	QarGuiPanelGesture* gesture, void* user_state
+);
+
+/**
+ * @brief Subscribe to the gestures the rendering peers report for one panel.
+ *
+ * Panel input is one stream of gestures: hover, tap, long press and drag, each
+ * carrying the QarGesturePhase lifecycle and a gesture id that pairs a started
+ * phase with its updates and its end. The peer that draws the panel recognises
+ * them from its user's hand joints - the thresholds are physical, in
+ * millimetres of hand travel against tracking jitter, which a consumer seeing
+ * only content pixels cannot reproduce. The consumer decides for itself whether
+ * a drag is a slider or a scroll.
+ *
+ * **One subscription delivers one kind**, the same way
+ * qar_app_volumes_subscribe_gesture_events() does. A consumer that wants
+ * several kinds subscribes several times. Every kind still travels on the one
+ * panel topic and the filtering happens on the receiving side, so a
+ * subscription never misses an event of its kind; what it does not get is an
+ * order guarantee *between* its subscriptions. Where that matters - a hover and
+ * a drag from the same contact - take both kinds on one subscription's worth of
+ * state and reconcile them on the gesture id, which is shared across kinds
+ * within a source peer.
+ *
+ * **Several producers publish here.** Recognition happens once per user, in the
+ * mixer that serves that user, so a panel several users can see carries one
+ * publisher per user on this single topic. Therefore:
+ * - The gesture id is unique only within a source peer id. Key lifecycles on
+ *   the pair that qar_gui_panel_gesture_get_lifecycle() returns together: two
+ *   users' first drags both carry gesture id 1. A consumer that keys on the
+ *   gesture id alone works perfectly until a second user joins.
+ * - Ordering holds within one producer's stream, not across producers. That is
+ *   sufficient, because no lifecycle spans two producers.
+ * - A source peer id never seen before is a new user, not an error, and
+ *   per-user interaction state - a slider's value while it is being dragged -
+ *   is held per peer so two users do not fight over one.
+ * - A live lifecycle is republished every 250 ms even when nothing changed.
+ *   Treat one silent for three of those intervals as cancelled. That, and not
+ *   the peer list, is what recovers a producer that crashed: the source peer id
+ *   is the headset, while the process that can die is the mixer, which the
+ *   event does not name.
+ * - A started phase that was never seen is recoverable, because every update
+ *   carries its start position.
+ *
+ * Every panel reports gestures, QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI panels
+ * included: nothing branches on content type on the publish path.
+ *
+ * @param session Session owning the panel; must not be NULL.
+ * @param id Panel to observe; must not be NULL, and the default all-zero id is
+ *           rejected with QAR_STATUS_GUI_PANEL_INVALID_ID.
+ * @param gesture_kind The single gesture kind this subscription delivers;
+ *                     subscribe again for another kind.
+ * @param callback Invoked for every gesture event of that kind; must not be
+ *                 NULL.
+ * @param user_state Opaque pointer passed back to @p callback; may be NULL.
+ * @param token Cancel token ending the subscription, or NULL to keep it alive
+ *              until the session is destroyed.
+ * @return QarResult Success once the subscription is running.
+ */
+static inline QarResult qar_gui_panels_subscribe_gesture_events(
+	QarSession* session,
+	const QarGuiPanelId* id,
+	QarGuiPanelGestureKind gesture_kind,
+	qar_gui_panel_gesture_event_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
+/**
+ * @brief Subscribe to every gesture kind on one panel, through one callback.
+ *
+ * The unfiltered counterpart of qar_gui_panels_subscribe_gesture_events(): same
+ * stream, same handle, no kind filter. It is a separate function rather than a
+ * sentinel value in QarGuiPanelGestureKind, because that enum is also what
+ * qar_gui_panel_gesture_get_classification() returns and a value that is not a
+ * kind has no meaning there.
+ *
+ * **Prefer this when you take more than one kind.** Everything arrives on one
+ * reader, so a hover and the drag that grows out of the same contact keep the
+ * order the producer published them in. Several per-kind subscriptions are
+ * separate readers and have no order relative to each other. Dispatch on the
+ * kind from qar_gui_panel_gesture_get_classification().
+ *
+ * @param session Session owning the panel; must not be NULL.
+ * @param id Panel to observe; must not be NULL, and the default all-zero id is
+ *           rejected with QAR_STATUS_GUI_PANEL_INVALID_ID.
+ * @param callback Invoked for every gesture event of every kind; must not be
+ *                 NULL.
+ * @param user_state Opaque pointer passed back to @p callback; may be NULL.
+ * @param token Cancel token ending the subscription, or NULL to keep it alive
+ *              until the session is destroyed.
+ * @return QarResult Success once the subscription is running.
+ */
+static inline QarResult qar_gui_panels_subscribe_all_gesture_events(
+	QarSession* session,
+	const QarGuiPanelId* id,
+	qar_gui_panel_gesture_event_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
+/**
+ * @brief The lifecycle this gesture belongs to: the peer and the gesture id.
+ *
+ * They are returned together because they are one key. The gesture id is unique
+ * only within @p out_source_peer_id, so a consumer that stores lifecycles must
+ * key on the pair. The id is non-zero and stable for one hover or drag
+ * lifecycle, and 0 for tap and long press, which are instant.
+ *
+ * The peer is the one whose hand produced the gesture - NOT the peer that
+ * recognised it. A mixer runs under its own peer id and publishes for the
+ * target peer it serves.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_source_peer_id Receives the producing peer; must not be NULL.
+ * @param out_gesture_id Receives the lifecycle id; must not be NULL.
+ */
+static inline QarResult qar_gui_panel_gesture_get_lifecycle(
+	QarGuiPanelGesture* gesture,
+	QarPeerId* out_source_peer_id,
+	uint64_t* out_gesture_id
+);
+
+/**
+ * @brief What this gesture is and where in its lifecycle it sits.
+ *
+ * Returned together because a consumer dispatches on both at once. Both are
+ * enums, so a future gesture kind or phase is a new enumerator rather than a
+ * change to this call. @p out_kind always equals the kind the subscription
+ * asked for; read it so one callback can serve several subscriptions.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_kind Receives hover, tap, long press or drag; must not be NULL.
+ * @param out_phase Receives started, updated, ended, canceled or instant; must
+ *                  not be NULL.
+ */
+static inline QarResult qar_gui_panel_gesture_get_classification(
+	QarGuiPanelGesture* gesture,
+	QarGuiPanelGestureKind* out_kind,
+	QarGesturePhase* out_phase
+);
+
+/**
+ * @brief Where the contact is now, and where its lifecycle began.
+ *
+ * Returned together because they are read together: a drag's travel is
+ * @p out_position minus @p out_start_position, and a frame-to-frame delta is
+ * the difference against the previous event of the same lifecycle. For instant
+ * kinds - tap and long press - the two are equal.
+ *
+ * Both are in panel-content-space pixels; see QarGuiPanelPoint. A contact
+ * outside the letterboxed content rectangle cannot *start* a lifecycle, but a
+ * live one follows the clamped pixel to the edge and stays there, so a drag
+ * that overshoots commits its end value.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_position Receives the current contact position; must not be NULL.
+ * @param out_start_position Receives where this lifecycle began; must not be
+ *                           NULL.
+ */
+static inline QarResult qar_gui_panel_gesture_get_positions(
+	QarGuiPanelGesture* gesture,
+	QarGuiPanelPoint* out_position,
+	QarGuiPanelPoint* out_start_position
+);
+
+/**
+ * @brief The panel this gesture landed on.
+ *
+ * Always the panel the subscription named, so a callback serving one panel can
+ * skip this and read it from its user_state instead.
+ */
+static inline QarResult qar_gui_panel_gesture_get_panel_id(
+	QarGuiPanelGesture* gesture, QarGuiPanelId* out_panel_id
+);
+
+/**
+ * @brief When the recogniser emitted this gesture, on its own clock.
+ *
+ * Not the device's sample time: device clocks are neither comparable nor
+ * monotonic across producers, so this is comparable only within one
+ * source peer id.
+ */
+static inline QarResult qar_gui_panel_gesture_get_timestamp(
+	QarGuiPanelGesture* gesture, QarTimePoint* out_timestamp
+);
+
+/**
+ * @brief Which hand of the producing peer made the contact.
+ *
+ * Diagnostic: only one hand of a peer is active at a time, so a consumer does
+ * not need this to arbitrate.
+ */
+static inline QarResult
+qar_gui_panel_gesture_get_hand(QarGuiPanelGesture* gesture, QarHand* out_hand);
+
+/**
+ * @brief How many taps in this run, for QAR_GUI_PANEL_GESTURE_KIND_TAP.
+ *
+ * 1, 2, 3 ... for taps close enough together in time and space. 0 for every
+ * other kind.
+ */
+static inline QarResult qar_gui_panel_gesture_get_tap_count(
+	QarGuiPanelGesture* gesture, uint8_t* out_tap_count
 );
 
 static inline QarResult
@@ -1938,6 +3292,14 @@ qar_gui_panel_get_size(QarGuiPanel* handle, QarGuiPanelSize* out_size);
 
 static inline QarResult qar_gui_panel_get_content_uri(
 	QarGuiPanel* handle, char* out_uri, size_t buffer_size
+);
+
+static inline QarResult qar_gui_panel_get_content_type(
+	QarGuiPanel* handle, QarGuiPanelContentType* out_type
+);
+
+static inline QarResult qar_gui_panel_get_content_stream_id(
+	QarGuiPanel* handle, QarStreamId* out_stream_id
 );
 
 static inline QarResult
@@ -2033,8 +3395,23 @@ static inline QarResult qar_app_volumes_change_pose(
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
 );
+/**
+ * @brief Receives one mapped gesture on a subscribed app volume.
+ *
+ * @p gesture is an opaque handle to library-owned storage, valid **only for the
+ * duration of this call**. Read what you need through the
+ * qar_app_volume_gesture_get_*() accessors and copy anything the application
+ * keeps; the handle must not be stored. @p user_state is the pointer handed to
+ * the subscribe call. The callback runs on a library background thread, so it
+ * must not block and must not call back into a subscribe function.
+ *
+ * It is a handle rather than a struct so the event can gain fields - a scale
+ * delta, a per-hand breakdown, a confidence - by appending an accessor, which
+ * is an additive change, instead of growing a struct, which would break every
+ * compiled consumer. This mirrors qar_gui_panel_gesture_event_callback_t.
+ */
 typedef void (*qar_app_volume_gesture_event_callback_t)(
-	const QarAppVolumeGestureEvent* event, void* user_state
+	QarAppVolumeGesture* gesture, void* user_state
 );
 /** @brief Subscribe to updates for app volumes. */
 static inline QarResult qar_app_volumes_subscribe_updates(
@@ -2043,14 +3420,261 @@ static inline QarResult qar_app_volumes_subscribe_updates(
 	void* user_state,
 	QarCancelToken* token
 );
-/** @brief Subscribe to filtered gesture updates for a specific app volume. */
-static inline QarResult qar_app_volumes_subscribe_gesture_updates(
+/**
+ * @brief Subscribe to one kind of mapped gesture on a specific app volume.
+ *
+ * The gestures a peer performs against the volume are recognised by the peer
+ * that renders it and mapped through the volume's
+ * QarAppVolumeGestureConfiguration before they arrive here, so what the
+ * callback receives is already expressed in the target volume's frame and
+ * already filtered by that volume's mapping rules.
+ *
+ * **Several producers publish here.** Recognition happens once per user, so a
+ * volume several users can reach carries one publisher per user on this topic.
+ * There is no gesture id: a peer runs at most one gesture of a kind against a
+ * volume at a time, so the lifecycle key is the source peer and the target
+ * volume from qar_app_volume_gesture_get_lifecycle() together with the kind
+ * from qar_app_volume_gesture_get_classification(). Ordering holds within one
+ * producer's stream, not across producers, which is sufficient because no
+ * lifecycle spans two producers. A source peer id never seen before is a new
+ * user, not an error, so per-user interaction state is held per peer.
+ *
+ * @param session Session owning the volume; must not be NULL.
+ * @param volume_id Volume to observe; must not be NULL.
+ * @param gesture_kind The single gesture kind this subscription delivers.
+ * @param callback Invoked for every matching gesture event; must not be NULL.
+ * @param user_state Opaque pointer passed back to @p callback; may be NULL.
+ * @param token Cancel token ending the subscription, or NULL to keep it alive
+ *              until the session is destroyed.
+ * @return QarResult Success once the subscription is running.
+ */
+static inline QarResult qar_app_volumes_subscribe_gesture_events(
 	QarSession* session,
 	const QarAppVolumeId* volume_id,
 	QarGestureKind gesture_kind,
 	qar_app_volume_gesture_event_callback_t callback,
 	void* user_state,
 	QarCancelToken* token
+);
+
+/**
+ * @brief Subscribe to every gesture kind on one app volume, through one
+ *        callback.
+ *
+ * The unfiltered counterpart of qar_app_volumes_subscribe_gesture_events():
+ * same stream, same handle, no kind filter. It is a separate function rather
+ * than a sentinel value in QarGestureKind, because that enum is also what
+ * qar_app_volume_gesture_get_classification() returns and a value that is not a
+ * kind has no meaning there.
+ *
+ * **Prefer this when you take more than one kind.** Everything arrives on one
+ * reader, so gestures a peer performs against the volume keep the order the
+ * producer published them in; several per-kind subscriptions are separate
+ * readers with no order relative to each other. Dispatch on the kind from
+ * qar_app_volume_gesture_get_classification().
+ *
+ * Only the volume's mapping rules decide what is published at all - this
+ * removes the C API's kind filter, not the volume's
+ * QarAppVolumeGestureConfiguration.
+ *
+ * @param session Session owning the volume; must not be NULL.
+ * @param volume_id Volume to observe; must not be NULL.
+ * @param callback Invoked for every gesture event of every kind; must not be
+ *                 NULL.
+ * @param user_state Opaque pointer passed back to @p callback; may be NULL.
+ * @param token Cancel token ending the subscription, or NULL to keep it alive
+ *              until the session is destroyed.
+ * @return QarResult Success once the subscription is running.
+ */
+static inline QarResult qar_app_volumes_subscribe_all_gesture_events(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	qar_app_volume_gesture_event_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
+/**
+ * @brief The lifecycle this gesture belongs to: the peer and the target volume.
+ *
+ * They are returned together because they are one key. This event carries no
+ * gesture id, so a consumer that stores lifecycles keys on this pair plus the
+ * kind from qar_app_volume_gesture_get_classification(); a peer runs at most
+ * one gesture of a kind against a volume at a time.
+ *
+ * The peer is the one whose hand or controller produced the gesture - NOT the
+ * peer that recognised it. A mixer runs under its own peer id and publishes for
+ * the target peer it serves. The volume is always the one the subscription
+ * named, so a callback serving one volume can read it from its user_state
+ * instead.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_source_peer_id Receives the producing peer; must not be NULL.
+ * @param out_target_app_volume_id Receives the volume acted on; must not be
+ *                                 NULL.
+ */
+static inline QarResult qar_app_volume_gesture_get_lifecycle(
+	QarAppVolumeGesture* gesture,
+	QarPeerId* out_source_peer_id,
+	QarAppVolumeId* out_target_app_volume_id
+);
+
+/**
+ * @brief What this gesture is and where in its lifecycle it sits.
+ *
+ * Returned together because a consumer dispatches on both at once. Both are
+ * enums, so a future gesture kind or phase is a new enumerator rather than a
+ * change to this call. @p out_kind always equals the kind the subscription
+ * asked for; read it so one callback can serve several subscriptions.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_kind Receives the gesture kind; must not be NULL.
+ * @param out_phase Receives started, updated, ended, canceled or instant; must
+ *                  not be NULL.
+ */
+static inline QarResult qar_app_volume_gesture_get_classification(
+	QarAppVolumeGesture* gesture,
+	QarGestureKind* out_kind,
+	QarGesturePhase* out_phase
+);
+
+/**
+ * @brief Where the gesture is acting now, and where its lifecycle began.
+ *
+ * Both are in app content space - the space the source app renders in - and
+ * in app units, under the app pose and scale the gesture began with. Both are
+ * optional: each point comes with its own validity flag rather than a sentinel
+ * value, because the origin is a legal position.
+ *
+ * - The start point is the hand: where it was when the gesture began, and for
+ *   a hover where it is now. A two-hand gesture starts midway between the
+ *   hands.
+ * - The action point is the intersection the gesture acts on, or the start
+ *   point when nothing was intersected, so it is absent only when the start
+ *   point is too. For a drag it is the content the gesture grabbed.
+ * - An absent point is zeroed, never left stale.
+ *
+ * Returned together because they are read together: from the start point to
+ * the action point is the ray the user is pointing along, which an app can
+ * draw itself. The travel of a gesture is its delta, not their difference.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_action_point Receives the point the gesture is applied to; must
+ *                         not be NULL.
+ * @param out_has_action_point Receives whether @p out_action_point was filled;
+ *                             must not be NULL.
+ * @param out_start_point Receives where this lifecycle began; must not be NULL.
+ * @param out_has_start_point Receives whether @p out_start_point was filled;
+ *                            must not be NULL.
+ */
+static inline QarResult qar_app_volume_gesture_get_points(
+	QarAppVolumeGesture* gesture,
+	QarVector3* out_action_point,
+	bool* out_has_action_point,
+	QarVector3* out_start_point,
+	bool* out_has_start_point
+);
+
+/**
+ * @brief The rigid motion accumulated since the gesture started, and whether
+ *        the library already applied it.
+ *
+ * @p out_translation_delta is a vector and @p out_rotation_delta a
+ * quaternion; together they are one rigid transform, which is why they are read
+ * as a pair. Both are in the target volume's **app volume space** - not app
+ * content space, unlike the points - and both are shaped by the volume's
+ * mapping rule: the translation is scaled by its precision and scale
+ * sensitivity, so it is in metres only for precision 1 with constant
+ * sensitivity, and both are masked by its axis flags.
+ * QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE is the exception for the
+ * translation: it is the change of the distance between the hands as a vector
+ * along their separation in the user's head-yaw frame, whose length is that
+ * change, and it is not rotated into the volume.
+ *
+ * @p out_was_mapped_to_app_transform belongs with them: it is true when the
+ * volume's QarGestureAppTransformMapping already folded this delta into the
+ * volume's app pose or app scale, so a consumer that applies it again moves the
+ * content twice. Reading a delta without it is a double-apply bug, which is why
+ * it is not a separate call.
+ *
+ * A gesture kind that later gains a scale delta gets its own accessor rather
+ * than a fourth out-parameter here.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_translation_delta Receives the accumulated translation; must not
+ *                              be NULL.
+ * @param out_rotation_delta Receives the accumulated rotation; must not be
+ *                           NULL.
+ * @param out_was_mapped_to_app_transform Receives whether the library already
+ *                                        applied the delta; must not be NULL.
+ */
+static inline QarResult qar_app_volume_gesture_get_deltas(
+	QarAppVolumeGesture* gesture,
+	QarVector3* out_translation_delta,
+	QarQuaternion* out_rotation_delta,
+	bool* out_was_mapped_to_app_transform
+);
+
+/**
+ * @brief When the recogniser emitted this gesture, on its own clock.
+ *
+ * Not the device's sample time: device clocks are neither comparable nor
+ * monotonic across producers, so this is comparable only within one source peer
+ * id.
+ */
+static inline QarResult qar_app_volume_gesture_get_timestamp(
+	QarAppVolumeGesture* gesture, QarTimePoint* out_timestamp
+);
+
+/**
+ * @brief Which hand the gesture came from.
+ *
+ * A gesture of one hand -- hover, click, single-pointer 6DoF -- names it. A
+ * gesture of both hands together, QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE
+ * and QAR_GESTURE_DUAL_POINTER_ROTATE, has none, and @p out_has_hand is false.
+ * Two hovers that arrive together are the user's two rays, told apart by this.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_hand Receives the hand; set to QAR_HAND_LEFT when there is none,
+ *                 never left stale. Must not be NULL.
+ * @param out_has_hand Receives whether the gesture came from one hand; must not
+ *                     be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
+ */
+static inline QarResult qar_app_volume_gesture_get_hand(
+	QarAppVolumeGesture* gesture, QarHand* out_hand, bool* out_has_hand
+);
+
+/**
+ * @brief The gesture's lifecycle id.
+ *
+ * The same for a gesture's Started, Updated and Ended or Canceled, and unique
+ * within its source peer, so a consumer pairs a lifecycle by the source peer
+ * and this id. 0 for a QAR_GESTURE_PHASE_INSTANT gesture, which has no
+ * lifecycle.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_gesture_id Receives the id; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
+ */
+static inline QarResult qar_app_volume_gesture_get_gesture_id(
+	QarAppVolumeGesture* gesture, uint64_t* out_gesture_id
+);
+
+/**
+ * @brief The gesture mode whose rule mapped the gesture.
+ *
+ * The source peer's mode when the gesture began: a running gesture keeps it
+ * through a mode switch, so its Started, Updated and Ended all report the
+ * same mode. Lets an application act on the same gesture differently per mode,
+ * such as a click that selects in one mode and measures in another.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_mode_id Receives the mode; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
+ */
+static inline QarResult qar_app_volume_gesture_get_mode(
+	QarAppVolumeGesture* gesture, QarAppVolumeGestureModeId* out_mode_id
 );
 
 // APP VOLUME GETTERS
@@ -2077,6 +3701,48 @@ static inline QarResult qar_app_volume_get_lifetime_status(
 static inline QarResult qar_app_volume_get_editing_status(
 	QarAppVolume* handle, QarAppVolumeEditingStatus* out_status
 );
+/**
+ * @brief The peers whose gestures may move or scale the app in this volume.
+ *
+ * Empty means every peer's may. Copies at most @p peer_capacity peers into
+ * @p out_peers and reports how many there are in @p out_peer_count, so a call
+ * with a capacity of 0 and a NULL @p out_peers asks for the count alone. Set
+ * with QarAppVolumeGestureAllowedPeersExt.
+ *
+ * @param handle The app volume; must be valid.
+ * @param out_peers Receives up to @p peer_capacity peers; may be NULL when
+ *                  @p peer_capacity is 0.
+ * @param peer_capacity How many peers @p out_peers holds.
+ * @param out_peer_count Receives how many peers are allowed, which may exceed
+ *                       @p peer_capacity; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument, or
+ *         QAR_STATUS_APP_VOLUME_INVALID_ID for an invalid handle.
+ */
+static inline QarResult qar_app_volume_get_gesture_allowed_peers(
+	QarAppVolume* handle,
+	QarPeerId* out_peers,
+	size_t peer_capacity,
+	size_t* out_peer_count
+);
+
+/**
+ * @brief Which peer is manipulating the app in this volume, if one is.
+ *
+ * One peer at a time moves or scales the app with a gesture: the first whose
+ * manipulation binds holds the volume until it ends, and every other peer's
+ * manipulations are refused meanwhile. Their hover and click still arrive.
+ *
+ * @param handle The app volume; must be valid.
+ * @param out_peer Receives the holder; the default peer id when none holds it.
+ *                 Must not be NULL.
+ * @param out_is_held Receives whether a peer holds it; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument, or
+ *         QAR_STATUS_APP_VOLUME_INVALID_ID for an invalid handle.
+ */
+static inline QarResult qar_app_volume_get_gesture_holder(
+	QarAppVolume* handle, QarPeerId* out_peer, bool* out_is_held
+);
+
 /** @brief Get number of peers currently using this volume. */
 static inline QarResult qar_app_volume_get_used_by_peers_count(
 	QarAppVolume* handle, size_t* out_peer_count
@@ -2129,24 +3795,204 @@ static inline QarResult qar_app_volume_get_latest_size(
 	const QarAppVolumeId* volume_id,
 	QarAppVolumeSize* out_size
 );
-/** @brief Get gesture configuration for an app volume handle.
+/** @brief Get the default gesture mode's configuration for an app volume
+ * handle.
  *
- * Mapping rules are returned in priority order. Earlier entries in
- * `mapping_rules` have higher priority than later entries.
+ * Returns the rules of QAR_APP_VOLUME_GESTURE_MODE_DEFAULT; read another
+ * mode's with qar_app_volume_get_gesture_mode(). Mapping rules are returned in
+ * priority order. Earlier entries in `mapping_rules` have higher priority than
+ * later entries.
  */
 static inline QarResult qar_app_volume_get_gesture_configuration(
 	QarAppVolume* handle, QarAppVolumeGestureConfiguration* out_config
 );
-/** @brief Update gesture configuration for an existing app volume.
+/** @brief Update the default gesture mode and the allowed peers of an existing
+ * app volume.
+ *
+ * Replaces the rules of QAR_APP_VOLUME_GESTURE_MODE_DEFAULT and the allowed
+ * peers (QarAppVolumeGestureAllowedPeersExt, empty when not chained). Every
+ * other mode is kept; define those with qar_app_volumes_change_gesture_mode().
  *
  * The order of `config->mapping_rules` defines runtime priority. Earlier rules
  * have higher priority and can suppress lower-priority gestures when both are
  * active at the same time for the same app volume and source peer.
+ *
+ * @return QarResult QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID when a
+ * rule could never work -- an enabled DualPointerRotate rule that moves the app
+ * with `rotation_axes` set to none, which would take two-hand gestures over and
+ * turn nothing. The volume keeps its previous configuration. Adding a volume
+ * with such a configuration fails the same way.
  */
 static inline QarResult qar_app_volumes_change_gesture_configuration(
 	QarSession* session,
 	const QarAppVolumeId* volume_id,
 	const QarAppVolumeGestureConfiguration* config
+);
+
+/**
+ * @brief Define a gesture mode, or replace the mode with that id.
+ *
+ * A mode is a set of mapping rules -- what each gesture does and how its ray
+ * looks -- that peers can be switched to with
+ * qar_app_volumes_select_gesture_mode(), so a user's gestures and rays change
+ * with one small call instead of a whole configuration. Every volume has
+ * QAR_APP_VOLUME_GESTURE_MODE_DEFAULT; any other id is the application's to
+ * choose. Other modes and the allowed peers are kept.
+ *
+ * @param session Session that owns the volume; must not be NULL.
+ * @param volume_id The app volume; must not be NULL.
+ * @param mode_id The mode to define or replace.
+ * @param config The mode's rules, in priority order. Its `header.next` must be
+ *               NULL: the allowed peers are the volume's, for every mode, and
+ *               are set with qar_app_volumes_change_gesture_configuration().
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument,
+ *         QAR_STATUS_ARGUMENT_NOT_SUPPORTED for a chained extension, or
+ *         QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID for a rule that
+ *         could never work, as with
+ *         qar_app_volumes_change_gesture_configuration().
+ */
+static inline QarResult qar_app_volumes_change_gesture_mode(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	QarAppVolumeGestureModeId mode_id,
+	const QarAppVolumeGestureConfiguration* config
+);
+
+/**
+ * @brief Remove a gesture mode.
+ *
+ * A peer switched to the removed mode, or the default selection naming it,
+ * falls back to QAR_APP_VOLUME_GESTURE_MODE_DEFAULT. A gesture already running
+ * in it finishes in it.
+ *
+ * @param session Session that owns the volume; must not be NULL.
+ * @param volume_id The app volume; must not be NULL.
+ * @param mode_id The mode to remove.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument,
+ *         QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID for
+ *         QAR_APP_VOLUME_GESTURE_MODE_DEFAULT, which cannot be removed, or
+ *         QAR_STATUS_APP_VOLUME_GESTURE_MODE_UNKNOWN for a mode the volume
+ *         does not have.
+ */
+static inline QarResult qar_app_volumes_remove_gesture_mode(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	QarAppVolumeGestureModeId mode_id
+);
+
+/**
+ * @brief Switch one peer, or every peer without its own mode, to a gesture
+ * mode.
+ *
+ * With @p peer, that peer's gestures map through @p mode_id from now on,
+ * whatever the default is. With a NULL @p peer, @p mode_id becomes the default
+ * every peer without its own mode follows; peers switched individually stay in
+ * theirs (clear them with qar_app_volumes_clear_peer_gesture_mode() or
+ * qar_app_volumes_clear_all_peer_gesture_modes()).
+ *
+ * A gesture already running keeps the mode it began in, so a drag never
+ * changes its mapping halfway; the switch applies from the next gesture. The
+ * peer's rays take the new mode's styles as its next gesture is mapped.
+ *
+ * @param session Session that owns the volume; must not be NULL.
+ * @param volume_id The app volume; must not be NULL.
+ * @param peer The peer to switch, or NULL for the default.
+ * @param mode_id The mode to switch to; the volume must define it.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument, or
+ *         QAR_STATUS_APP_VOLUME_GESTURE_MODE_UNKNOWN for a mode the volume
+ *         does not have.
+ */
+static inline QarResult qar_app_volumes_select_gesture_mode(
+	QarSession* session,
+	const QarAppVolumeId* volume_id,
+	const QarPeerId* peer,
+	QarAppVolumeGestureModeId mode_id
+);
+
+/**
+ * @brief Drop one peer's own gesture mode, so it follows the default again.
+ *
+ * Does nothing for a peer that has none.
+ *
+ * @param session Session that owns the volume; must not be NULL.
+ * @param volume_id The app volume; must not be NULL.
+ * @param peer The peer; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
+ */
+static inline QarResult qar_app_volumes_clear_peer_gesture_mode(
+	QarSession* session, const QarAppVolumeId* volume_id, const QarPeerId* peer
+);
+
+/**
+ * @brief Drop every peer's own gesture mode, so all follow the default.
+ *
+ * @param session Session that owns the volume; must not be NULL.
+ * @param volume_id The app volume; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
+ */
+static inline QarResult qar_app_volumes_clear_all_peer_gesture_modes(
+	QarSession* session, const QarAppVolumeId* volume_id
+);
+
+/**
+ * @brief The ids of the gesture modes an app volume defines.
+ *
+ * Always includes QAR_APP_VOLUME_GESTURE_MODE_DEFAULT. Copies at most
+ * @p mode_capacity ids into @p out_mode_ids and reports how many there are in
+ * @p out_mode_count, so a call with a capacity of 0 and a NULL @p out_mode_ids
+ * asks for the count alone.
+ *
+ * @param handle The app volume; must be valid.
+ * @param out_mode_ids Receives up to @p mode_capacity ids; may be NULL when
+ *                     @p mode_capacity is 0.
+ * @param mode_capacity How many ids @p out_mode_ids holds.
+ * @param out_mode_count Receives how many modes there are, which may exceed
+ *                       @p mode_capacity; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument, or
+ *         QAR_STATUS_APP_VOLUME_INVALID_ID for an invalid handle.
+ */
+static inline QarResult qar_app_volume_get_gesture_mode_ids(
+	QarAppVolume* handle,
+	QarAppVolumeGestureModeId* out_mode_ids,
+	size_t mode_capacity,
+	size_t* out_mode_count
+);
+
+/**
+ * @brief One gesture mode's rules.
+ *
+ * @param handle The app volume; must be valid.
+ * @param mode_id The mode to read.
+ * @param out_config Receives the mode's rules in priority order, with
+ *                   `header.next` NULL. Must not be NULL.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument,
+ *         QAR_STATUS_APP_VOLUME_INVALID_ID for an invalid handle, or
+ *         QAR_STATUS_APP_VOLUME_GESTURE_MODE_UNKNOWN for a mode the volume
+ *         does not have.
+ */
+static inline QarResult qar_app_volume_get_gesture_mode(
+	QarAppVolume* handle,
+	QarAppVolumeGestureModeId mode_id,
+	QarAppVolumeGestureConfiguration* out_config
+);
+
+/**
+ * @brief The gesture mode a peer's next gesture maps through.
+ *
+ * The peer's own mode when it has one, the default otherwise. With a NULL
+ * @p peer, the default. A mode that is no longer defined reads as
+ * QAR_APP_VOLUME_GESTURE_MODE_DEFAULT, which is also what the mapper uses.
+ *
+ * @param handle The app volume; must be valid.
+ * @param peer The peer, or NULL for the default.
+ * @param out_mode_id Receives the mode; must not be NULL.
+ * @return QAR_STATUS_SUCCESS, QAR_STATUS_LOGIC_ERROR for a NULL argument, or
+ *         QAR_STATUS_APP_VOLUME_INVALID_ID for an invalid handle.
+ */
+static inline QarResult qar_app_volume_get_active_gesture_mode(
+	QarAppVolume* handle,
+	const QarPeerId* peer,
+	QarAppVolumeGestureModeId* out_mode_id
 );
 
 /** @} */ /* end of qar_c_app_volumes */
@@ -2167,10 +4013,33 @@ static inline QarRenderSenderInit qar_render_sender_init_default(void);
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
 static inline QarRuntimeInit qar_runtime_init_default(void);
+#if 0 // Obsolete pre-onboarding session API.
+/** @brief Default init for QarRuntimeJoinInit. */
+static inline QarRuntimeJoinInit qar_runtime_join_init_default(void);
+/** @brief Default init for QarPeerSpecInit. */
+static inline QarPeerSpecInit qar_peer_spec_init_default(void);
+/** @brief Default init for QarSessionCreateInit. */
+static inline QarSessionCreateInit qar_session_create_init_default(void);
+/** @brief Default init for QarSessionJoinInit. */
+static inline QarSessionJoinInit qar_session_join_init_default(void);
+/** @brief Default graphics-device extension for session initialization. */
+static inline QarGraphicsDeviceId qar_graphics_device_id_default(void);
+/** @brief Default init for QarSessionInvitePeerInit. */
+static inline QarSessionInvitePeerInit
+qar_session_invite_peer_init_default(void);
+#endif
 /** @brief Default init for QarRenderFrameShow. */
 static inline QarRenderFrameShow qar_render_frame_show_default(void);
 /** @brief Default init for QarGuiPanelInit. */
 static inline QarGuiPanelInit qar_gui_panel_init_default(void);
+/** @brief Default stream-content extension for QarGuiPanelInit. */
+static inline QarGuiPanelStreamIdExt qar_gui_panel_stream_id_ext_default(void);
+/** @brief A QarAppVolumeGestureAllowedPeersExt with its header set and no
+ * peers. */
+static inline QarAppVolumeGestureAllowedPeersExt
+qar_app_volume_gesture_allowed_peers_ext_default(void);
+/** @brief Default URL-content extension for QarGuiPanelInit. */
+static inline QarGuiPanelUrlExt qar_gui_panel_url_ext_default(void);
 /** @brief Default init for QarAppVolumeInit. */
 static inline QarAppVolumeInit qar_app_volume_init_default(void);
 #ifdef QAR_ENABLE_D3D11
@@ -2184,6 +4053,34 @@ static inline QarDXGIKeyedMutexSync qar_dxgi_keyed_mutex_sync_default(void);
 static inline QarSyncFrameD3D11 qar_sync_frame_d3d11_default(void);
 /** @brief Default init for QarVideoFrameD3D11. */
 static inline QarVideoFrameD3D11 qar_video_frame_d3d11_default(void);
+#endif
+#ifdef QAR_ENABLE_OPENGL
+/** @brief Default init for QarVideoFrameOpenGl. */
+static inline QarVideoFrameOpenGl qar_video_frame_opengl_default(void);
+/** @brief Default OpenGL external-context extension. */
+/**
+ * @brief Zeroed EGL stream parameters, ready to fill in.
+ *
+ * One default per context type, because one extension per context type: pick
+ * the one matching the context the application owns, set its handles and its
+ * QarOpenGlContextCallbacks, and chain it on the init's header.next.
+ */
+static inline QarStreamParamsOpenGlEgl
+qar_stream_params_opengl_egl_default(void);
+/** @brief Zeroed WGL stream parameters. See the EGL one. */
+static inline QarStreamParamsOpenGlWgl
+qar_stream_params_opengl_wgl_default(void);
+/** @brief Zeroed GLX stream parameters. See the EGL one. */
+static inline QarStreamParamsOpenGlGlx
+qar_stream_params_opengl_glx_default(void);
+#endif
+#ifdef QAR_ENABLE_VULKAN
+/** @brief Default init for QarSyncFrameVulkan. */
+static inline QarSyncFrameVulkan qar_sync_frame_vulkan_default(void);
+/** @brief Default init for QarVideoFrameVulkan. */
+static inline QarVideoFrameVulkan qar_video_frame_vulkan_default(void);
+/** @brief Default Vulkan external-device extension. */
+static inline QarStreamParamsVulkan qar_stream_params_vulkan_default(void);
 #endif
 
 /** @brief Default time point (zero-initialized). */
@@ -2219,6 +4116,10 @@ static inline QarTextureSize qar_texture_size_default(void);
 static inline QarVideoFrameView qar_video_frame_view_default(void);
 /** @brief Default video frame layout. */
 static inline QarVideoFrameLayout qar_video_frame_layout_default(void);
+
+/** Default CPU sender configuration with reconnects enabled for five minutes.
+ */
+static inline QarVideoSenderInit qar_video_sender_init_default(void);
 /** @brief Default CPU video texture. */
 static inline QarVideoTextureCpu qar_video_texture_cpu_default(void);
 /** @brief Default CPU video frame. */
@@ -2248,13 +4149,18 @@ qar_app_volume_gesture_configuration_default(void);
 
 /** @brief Zero/invalid peer id. */
 static inline QarPeerId qar_peer_id_default(void);
-/** @brief Generate a unique peer id. */
+/**
+ * @brief Generate a unique peer id.
+ *
+ * A fresh id that identifies no peer in any session. Never use it as a stream
+ * target - target ids come from qar_session_invite_target_app().
+ */
 static inline QarPeerId qar_peer_id_unique(void);
 
 /** @brief Zero/invalid session id. */
 static inline QarSessionId qar_session_id_default(void);
 /** @brief Generate a unique session id. */
-static inline QarSessionId qar_session_unique(void);
+static inline QarSessionId qar_session_id_unique(void);
 
 /** @brief Zero/invalid GUI panel id. */
 static inline QarGuiPanelId qar_gui_panel_id_default(void);
@@ -2414,8 +4320,9 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
 );
+/// Documented on the public declaration in <qar_streaming_c/v0/api.h>.
 typedef void (*qar_app_volume_gesture_event_callback_t)(
-	const QarAppVolumeGestureEvent* event, void* user_state
+	QarAppVolumeGesture* gesture, void* user_state
 );
 
 #define QAR_APP_VOLUMES_FUNCTION_LIST(X)                                       \
@@ -2480,7 +4387,7 @@ typedef void (*qar_app_volume_gesture_event_callback_t)(
 	  (session, volume_id, config))                                            \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  app_volumes_subscribe_gesture_updates,                                   \
+	  app_volumes_subscribe_gesture_events,                                    \
 	  (QarSession * session,                                                   \
 	   const QarAppVolumeId* volume_id,                                        \
 	   QarGestureKind gesture_kind,                                            \
@@ -2639,7 +4546,145 @@ typedef void (*qar_app_volume_gesture_event_callback_t)(
 	  (QarSession * session,                                                   \
 	   const QarAppVolumeId* volume_id,                                        \
 	   QarAppVolumeSize* out_size),                                            \
-	  (session, volume_id, out_size))
+	  (session, volume_id, out_size))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_subscribe_all_gesture_events,                                \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   qar_app_volume_gesture_event_callback_t callback,                       \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, volume_id, callback, user_state, token))                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_lifecycle,                                        \
+	  (QarAppVolumeGesture * gesture,                                          \
+	   QarPeerId * out_source_peer_id,                                         \
+	   QarAppVolumeId * out_target_app_volume_id),                             \
+	  (gesture, out_source_peer_id, out_target_app_volume_id))                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_classification,                                   \
+	  (QarAppVolumeGesture * gesture,                                          \
+	   QarGestureKind * out_kind,                                              \
+	   QarGesturePhase * out_phase),                                           \
+	  (gesture, out_kind, out_phase))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_points,                                           \
+	  (QarAppVolumeGesture * gesture,                                          \
+	   QarVector3 * out_action_point,                                          \
+	   bool* out_has_action_point,                                             \
+	   QarVector3* out_start_point,                                            \
+	   bool* out_has_start_point),                                             \
+	  (gesture,                                                                \
+	   out_action_point,                                                       \
+	   out_has_action_point,                                                   \
+	   out_start_point,                                                        \
+	   out_has_start_point))                                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_deltas,                                           \
+	  (QarAppVolumeGesture * gesture,                                          \
+	   QarVector3 * out_translation_delta,                                     \
+	   QarQuaternion * out_rotation_delta,                                     \
+	   bool* out_was_mapped_to_app_transform),                                 \
+	  (gesture,                                                                \
+	   out_translation_delta,                                                  \
+	   out_rotation_delta,                                                     \
+	   out_was_mapped_to_app_transform))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_timestamp,                                        \
+	  (QarAppVolumeGesture * gesture, QarTimePoint * out_timestamp),           \
+	  (gesture, out_timestamp))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_hand,                                             \
+	  (QarAppVolumeGesture * gesture, QarHand * out_hand, bool* out_has_hand), \
+	  (gesture, out_hand, out_has_hand))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_gesture_id,                                       \
+	  (QarAppVolumeGesture * gesture, uint64_t* out_gesture_id),               \
+	  (gesture, out_gesture_id))                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_gesture_allowed_peers,                                    \
+	  (QarAppVolume * handle,                                                  \
+	   QarPeerId * out_peers,                                                  \
+	   size_t peer_capacity,                                                   \
+	   size_t* out_peer_count),                                                \
+	  (handle, out_peers, peer_capacity, out_peer_count))                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_gesture_holder,                                           \
+	  (QarAppVolume * handle, QarPeerId * out_peer, bool* out_is_held),        \
+	  (handle, out_peer, out_is_held))                                         \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_change_gesture_mode,                                         \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarAppVolumeGestureModeId mode_id,                                      \
+	   const QarAppVolumeGestureConfiguration* config),                        \
+	  (session, volume_id, mode_id, config))                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_remove_gesture_mode,                                         \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   QarAppVolumeGestureModeId mode_id),                                     \
+	  (session, volume_id, mode_id))                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_select_gesture_mode,                                         \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarPeerId* peer,                                                  \
+	   QarAppVolumeGestureModeId mode_id),                                     \
+	  (session, volume_id, peer, mode_id))                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_clear_peer_gesture_mode,                                     \
+	  (QarSession * session,                                                   \
+	   const QarAppVolumeId* volume_id,                                        \
+	   const QarPeerId* peer),                                                 \
+	  (session, volume_id, peer))                                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volumes_clear_all_peer_gesture_modes,                                \
+	  (QarSession * session, const QarAppVolumeId* volume_id),                 \
+	  (session, volume_id))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_gesture_mode_ids,                                         \
+	  (QarAppVolume * handle,                                                  \
+	   QarAppVolumeGestureModeId * out_mode_ids,                               \
+	   size_t mode_capacity,                                                   \
+	   size_t* out_mode_count),                                                \
+	  (handle, out_mode_ids, mode_capacity, out_mode_count))                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_gesture_mode,                                             \
+	  (QarAppVolume * handle,                                                  \
+	   QarAppVolumeGestureModeId mode_id,                                      \
+	   QarAppVolumeGestureConfiguration * out_config),                         \
+	  (handle, mode_id, out_config))                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_get_active_gesture_mode,                                      \
+	  (QarAppVolume * handle,                                                  \
+	   const QarPeerId* peer,                                                  \
+	   QarAppVolumeGestureModeId* out_mode_id),                                \
+	  (handle, peer, out_mode_id))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  app_volume_gesture_get_mode,                                             \
+	  (QarAppVolumeGesture * gesture,                                          \
+	   QarAppVolumeGestureModeId * out_mode_id),                               \
+	  (gesture, out_mode_id))
 
 QAR_DECLARE_MODULE_COMMON(
 	APP_VOLUMES, AppVolumes, app_volumes, QAR_APP_VOLUMES_FUNCTION_LIST
@@ -2663,7 +4708,7 @@ QAR_APP_VOLUMES_FUNCTION_LIST(QAR_APP_VOLUMES_DECLARE_WRAPPER)
 
 #define QAR_TYPES_FUNCTION_LIST(X)                                             \
 	X(ACTIVE, QarPeerId, peer_id_unique, (void), ())                           \
-	X(ACTIVE, QarSessionId, session_unique, (void), ())                        \
+	X(ACTIVE, QarSessionId, session_id_unique, (void), ())                     \
 	X(ACTIVE, QarGuiPanelId, gui_panel_id_unique, (void), ())                  \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
@@ -3013,6 +5058,19 @@ qar_video_frame_layout_default(void)
 	return layout;
 }
 
+static inline QarVideoSenderInit
+qar_video_sender_init_default(void)
+{
+	QarVideoSenderInit init = {
+		{ QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT, NULL }, // header
+		qar_video_frame_layout_default(),				// layout
+		true,											// enable_reconnects
+		300000,											// reconnect_timeout_ms
+		QAR_GRAPHICS_API_CPU							// graphics_api
+	};
+	return init;
+}
+
 static inline QarVideoTextureCpu
 qar_video_texture_cpu_default(void)
 {
@@ -3083,6 +5141,33 @@ qar_video_frame_d3d11_default(void)
 }
 #endif // QAR_ENABLE_D3D11
 
+#ifdef QAR_ENABLE_OPENGL
+static inline QarVideoFrameOpenGl
+qar_video_frame_opengl_default(void)
+{
+	QarVideoFrameOpenGl frame = { { 0 }, 0, {}, 0 };
+	return frame;
+}
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+static inline QarSyncFrameVulkan
+qar_sync_frame_vulkan_default(void)
+{
+	QarSyncFrameVulkan sync = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	return sync;
+}
+
+static inline QarVideoFrameVulkan
+qar_video_frame_vulkan_default(void)
+{
+	QarVideoFrameVulkan frame = {
+		{ 0 }, 0, {}, 0, qar_sync_frame_vulkan_default()
+	};
+	return frame;
+}
+#endif
+
 static inline QarGuiPanelSize
 qar_gui_panel_size_default(void)
 {
@@ -3125,27 +5210,60 @@ qar_app_volume_gesture_mapping_rule_default(void)
 	return rule;
 }
 
+static inline QarAppVolumeGestureAllowedPeersExt
+qar_app_volume_gesture_allowed_peers_ext_default(void)
+{
+	QarAppVolumeGestureAllowedPeersExt extension = {
+		{ QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_ALLOWED_PEERS_EXT, NULL },
+		NULL,
+		0
+	};
+	return extension;
+}
+
 static inline QarAppVolumeGestureConfiguration
 qar_app_volume_gesture_configuration_default(void)
 {
 	QarAppVolumeGestureConfiguration config = {
-		{ QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION, NULL }, {}, 2
+		{ QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION, NULL }, {}, 4
 	};
+	/* The default rules must mirror the configuration a volume created without
+	 * a gesture configuration actually gets. That default lives in the library
+	 * (AppVolumeGestureConfiguration in AppVolume.hpp) and turns rotation off
+	 * on both manipulation rules, so this helper has to do the same --
+	 * otherwise an application that reads the defaults here sees axes the
+	 * runtime never applies. The rays: green on the manipulations, dotted
+	 * white while hovering, light green on a click. */
 	config.mapping_rules[0] = qar_app_volume_gesture_mapping_rule_default();
 	config.mapping_rules[0].gesture_kind =
 		QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE;
-	config.mapping_rules[0].precision = 2.0f;
+	config.mapping_rules[0].precision = 1.0f;
 	config.mapping_rules[0].app_scale_sensitivity_mode =
 		QAR_APP_SCALE_SENSITIVITY_BASED_ON_APP_SCALE;
 	config.mapping_rules[0].rotation_axes = QAR_APP_VOLUME_AXIS_NONE;
 	config.mapping_rules[0].app_transform_mapping =
 		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_SCALE;
+	config.mapping_rules[0].controller_ray_style.color.r = 0;
+	config.mapping_rules[0].controller_ray_style.color.g = 200;
+	config.mapping_rules[0].controller_ray_style.color.b = 0;
 	config.mapping_rules[1] = qar_app_volume_gesture_mapping_rule_default();
 	config.mapping_rules[1].gesture_kind = QAR_GESTURE_SINGLE_POINTER_6DOF;
 	config.mapping_rules[1].precision = 1.0f;
 	config.mapping_rules[1].rotation_axes = QAR_APP_VOLUME_AXIS_NONE;
 	config.mapping_rules[1].app_transform_mapping =
 		QAR_GESTURE_APP_TRANSFORM_MAPPING_APP_POSE;
+	config.mapping_rules[1].controller_ray_style.color.r = 0;
+	config.mapping_rules[1].controller_ray_style.color.g = 200;
+	config.mapping_rules[1].controller_ray_style.color.b = 0;
+	config.mapping_rules[2] = qar_app_volume_gesture_mapping_rule_default();
+	config.mapping_rules[2].gesture_kind = QAR_GESTURE_HOVER;
+	config.mapping_rules[2].controller_ray_style.line_style =
+		QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_DOTTED;
+	config.mapping_rules[3] = qar_app_volume_gesture_mapping_rule_default();
+	config.mapping_rules[3].gesture_kind = QAR_GESTURE_CLICK;
+	config.mapping_rules[3].controller_ray_style.color.r = 144;
+	config.mapping_rules[3].controller_ray_style.color.g = 238;
+	config.mapping_rules[3].controller_ray_style.color.b = 144;
 
 	return config;
 }
@@ -3249,11 +5367,31 @@ qar_onboard_invite_ext_default(void)
 	return ext;
 }
 
+static inline QarOnboardPeerIdExt
+qar_onboard_peer_id_ext_default(void)
+{
+	QarOnboardPeerIdExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT, NULL },
+		qar_peer_id_default() // peer_id (required, caller must set)
+	};
+	return ext;
+}
+
 static inline QarRequestInviteInit
 qar_request_invite_init_default(void)
 {
 	QarRequestInviteInit init = {
 		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL } // header
+	};
+	return init;
+}
+
+static inline QarSessionInviteTargetAppInit
+qar_session_invite_target_app_init_default(void)
+{
+	QarSessionInviteTargetAppInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT, NULL }, // header
+		NULL // connection_string
 	};
 	return init;
 }
@@ -3267,6 +5405,71 @@ qar_forget_init_default(void)
 	};
 	return init;
 }
+
+#if 0 // Obsolete pre-onboarding session API.
+static inline QarPeerSpecInit
+qar_peer_spec_init_default(void)
+{
+	QarPeerSpecInit init = {
+		{ QAR_STRUCTURE_TYPE_PEER_SPEC_INIT, NULL }, // header
+		NULL,										 // id
+		NULL,										 // display_name
+		NULL,										 // app_version
+		NULL										 // app_custom_peer_info
+	};
+	return init;
+}
+
+static inline QarSessionCreateInit
+qar_session_create_init_default(void)
+{
+	QarSessionCreateInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_CREATE_INIT, NULL }, // header
+		NULL,											  // session_id
+		NULL // launcher_config_json
+	};
+	return init;
+}
+
+static inline QarSessionJoinInit
+qar_session_join_init_default(void)
+{
+	QarSessionJoinInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_JOIN_INIT, NULL }, // header
+		NULL,											// invite_data
+		0,												// invite_data_size
+		qar_peer_spec_init_default()					// peer_spec_init
+	};
+	return init;
+}
+
+#endif // Obsolete pre-onboarding session API.
+
+static inline QarGraphicsDeviceId
+qar_graphics_device_id_default(void)
+{
+	QarGraphicsDeviceId device = {};
+	device.header.type = QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID;
+	device.header.next = NULL;
+#ifdef _WIN32
+	device.id_type = QAR_GPU_DEVICE_ID_TYPE_LUID;
+#else
+	device.id_type = QAR_GPU_DEVICE_ID_TYPE_UUID;
+#endif
+	return device;
+}
+
+#if 0  // Obsolete pre-onboarding session API.
+static inline QarSessionInvitePeerInit
+qar_session_invite_peer_init_default(void)
+{
+	QarSessionInvitePeerInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_INVITE_PEER_INIT, NULL }, // header
+		NULL, // connection_string
+	};
+	return init;
+}
+#endif // Obsolete pre-onboarding session API.
 
 static inline QarRenderSenderInit
 qar_render_sender_init_default(void)
@@ -3299,6 +5502,26 @@ qar_gui_panel_init_default(void)
 		0							  // visible_to_peer_count
 	};
 	return init;
+}
+
+static inline QarGuiPanelStreamIdExt
+qar_gui_panel_stream_id_ext_default(void)
+{
+	QarGuiPanelStreamIdExt extension = {
+		{ QAR_STRUCTURE_TYPE_GUI_PANEL_STREAM_ID_EXT, NULL }, // header
+		{ 0 }												  // stream_id
+	};
+	return extension;
+}
+
+static inline QarGuiPanelUrlExt
+qar_gui_panel_url_ext_default(void)
+{
+	QarGuiPanelUrlExt extension = {
+		{ QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT, NULL }, // header
+		NULL											// url
+	};
+	return extension;
 }
 
 static inline QarAppVolumeInit
@@ -3348,6 +5571,60 @@ qar_stream_params_d3d11_default(void)
 }
 #endif
 
+#ifdef QAR_ENABLE_OPENGL
+static inline QarStreamParamsOpenGlEgl
+qar_stream_params_opengl_egl_default(void)
+{
+	QarStreamParamsOpenGlEgl params = {
+		{ QAR_STRUCTURE_TYPE_STREAM_OPENGL_EGL_PARAMS_EXT, NULL },
+		NULL,							 // display
+		0,								 // draw_surface
+		0,								 // read_surface
+		NULL,							 // context
+		{ NULL, NULL, NULL, NULL, NULL } // callbacks
+	};
+	return params;
+}
+
+static inline QarStreamParamsOpenGlWgl
+qar_stream_params_opengl_wgl_default(void)
+{
+	QarStreamParamsOpenGlWgl params = {
+		{ QAR_STRUCTURE_TYPE_STREAM_OPENGL_WGL_PARAMS_EXT, NULL },
+		NULL,							 // device_context
+		NULL,							 // context
+		{ NULL, NULL, NULL, NULL, NULL } // callbacks
+	};
+	return params;
+}
+
+static inline QarStreamParamsOpenGlGlx
+qar_stream_params_opengl_glx_default(void)
+{
+	QarStreamParamsOpenGlGlx params = {
+		{ QAR_STRUCTURE_TYPE_STREAM_OPENGL_GLX_PARAMS_EXT, NULL },
+		NULL,							 // display
+		0,								 // drawable
+		NULL,							 // context
+		{ NULL, NULL, NULL, NULL, NULL } // callbacks
+	};
+	return params;
+}
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+static inline QarStreamParamsVulkan
+qar_stream_params_vulkan_default(void)
+{
+	QarStreamParamsVulkan params = {
+		{ QAR_STRUCTURE_TYPE_STREAM_VULKAN_PARAMS_EXT, NULL },
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE
+	};
+	return params;
+}
+#endif
+
 #endif // QAR_STREAMING_C_V0_DETAIL_DEFAULT_INITS_H
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
@@ -3356,6 +5633,11 @@ qar_stream_params_d3d11_default(void)
 
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
+);
+
+/// Documented on the public declaration in <qar_streaming_c/v0/api.h>.
+typedef void (*qar_gui_panel_gesture_event_callback_t)(
+	QarGuiPanelGesture* gesture, void* user_state
 );
 
 #define QAR_GUI_PANELS_FUNCTION_LIST(X)                                        \
@@ -3490,7 +5772,84 @@ typedef void (*qar_gui_panel_update_callback_t)(
 	   QarGuiPanel * *out_handles,                                             \
 	   size_t handles_buffer_size,                                             \
 	   size_t* out_handles_written),                                           \
-	  (session, out_handles, handles_buffer_size, out_handles_written))
+	  (session, out_handles, handles_buffer_size, out_handles_written))        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_set_stream,                                                   \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   const QarStreamId* stream_id),                                          \
+	  (session, id, stream_id))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_content_type,                                              \
+	  (QarGuiPanel * handle, QarGuiPanelContentType * out_type),               \
+	  (handle, out_type))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_content_stream_id,                                         \
+	  (QarGuiPanel * handle, QarStreamId * out_stream_id),                     \
+	  (handle, out_stream_id))                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_subscribe_gesture_events,                                     \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   QarGuiPanelGestureKind gesture_kind,                                    \
+	   qar_gui_panel_gesture_event_callback_t callback,                        \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, id, gesture_kind, callback, user_state, token))                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_subscribe_all_gesture_events,                                 \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   qar_gui_panel_gesture_event_callback_t callback,                        \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, id, callback, user_state, token))                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_lifecycle,                                         \
+	  (QarGuiPanelGesture * gesture,                                           \
+	   QarPeerId * out_source_peer_id,                                         \
+	   uint64_t* out_gesture_id),                                              \
+	  (gesture, out_source_peer_id, out_gesture_id))                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_classification,                                    \
+	  (QarGuiPanelGesture * gesture,                                           \
+	   QarGuiPanelGestureKind * out_kind,                                      \
+	   QarGesturePhase * out_phase),                                           \
+	  (gesture, out_kind, out_phase))                                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_positions,                                         \
+	  (QarGuiPanelGesture * gesture,                                           \
+	   QarGuiPanelPoint * out_position,                                        \
+	   QarGuiPanelPoint * out_start_position),                                 \
+	  (gesture, out_position, out_start_position))                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_panel_id,                                          \
+	  (QarGuiPanelGesture * gesture, QarGuiPanelId * out_panel_id),            \
+	  (gesture, out_panel_id))                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_timestamp,                                         \
+	  (QarGuiPanelGesture * gesture, QarTimePoint * out_timestamp),            \
+	  (gesture, out_timestamp))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_hand,                                              \
+	  (QarGuiPanelGesture * gesture, QarHand * out_hand),                      \
+	  (gesture, out_hand))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_gesture_get_tap_count,                                         \
+	  (QarGuiPanelGesture * gesture, uint8_t* out_tap_count),                  \
+	  (gesture, out_tap_count))
 
 QAR_DECLARE_MODULE_COMMON(
 	GUI_PANELS, GuiPanels, gui_panels, QAR_GUI_PANELS_FUNCTION_LIST
@@ -3799,10 +6158,6 @@ typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
 );
 
-typedef void (*qar_render_sender_change_layout_callback_t)(
-	QarResult status, void* user_state
-);
-
 typedef void (*qar_render_sender_begin_frame_callback_t)(
 	QarResult status, QarRenderFrameInfo* frame_info, void* user_state
 );
@@ -3843,6 +6198,11 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	  (stream, out_layout))                                                    \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
+	  render_sender_stream_id,                                                 \
+	  (QarRenderSender * stream, QarStreamId * out_stream_id),                 \
+	  (stream, out_stream_id))                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
 	  render_sender_last_hands,                                                \
 	  (QarRenderSender * stream, QarDeviceHandsWithJoints * out_hands),        \
 	  (stream, out_hands))                                                     \
@@ -3863,19 +6223,8 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  render_sender_change_layout,                                             \
-	  (QarRenderSender * stream,                                               \
-	   const QarVideoFrameLayout* layout,                                      \
-	   QarCancelToken* token),                                                 \
-	  (stream, layout, token))                                                 \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  render_sender_change_layout_async,                                       \
-	  (QarRenderSender * stream,                                               \
-	   const QarVideoFrameLayout* layout,                                      \
-	   qar_render_sender_change_layout_callback_t callback,                    \
-	   void* user_state,                                                       \
-	   QarCancelToken* token),                                                 \
-	  (stream, layout, callback, user_state, token))                           \
+	  (QarRenderSender * stream, const QarVideoFrameLayout* layout),           \
+	  (stream, layout))                                                        \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  render_sender_begin_frame_async,                                         \
@@ -3905,6 +6254,13 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	   QarRenderFrameInfo * *out_frame_info),                                  \
 	  (stream, token, out_frame_info))                                         \
 	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_try_begin_frame,                                           \
+	  (QarRenderSender * stream,                                               \
+	   QarRenderFrameInfo * *out_frame_info,                                   \
+	   bool* out_ready),                                                       \
+	  (stream, out_frame_info, out_ready))                                     \
+	X(ACTIVE,                                                                  \
 	  void,                                                                    \
 	  render_frame_info_handle_destroy,                                        \
 	  (QarRenderFrameInfo * handle),                                           \
@@ -3931,9 +6287,33 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 #define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)
 #endif
 
+#ifdef QAR_ENABLE_OPENGL
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_OPENGL(X)                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_frame_opengl,                                              \
+	  (QarRenderSender * stream, QarVideoFrameOpenGl * out_frame),             \
+	  (stream, out_frame))
+#else
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_OPENGL(X)
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_VULKAN(X)                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_frame_vulkan,                                              \
+	  (QarRenderSender * stream, QarVideoFrameVulkan * *out_frame),            \
+	  (stream, out_frame))
+#else
+#define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_VULKAN(X)
+#endif
+
 #define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST(X)                              \
 	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_BASE(X)                             \
-	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)                            \
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_OPENGL(X)                           \
+	QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_VULKAN(X)
 
 QAR_DECLARE_MODULE_COMMON(
 	RENDER_STREAM_SENDER,
@@ -3959,6 +6339,8 @@ QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RENDER_STREAM_SENDER_FUNCTION_LIST)
 QAR_RENDER_STREAM_SENDER_FUNCTION_LIST(QAR_RENDER_STREAM_SENDER_DECLARE_WRAPPER)
 
 #undef QAR_RENDER_STREAM_SENDER_DECLARE_WRAPPER
+#undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_VULKAN
+#undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_OPENGL
 #undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11
 #undef QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_BASE
 
@@ -4061,7 +6443,14 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 	  QarResult,                                                               \
 	  session_get_id,                                                          \
 	  (const QarSession* session, QarSessionId* out_session_id),               \
-	  (session, out_session_id))
+	  (session, out_session_id))                                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_find_render_target,                                              \
+	  (const QarSession* session,                                              \
+	   const char* connection,                                                 \
+	   QarPeerId* out_peer),                                                   \
+	  (session, connection, out_peer))
 
 QAR_DECLARE_MODULE_COMMON(SESSION, Session, session, QAR_SESSION_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_SESSION_FUNCTION_LIST)
@@ -4076,6 +6465,201 @@ QAR_SESSION_FUNCTION_LIST(QAR_SESSION_DECLARE_WRAPPER)
 #undef QAR_SESSION_DECLARE_WRAPPER
 
 #endif // QAR_STREAMING_C_V0_DETAIL_SESSION_H
+
+#ifndef QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
+#define QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
+
+
+#define QAR_TARGET_APPS_FUNCTION_LIST(X)                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_target_app,                                               \
+	  (QarSession * session,                                                   \
+	   const QarSessionInviteTargetAppInit* init,                              \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarPeerId* out_peer),                                                   \
+	  (session, init, on_progress, progress_state, cancel, out_peer))          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_invite_target_app_async,                                         \
+	  (QarSession * session,                                                   \
+	   const QarSessionInviteTargetAppInit* init,                              \
+	   qar_target_app_invite_result_callback_t result_callback,                \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (session, init, result_callback, update_callback, user_state, cancel))   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_kill_target_app,                                                 \
+	  (QarSession * session,                                                   \
+	   const QarPeerId* target_app,                                            \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel),                                                \
+	  (session, target_app, on_progress, progress_state, cancel))              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_kill_target_app_async,                                           \
+	  (QarSession * session,                                                   \
+	   const QarPeerId* target_app,                                            \
+	   qar_target_app_kill_result_callback_t result_callback,                  \
+	   qar_progress_callback_t update_callback,                                \
+	   void* user_state,                                                       \
+	   QarCancelToken* cancel),                                                \
+	  (session,                                                                \
+	   target_app,                                                             \
+	   result_callback,                                                        \
+	   update_callback,                                                        \
+	   user_state,                                                             \
+	   cancel))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  target_app_connection_string_hololens,                                   \
+	  (const char* host, char* buffer, size_t buffer_size),                    \
+	  (host, buffer, buffer_size))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  target_app_connection_string_quest,                                      \
+	  (const char* host, char* buffer, size_t buffer_size),                    \
+	  (host, buffer, buffer_size))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  target_app_connection_string_android,                                    \
+	  (const char* host, char* buffer, size_t buffer_size),                    \
+	  (host, buffer, buffer_size))
+
+QAR_DECLARE_MODULE_COMMON(
+	TARGET_APPS, TargetApps, target_apps, QAR_TARGET_APPS_FUNCTION_LIST
+);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_TARGET_APPS_FUNCTION_LIST)
+
+#define QAR_TARGET_APPS_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)       \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_target_apps_api, "target_apps", STATUS, RET, NAME, PARAMS, ARGS  \
+	)
+
+QAR_TARGET_APPS_FUNCTION_LIST(QAR_TARGET_APPS_DECLARE_WRAPPER)
+
+#undef QAR_TARGET_APPS_DECLARE_WRAPPER
+
+#endif // QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
+
+#ifndef QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
+#define QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
+
+
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_BASE(X)                                 \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  video_sender_handle_destroy,                                             \
+	  (QarVideoSender * handle),                                               \
+	  (handle))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_stream_id,                                                  \
+	  (QarVideoSender * sender, QarStreamId * out_stream_id),                  \
+	  (sender, out_stream_id))                                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_try_begin_frame,                                            \
+	  (QarVideoSender * sender, bool* out_ready),                              \
+	  (sender, out_ready))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_layout,                                                     \
+	  (QarVideoSender * sender, QarVideoFrameLayout * out_layout),             \
+	  (sender, out_layout))                                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_change_layout,                                              \
+	  (QarVideoSender * sender, const QarVideoFrameLayout* layout),            \
+	  (sender, layout))                                                        \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_frame_cpu,                                                  \
+	  (QarVideoSender * sender, QarVideoFrameCpu * out_frame),                 \
+	  (sender, out_frame))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_show_frame,                                                 \
+	  (QarVideoSender * sender),                                               \
+	  (sender))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_create,                                                     \
+	  (QarSession * session,                                                   \
+	   const QarVideoSenderInit* init,                                         \
+	   QarVideoSender** out_sender),                                           \
+	  (session, init, out_sender))
+
+#ifdef QAR_ENABLE_D3D11
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_D3D11(X)                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_frame_d3d11,                                                \
+	  (QarVideoSender * sender, QarVideoFrameD3D11 * out_frame),               \
+	  (sender, out_frame))
+#else
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_D3D11(X)
+#endif
+
+#ifdef QAR_ENABLE_OPENGL
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_OPENGL(X)                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_frame_opengl,                                               \
+	  (QarVideoSender * sender, QarVideoFrameOpenGl * out_frame),              \
+	  (sender, out_frame))
+#else
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_OPENGL(X)
+#endif
+
+#ifdef QAR_ENABLE_VULKAN
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_VULKAN(X)                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  video_sender_frame_vulkan,                                               \
+	  (QarVideoSender * sender, QarVideoFrameVulkan * *out_frame),             \
+	  (sender, out_frame))
+#else
+#define QAR_VIDEO_SENDER_FUNCTION_LIST_VULKAN(X)
+#endif
+
+#define QAR_VIDEO_SENDER_FUNCTION_LIST(X)                                      \
+	QAR_VIDEO_SENDER_FUNCTION_LIST_BASE(X)                                     \
+	QAR_VIDEO_SENDER_FUNCTION_LIST_D3D11(X)                                    \
+	QAR_VIDEO_SENDER_FUNCTION_LIST_OPENGL(X)                                   \
+	QAR_VIDEO_SENDER_FUNCTION_LIST_VULKAN(X)
+
+QAR_DECLARE_MODULE_COMMON(
+	VIDEO_SENDER, VideoSender, video_sender, QAR_VIDEO_SENDER_FUNCTION_LIST
+);
+QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_VIDEO_SENDER_FUNCTION_LIST)
+
+#define QAR_VIDEO_SENDER_DECLARE_WRAPPER(STATUS, RET, NAME, PARAMS, ARGS)      \
+	QAR_DECLARE_WRAPPER_EX(                                                    \
+		g_qar_video_sender_api,                                                \
+		"video_sender",                                                        \
+		STATUS,                                                                \
+		RET,                                                                   \
+		NAME,                                                                  \
+		PARAMS,                                                                \
+		ARGS                                                                   \
+	)
+
+QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
+
+#undef QAR_VIDEO_SENDER_DECLARE_WRAPPER
+#undef QAR_VIDEO_SENDER_FUNCTION_LIST_VULKAN
+#undef QAR_VIDEO_SENDER_FUNCTION_LIST_OPENGL
+#undef QAR_VIDEO_SENDER_FUNCTION_LIST_D3D11
+#undef QAR_VIDEO_SENDER_FUNCTION_LIST_BASE
+#undef QAR_VIDEO_SENDER_FUNCTION_LIST
+
+#endif // QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
 
 
 #ifdef QAR_ENABLE_DYNAMIC_LOADING
@@ -4181,9 +6765,11 @@ qar_load_symbol(QAR_DLL_HANDLE_TYPE handle, const char* name)
 	X(CANCELATION_TOKEN, CancelationToken, cancelation_token)                  \
 	X(RUNTIME, Runtime, runtime)                                               \
 	X(SESSION, Session, session)                                               \
+	X(TARGET_APPS, TargetApps, target_apps)                                    \
 	X(ONBOARDING, Onboarding, onboarding)                                      \
 	X(PEER_MANAGEMENT, PeerManagement, peer_management)                        \
 	X(RENDER_STREAM_SENDER, RenderStreamSender, render_stream_sender)          \
+	X(VIDEO_SENDER, VideoSender, video_sender)                                 \
 	X(GUI_PANELS, GuiPanels, gui_panels)                                       \
 	X(APP_VOLUMES, AppVolumes, app_volumes)                                    \
 	X(TYPES, Types, types)
@@ -4195,9 +6781,11 @@ extern QAR_DLL_HANDLE_TYPE g_qar_dynamic_library_handle;
 	QAR_DEFINE_MODULE_STORAGE(CancelationToken, cancelation_token);            \
 	QAR_DEFINE_MODULE_STORAGE(Runtime, runtime);                               \
 	QAR_DEFINE_MODULE_STORAGE(Session, session);                               \
+	QAR_DEFINE_MODULE_STORAGE(TargetApps, target_apps);                        \
 	QAR_DEFINE_MODULE_STORAGE(Onboarding, onboarding);                         \
 	QAR_DEFINE_MODULE_STORAGE(PeerManagement, peer_management);                \
 	QAR_DEFINE_MODULE_STORAGE(RenderStreamSender, render_stream_sender);       \
+	QAR_DEFINE_MODULE_STORAGE(VideoSender, video_sender);                      \
 	QAR_DEFINE_MODULE_STORAGE(GuiPanels, gui_panels);                          \
 	QAR_DEFINE_MODULE_STORAGE(AppVolumes, app_volumes);                        \
 	QAR_DEFINE_MODULE_STORAGE(Types, types);                                   \

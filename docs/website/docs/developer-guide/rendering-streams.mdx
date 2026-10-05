@@ -15,6 +15,14 @@ The **render sender** is how your application's pixels reach the room. You creat
 
 ## Accepting render stream requests
 
+**Use `qar_render_sender_subscribe_requests()` to discover rendering targets automatically.** Subscribe once after joining and keep the subscription alive: later targets requesting your content arrive through the same callback. A peer merely joining the session is not a request to render your application.
+
+- Read the target ID with `qar_render_request_get_target_peer_id()` and queue it for your render thread.
+- Create the app volume first, then one sender and one camera per target ID. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
+- Deduplicate repeated requests for a target already served.
+- Callbacks run asynchronously. Synchronize the handoff and keep callback state alive through session/subscription teardown. Destroy every delivered request handle after reading it.
+- See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, stdin onboarding and multi-camera loop.
+
 There is no API for pulling a peer into your stream by address — instead, a peer that wants your content (a Visualizer app volume, a headset viewer, ...) sends a **render stream request**, and your application subscribes to be notified of these:
 
 ```c
@@ -65,7 +73,7 @@ init.frame_views_count = 4;
 
 QarRenderSender* sender = NULL;
 qar_result_log_if_error(
-    qar_render_sender_create(session, &init, &sender));
+    qar_render_sender_create(session, &init, NULL, &sender));
 ```
 
 </Lang>
@@ -188,7 +196,7 @@ This is how a source application implements grabbing, pointing, and touch agains
 
 - `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected and recover on their own.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
-- Senders are per-target: to serve several viewers *directly* you create several senders — but in a Hub deployment you typically stream once into your app volume and let the per-user mixers fan the content out.
+- Rendering senders are per requested target. For several users viewing the same scene, create a sender and camera for each target discovered through the request subscription; use each target's poses and FOV even when the scene objects are shared.
 
 ## Compiled tutorial
 

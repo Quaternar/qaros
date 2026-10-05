@@ -1,0 +1,15 @@
+# Vulkan cube source
+
+Status: Implemented, end-to-end multi-headset validation pending.
+
+- Source: `qar-streaming-c/examples/vulkan_cube/`.
+- Optional `BUILD_VULKAN_EXAMPLE` CMake target, Windows Vulkan SDK and glm.
+- Target `qar-vulkan-source`, also built from Quaternar with `QAR_BUILD_VULKAN_SRC_APP` and included in the launcher's copy/install set.
+- Compile and embed shaders into the executable; default SDK path is beside the executable, independent of working directory. The main build copies the dynamic SDK and transfer-plugin dependencies beside the app.
+- Runtime-load the C SDK, read onboarding code from stdin, pin session GPU to the Vulkan device's LUID.
+- Use existing `qar_render_sender_subscribe_requests()` for target discovery; add no C API.
+- One independently polled sender and stereo camera per requesting target, all drawing the same colored cube and real depth.
+- Protect callback-to-render-thread ID handoff, deduplicate requests and retain callback state through teardown.
+- Publish actual final image layouts and external queue ownership; signal each sender's semaphore. Each camera drains its own submitted work before releasing resources.
+- Documentation entry: `docs/website/docs/developer-guide/rendering-streams.mdx`; usage and known gaps in the example folder.
+- Validation: isolated standalone Debug build in `build/qaros-vulkan-debug`, dynamic debug SDK load/device startup and teardown from another working directory, and CTest GPU readback for two distinct cameras over two cycles passed with Vulkan synchronization validation enabled. SDK DLL is absent from the executable's import table.
