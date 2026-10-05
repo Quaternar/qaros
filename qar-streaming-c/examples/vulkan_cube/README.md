@@ -15,6 +15,13 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
 4. Open the application's content on a target viewer. Additional viewers automatically get their own rendering streams and cameras.
 
 - Enter an onboarding code each time the app starts.
+- `QAR_GPU_ADAPTER_ID` selects the GPU: the lowercase hex LUID (16 digits) or UUID (32 digits) of the adapter. Absent or empty, the first supported NVIDIA GPU is used. A value that matches no supported GPU stops the app with an error. The console names the GPU it renders on.
+
+  ```powershell
+  $env:QAR_GPU_ADAPTER_ID = "a1b2000000000000"; .\qar-vulkan-source.exe
+  ```
+
+- Started from QAROS (Visualizer, Source Applications), the app gets its onboarding code on stdin and `QAR_GPU_ADAPTER_ID` set to the target's GPU, so no prompt needs an answer.
 - Press Ctrl+C to stop the source.
 - Requires an NVIDIA GPU supporting Vulkan external memory and semaphores.
 

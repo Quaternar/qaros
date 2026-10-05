@@ -2,6 +2,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -251,11 +252,18 @@ Run(QarSession* session, VulkanDevice& gpu, HANDLE stop, Requests& requests)
 	{
 		return false;
 	}
-	// Null token: session teardown joins the subscription before Requests dies.
+	// The SDK requires a token for a subscription. Requests outlives the
+	// session, so cancelling at the end of Run is enough.
+	QarCancelToken* subscription = nullptr;
+	if(not Check(qar_cancel_token_create(&subscription)))
+	{
+		return false;
+	}
 	if(not Check(qar_render_sender_subscribe_requests(
-		   session, Requests::OnRequest, &requests, nullptr
+		   session, Requests::OnRequest, &requests, subscription
 	   )))
 	{
+		qar_cancel_token_handle_destroy(subscription);
 		return false;
 	}
 	std::map<PeerKey, QarPeerId> wanted;
@@ -336,7 +344,29 @@ Run(QarSession* session, VulkanDevice& gpu, HANDLE stop, Requests& requests)
 		}
 	}
 	targets.clear();
+	if(not Check(qar_cancel_token_cancel(subscription)))
+	{
+		success = false;
+	}
+	qar_cancel_token_handle_destroy(subscription);
 	return success;
+}
+
+// The GPU QAROS asks this app to render on, set when QAROS launches it. Empty
+// when the variable is absent or empty.
+std::string
+RequestedAdapter()
+{
+	char* value = nullptr;
+	size_t length = 0;
+	if(_dupenv_s(&value, &length, "QAR_GPU_ADAPTER_ID") != 0
+	   || value == nullptr)
+	{
+		return {};
+	}
+	std::string adapter(value);
+	free(value);
+	return adapter;
 }
 
 int
@@ -347,7 +377,8 @@ main(int argc, char** argv)
 		std::cout
 			<< "Usage: qar-vulkan-source [qar-streaming-c.dll] [hub-host]\n"
 			   "Defaults to the SDK beside this executable. Enter onboarding "
-			   "code on stdin.\n";
+			   "code on stdin. QAR_GPU_ADAPTER_ID=<LUID or UUID hex> selects "
+			   "the GPU.\n";
 		return 0;
 	}
 	std::array<wchar_t, 32768> executable{};
@@ -390,7 +421,8 @@ main(int argc, char** argv)
 		QarSession* session = nullptr;
 		auto runtimeInit = qar_runtime_init_default();
 		runtimeInit.runtime_binaries_folder_path = binaries.c_str();
-		if(gpu.Create() && Check(qar_runtime_create(&runtimeInit, &runtime)))
+		if(gpu.Create(RequestedAdapter())
+		   && Check(qar_runtime_create(&runtimeInit, &runtime)))
 		{
 			std::string code;
 			std::cout << "Hub onboarding code: " << std::flush;

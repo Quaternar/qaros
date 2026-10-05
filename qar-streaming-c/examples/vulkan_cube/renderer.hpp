@@ -2,6 +2,8 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <qar_streaming.h>
+#include <string>
+#include <string_view>
 #include <vector>
 #include <vulkan/vulkan.h>
 
@@ -23,9 +25,21 @@ struct VulkanDevice
 	VkDevice device = VK_NULL_HANDLE;
 	VkQueue queue = VK_NULL_HANDLE;
 	uint32_t family = 0;
-	bool Create();
+	// requestedAdapter: lowercase hex LUID (16 digits) or UUID (32 digits) of
+	// the GPU to render on, as QAR_GPU_ADAPTER_ID gives it. Empty picks the
+	// first supported GPU; a value that matches no supported GPU fails.
+	bool Create(std::string_view requestedAdapter = {});
 	~VulkanDevice();
 };
+
+// Lowercase hex of `bytes`, the QAR_GPU_ADAPTER_ID format.
+std::string AdapterIdHex(const uint8_t* bytes, size_t count);
+
+// Whether `requested` (QAR_GPU_ADAPTER_ID format) names this GPU's LUID or
+// UUID.
+bool MatchesAdapterId(
+	const VkPhysicalDeviceIDProperties& id, std::string_view requested
+);
 
 // One camera's resources and one submitted frame. Never waits for other
 // cameras.

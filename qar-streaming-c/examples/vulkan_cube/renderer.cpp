@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 #include "CubeShaders.hpp"
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -27,8 +28,74 @@ CheckVk(VkResult result, const char* operation)
 	std::cerr << operation << " failed: VkResult " << result << '\n';
 	return false;
 }
+
+std::string
+AdapterIdHex(const uint8_t* bytes, size_t count)
+{
+	static constexpr char kDigits[] = "0123456789abcdef";
+	std::string hex;
+	for(size_t index = 0; index < count; ++index)
+	{
+		hex += kDigits[bytes[index] >> 4];
+		hex += kDigits[bytes[index] & 0x0f];
+	}
+	return hex;
+}
+
 bool
-VulkanDevice::Create()
+MatchesAdapterId(
+	const VkPhysicalDeviceIDProperties& id, std::string_view requested
+)
+{
+	std::string lower(requested);
+	for(auto& character : lower)
+	{
+		character = static_cast<char>(
+			std::tolower(static_cast<unsigned char>(character))
+		);
+	}
+	if(id.deviceLUIDValid && lower == AdapterIdHex(id.deviceLUID, VK_LUID_SIZE))
+	{
+		return true;
+	}
+	return lower == AdapterIdHex(id.deviceUUID, VK_UUID_SIZE);
+}
+
+namespace
+{
+VkPhysicalDeviceIDProperties
+AdapterId(VkPhysicalDevice candidate, std::string* name = nullptr)
+{
+	VkPhysicalDeviceIDProperties id{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
+	};
+	VkPhysicalDeviceProperties2 properties{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
+	};
+	properties.pNext = &id;
+	vkGetPhysicalDeviceProperties2(candidate, &properties);
+	if(name != nullptr)
+	{
+		*name = properties.properties.deviceName;
+	}
+	id.pNext = nullptr;
+	return id;
+}
+
+std::string
+DescribeAdapter(VkPhysicalDevice candidate)
+{
+	std::string name;
+	const auto id = AdapterId(candidate, &name);
+	return name + " (LUID "
+		   + (id.deviceLUIDValid ? AdapterIdHex(id.deviceLUID, VK_LUID_SIZE)
+								 : std::string("none"))
+		   + ")";
+}
+} // namespace
+
+bool
+VulkanDevice::Create(std::string_view requestedAdapter)
 {
 	VkApplicationInfo app{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 	app.pApplicationName = "QAROS Vulkan cube";
@@ -68,6 +135,11 @@ VulkanDevice::Create()
 		if(gpuProperties.vendorID != 0x10de)
 		{
 			continue; // Current SDK supports NVIDIA adapters.
+		}
+		if(not requestedAdapter.empty()
+		   && not MatchesAdapterId(AdapterId(candidate), requestedAdapter))
+		{
+			continue;
 		}
 		uint32_t extensionCount = 0;
 		if(not CheckVk(
@@ -124,11 +196,22 @@ VulkanDevice::Create()
 			break;
 		}
 	}
+	if(not physical && not requestedAdapter.empty())
+	{
+		std::cerr << "QAR_GPU_ADAPTER_ID " << requestedAdapter
+				  << " names no NVIDIA graphics GPU with external "
+					 "memory/semaphore support\n";
+		return false;
+	}
 	if(not physical)
 	{
 		std::cerr << "No graphics GPU with external memory/semaphore support\n";
 		return false;
 	}
+	std::cout << "Rendering on " << DescribeAdapter(physical)
+			  << (requestedAdapter.empty()
+					  ? ", the first supported GPU\n"
+					  : ", chosen by QAR_GPU_ADAPTER_ID\n");
 	const float priority = 1;
 	VkDeviceQueueCreateInfo queueInfo{
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
