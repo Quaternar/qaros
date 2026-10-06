@@ -51,7 +51,7 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it, hands it its onboarding code and GPU, and restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launching from QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
+A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it, hands it a one-time launch code of its own (the code on the onboarding screen stays as it is) and its GPU, and restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launching from QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
 
 ## OpenXR apps
 

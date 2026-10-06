@@ -84,6 +84,21 @@ Processes the Hub launches itself are onboarded without a human code:
 - The process opens the secure channel with that key directly - no PAKE, because the key is already high-entropy.
 - From here it is identical to the pairing path.
 
+### Many one-time codes
+
+The Hub holds many pairing codes at once, each its own single-use PAKE invitation, burned by one failed attempt:
+
+| Code | Lifetime | Shown / announced |
+|---|---|---|
+| Onboarding screen code | ~10 s, rotates | Yes, the only one |
+| Codes an onboarded app requests (1-64 per request, optionally bound to a planned peer id) | 2 min default, 10 min max | No |
+| Launch code of a QAROS API app, one per start | 2 min | No, written to the app's stdin only |
+
+- A request never invalidates codes others hold or the screen code.
+- A code that is not announced carries its invitation id and expiry with it (`qar-code:<id>:<expiry>:<code>`). Neither is secret; both cross the network in the handshake anyway.
+- A code bound to a planned peer id enrols that peer id and no other.
+- Codes are never command-line arguments and never logged.
+
 ## Layer 2 - Certificate enrolment
 
 ```text
@@ -201,6 +216,7 @@ A publishes the merged bundle to its session devices  ->  each device merges, pe
 | A1 | The Hub machine is trusted and operator-controlled | Full break: CA keys are on it |
 | A2 | The pairing code is shown only to the intended person, for its 10 s | Whoever has the code and network reach can onboard |
 | A3 | A provisioned key reaches only the process it was minted for | Its holder can onboard within 5 minutes |
+| A3b | A requested or launch code reaches only the device or app it was minted for | Its holder can onboard within its lifetime (at most 10 minutes) |
 | A4 | OS file permissions on the Hub and devices are enforced | Local admin / same-user processes read keys |
 | A5 | Deployment is a LAN or private network | Discovery and pairing ports are not designed for internet exposure |
 | A6 | One signing CA per Hub; federation shares roots only | - |

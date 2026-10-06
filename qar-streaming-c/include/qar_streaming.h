@@ -1068,6 +1068,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
+	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
@@ -1389,8 +1390,10 @@ typedef struct QarOnboardCodeExt
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
-	/// Required; short code shown on the hub onboarding screen. Copied before
-	/// the call returns.
+	/// Required; short code shown on the hub onboarding screen, or the code
+	/// text of any other invite the hub minted (qar_onboarding_invite_get_code),
+	/// such as the launch code QAROS writes to the stdin of an app it starts.
+	/// Copied before the call returns.
 	const char* code;
 } QarOnboardCodeExt;
 
@@ -1450,6 +1453,27 @@ typedef struct QarRequestInviteInit
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT */
 } QarRequestInviteInit;
+
+/**
+ * @brief Ask the hub for a new set of one-time onboarding codes.
+ *
+ * Every request mints codes of its own: codes other callers hold and the
+ * code on the hub's onboarding screen stay valid, and none of the new ones is
+ * announced or displayed. Each code works once and lapses after its
+ * lifetime.
+ */
+typedef struct QarRequestOnboardingCodesInit
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT */
+	/// How many codes, 1 to 64. Also the length of the caller's out array.
+	uint32_t count;
+	/// Seconds each code stays valid; 0 -> 120. At most 600.
+	uint32_t lifetime_seconds;
+	/// Zero -> any device may use the codes. Otherwise a device pairing with
+	/// one of them can only join under this peer id (QarOnboardPeerIdExt).
+	QarPeerId planned_peer_id;
+} QarRequestOnboardingCodesInit;
 
 /**
  * @brief Ask this machine's hub to start a target app for one AR device.
@@ -2175,6 +2199,10 @@ static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
 static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
+/** @brief Default init for QarRequestOnboardingCodesInit (one code, hub
+ * default lifetime, any device). */
+static inline QarRequestOnboardingCodesInit
+qar_request_onboarding_codes_init_default(void);
 /** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
@@ -2323,6 +2351,38 @@ static inline QarResult qar_session_request_onboarding_invite_async(
 );
 
 /**
+ * @brief Ask the hub this session onboarded through for a new set of
+ * one-time onboarding codes, for several devices to onboard at once.
+ *
+ * Every call mints codes of its own. Codes other callers hold and the code
+ * on the hub's onboarding screen stay valid, and none of the new codes is
+ * announced or displayed. Each works once, for init->lifetime_seconds. Hand
+ * a device either the invite itself (qar_onboarding_invite_serialize, then
+ * QarOnboardInviteExt) or its code text (qar_onboarding_invite_get_code, then
+ * QarOnboardCodeExt). Blocks until the hub answers.
+ *
+ * @param init Required; count, lifetime and optional planned peer id.
+ * @param on_progress Optional progress callback.
+ * @param progress_state Passed to on_progress.
+ * @param cancel Optional cancel token.
+ * @param out_invites Required; an array of init->count handles, filled on
+ *   success. Each is owned by the caller (release with
+ *   qar_onboarding_invite_handle_destroy). Untouched entries are NULL on
+ *   failure.
+ * @return Success, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED count is 0 or above 64, the
+ *   lifetime is above 600 s, or the hub peer could not be resolved.
+ */
+static inline QarResult qar_session_request_onboarding_codes(
+	QarSession* session,
+	const QarRequestOnboardingCodesInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel,
+	QarOnboardingInvite** out_invites
+);
+
+/**
  * @brief Erase everything stored for this identity slot (certificate,
  * persisted instance id, session state).
  *
@@ -2386,6 +2446,30 @@ static inline QarResult qar_onboarding_invite_get_expires_unix(
 /** @brief Check if an onboarding invite handle is valid. */
 static inline bool
 qar_onboarding_invite_handle_is_valid(const QarOnboardingInvite* invite);
+
+/**
+ * @brief The code text of a pairing-code invite, to pass as
+ * QarOnboardCodeExt.code.
+ *
+ * The text names its own invitation, so it works for any invite the hub
+ * minted, not only the one its onboarding screen shows. It is a secret:
+ * never log it.
+ *
+ * @param invite Required; a PAKE invite (qar_onboarding_invite_get_method).
+ * @param out_buffer Receives the NUL-terminated text. May be NULL to query
+ *   the length only.
+ * @param buffer_size Size of out_buffer in bytes.
+ * @param out_length Optional; receives the text length without the NUL.
+ * @return Success, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the invite is not a pairing-code
+ *   invite, or out_buffer is too small (out_length still tells the length).
+ */
+static inline QarResult qar_onboarding_invite_get_code(
+	const QarOnboardingInvite* invite,
+	char* out_buffer,
+	size_t buffer_size,
+	size_t* out_length
+);
 /** @brief Destroy an onboarding invite handle. */
 static inline void
 qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
@@ -5438,6 +5522,18 @@ qar_request_invite_init_default(void)
 	return init;
 }
 
+static inline QarRequestOnboardingCodesInit
+qar_request_onboarding_codes_init_default(void)
+{
+	QarRequestOnboardingCodesInit init = {
+		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT, NULL },
+		1,					  // count
+		0,					  // lifetime_seconds -> hub default
+		qar_peer_id_default() // planned_peer_id -> any device
+	};
+	return init;
+}
+
 static inline QarSessionInviteTargetAppInit
 qar_session_invite_target_app_init_default(void)
 {
@@ -6035,7 +6131,25 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  void,                                                                    \
 	  onboarding_invite_handle_destroy,                                        \
 	  (QarOnboardingInvite * invite),                                          \
-	  (invite))
+	  (invite))                                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_request_onboarding_codes,                                        \
+	  (QarSession * session,                                                   \
+	   const QarRequestOnboardingCodesInit* init,                              \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel,                                                 \
+	   QarOnboardingInvite** out_invites),                                     \
+	  (session, init, on_progress, progress_state, cancel, out_invites))       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  onboarding_invite_get_code,                                              \
+	  (const QarOnboardingInvite* invite,                                      \
+	   char* out_buffer,                                                       \
+	   size_t buffer_size,                                                     \
+	   size_t* out_length),                                                    \
+	  (invite, out_buffer, buffer_size, out_length))
 
 QAR_DECLARE_MODULE_COMMON(
 	ONBOARDING, Onboarding, onboarding, QAR_ONBOARDING_FUNCTION_LIST
