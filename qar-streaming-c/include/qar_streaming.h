@@ -43,8 +43,8 @@
  *    qar_runtime_rejoin() with a previously persisted QarOnboardingId -
  *    **the only calls that produce an active `QarSession*`**. There is no
  *    "current session" getter, so keep the returned pointer: it is the first
- *    argument of nearly every other call, and qar_session_destroy() ends it.
- *    Persist the onboarding id the onboard call returns; it is the ticket for
+ *    argument of nearly every other call, and qar_session_handle_destroy() ends
+ * it. Persist the onboarding id the onboard call returns; it is the ticket for
  *    every later rejoin.
  * 4. qar_session_invite_target_app() (or its async form) - **the only source
  *    of a target `QarPeerId`**. The hub remembers every invited device
@@ -137,16 +137,24 @@
  *   of a mapped app volume gesture are in it. See QarAppVolumeSize.
  * - **App content space.** The application's own world inside the box, the
  *   space it renders in: app volume space taken into the app pose, positions
- *   divided by the app scale, so in app metres. A render sender bound to an app
- *   volume hands out its view poses and hand poses in it, and a mapped app
- *   volume gesture's start and action points are in it, so an application uses
- *   them as they come.
+ *   divided by the app scale, so in app metres. A render sender hands out
+ *   everything in its app volume's app content space - view poses, hand aim
+ *   poses, hand joint poses, joint radii and joint velocities - and takes the
+ *   rendered pose back in it; a mapped app volume gesture's start and action
+ *   points are in it too, so an application uses them as they come. A render
+ *   sender whose volume does not resolve hands out nothing rather than room
+ *   space (QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED).
  * - **View space.** One render view's camera frame, looking along -Z. QarFov
  *   angles are in it, in radians.
  * - **Panel space** and **panel content space.** A GUI panel's local frame in
  *   metres, and the pixel raster drawn onto it. See QarGuiPanelSize.
  * - **Texture pixels.** Positions inside a video texture, for frame layouts.
  *   See QarVideoFrameView.
+ *
+ * The rule (ADR-0253): what a render sender hands its application is in app
+ * content space. What arrives through data streams and shared objects - app
+ * volume and GUI panel state, another peer's published data - is in the
+ * publishing peer's room space, and is never converted for you.
  */
 #ifndef QAR_TYPES_H
 #define QAR_TYPES_H
@@ -319,6 +327,12 @@ typedef enum QarStatusCode
 	QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED = 607,
 	QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME = 803,
 	QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED = 804,
+	/** The render sender's app volume does not resolve - it is not known to
+	 * this session yet, or it was removed - so app content space is undefined
+	 * and no frame was begun. Nothing is handed out in room space instead.
+	 * Recoverable: keep calling begin-frame, it succeeds once the volume
+	 * resolves. A volume that was removed never does; recreate it. */
+	QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED = 805,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
@@ -1685,11 +1699,15 @@ typedef struct QarRenderSenderInit
 
 	/// Array of views in the single video frame.
 	///
-	/// The order and the `texture_index` values given here are a request, not
-	/// the layout of the frames you receive: the sender may reorder the views
-	/// (separated textures in eye order come back colour first, for example).
-	/// Look each view of a received frame up by its `eye` and `data_type`;
-	/// never pair views with textures by array position.
+	/// **The order is guaranteed.** The views of the layout
+	/// (qar_render_sender_layout()) and of every frame this sender hands back
+	/// (qar_render_sender_frame_*()) come in exactly the order declared here,
+	/// each with the `eye` and `data_type` declared at its position. Textures
+	/// come in the order the views first use them: one per view for
+	/// QAR_FRAME_LAYOUT_SEPARATED_TEXTURES, one per data type for side by side
+	/// and layered, and each view's `texture_index` names its texture. A view
+	/// the frame layout provides but you did not declare follows the declared
+	/// ones.
 	QarRenderFrameView frame_views[QAR_MAX_FRAME_VIEWS];
 	size_t frame_views_count;
 
@@ -1697,6 +1715,13 @@ typedef struct QarRenderSenderInit
 	/// places it in the session's shared 3D scene. Create the volume first with
 	/// qar_app_volumes_get_or_create() and pass the id it wrote out; a stream
 	/// without one is not positioned in the scene and no viewer can show it.
+	///
+	/// It also defines the sender's **app content space**: every pose, hand
+	/// joint, radius and velocity the sender hands the application is in it.
+	/// While the volume does not resolve, the sender hands out nothing:
+	/// begin-frame fails with
+	/// QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED and the hands are
+	/// reported untracked.
 	///
 	/// NULL is rejected with QAR_STATUS_APP_VOLUME_INVALID_ID.
 	const QarAppVolumeId* app_volume_id;
@@ -2729,6 +2754,10 @@ static inline QarResult qar_render_sender_create_async(
  * on, so it can be read before the first begin-frame and while a transfer is
  * reconnecting. Size lasting resources from this rather than from a frame that
  * has not arrived yet.
+ *
+ * Its views come in exactly the order declared in
+ * QarRenderSenderInit::frame_views, and every frame's views and textures match
+ * it; after qar_render_sender_change_layout(), in the order of that layout.
  */
 static inline QarResult qar_render_sender_layout(
 	QarRenderSender* stream, QarVideoFrameLayout* out_layout
@@ -2738,7 +2767,8 @@ static inline QarResult qar_render_sender_layout(
  *
  * Not callable inside a frame cycle: between a successful begin-frame and its
  * qar_render_sender_show_frame() it returns QAR_STATUS_LOGIC_ERROR and changes
- * nothing.
+ * nothing. The views and textures of later frames keep the order given in
+ * @p layout.
  */
 static inline QarResult qar_render_sender_change_layout(
 	QarRenderSender* stream, const QarVideoFrameLayout* layout
@@ -2790,7 +2820,15 @@ static inline QarResult qar_render_sender_frame_vulkan(
 /**
  * @brief Begin producing a new frame.
  *
- * Returns per-frame information such as per-eye pose/FOV to render with.
+ * Returns per-frame information such as per-eye pose/FOV to render with. The
+ * poses are in the bound app volume's app content space (ADR-0253).
+ *
+ * Fails with QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED, without
+ * beginning a frame, while the app volume does not resolve: app content space
+ * is undefined then, and no room-space pose is handed out in its place. The
+ * failure is recoverable - keep calling, a frame begins once the volume
+ * resolves. The call is held about 16 ms first, so a retrying loop does not
+ * spin.
  */
 static inline QarResult qar_render_sender_begin_frame(
 	QarRenderSender* stream,
@@ -2808,6 +2846,9 @@ static inline QarResult qar_render_sender_begin_frame(
  * QarResult reports only real failures (invalid arguments, a failed
  * begin-frame); a still-pending wait is reported through @p out_ready, not as
  * an error. Poll with the same @p stream until @p out_ready becomes true.
+ * Fails like qar_render_sender_begin_frame(), including
+ * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
+ * not resolve.
  */
 static inline QarResult qar_render_sender_try_begin_frame(
 	QarRenderSender* stream,
@@ -2817,7 +2858,8 @@ static inline QarResult qar_render_sender_try_begin_frame(
 typedef void (*qar_render_sender_begin_frame_callback_t)(
 	QarResult status, QarRenderFrameInfo* frame_info, void* user_state
 );
-/** @brief Async version of begin_frame. */
+/** @brief Async version of begin_frame. Same poses, same space and same
+ * failures as qar_render_sender_begin_frame(). */
 static inline QarResult qar_render_sender_begin_frame_async(
 	QarRenderSender* stream,
 	qar_render_sender_begin_frame_callback_t callback,
@@ -2835,9 +2877,13 @@ static inline QarResult qar_render_sender_show_frame(
  *
  * Drains everything that arrived and returns the last sample. The poses are in
  * the bound app volume's app content space, like the view poses, and so are
- * the joint radii and velocities measured beside them.
+ * the joint radii and velocities measured beside them: radii in app units,
+ * velocities in app axes, linear ones in app units per second (ADR-0253).
+ * Never room space - hand data a peer publishes on a data stream is in that
+ * peer's room space, but this call converts it.
  * Samples arrive only while the target peer is focused on the volume and not
- * editing it. When nothing arrived since the previous call, the last sample is
+ * editing it, and while the volume resolves; otherwise both hands are
+ * untracked. When nothing arrived since the previous call, the last sample is
  * returned again while it is younger than a second, so polling faster than the
  * device sends never blinks the hands out between its samples. Once no sample
  * has arrived for a second, both hands are reported untracked: a device that
