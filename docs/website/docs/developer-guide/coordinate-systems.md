@@ -22,7 +22,7 @@ WORLD (geographic, optional)
 
 ### Room space — where everything lives
 
-**Room space** is the shared frame of reference of the physical room. Every peer in a session agrees on it: when one user places an app volume on the table, every other user sees it on the same table. All app-volume poses, GUI-panel poses, and gesture points in the API are expressed in room space unless stated otherwise.
+**Room space** is the shared frame of reference of the physical room. Every peer in a session agrees on it: when one user places an app volume on the table, every other user sees it on the same table. App-volume poses and GUI-panel poses are expressed in room space. What an application renders and hit-tests — view poses, hand poses, gesture points — arrives in [app content space](#app-content-space--your-applications-world-inside-the-box) instead. The C header names the space of every field that holds one.
 
 Conventions:
 
@@ -49,6 +49,8 @@ An **app volume** is placed in the room by two values:
 - `pose` — the pose of the **cuboid's center** in room space,
 - `size` — width × length × height in meters.
 
+App volume space has its origin at the cuboid centre (not a corner, not the floor): **+X** spans the width, **+Y** points up along the height, **+Z** spans the length (horizontal depth). The box covers ± half of each extent.
+
 Moving or rotating the volume moves the box *and everything rendered inside it* — like picking up and turning a diorama.
 
 ### App content space — your application's world inside the box
@@ -67,20 +69,23 @@ This separation is the key trick: users can grab the volume to move the whole bo
 
 GUI panels do **not** live inside app volumes; they are positioned directly in room space, as siblings of app volumes. Two conventions differ from volumes:
 
-- A panel's pose is its **top-left corner** (an app volume's pose is its **center**). Keep this in mind when aligning panels to volumes.
+- A panel's pose is the **midpoint of its top edge** (an app volume's pose is its **center**). The surface hangs below the pose: x in ±`width_meters`/2, y from −`height_meters` to 0. Keep this in mind when aligning panels to volumes.
+- Panel space is right-handed with the front face along **−Z** (towards the viewer), +Y up, and +X along the top edge to the viewer's *left*.
 - A panel has a physical size in meters (`width_meters` × `height_meters`) plus a **content scale** that maps the panel's pixel content onto those meters — the same panel can show a dense dashboard or a large-print menu at the same physical size.
+- **Panel content space** is the pixel raster on the panel: origin at the top-left corner as the viewer sees it, +X right, +Y down. Panel interaction points (`QarGuiPanelPoint`) are reported in it.
 
 ## Gestures and spaces
 
-The gesture system reports interaction points in room space (meters) and lets you map gestures onto app-volume transforms:
+The gesture system lets you map gestures onto app-volume transforms, or consume them yourself:
 
-- Gesture events carry a `start_point` and `action_point` in room space, plus accumulated `translation_delta` (meters) and `rotation_delta` (quaternion).
-- Single-pointer 6-DoF gesture deltas are expressed in world/room orientation; dual-pointer gestures (pinch-distance scale, two-hand rotate) are evaluated in head-local space, which matches how users intuitively perform them.
+- App volume gesture events carry a start point and an action point in **app content space** (app units, under the app pose and scale the gesture began with), so you can hit-test them against your model directly. Their accumulated translation and rotation deltas are in app volume space.
 - A **mapping rule** routes a gesture either to the content (`app_pose` / `app_scale`) or lets your application consume the raw event. Rules can constrain translation/rotation to specific axes, set a `precision` divisor (hand-centimeters per app-centimeter), and choose how sensitivity relates to the current `app_scale` (constant, inverse, or proportional).
 
 The default configuration maps dual-pointer distance to `app_scale` and single-pointer 6-DoF to `app_pose` — grab-to-move, pinch-to-zoom out of the box.
 
 ## Streaming and spaces
+
+A render sender bound to an app volume hands out its per-eye view poses — and the viewer's hand poses — in that volume's **app content space**, the space your application renders in, so you use them as they come. Field-of-view angles are in each view's own camera frame (looking along −Z), in radians.
 
 When your application streams frames, the projection metadata you provide (per-eye pose, field of view, near/far planes) is what ties your rendered pixels back into the room: the mixer uses it, together with the frame's depth channel, to re-project your image to the viewer's latest head pose and to mask it to your app volume's box. Getting poses and near/far values right is therefore not cosmetic — wrong metadata produces swimming or clipped content. See [Rendering Streams](/docs/developer-guide/rendering-streams).
 
@@ -93,7 +98,10 @@ When your application streams frames, the projection metadata you provide (per-e
 | `app_pose` | App volume (unscaled meters) | Where the app origin sits in the volume |
 | `app_scale` | — | Room-meters per app-meter |
 | World anchor | ECEF WGS84 (meters, double) | Pins a volume to the Earth |
-| GUI panel pose | Room | **Top-left corner** of the quad |
+| GUI panel pose | Room | **Midpoint of the top edge** of the quad |
 | Panel size + content scale | Room / pixels | Physical size; pixel density |
-| Gesture points/deltas | Room (head-local for dual-pointer) | Meters + quaternion deltas |
-| Stream view poses & FOV | Room | Per-eye projection used for warping |
+| App volume gesture points | App content | Where the gesture started / acts |
+| App volume gesture deltas | App volume | Meters + quaternion deltas |
+| Panel interaction points | Panel content (pixels) | Top-left origin, +Y down |
+| Stream view poses, hand poses | App content | Per-eye projection used for warping; viewer hands |
+| FOV angles | View | Radians, view looks along −Z |

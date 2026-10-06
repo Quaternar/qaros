@@ -13,7 +13,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. Panel content is currently **web content**: the panel renders a URI, which makes any existing web UI immediately usable in the room.
 
-The concepts (identity by common name, top-left-corner pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
+The concepts (identity by common name, top-edge-midpoint pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
 
 ## Creating a panel (idempotent)
 
@@ -28,7 +28,7 @@ init.common_name = "machine-status.myapp.example.com"; /* stable identity */
 init.display_name = "Machine Status";
 
 init.pose = qar_pose_default();
-init.pose.position.y = 1.5f;      /* top-left corner, room space, meters */
+init.pose.position.y = 1.5f;      /* top-edge midpoint, room space, meters */
 init.pose.position.z = -1.0f;
 
 QarGuiPanelSize size = qar_gui_panel_size_default();
@@ -52,7 +52,7 @@ var options = new GuiPanelOptions
 {
     CommonName  = "machine-status.myapp.example.com", // stable identity
     DisplayName = "Machine Status",
-    // Pose is the top-left corner, room space, meters.
+    // Pose is the top-edge midpoint, room space, meters.
     Pose = new Pose { Position = new Vec3(0f, 1.5f, -1.0f) },
     Size = new GuiPanelSize { WidthMeters = 0.8f, HeightMeters = 0.5f },
 };
@@ -120,7 +120,7 @@ Update callbacks arrive on library threads — see the [callback rules](/docs/de
 
 **Drive app state from a panel.** Host a small web page that calls back into your application (REST/WebSocket). The panel is shared, so any user in the room can press the buttons; your app sees the effect and updates its rendered content accordingly.
 
-**Attach a panel to your app volume.** Panels don't parent to volumes automatically, but you can keep one docked: subscribe to your volume's pose updates and reposition the panel relative to it. Remember the differing conventions — panel pose is the **top-left corner**, volume pose is the **center**.
+**Attach a panel to your app volume.** Panels don't parent to volumes automatically, but you can keep one docked: subscribe to your volume's pose updates and reposition the panel relative to it. Remember the differing conventions — panel pose is the **midpoint of its top edge**, volume pose is the **center**.
 
 ## Compiled tutorial
 

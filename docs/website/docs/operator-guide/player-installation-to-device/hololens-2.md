@@ -11,7 +11,9 @@ We support only the sideloaded Quaternar player app on HoloLens. The Microsoft H
 
 ## Install the HoloLens Player
 
-Obtain the HoloLens Player app bundle from Quaternar, then sideload it through the HoloLens Device Portal.
+The player ships in the QAROS ZIP under `devices/hololens/`: `QAROS Player HoloLens <version>.msix`, its `.cer` certificate and a `Dependencies/` folder. Sideload it through the HoloLens Device Portal.
+
+A HoloLens with an earlier player build (package version `1.0.0.0`) must uninstall it first: the player's package version now follows the product version.
 
 ### 1. Enable Developer Mode on the HoloLens
 

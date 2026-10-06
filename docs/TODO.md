@@ -8,7 +8,7 @@ items here instead of leaving `:::note TODO` admonitions in the pages.
 
 Status legend: TODO · BLOCKED(reason) · NEEDS-INPUT(who).
 
-Last swept: 2026-10-06 (done items removed).
+Last swept: 2026-10-06 (synced with internal docs; done items removed).
 
 ---
 
@@ -30,12 +30,13 @@ Last swept: 2026-10-06 (done items removed).
   `operator-guide/running-the-hub` document this workaround. When a local
   "show my code" screen exists, update both and add the click path.
 
-- **MSIX as the primary install path** — BLOCKED(two items) / T13. Promotion needs
-  (1) seeding the launcher config into the package `LocalState` (packaged install
-  root is read-only) and (2) a tray toggle for the startup task. Tracked in the
-  `windows-msix-packaging` feature. When landed, rewrite the MSIX section of
-  `operator-guide/installation` as the primary path and demote ZIP, and revisit
-  `operator-guide/maintenance-and-updates`.
+- **Classic system installer** — BLOCKED(product). The planned installer is an MSI plus a signed
+  sparse MSIX identity, installing one shared runtime that source apps load instead of carrying
+  their own copy. Today the "system installer" is the interim full MSIX bundle
+  (`QAROS Hub <v>.msixbundle`). When the MSI ships, update `operator-guide/installation`
+  (artifact table, data root, install folder), `operator-guide/maintenance-and-updates`, and
+  `developer-guide/getting-started` (how an app finds the installed runtime; the NuGet and Unity
+  ZIP stop bundling it).
 
 ## Blocked on the C# binding not being published in `qaros`
 
@@ -52,8 +53,8 @@ Last swept: 2026-10-06 (done items removed).
     references).
   - Add a `Tutorials > C#` subfolder (`developer-guide/tutorials/csharp/*.mdx`)
     mirroring the 5 C tutorials 1:1.
-  - Publish real NuGet package metadata; confirm the package id used in
-    `developer-guide/getting-started` (currently `QarStreamingSharp`).
+  - The NuGet ids are `Quaternar.Qaros.Streaming[.Demo]` (now in
+    `developer-guide/getting-started`); publish them where integrators can reach them.
   - Verify the C# member names the docs currently infer (not all were in the
     binding fact-check): `session.GuiPanels.GetOrCreate` / `NavigateToUri`,
     `session.AppVolumes.GetOrCreate`, `session.RenderSenders.Create`,
@@ -98,7 +99,7 @@ Last swept: 2026-10-06 (done items removed).
   `developer-guide/coordinate-systems` currently frames both as inherited platform
   behavior.
 - **Visualizer UI walkthrough with screenshots** — TODO / T7. Tray menu, visualizer
-  window, app-volumes panel, warping/timing view, hub-connect screen. Store under
+  window, Source Applications panel (tiles, add flow, Running list), Logs panel, app-volumes panel, warping/timing view, hub-connect screen. Store under
   `docs/website/static/img/screenshots/`. Referenced honestly (no tour) in
   `operator-guide/running-the-hub`.
 - **Developer troubleshooting growth** — TODO. Grow `developer-guide/troubleshooting`
@@ -148,3 +149,26 @@ guarantees in the meantime):
   then in Quaternar commit `.gitmodules` + the `qaros` gitlink + the CMake mirror
   change + the `default_inits.h` C-compat fix. Stage selectively — the Quaternar
   working tree has unrelated changes.
+
+## To verify (added 2026-10-06 sync with internal docs)
+
+- **Launcher config `sourceApps[].type: "ApiApp"`** — NEEDS-INPUT(team). QAROS API apps are added
+  from the visualizer; whether the file-based `sourceApps[]` accepts them, and with which keys, is
+  not verified. `operator-guide/launcher-config-reference` keeps listing only the older kinds.
+- **Reconnect in the visualizer UI** — TODO. What a viewer/operator sees while a stream reconnects
+  (status text, frozen frame) was not traced. `operator-guide/running-the-hub` gives timings only.
+- **HoloLens player name on device** — TODO. `player-installation-to-device/hololens-2` still says
+  the app appears as *QuaternAR Player* / *Skyline Player*; the shipped package is
+  `QAROS Player HoloLens <v>.msix`. Confirm the tile name and whether `Dependencies/` and the `.cer`
+  must be selected in Device Portal.
+- **Exact received frame-view order** — TODO. The header states only "colour first" for separated
+  textures; `developer-guide/rendering-streams` gives colour L, colour R, depth L, depth R and
+  tells apps to look views up by eye and type, which is safe either way.
+- **App-facing log streaming** — NEEDS-INPUT(team). Best-effort log streaming with lost-message
+  markers is visible in the visualizer's Logs panel only; the C API has no log subscription. Document
+  an app API if one is planned.
+- **Header overview names `qar_session_destroy()`** — TODO(engineering). The generated header's
+  "Basic flow" says `qar_session_destroy()` ends a session; the function is
+  `qar_session_handle_destroy()`. Fix in the API source, then the header regenerates.
+- **API app launch policy wording** — TODO(engineering). The registry enum comment says "one process
+  for every target", the behaviour is one shared process for all targets (what the docs say).

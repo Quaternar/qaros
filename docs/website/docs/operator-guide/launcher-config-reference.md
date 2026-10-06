@@ -12,9 +12,12 @@ The runtime launcher (`qar-runtime-launcher.exe`) is configured by one JSON obje
 
 | Started by | Configuration used |
 |---|---|
-| Launcher alone, empty input | `qar-runtime-launcher.jsonc` next to the launcher executable (comments allowed). |
-| Tray (`qaros-hub-service.exe <config-path>`) | The file given as the tray's first argument. Must be **plain JSON** (no comments); a file that fails to parse is replaced by `{"logSeverity": "debug"}`. |
-| Tray, no argument | A minimal built-in config (`logSeverity: debug`), so all other keys take their defaults. |
+| Launcher alone, empty input | `qar-runtime-launcher.jsonc` next to the launcher executable. |
+| Tray (`qaros-hub-service.exe <config-path>`) | The file given as the tray's first argument. |
+| Tray, no argument | `qar-runtime-launcher.jsonc` next to the launcher executable. |
+
+- Every config file may contain `//` and `/* */` comments.
+- A file that cannot be parsed is reported and the Hub does not start on defaults: fix the file.
 
 The tray always adds `startupTarget` and `startupTargetPath` (see [Hub interconnect](#hub-interconnect-startuptarget)) and sets `prewarmVisualizer: true` unless the file sets it.
 
@@ -69,7 +72,7 @@ All paths default to subfolders of the per-user application-data root (see [Inst
 | `routerPort` | integer | - | Fixed message-router port. Omit it: the Hub takes the first port in the range below free on both TCP and UDP, so several local Hubs coexist. Pin it only for a firewalled deployment. |
 | `routerPortRangeStart` | integer | `19120` | First port searched when `routerPort` is unset. |
 | `routerPortRangeEnd` | integer | `19199` | Last port searched when `routerPort` is unset. |
-| `sessionEndpoints` | array of locator strings or address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Each entry is either a locator string `"<protocol>/<host>:<port>"` (IPv6 host in brackets) or `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <port>}` with all three fields. A malformed entry fails the config load. |
+| `sessionEndpoints` | array of locator strings or address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Must be an array (a bare string is rejected). Each entry is either a locator string `"<protocol>/<host>:<port>"` (IPv6 host in brackets) or `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <1-65535>}` with all three fields; both forms may be mixed. A malformed entry stops the launcher with an error message. |
 | `discoveryHost` | string | `""` | Host name or IP advertised in the discovery beacon as the discovery server address. |
 | `discoveryPort` | integer | `7445` | Discovery port. |
 | `discoveryDisplayName` | string | - | Overrides the Hub name shown in discovery. Omit it: the Hub keeps its persisted name (initially "QAROS Hub"). |
@@ -78,7 +81,7 @@ All paths default to subfolders of the per-user application-data root (see [Inst
 ```json
 {
   "routerPort": 19120,
-  "sessionEndpoints": [ { "Protocol": "tcp", "Hostname": "192.168.1.20", "Port": 19120 } ]
+  "sessionEndpoints": [ "tcp/192.168.1.20:19120", { "Protocol": "tcp", "Hostname": "hub.lab2.local", "Port": 19120 } ]
 }
 ```
 
@@ -103,7 +106,7 @@ See [Security Model](/docs/operator-guide/security-model) and [Managing Devices]
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `autoLaunchVisualizer` | boolean | `false` (shipped file: `true`) | Open the single control visualizer when the Hub starts. |
+| `autoLaunchVisualizer` | boolean | `false` (shipped file: `true`) | Open the single control visualizer when the Hub starts. A launcher an application starts through the C API without this key opens no window. |
 | `prewarmVisualizer` | boolean | `false` (tray: `true`) | When `autoLaunchVisualizer` is off, start the visualizer hidden so opening it later is instant. |
 | `openVisualizerOnStartup` | boolean | `true` | Read by the tray, not the launcher: show the visualizer once the Hub has started. |
 

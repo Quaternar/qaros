@@ -40,10 +40,10 @@ If no device is shown, check that:
 
 ## Install the APK
 
-Run the command from the folder containing the APK file, or provide the full path to the APK.
+The APK ships in the QAROS ZIP under `devices/android/` as `QAROS Player MetaLens <version>.apk`. Run the command from that folder, or provide the full path to the APK.
 
 ```powershell
-adb install qar-openxr-app-OpenGLES-spaces-release.apk
+adb install "QAROS Player MetaLens <version>.apk"
 ```
 
 ## Reinstall or update the app
@@ -51,5 +51,5 @@ adb install qar-openxr-app-OpenGLES-spaces-release.apk
 If the app is already installed and you want to replace it, use the `-r` flag.
 
 ```powershell
-adb install -r qar-openxr-app-OpenGLES-spaces-release.apk
+adb install -r "QAROS Player MetaLens <version>.apk"
 ```

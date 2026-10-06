@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 title: Running the Hub
-description: Running the QAROS Hub - tray service, runtime launcher, and the visualizer.
+description: Running the QAROS Hub - tray service, runtime launcher, the visualizer, reconnects, logs and crash dumps.
 ---
 
 # Using the Hub
@@ -28,7 +28,46 @@ Hub configuration is managed through the Hub UI and persists across restarts. St
 
 The visualizer is the Hub's window into the shared room: it renders the same mixed scene a headset user would see, and hosts the desktop-side UI panels.
 
-A full operator walkthrough of the visualizer's UI surface - the app-volumes panel (moving and resizing volumes), the warping/timing monitor, the hub-connect screen, and device onboarding - with screenshots is not yet captured. The underlying features run as described elsewhere in this guide; this section will grow into a screen-by-screen tour once those screens are captured.
+- **Source Applications** starts, configures and stops the apps streaming into the room: see [Source Applications](/docs/operator-guide/source-applications).
+- **UI mode** (Settings): **Basic**, **Developer** or **Debug**. Debug needs the debug password and shows the debug-only apps and tools.
+- **Logs** shows the log lines of the processes in the session (see [Logs](#logs)).
+
+A screen-by-screen tour with screenshots is not yet captured.
+
+## When a process drops out or restarts
+
+QAROS recovers on its own; nothing needs restarting by hand.
+
+| Event | What happens | Typical time |
+|---|---|---|
+| A process dies or its network drops | The session drops it once it has been silent for about 2 s. | ~2 s |
+| A stream stops delivering frames | The receiver probes the sender and reconnects the stream once the sender is gone. | ~5 s from kill to reconnected stream |
+| A source app is killed and relaunched | The relaunched app takes over its streams from the dead instance. A second copy is refused only while the first is provably still live. | ~2-3 s |
+| **Stop** on a running app | The Hub asks the app to stop and kills it after about 1.3 s. | ~1.3 s |
+| A QAROS API app exits within 10 s of starting | The Hub restarts it with a fresh onboarding code, backing off from 2 s up to 60 s, and reports the first failure. | 2 s, doubling |
+| The Hub's router is unreachable | Processes keep retrying with backoff up to 10 s and reconnect once it is back, without a restart. | up to 10 s after it returns |
+
+### When an app restarts
+
+Restarting a source app (crash, kill, or **Stop** then **Launch**) is safe: the new instance keeps the same streams and app volume, and viewers see it again within a few seconds.
+
+## Logs
+
+- Every process writes its log files into the Hub's log folder (default `<data root>/qar-launcher-default/<session-id>`, set with `logFolder`, see the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference#paths)). The default folder is emptied when the Hub starts: copy it **before** restarting if you need it.
+- Processes started by the Hub also write `<name>_stdout.log` and `<name>_stderr.log` there.
+- The visualizer's **Logs** panel streams log lines live. Delivery is best-effort: a gap shows as a warning line `[viz] N log messages lost`, and a restarted process as `[viz] peer log stream restarted`. The log files stay complete. Log-level changes from the panel are always delivered.
+
+## Crash dumps
+
+A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a short report) and `<time>_<process>_<pid>.dmp` (the dump).
+
+| Process | Where |
+|---|---|
+| Processes started by the Hub | Next to that process's logs, in the Hub's log folder |
+| Your application on the C API | `crashes/` under the `log_folder_path` it passes to `qar_library_init` |
+| Anything else | `%TEMP%\quaternar\crashes` |
+
+When reporting a crash, send both files together with the log files next to them.
 
 ## Connecting two Hubs
 

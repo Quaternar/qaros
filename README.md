@@ -16,17 +16,18 @@ winget install --id LLVM.LLVM ---exact
 
 ## Obtain QarOS packages
 
-1. Request the latest QarOS binary package from https://www.quaternar.com/.
-2. Unzip the archive you receive and move its contents into the repository's `package/` directory (the packages folder).
-3. The packages folder should have this form
+1. Request the latest QAROS runtime ZIP (`QAROS <version>.zip`) from https://www.quaternar.com/.
+2. Unzip the archive and move the contents of its top-level folder into the repository's `package/` directory.
+3. The package folder should have this form
 
 ```
-packages
-    |- bin
-    |- lib
-    |- include
-    |- shared
+package
+    |- bin       # qar-streaming-c.dll, qar-runtime-launcher, runtime DLLs
+    |- include   # qar_streaming.h matching the binaries
+    |- devices   # device player apps
 ```
+
+The runtime ZIP has no import library: the examples load `package/bin/qar-streaming-c.dll` at run time.
 
 ## Documentation
 

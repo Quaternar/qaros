@@ -188,9 +188,50 @@ The compiled example in this repo now demonstrates the full two-instance path en
 - Source: `qaros/qar-streaming-c/examples/onboarding_and_rejoin.c`
 - Example walkthrough: [Onboarding and Rejoin](/docs/developer-guide/tutorials/c/onboarding-and-rejoin)
 
+## Choosing the GPU
+
+Chain a `QarGraphicsDeviceId` into `QarOnboardInit` or `QarRejoinInit` to create the session's GPU devices — and with them every render sender's frame textures — on a specific adapter. Windows takes the adapter LUID, other platforms its UUID. Absent, the library picks one. Only NVIDIA adapters are supported; an unsupported adapter fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+
+```c
+QarGraphicsDeviceId adapter = qar_graphics_device_id_default();
+adapter.id_type = QAR_GPU_DEVICE_ID_TYPE_LUID;
+memcpy(&adapter.luid, my_adapter_luid, sizeof adapter.luid); /* e.g. VkPhysicalDeviceIDProperties::deviceLUID */
+
+onboard.header.next = &onboard_code.header;   /* mode extension first */
+onboard_code.header.next = &adapter.header;   /* then the adapter     */
+```
+
+Render on the same adapter you pass here, so frames need no cross-GPU copy.
+
+## Joining under a planned peer id
+
+A process whose peer id was planned by someone else (for example a process another component starts and announces to the session) chains `QarOnboardPeerIdExt` next to the mode extension. The session then sees it under that id instead of a freshly minted one. The id is persisted with the identity slot, so later rejoins keep it. A zero id is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. Most applications do not need it.
+
+## Launched by QAROS: QAROS API apps
+
+An operator can add your executable as a **QAROS API app** in the visualizer's [Source Applications](/docs/operator-guide/source-applications) panel. QAROS then starts one process of it for all targets, and on every start hands it:
+
+| What | How | Format |
+|---|---|---|
+| A fresh, single-use onboarding code | First line of **stdin**, newline-terminated. Never on the command line, never logged. | The pairing code |
+| The target's GPU | Environment variable `QAR_GPU_ADAPTER_ID` | Lowercase hex of the adapter id bytes: LUID (16 digits) on Windows, UUID (32 digits). Absent or empty when unknown. |
+| Arguments | Command line | One argument per line the operator entered |
+
+The working directory is the executable's folder; stdout and stderr go to the Hub's log folder. To work as an API app:
+
+1. Read the code from stdin and call `qar_runtime_onboard` with `QarOnboardCodeExt`. Do not prompt for anything else: nobody is there to answer.
+2. If `QAR_GPU_ADAPTER_ID` is set, pick that adapter for rendering and chain it as a `QarGraphicsDeviceId` ([above](#choosing-the-gpu)). Fail with an error if no adapter matches.
+3. Create your own app volume (`qar_app_volumes_get_or_create`); QAROS registers none for an API app.
+4. Subscribe to render requests and serve every target that requests your content ([Rendering Streams](/docs/developer-guide/rendering-streams#accepting-render-stream-requests)).
+5. Treat end of stdin as a request to stop. QAROS closes stdin on **Stop** and kills the process about 1.3 s later.
+
+An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s) and the operator is notified of the first failure. Each restart brings a new code, so onboard again rather than replaying the old one. The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this contract.
+
 ## Getting devices into the session
 
-There is no host-side "invite a device by address" call. Every peer reaches the session the same way: it runs its own rejoin-or-onboard flow (this page) against the hub, either directly with a pairing code or via a serialized invite from an already-onboarded instance (see [Sibling onboarding](#sibling-onboarding-one-app-several-api-instances) above). Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers), and it is the peer itself that requests a render stream from your application — see [Accepting render stream requests](/docs/developer-guide/rendering-streams#accepting-render-stream-requests).
+Every peer reaches the session by running its own rejoin-or-onboard flow (this page) against the hub, either directly with a pairing code or via a serialized invite from an already-onboarded instance (see [Sibling onboarding](#sibling-onboarding-one-app-several-api-instances) above). Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers), and it is the peer itself that requests a render stream from your application — see [Accepting render stream requests](/docs/developer-guide/rendering-streams#accepting-render-stream-requests).
+
+To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"`, `"quest:<host>"` or `"android:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, the invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
 
 ## Teardown: destroy vs. forget
 

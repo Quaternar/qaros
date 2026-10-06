@@ -21,7 +21,7 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
   $env:QAR_GPU_ADAPTER_ID = "a1b2000000000000"; .\qar-vulkan-source.exe
   ```
 
-- Started from QAROS (Visualizer, Source Applications), the app gets its onboarding code on stdin and `QAR_GPU_ADAPTER_ID` set to the target's GPU, so no prompt needs an answer.
+- The QAROS runtime ships this app next to the visualizer, which lists it as the **Vulkan cube** tile in Source Applications (Debug UI mode). Started from there, the app gets its onboarding code on stdin and `QAR_GPU_ADAPTER_ID` set to the target's GPU, so no prompt needs an answer. The contract is in the Developer Guide, *Onboarding and Sessions*, "Launched by QAROS".
 - Press Ctrl+C to stop the source.
 - Requires an NVIDIA GPU supporting Vulkan external memory and semaphores.
 
