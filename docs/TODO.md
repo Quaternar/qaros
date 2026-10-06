@@ -130,12 +130,10 @@ guarantees in the meantime):
   remote device (HoloLens/Android) receives its provisioned key - page only covers
   Hub-launched processes; (d) whether step-ca rejects or clamps a `certLifetimeHours`
   above the 24 h provisioner cap.
-- T10 found doc drift elsewhere: `operator-guide/managing-devices` says a blacklisted
-  device is blocked "even if it still holds a valid certificate" - code enforces the
-  blacklist at the CA gateway only (enrolment/renewal); session peers do not check it, so a
-  revoked certificate is accepted until it expires. NEEDS-INPUT(user): fix the page, or enforce
-  revocation at peers.
-  Also there is no production online renewal (gateway renewal binding unwired), so
+- T10 blacklist drift: resolved by ADR-0254 (hub publishes its revocation list; peers that read
+  it refuse the device, others accept it until expiry); `managing-devices` and
+  `security-deep-dive` rewritten to match.
+- There is no production online renewal (gateway renewal binding unwired), so
   "silent rejoin" lasts only until 75 % of the cert lifetime (24 h cap).
 
 ## Repo hygiene / housekeeping

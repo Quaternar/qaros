@@ -34,7 +34,22 @@ The runtime tracks which peers are connected. The visualizer surfaces the connec
 Two related operations remove a device:
 
 - **Forget** wipes the device's persisted identity slot (certificate and session state) so its next connection requires a fresh pairing. A device cannot be forgotten while its session is still active - have it leave first, then forget.
-- **Blacklist (revoke)** blocks a device at the Hub even if it still holds a valid certificate. A blacklisted device can only return through a **fresh, human-approved pairing** - and completing that fresh pairing clears the blacklist entry for it.
+- **Blacklist (revoke)** stops the Hub from renewing or re-issuing the device's certificate and tells the rest of the session about it. A blacklisted device can only return through a **fresh, human-approved pairing** - and completing that fresh pairing clears the blacklist entry for it.
+
+### What a blacklisted device can still do
+
+A revoked certificate is not invalid everywhere at once. What happens depends on whether a peer has heard of the revocation:
+
+| Who | Has heard of the revocation | What happens to the device |
+|---|---|---|
+| The Hub's certificate authority | Always | Refuses to renew or re-issue its certificate |
+| A peer that has received the Hub's revocation list | Yes | Drops the device and refuses it. A launcher stops streaming to it at once and does not start streaming to it again |
+| A peer that has not received the list | No | Keeps accepting the device until its certificate expires |
+
+- The Hub publishes the list the moment you blacklist a device, and keeps it stored, so a peer that joins later still receives it. Peers connected to the Hub normally hear of it within about a second.
+- A peer that cannot reach the Hub's stored data keeps accepting the device. It never refuses everyone just because the list is missing.
+- **Worst case: up to 24 hours.** That is the longest a certificate lives. When it expires, every peer drops the connection and the device cannot renew.
+- A peer that refuses the device stops serving it (no pipeline, no video), but the network connection itself is not closed.
 
 ## A current gap: reading this Hub's code
 

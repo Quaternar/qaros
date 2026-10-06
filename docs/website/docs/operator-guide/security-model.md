@@ -46,7 +46,7 @@ Each Hub operates its own private CA (based on `step-ca`). This means:
 - **No external dependency.** A deployment is self-contained; no internet, cloud, or corporate PKI is required.
 - **The Hub is the trust root.** A certificate from Hub A means "Hub A vouched for this device". The Hub machine itself is assumed trusted — protect it as you would a domain controller.
 - **Renewal** is online and CSR-based: a device with a valid certificate can refresh it without re-pairing. A certificate that expires while the device is offline requires onboarding again.
-- **Revocation** is two-layered: the CA can revoke, and the gateway keeps an encrypted blacklist. A blacklisted device can only return through a fresh, human-approved pairing.
+- **Revocation** is two-layered: the CA can revoke, and the gateway keeps an encrypted blacklist. A blacklisted device can only return through a fresh, human-approved pairing. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
 
 ### Hub-to-Hub federation
 

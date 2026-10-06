@@ -174,9 +174,11 @@ No file is written with explicit permission hardening; each inherits its parent 
 |---|---|
 | 1. CA revocation | The certificate serial is revoked at the local CA |
 | 2. Gateway blacklist | Device added to the encrypted blacklist; blocks enrolment and renewal |
+| 3. Peer revocation list | The Hub publishes the blacklist (peer id, serial) on a stored topic; peers that read it refuse the device |
 | Re-entry | Only through a fresh pairing; a successful enrolment on that pairing clears the entry |
 
-- Revocation is enforced at the **gateway only**. Session peers do not consult a revocation list, so an already-issued certificate keeps working until it expires (at most 24 h).
+- A peer that has read the list refuses the device's peer id: the launcher releases its pipeline at once and never provisions it again. The zenoh link is not closed; zenoh decides TLS acceptance itself and offers no per-certificate hook.
+- A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h. A missing list is "unknown", never "everyone is revoked".
 - Revoke / allow / list is restricted to configured admin peers, but it is an in-process interface; there is no authenticated remote control plane yet.
 
 ## Hub federation via trust bundles
@@ -216,7 +218,7 @@ Ranked by severity. These are current, known engineering items.
 | L4 | Medium | **No identity check at connect.** Hostnames are not verified and `qar://peer` / `qar://session` SANs are not enforced; any certificate chaining to a trusted root is accepted as any peer. | Amplifies L1 and L2. |
 | L5 | High | **Secrets at rest are plaintext** (device private keys, CA and provisioner passwords, session-store key) and rely on OS file permissions; the blacklist key sits beside the blacklist. | File-system read access means key theft or CA takeover. |
 | L6 | Medium | **No online renewal**; certificates are short-lived and devices re-onboard. | Availability cost, not a confidentiality gap. |
-| L7 | Medium | **Revocation is not checked by session peers.** | A revoked certificate works until expiry (≤ 24 h). |
+| L7 | Medium | **Revocation reaches only peers that read the Hub's list, and is enforced by peer id, not at TLS.** | A peer that has not read it accepts a revoked certificate until expiry (≤ 24 h); one that has keeps the link open but refuses to serve the device. |
 | L8 | Medium | **No rate limit** on concurrent pairing handshakes or CA signing. | CPU / CA exhaustion by connection flood. |
 | L9 | Medium | **Admin surface is in-process only**; the admin actor is caller-asserted. | No authenticated remote revocation yet. |
 | L10 | Medium | **Certificate lifetime is capped only by CA configuration**, not also by the gateway. | A mis-edited CA config would lift the cap. |
