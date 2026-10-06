@@ -48,9 +48,8 @@ qar_gui_panels_navigate_to_uri(
 <Lang value="csharp">
 
 ```csharp
-var options = new GuiPanelOptions
+var options = new GuiPanelOptions("machine-status.myapp.example.com") // required, stable identity
 {
-    CommonName  = "machine-status.myapp.example.com", // stable identity
     DisplayName = "Machine Status",
     // Pose is the top-edge midpoint, room space, meters.
     Pose = new Pose { Position = new Vec3(0f, 1.5f, -1.0f) },

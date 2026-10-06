@@ -120,7 +120,7 @@ Key choices:
 - **Target peer** — a sender streams to one peer: the requesting peer's ID from the [render stream request](#accepting-render-stream-requests) above, or one obtained through [peer enumeration](/docs/developer-guide/peers).
 - **App volume** — required. Create the volume first and pass its ID so the mixer composites the stream inside that box; a stream without one is not placed in the scene. See [App Volumes](/docs/developer-guide/app-volumes).
 - **Graphics API** — `QAR_GRAPHICS_API_CPU` (portable, always available, no extension), or a GPU API with exactly one matching extension in `init.header.next`: `QAR_GRAPHICS_API_D3D11` + `QarStreamParamsD3D11`, `QAR_GRAPHICS_API_VULKAN` + `QarStreamParamsVulkan`, or `QAR_GRAPHICS_API_OPENGL` + the `QarStreamParamsOpenGl*` struct matching your context (EGL, WGL or GLX). GPU frame textures are created on the session's adapter (see [choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)).
-- **Frame views** — `frame_views` and their `texture_index` are a *request*. The sender may reorder them (separated textures in eye order come back colour first: colour left, colour right, depth left, depth right). In every received frame, look each view up by `eye` and `data_type` in `texture_views` and use that view's `texture_index`; never pair views and textures by array position.
+- **Frame views** — the order you declare in `frame_views` is guaranteed: the layout (`qar_render_sender_layout`) and every frame list their views in exactly that order, each with the `eye` and `data_type` you declared at that position. Textures come in the order the views first use them (one per view for `SEPARATED_TEXTURES`, one per data type for side by side and layered); each view's `texture_index` names its texture. A view the layout provides that you did not declare follows yours.
 - **Frame layout** — how views pack into textures: `SIDE_BY_SIDE` (both eyes in one texture), `SEPARATED_TEXTURES`, or `LAYERED` (texture array). The negotiated layout can be queried (`qar_render_sender_layout`) and changed at runtime (`qar_render_sender_change_layout`).
 - **Depth matters.** Sending real depth (not just color) is what enables correct occlusion between app volumes and low-latency warping. Send it whenever you can.
 
@@ -132,7 +132,7 @@ for (;;)
     /* 1. Begin: get the poses/FOVs you must render with. */
     QarRenderFrameInfo* info = NULL;
     QarResult r = qar_render_sender_begin_frame(sender, NULL, &info);
-    if (qar_result_is_error(r)) { /* stream gone? reconnecting? */ continue; }
+    if (qar_result_is_error(r)) { /* reconnecting? volume unresolved? */ continue; }
 
     QarPose pose;  QarFov fov;
     qar_render_frame_info_get_view_pose(info, 0, &pose);
@@ -143,8 +143,8 @@ for (;;)
     QarVideoFrameCpu frame;
     qar_render_sender_frame_cpu(sender, &frame);
     /* frame.textures[i].texture_data / .pitch / .size — write your pixels.
-       Find each view in frame.texture_views by eye + data_type, then use
-       its texture_index; the order may differ from your request.     */
+       frame.texture_views[i] is the view you declared at frame_views[i];
+       its texture_index names the texture it lives in.               */
     render_my_scene(&frame, &pose, &fov);
 
     /* 3. Show: submit with the projection metadata you used. */
@@ -157,6 +157,8 @@ for (;;)
     qar_render_frame_info_handle_destroy(info);
 }
 ```
+
+`begin_frame` fails with the recoverable `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` until the sender's app volume resolves (and again if it is closed): there is no app content space to hand poses out in yet, and no room-space pose is given instead. Keep calling — the call waits about 16 ms, so the loop does not spin — and recreate a volume you closed.
 
 The contract to respect: **render with the pose and FOV that `begin_frame` gives you, and report the near/far you actually used in `show_frame`.** The mixer uses exactly this metadata (plus your depth buffer) to re-project your frame to the viewer's latest head pose — wrong metadata shows up as swimming or misplaced content, not as an error code.
 
@@ -193,7 +195,9 @@ if (qar_result_is_success(qar_render_sender_last_hands(sender, &hands)))
 }
 ```
 
-Hand poses, joint radii and velocities come in **app content space**, the space you render in (app units, under the volume's app pose and scale), so hit-test them against your content directly. `pose` is the hand's aim pose (its −Z is the hand ray). The last sample repeats for up to 1 s, then the hand reports untracked: poll once per frame.
+Hand poses, joint radii and velocities come in **app content space**, the space you render in (app units, under the volume's app pose and scale), so hit-test them against your content directly. `pose` is the hand's aim pose (its −Z is the hand ray). The last sample repeats for up to 1 s, then the hand reports untracked: poll once per frame. While the app volume is unresolved, both hands report untracked.
+
+Hand data another peer publishes on a data stream is different: it is in that publisher's **room space** and is never converted for you.
 
 This is how a source application implements grabbing, pointing, and touch against its own content (combine with [gesture events](/docs/developer-guide/app-volumes#gestures) for higher-level interactions).
 

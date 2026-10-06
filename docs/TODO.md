@@ -55,15 +55,11 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
     mirroring the 5 C tutorials 1:1.
   - The NuGet ids are `Quaternar.Qaros.Streaming[.Demo]` (now in
     `developer-guide/getting-started`); publish them where integrators can reach them.
-  - Verify the C# member names the docs currently infer (not all were in the
-    binding fact-check): `session.GuiPanels.GetOrCreate` / `NavigateToUri`,
-    `session.AppVolumes.GetOrCreate`, `session.RenderSenders.Create`,
-    `session.Peers.UpdateDisplayName`, `runtime.OnboardWithCode` / `Rejoin` /
-    `Forget`, and options/DTO field names. Confirmed members: `Result<T>`,
-    `.IsSuccess`/`.Info`/`.Value`/`.EnsureSuccess()`/`.ValueOrThrow()`,
-    `NativeCallException`, `session.Peers.GetAll()` → `Result<PeerSpec[]>`,
-    `session.Peers.Updated` event, `SubscribeUpdates` → `Result<IDisposable>`,
-    `IDisposable` handles, the `Qar` namespace, target frameworks.
+  - C# members the docs use are confirmed against the binding: `session.AppVolumes.GetOrCreate`
+    / `session.GuiPanels.GetOrCreate` (options take the required common name in their
+    constructor), `GuiPanels.NavigateToUri`, `session.RenderSenders.Create`,
+    `session.Peers.UpdateDisplayName`, `runtime.Onboard` / `Rejoin` / `Forget`,
+    `session.InviteTargetApp`. Remaining risk is in options/DTO field names inside the snippets.
 
 ## Needs team input (no single in-repo source)
 
@@ -159,14 +155,8 @@ guarantees in the meantime):
   the app appears as *QuaternAR Player* / *Skyline Player*; the shipped package is
   `QAROS Player HoloLens <v>.msix`. Confirm the tile name and whether `Dependencies/` and the `.cer`
   must be selected in Device Portal.
-- **Exact received frame-view order** — TODO. The header states only "colour first" for separated
-  textures; `developer-guide/rendering-streams` gives colour L, colour R, depth L, depth R and
-  tells apps to look views up by eye and type, which is safe either way.
 - **App-facing log streaming** — NEEDS-INPUT(team). Best-effort log streaming with lost-message
   markers is visible in the visualizer's Logs panel only; the C API has no log subscription. Document
   an app API if one is planned.
-- **Header overview names `qar_session_destroy()`** — TODO(engineering). The generated header's
-  "Basic flow" says `qar_session_destroy()` ends a session; the function is
-  `qar_session_handle_destroy()`. Fix in the API source, then the header regenerates.
 - **API app launch policy wording** — TODO(engineering). The registry enum comment says "one process
   for every target", the behaviour is one shared process for all targets (what the docs say).

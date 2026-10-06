@@ -22,7 +22,12 @@ WORLD (geographic, optional)
 
 ### Room space — where everything lives
 
-**Room space** is the shared frame of reference of the physical room. Every peer in a session agrees on it: when one user places an app volume on the table, every other user sees it on the same table. App-volume poses and GUI-panel poses are expressed in room space. What an application renders and hit-tests — view poses, hand poses, gesture points — arrives in [app content space](#app-content-space--your-applications-world-inside-the-box) instead. The C header names the space of every field that holds one.
+**Room space** is the shared frame of reference of the physical room. Every peer in a session agrees on it: when one user places an app volume on the table, every other user sees it on the same table. App-volume poses and GUI-panel poses are expressed in room space. The rule for everything else:
+
+- **What a render sender hands your application** — view and head poses, hand aim and joint poses, joint radii and velocities — and mapped gesture points are in that volume's [app content space](#app-content-space--your-applications-world-inside-the-box). Use them as they come.
+- **What arrives through data streams and shared objects** — app volume and GUI panel state, another peer's published data — is in the **publishing peer's room space**, and is never converted for you.
+
+The C header names the space of every field that holds one.
 
 Conventions:
 
@@ -85,7 +90,7 @@ The default configuration maps dual-pointer distance to `app_scale` and single-p
 
 ## Streaming and spaces
 
-A render sender bound to an app volume hands out its per-eye view poses — and the viewer's hand poses — in that volume's **app content space**, the space your application renders in, so you use them as they come. Field-of-view angles are in each view's own camera frame (looking along −Z), in radians.
+A render sender hands out its per-eye view poses, head pose and the viewer's hands in its app volume's **app content space**, the space your application renders in, so you use them as they come. While the volume does not resolve, it hands out nothing: begin-frame fails with `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED`, hands report untracked, and no room-space pose is substituted. Field-of-view angles are in each view's own camera frame (looking along −Z), in radians.
 
 When your application streams frames, the projection metadata you provide (per-eye pose, field of view, near/far planes) is what ties your rendered pixels back into the room: the mixer uses it, together with the frame's depth channel, to re-project your image to the viewer's latest head pose and to mask it to your app volume's box. Getting poses and near/far values right is therefore not cosmetic — wrong metadata produces swimming or clipped content. See [Rendering Streams](/docs/developer-guide/rendering-streams).
 
@@ -103,5 +108,6 @@ When your application streams frames, the projection metadata you provide (per-e
 | App volume gesture points | App content | Where the gesture started / acts |
 | App volume gesture deltas | App volume | Meters + quaternion deltas |
 | Panel interaction points | Panel content (pixels) | Top-left origin, +Y down |
-| Stream view poses, hand poses | App content | Per-eye projection used for warping; viewer hands |
+| Stream view/head poses, hands | App content | Per-eye projection used for warping; viewer hands |
+| Data streams, shared objects | Publisher's room | Never converted for you |
 | FOV angles | View | Radians, view looks along −Z |

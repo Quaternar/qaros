@@ -20,6 +20,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Discovery couldn't reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
 | `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` | `forget` called while the session is active | Call `qar_session_handle_destroy` first, then `forget` |
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` | The stream lost its peer and is reconnecting | Skip the frame and keep calling; a dead peer is noticed within ~2 s, a restarted one streams again within a few seconds |
+| `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | The sender's app volume does not resolve yet (or was closed), so there is no app content space to hand poses out in | Keep calling `begin_frame`; create the volume before the sender and recreate one you closed |
 | `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` | The sender's stream was closed for good | Destroy the sender; a new render request brings a new one |
 
 ## Checking results

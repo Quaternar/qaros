@@ -47,9 +47,9 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
-var options = new AppVolumeOptions
+// The common name is required: GetOrCreate returns the existing volume of that name.
+var options = new AppVolumeOptions("assembly-view.myapp.example.com")
 {
-    CommonName  = "assembly-view.myapp.example.com",
     DisplayName = "Assembly View",
 
     // Pose is the cuboid CENTER, room space.
@@ -143,7 +143,7 @@ static void on_gesture(QarAppVolumeGesture* g, void* state)
 qar_app_volumes_subscribe_all_gesture_events(session, &volume_id, on_gesture, NULL, NULL);
 ```
 
-Gesture start and action points already arrive in **app content space** (app units, under the app pose and scale the gesture began with), so hit-test them against your model directly. A point you hold only in **room space** — a GUI panel position, a device pose — goes through two steps: room → app volume space via the volume's latest pose (its position is the cuboid **center**, so the box spans ± half the extents), then app volume → app content space via `app_pose` and `app_scale`. The compiled tutorial implements both steps and the cuboid test: [Room-Space Point to App Content Space](/docs/developer-guide/tutorials/c/app-volume-management).
+Gesture start and action points already arrive in **app content space** (as do a render sender's view poses and hands) (app units, under the app pose and scale the gesture began with), so hit-test them against your model directly. A point you hold only in **room space** — a GUI panel position, a device pose — goes through two steps: room → app volume space via the volume's latest pose (its position is the cuboid **center**, so the box spans ± half the extents), then app volume → app content space via `app_pose` and `app_scale`. The compiled tutorial implements both steps and the cuboid test: [Room-Space Point to App Content Space](/docs/developer-guide/tutorials/c/app-volume-management).
 
 ## Compiled tutorial
 
