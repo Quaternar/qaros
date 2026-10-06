@@ -82,6 +82,14 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
 - **ZED camera end-to-end setup** — NEEDS-INPUT(team). Drivers, which machine runs
   the ZED source, and volume placement. `user-guide/onboarding-devices` states it
   depends on the deployment.
+- **Launcher config keys left out of the reference** — NEEDS-INPUT(team) / T9.
+  `operator-guide/launcher-config-reference` omits: `hardwareUniqueName` (read and
+  passed to the Hub, effect unclear); source-app `type: "ApiApp"` (how the launcher
+  locates the API application is not configurable from the entry); the exact
+  semantic difference of `startupTarget.type` `"local"` vs `"auto"`; behaviour when
+  `schema_version` is omitted. Also: the shipped `qar-runtime-launcher.jsonc` comment
+  shows `sessionEndpoints` as strings (`"tcp/127.0.0.1:19558"`), but the parser
+  needs `{Protocol, Hostname, Port}` objects - fix the comment.
 
 ## Content to add when the source work lands
 
@@ -91,14 +99,14 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
   convention normatively in the C headers rather than by OpenXR inheritance.
   `developer-guide/coordinate-systems` currently frames both as inherited platform
   behavior.
-- **Worked room→app hit-testing example** — TODO / T11. Add a room-space point →
+- **Worked room→app hit-testing example** — DONE / T11. Add a room-space point →
   app-space point helper (respecting the center-of-cuboid convention) to
   `qar-streaming-c/examples/app_volume_management.c` with a snippet section, then
   reference it from `developer-guide/app-volumes`.
-- **D3D11 render-sender example** — TODO / T11. Add a D3D11 sender example
+- **D3D11 render-sender example** — DONE / T11. Add a D3D11 sender example
   (guard `#ifdef QAR_ENABLE_D3D11`, chain `QarStreamParamsD3D11`) and extend
   `developer-guide/rendering-streams` / the `cpu-rendering` tutorial.
-- **Gesture-config + world-anchor tutorial sections** — TODO / T11. Extend the
+- **Gesture-config + world-anchor tutorial sections** — DONE / T11. Extend the
   `app_volume_management.c` example (gesture rules, world-anchor set/clear) and the
   `tutorials/c/app-volume-management` page. Verify `QarAppVolumeGestureEvent` field
   names against the generated header first.
@@ -113,7 +121,7 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
 
 ## Security documentation — track findings to closure
 
-`operator-guide/security-deep-dive` presents the intended design and folds these
+`operator-guide/security-deep-dive` (T10 — DONE) presents the intended design and folds these
 **current, known** gaps into its limitations/roadmap honestly. They are engineering
 items, tracked here so the docs can be tightened as each is fixed (do not overstate
 guarantees in the meantime):
@@ -127,6 +135,18 @@ guarantees in the meantime):
   re-pair under a new id).
 - No CA-signing rate limiter; no SNI hostname verification; admin/revocation control
   surface is in-process only (no authenticated remote control plane yet).
+- T10 left out / to verify before documenting: (a) whether a Hub leaving a federation
+  actually triggers trust withdrawal in production (a hub-leave handler exists, no
+  publisher found) - the page says there is no operator withdraw action; (b) that Hub B
+  also merges Hub A's root (page only describes A merging B's); (c) how a push-invited
+  remote device (HoloLens/Android) receives its provisioned key - page only covers
+  Hub-launched processes; (d) whether step-ca rejects or clamps a `certLifetimeHours`
+  above the 24 h provisioner cap.
+- T10 found doc drift elsewhere: `operator-guide/managing-devices` says a blacklisted
+  device is blocked "even if it still holds a valid certificate" - code enforces the
+  blacklist at the CA gateway only (enrolment/renewal); session peers do not check it.
+  Also there is no production online renewal (gateway renewal binding unwired), so
+  "silent rejoin" lasts only until 75 % of the cert lifetime (24 h cap).
 
 ## Repo hygiene / housekeeping
 

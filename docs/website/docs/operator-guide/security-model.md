@@ -18,7 +18,7 @@ Devices find the Hub with zero configuration: the Hub broadcasts a beacon on the
 
 ### Layer 1 — Pairing (EC-JPAKE)
 
-The Hub issues short-lived pairing **codes** (8 characters from a no-look-alike alphabet). A user transfers the code out-of-band — reads it off the Hub's screen, scans a QR, or pastes it. Device and Hub then run **EC-JPAKE** (a password-authenticated key exchange on P-256): each side proves it knows the code *without ever transmitting it*. What actually protects the deployment is not code length but code handling:
+The Hub issues short-lived pairing **codes** (8 digits). A user transfers the code out-of-band — reads it off the Hub's screen, scans a QR, or pastes it. Device and Hub then run **EC-JPAKE** (a password-authenticated key exchange on P-256): each side proves it knows the code *without ever transmitting it*. What actually protects the deployment is not code length but code handling:
 
 - every code is **single-use** — consumed on success *and* on failure,
 - codes expire after **10 seconds** (the Hub mints a fresh one every few seconds),
@@ -59,3 +59,7 @@ When two Hubs connect, they exchange and merge **CA trust bundles**. Devices onb
 **For operators:** the security perimeter is (1) the Hub machine, and (2) whoever can see the pairing screen for the 10 seconds a code lives. Network eavesdroppers learn nothing useful from discovery, and cannot join without a code.
 
 **For application developers:** the entire stack above is hidden behind three C API calls — *onboard*, *rejoin*, and *forget*. Your app persists one opaque onboarding ID and never touches keys or certificates. See [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).
+
+## Going deeper
+
+For the protocol details, certificate contents, storage layout, assumptions and the current known limitations, see the auditor-level [Security Deep Dive](./security-deep-dive.md).

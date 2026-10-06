@@ -479,8 +479,8 @@ typedef struct QarHandJointLocation
 	/// In the space of the QarHandJoints holding it: app content space when it
 	/// comes from qar_render_sender_last_hands().
 	QarPose pose;
-	/// Joint radius in room metres. Not converted into app content space: with
-	/// an app scale other than 1 it does not match the app-content-space pose.
+	/// Joint radius, in the same space and units as `pose`: app content units
+	/// when it comes from qar_render_sender_last_hands().
 	float radius;
 } QarHandJointLocation;
 
@@ -489,11 +489,11 @@ typedef struct QarHandJointVelocity
 {
 	uint32_t joint_id;
 	uint64_t flags;
-	/// Room-space axes, metres per second. Not converted into app content
-	/// space.
+	/// Units per second, in the axes and units of the joint poses: app content
+	/// space when it comes from qar_render_sender_last_hands().
 	QarVector3 linear_velocity;
-	/// Room-space axes, radians per second. Not converted into app content
-	/// space.
+	/// Radians per second, about the axes of the joint poses: app content
+	/// space axes when it comes from qar_render_sender_last_hands().
 	QarVector3 angular_velocity;
 } QarHandJointVelocity;
 
@@ -1683,7 +1683,13 @@ typedef struct QarRenderSenderInit
 	/// Frame layout configuration
 	QarFrameLayout texture_layout;
 
-	/// Array of views in the single video frame
+	/// Array of views in the single video frame.
+	///
+	/// The order and the `texture_index` values given here are a request, not
+	/// the layout of the frames you receive: the sender may reorder the views
+	/// (separated textures in eye order come back colour first, for example).
+	/// Look each view of a received frame up by its `eye` and `data_type`;
+	/// never pair views with textures by array position.
 	QarRenderFrameView frame_views[QAR_MAX_FRAME_VIEWS];
 	size_t frame_views_count;
 
@@ -2828,8 +2834,8 @@ static inline QarResult qar_render_sender_show_frame(
  * @brief Query the newest hands data the device sent since the previous call.
  *
  * Drains everything that arrived and returns the last sample. The poses are in
- * the bound app volume's app content space, like the view poses; joint radii
- * and velocities are not converted and stay in room metres and room axes.
+ * the bound app volume's app content space, like the view poses, and so are
+ * the joint radii and velocities measured beside them.
  * Samples arrive only while the target peer is focused on the volume and not
  * editing it. When nothing arrived since the previous call, the last sample is
  * returned again while it is younger than a second, so polling faster than the

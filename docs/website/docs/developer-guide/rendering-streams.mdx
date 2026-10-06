@@ -176,7 +176,7 @@ d3d.acquire_keyed_mutex_sync = true; /* let QAROS manage keyed-mutex sync */
 init.header.next = &d3d.header;
 ```
 
-`qar_render_sender_frame_d3d11` then hands you shared D3D11 textures to render into directly — no CPU copy. Set `acquire_keyed_mutex_sync = false` only if you need to manage the keyed-mutex acquire/release chain yourself (e.g. when copying through a chain of shared textures).
+`qar_render_sender_frame_d3d11` then hands you shared D3D11 textures to render into directly — no CPU copy ([D3D11 Rendering tutorial](/docs/developer-guide/tutorials/c/d3d11-rendering)). Set `acquire_keyed_mutex_sync = false` only if you need to manage the keyed-mutex acquire/release chain yourself (e.g. when copying through a chain of shared textures).
 
 ## Reading back the viewer: hand tracking
 
@@ -204,3 +204,8 @@ This page is backed by the compiled example `cpu_rendering_visualizer.c`, which 
 
 - Source: `qaros/qar-streaming-c/examples/cpu_rendering_visualizer.c`
 - Example walkthrough: [CPU Rendering with a Visualizer](/docs/developer-guide/tutorials/c/cpu-rendering)
+
+The D3D11 path is backed by `d3d11_render_sender.c`, which chains a D3D11.1 device into the sender and clears each colour view of the shared textures on the GPU:
+
+- Source: `qaros/qar-streaming-c/examples/d3d11_render_sender.c`
+- Example walkthrough: [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering)

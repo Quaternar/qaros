@@ -213,6 +213,29 @@ main(int argc, char** argv)
 	}
 	//! [cpu_setup]
 
+	//! [cpu_volume]
+	/* A render sender requires the app volume its stream is shown in. */
+	QarAppVolumeInit volume_init = qar_app_volume_init_default();
+	volume_init.common_name = "cpu-volume.examples.qaros";
+	volume_init.display_name = "CPU Tutorial Volume";
+	volume_init.pose = qar_pose_default();
+	volume_init.pose.position.z = -1.0f;
+	volume_init.size = qar_app_volume_size_default();
+
+	QarAppVolumeId volume_id = qar_app_volume_id_default();
+	QarResult volume_result =
+		qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
+	if(qar_result_is_error(volume_result))
+	{
+		log_result("qar_app_volumes_get_or_create", volume_result);
+		qar_session_handle_destroy(session);
+		qar_runtime_destroy(runtime);
+		qar_library_destroy();
+		qar_library_unload();
+		return 6;
+	}
+	//! [cpu_volume]
+
 	//! [cpu_request]
 	RenderRequestState request_state = { false, qar_peer_id_default() };
 	QarResult subscribe_result = qar_render_sender_subscribe_requests(
@@ -234,6 +257,7 @@ main(int argc, char** argv)
 	QarRenderSenderInit sender_init = qar_render_sender_init_default();
 	sender_init.graphics_api = QAR_GRAPHICS_API_CPU;
 	sender_init.peer_id = request_state.target_peer_id;
+	sender_init.app_volume_id = &volume_id;
 
 	QarRenderSender* sender = NULL;
 	QarResult sender_result =
@@ -241,12 +265,11 @@ main(int argc, char** argv)
 	if(qar_result_is_error(sender_result) || sender == NULL)
 	{
 		log_result("qar_render_sender_create", sender_result);
-		log_result("qar_session_leave", qar_session_leave(session));
 		qar_session_handle_destroy(session);
 		qar_runtime_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
-		return 6;
+		return 7;
 	}
 	log_result("qar_render_sender_create", sender_result);
 
@@ -288,7 +311,6 @@ main(int argc, char** argv)
 	qar_render_stream_handle_destroy(sender);
 	//! [cpu_frames]
 
-	log_result("qar_session_leave", qar_session_leave(session));
 	qar_session_handle_destroy(session);
 	qar_runtime_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();

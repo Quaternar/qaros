@@ -270,7 +270,7 @@ page's TODO), every `C#` tab in `onboarding-and-sessions.mdx`,
 - Consider a second doxygen project (doxygen supports C#) or csharp snippets
   via the same `//! [region]` mechanism if the C# sources are doxygen inputs.
 
-### T9 — Launcher configuration schema reference — TODO
+### T9 — Launcher configuration schema reference — DONE (`operator-guide/launcher-config-reference.md`)
 New page `user-guide/launcher-config-reference.md` (or grow the section in
 using-the-hub.md). Source of truth: `qar-runtime-launcher/src/LauncherConfig.cpp`
 (parsing) + `qar-runtime-launcher/qar-runtime-launcher.jsonc` (annotated
@@ -284,7 +284,7 @@ detectConnectedPeers, replyToServiceExists, handleSourceAppLaunchRequests,
 targetAppOverride), paths (caDir, runtimeStorageRoot, logFolder,
 startupTargetPath), startupTarget{type, hubConnectionId, trustedHubCaBundles[]}.
 
-### T10 — Advanced security page (auditor level) — TODO
+### T10 — Advanced security page (auditor level) — DONE (`operator-guide/security-deep-dive.md`, linked from `operator-guide/security-model.md`; claims verified against code, unverifiable items in docs/TODO.md)
 New page `user-guide/security-deep-dive.md` (link from
 security-and-onboarding.md's TODO). Port + de-internalize from the main repo's
 `docs/Onboarding and Certificates.md` (exhaustive: layer protocols, EC-JPAKE
@@ -293,7 +293,7 @@ URI SANs `qar://peer/<id>` + `qar://session/<id>`, storage layout, renewal,
 revocation/blacklist, hub federation via CaTrustStoreService, assumptions
 A1–A7, limitations L1–L11, roadmap). Keep the public page free of source paths.
 
-### T11 — More compiled tutorials + link the "Compiled tutorial" TODOs — TODO
+### T11 — More compiled tutorials + link the "Compiled tutorial" TODOs — DONE
 - Extend `qaros/qar-streaming-c/examples/app_volume_management.c` with gesture
   configuration (`qar_app_volume_gesture_configuration_default()` then
   customize rules) + world-anchor set/clear + a room→app hit-testing helper

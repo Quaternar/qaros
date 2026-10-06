@@ -22,7 +22,7 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 On startup the launcher restores its previous session (or creates a fresh one), registers the configured source app volumes, starts the streaming services, begins broadcasting the discovery beacon (default display name "QAROS Hub"), and starts the onboarding services. By default it also invites a local visualizer into the session automatically.
 
-Hub configuration is managed through the Hub UI and persists across restarts.
+Hub configuration is managed through the Hub UI and persists across restarts. Startup settings (paths, ports, onboarding, source and target apps) come from the launcher configuration file - see the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference).
 
 ## The visualizer
 

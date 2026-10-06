@@ -11,6 +11,13 @@ if(BUILD_CORE_EXAMPLES)
     target_compile_features(${sample} PRIVATE c_std_11)
     target_link_libraries(${sample} PRIVATE qar-streaming-c-headers)
   endforeach()
+
+  if(WIN32)
+    add_executable(d3d11_render_sender d3d11_render_sender.c)
+    target_compile_features(d3d11_render_sender PRIVATE c_std_11)
+    target_link_libraries(d3d11_render_sender PRIVATE qar-streaming-c-headers
+                                                      d3d11 dxguid)
+  endif()
 endif()
 
 if(BUILD_VULKAN_EXAMPLE)
