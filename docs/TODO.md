@@ -8,7 +8,7 @@ items here instead of leaving `:::note TODO` admonitions in the pages.
 
 Status legend: TODO · BLOCKED(reason) · NEEDS-INPUT(who).
 
-Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
+Last swept: 2026-10-06 (done items removed).
 
 ---
 
@@ -87,9 +87,7 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
   passed to the Hub, effect unclear); source-app `type: "ApiApp"` (how the launcher
   locates the API application is not configurable from the entry); the exact
   semantic difference of `startupTarget.type` `"local"` vs `"auto"`; behaviour when
-  `schema_version` is omitted. Also: the shipped `qar-runtime-launcher.jsonc` comment
-  shows `sessionEndpoints` as strings (`"tcp/127.0.0.1:19558"`), but the parser
-  needs `{Protocol, Hostname, Port}` objects - fix the comment.
+  `schema_version` is omitted.
 
 ## Content to add when the source work lands
 
@@ -99,17 +97,6 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
   convention normatively in the C headers rather than by OpenXR inheritance.
   `developer-guide/coordinate-systems` currently frames both as inherited platform
   behavior.
-- **Worked room→app hit-testing example** — DONE / T11. Add a room-space point →
-  app-space point helper (respecting the center-of-cuboid convention) to
-  `qar-streaming-c/examples/app_volume_management.c` with a snippet section, then
-  reference it from `developer-guide/app-volumes`.
-- **D3D11 render-sender example** — DONE / T11. Add a D3D11 sender example
-  (guard `#ifdef QAR_ENABLE_D3D11`, chain `QarStreamParamsD3D11`) and extend
-  `developer-guide/rendering-streams` / the `cpu-rendering` tutorial.
-- **Gesture-config + world-anchor tutorial sections** — DONE / T11. Extend the
-  `app_volume_management.c` example (gesture rules, world-anchor set/clear) and the
-  `tutorials/c/app-volume-management` page. Verify `QarAppVolumeGestureEvent` field
-  names against the generated header first.
 - **Visualizer UI walkthrough with screenshots** — TODO / T7. Tray menu, visualizer
   window, app-volumes panel, warping/timing view, hub-connect screen. Store under
   `docs/website/static/img/screenshots/`. Referenced honestly (no tour) in
@@ -144,17 +131,14 @@ guarantees in the meantime):
   above the 24 h provisioner cap.
 - T10 found doc drift elsewhere: `operator-guide/managing-devices` says a blacklisted
   device is blocked "even if it still holds a valid certificate" - code enforces the
-  blacklist at the CA gateway only (enrolment/renewal); session peers do not check it.
+  blacklist at the CA gateway only (enrolment/renewal); session peers do not check it, so a
+  revoked certificate is accepted until it expires. NEEDS-INPUT(user): fix the page, or enforce
+  revocation at peers.
   Also there is no production online renewal (gateway renewal binding unwired), so
   "silent rejoin" lasts only until 75 % of the cert lifetime (24 h cap).
 
 ## Repo hygiene / housekeeping
 
-- **Retire stale internal C API docs** — TODO / T15.
-  `qar-streaming/libs/qar-streaming-c/docs/API_Reference.md` still teaches the removed
-  `qar_runtime_create_session` / `qar_session_join` flow and wrong signatures. Delete
-  it (pointing at docs.quaternar.com) or regenerate. Decide one source of truth vs.
-  its `Getting_Started.md`.
 - **Run-verify examples against a real runtime** — TODO / T14. The 5 C examples pass
   `clang -fsyntax-only` but are not yet link/run-verified end-to-end against a real
   runtime DLL + Hub. Drop a binary package into `qaros/package/`, build, and run

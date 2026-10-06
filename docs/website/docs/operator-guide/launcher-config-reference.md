@@ -69,7 +69,7 @@ All paths default to subfolders of the per-user application-data root (see [Inst
 | `routerPort` | integer | - | Fixed message-router port. Omit it: the Hub takes the first port in the range below free on both TCP and UDP, so several local Hubs coexist. Pin it only for a firewalled deployment. |
 | `routerPortRangeStart` | integer | `19120` | First port searched when `routerPort` is unset. |
 | `routerPortRangeEnd` | integer | `19199` | Last port searched when `routerPort` is unset. |
-| `sessionEndpoints` | array of address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Each entry: `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <port>}`; all three fields are required. |
+| `sessionEndpoints` | array of locator strings or address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Each entry is either a locator string `"<protocol>/<host>:<port>"` (IPv6 host in brackets) or `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <port>}` with all three fields. A malformed entry fails the config load. |
 | `discoveryHost` | string | `""` | Host name or IP advertised in the discovery beacon as the discovery server address. |
 | `discoveryPort` | integer | `7445` | Discovery port. |
 | `discoveryDisplayName` | string | - | Overrides the Hub name shown in discovery. Omit it: the Hub keeps its persisted name (initially "QAROS Hub"). |
