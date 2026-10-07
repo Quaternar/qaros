@@ -361,11 +361,7 @@ typedef enum QarStatusCode
 	QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC = 1806,
 	/// Local enrollment: the app no longer matches what the user approved
 	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
-	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1807,
-	/// Local enrollment: the installed hub tier is below
-	/// QarOnboardLocalAppExt.minimum_hub_tier. Ask the user to install QAROS
-	/// with the required protection.
-	QAR_STATUS_ONBOARDING_HUB_TIER_TOO_LOW = 1808
+	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1807
 } QarStatusCode;
 
 /**
@@ -1463,19 +1459,6 @@ typedef struct QarOnboardPeerIdExt
 } QarOnboardPeerIdExt;
 
 /**
- * @brief Protection level of the installed QAROS hub, weakest first.
- */
-typedef enum QarHubTier
-{
-	/// Our own development and CI builds only; never in a distributed DLL.
-	QAR_HUB_TIER_DEVELOPMENT = 0,
-	/// Per-user install with a signed package identity.
-	QAR_HUB_TIER_USER_PACKAGE = 1,
-	/// Per-machine install whose system service guards the hub's secrets.
-	QAR_HUB_TIER_SYSTEM_SERVICE = 2
-} QarHubTier;
-
-/**
  * @brief Extension: join the QAROS hub installed on this PC as a local source
  * app, with no code.
  *
@@ -1500,10 +1483,6 @@ typedef struct QarOnboardLocalAppExt
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT */
 	/// Max wait for the user's first-time approval; 0 -> hub default (120 s).
 	uint32_t approval_timeout_ms;
-	/// Weakest hub installation this app accepts; default
-	/// QAR_HUB_TIER_USER_PACKAGE. QAR_HUB_TIER_DEVELOPMENT is reachable only
-	/// with development builds of QAROS.
-	QarHubTier minimum_hub_tier;
 } QarOnboardLocalAppExt;
 
 /**
@@ -2304,7 +2283,7 @@ static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
 /** @brief Default init for QarOnboardPeerIdExt (zero peer id; set it). */
 static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
 /** @brief Default init for QarOnboardLocalAppExt (hub default approval
- * timeout, minimum tier QAR_HUB_TIER_USER_PACKAGE). */
+ * timeout). */
 static inline QarOnboardLocalAppExt qar_onboard_local_app_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
@@ -5627,8 +5606,7 @@ qar_onboard_local_app_ext_default(void)
 {
 	QarOnboardLocalAppExt ext = {
 		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT, NULL }, // header
-		0, // approval_timeout_ms (0 -> hub default, 120 s)
-		QAR_HUB_TIER_USER_PACKAGE // minimum_hub_tier
+		0 // approval_timeout_ms (0 -> hub default, 120 s)
 	};
 	return ext;
 }
