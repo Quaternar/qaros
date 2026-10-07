@@ -16,7 +16,7 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 ## Starting the Hub
 
-1. Start **`qaros-hub-service`** (or let it start with Windows, if the startup task is enabled). It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
+1. Start **`qaros-hub-service`** (the installer makes it start at sign-in; the tray menu's "Start QAROS at login" turns that off). It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
 2. **Left-click the tray icon** to open the visualizer window.
 3. The tray menu offers: *Open visualizer*, *Restart launcher*, *Connect to other Hub*, and *Exit*.
 
@@ -43,8 +43,8 @@ QAROS recovers on its own; nothing needs restarting by hand.
 | A process dies or its network drops | The session drops it once it has been silent for about 2 s. | ~2 s |
 | A stream stops delivering frames | The receiver probes the sender and reconnects the stream once the sender is gone. | ~5 s from kill to reconnected stream |
 | A source app is killed and relaunched | The relaunched app takes over its streams from the dead instance. A second copy is refused only while the first is provably still live. | ~2-3 s |
-| **Stop** on a running app | The Hub asks the app to stop and kills it after about 1.3 s. | ~1.3 s |
-| A QAROS API app exits within 10 s of starting | The Hub restarts it with a fresh one-time launch code (the onboarding screen's code is not affected), backing off from 2 s up to 60 s, and reports the first failure. | 2 s, doubling |
+| **Stop** on a running app | The Hub asks the app to stop (a QAROS API app: its stdin closes) and kills it if it has not exited after about 1 s. | ~1 s |
+| A QAROS API app exits within 10 s of starting | The Hub restarts it, backing off from 2 s up to 60 s, and reports the first failure. | 2 s, doubling |
 | The Hub's router is unreachable | Processes keep retrying with backoff up to 10 s and reconnect once it is back, without a restart. | up to 10 s after it returns |
 
 ### When an app restarts
