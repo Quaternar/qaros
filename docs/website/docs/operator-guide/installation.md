@@ -21,6 +21,9 @@ Each release comes in two flavors, release and demo. One PC holds one QAROS inst
 ## Install
 
 1. Run `QAROS-Setup-<version>.exe` and accept the Windows administrator (UAC) prompt.
+   :::note Preview builds
+   Preview builds are signed with a temporary Quaternar certificate that Windows does not know yet. SmartScreen shows "Windows protected your PC": choose **More info**, then **Run anyway**. The UAC prompt shows an unverified publisher. Releases signed with the final certificate show neither.
+   :::
 2. When the setup finishes, the QAROS icon appears in the notification area. If it does not, start **QAROS** from the Start menu.
 3. Left-click the tray icon to open the Visualizer. Continue with [Running the Hub](/docs/operator-guide/running-the-hub).
 
@@ -35,6 +38,7 @@ Silent install, from an elevated PowerShell:
 | 0 | installed |
 | 1 | cancelled |
 | 2 | aborted with an error |
+| 3 | an older per-user QAROS is installed; uninstall it first |
 | 4 | Windows version not supported |
 | 5 | administrator prompt declined |
 
@@ -46,7 +50,7 @@ Silent install, from an elevated PowerShell:
 | Windows service `QAROS.SystemService` (`qaros-system-service.exe`) | runs as a service |
 | Firewall rules for every QAROS executable, TCP and UDP, in and out | Windows Defender Firewall, all network profiles |
 | Runtime location for apps: value `InstallFolder` | `HKLM\SOFTWARE\Quaternar\QAROS` |
-| QAROS tray starting at sign-in; switch it off with the tray menu's "Start QAROS at login" | per user |
+| QAROS tray starting at sign-in, for every user (`/NoAutostart` skips it) | `HKLM\...\Run\QAROS` |
 | Start menu shortcut, Add/Remove Programs entry, signed uninstaller | |
 
 The Hub processes (tray, launcher, Visualizer) run in the signed-in user's session, not as the service.
