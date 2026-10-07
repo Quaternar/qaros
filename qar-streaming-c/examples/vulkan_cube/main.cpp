@@ -384,34 +384,35 @@ main(int argc, char** argv)
 	{
 		std::cout
 			<< "Usage: qar-vulkan-source [qar-streaming-c.dll] [hub-host]\n"
-			   "Defaults to the SDK beside this executable. Enter onboarding "
+			   "Defaults to the installed QAROS runtime. Enter onboarding "
 			   "code on stdin. QAR_GPU_ADAPTER_ID=<LUID or UUID hex> selects "
 			   "the GPU.\n";
 		return 0;
 	}
-	std::array<wchar_t, 32768> executable{};
-	const auto length = GetModuleFileNameW(
-		nullptr, executable.data(), static_cast<DWORD>(executable.size())
-	);
-	if(length == 0 || length >= executable.size())
+	// No argument: the runtime of the QAROS installed on this PC, and the
+	// runtime binaries folder defaults to its bin/. An argument names the
+	// library file of a development build.
+	const char* libraryArgument = argc > 1 ? argv[1] : nullptr;
+	std::filesystem::path library;
+	if(libraryArgument != nullptr)
 	{
-		std::cerr << "Cannot locate executable directory\n";
-		return 1;
+		std::error_code error;
+		library = std::filesystem::absolute(libraryArgument, error);
+		if(error)
+		{
+			std::cerr << "Invalid SDK path: " << error.message() << '\n';
+			return 1;
+		}
 	}
-	const auto directory =
-		std::filesystem::path(executable.data()).parent_path();
-	std::error_code error;
-	const auto library = argc > 1 ? std::filesystem::absolute(argv[1], error)
-								  : directory / "qar-streaming-c.dll";
-	if(error)
+	const auto libraryPath = library.string();
+	const auto binaries = libraryArgument != nullptr
+							  ? library.parent_path().string()
+							  : std::string();
+	if(not qar_library_load(
+		   libraryArgument != nullptr ? libraryPath.c_str() : nullptr
+	   ))
 	{
-		std::cerr << "Invalid SDK path: " << error.message() << '\n';
-		return 1;
-	}
-	const auto binaries = library.parent_path().string();
-	if(not qar_library_load(library.string().c_str()))
-	{
-		std::cerr << "Failed to load SDK DLL (check header/runtime versions)\n";
+		std::cerr << "Failed to load the QAROS runtime (is QAROS installed?)\n";
 		return 2;
 	}
 	auto libraryInit = qar_library_init_default();

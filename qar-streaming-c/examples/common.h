@@ -167,6 +167,24 @@ example_obtain_session(
 }
 //! [example_obtain_session]
 
+/** \brief Library path from the first argument. "installed" (what a shipped
+ *  application does) returns NULL, so qar_library_load(NULL) loads the
+ *  runtime of the QAROS installed on this PC and the runtime binaries folder
+ *  defaults to its bin/. Any other value is the library file of a
+ *  development build. */
+static const char*
+library_path_argument(const char* argument)
+{
+	return strcmp(argument, "installed") == 0 ? NULL : argument;
+}
+
+/** \brief Printable name of what qar_library_load was given. */
+static const char*
+describe_library(const char* library_path)
+{
+	return library_path != NULL ? library_path : "the installed QAROS runtime";
+}
+
 /** \brief Extract directory portion from a path (both '/' and '\\' on Windows).
  */
 static const char*

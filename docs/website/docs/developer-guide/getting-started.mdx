@@ -52,10 +52,14 @@ Both modes expose identical function names.
 
 Dynamic loading is recommended for integrating into an existing application: your
 software keeps working on machines without QAROS installed.
-The runtime ZIP ships no import library, so with it dynamic loading is the only
-option. Point `qar_library_load()` at `<sdk>/bin/qar-streaming-c.dll` and
-`QarRuntimeInit::runtime_binaries_folder_path` at `<sdk>/bin`; leaving the folder
-empty starts no launcher.
+Every application runs against the QAROS installed on the PC and ships no copy
+of the runtime. On Windows, `qar_library_load(NULL)` finds the installation
+(`HKLM` or `HKCU\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`) and loads
+`<InstallFolder>\bin\qar-streaming-c.dll`; it returns `false` with
+"QAROS is not installed" when there is none. Leave
+`QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder
+the library was loaded from. A path instead of `NULL` loads that library file,
+for development builds.
 
 ```c
 // Dynamic-loading mode: one macro before the include, one macro in ONE .c file.
@@ -66,9 +70,9 @@ QAR_IMPLEMENT_DYNAMIC_LOADING() // exactly once per application
 
 int main(int argc, char** argv)
 {
-    if (not qar_library_load("path/to/qar-streaming-c.dll"))
+    if (not qar_library_load(NULL)) // the installed QAROS
     {
-        // QAROS not present — run without AR/VR features
+        // QAROS not installed — run without AR/VR features
         return 1;
     }
     // ... use the API exactly as in static mode ...
@@ -91,8 +95,9 @@ working with older applications and vice versa. Full walkthrough:
 cmake --preset x64-windows
 cmake --build --preset x64-windows-debug
 
-# 3. Run an example
-./build/x64-windows/Debug/dynamic_loading.exe ./package/bin/qar-streaming-c.dll
+# 3. Run an example against the installed QAROS ("installed"), or pass the
+#    path of a qar-streaming-c.dll instead
+./build/x64-windows/Debug/dynamic_loading.exe installed
 ```
 
 </Lang>

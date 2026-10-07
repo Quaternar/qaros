@@ -27,7 +27,7 @@ package
     |- devices   # device player apps
 ```
 
-The runtime ZIP has no import library: the examples load `package/bin/qar-streaming-c.dll` at run time.
+The runtime ZIP has no import library: the examples load a `qar-streaming-c.dll` at run time. Pass `installed` as their first argument to load the QAROS installed on this PC (`qar_library_load(NULL)`), or the path of a `qar-streaming-c.dll`.
 
 ## Documentation
 

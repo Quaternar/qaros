@@ -13,33 +13,36 @@
  * symbols declared in this header (and the companion basic_types.h) are
  * considered stable for C consumers.
  *
- * @par Shipping the binaries
- * The SDK is one folder (`bin/` in the package) holding the shared library
- * (`qar-streaming-c.dll` / `libqar-streaming-c.so`), `qar-runtime-launcher`
- * and every dependency the two need. Deploy it whole and unmodified; do not
- * copy individual files out of it into your own application folder.
+ * @par Load the installed runtime
+ * Every application runs against the QAROS installed on the PC. The runtime
+ * (`qar-streaming-c.dll`, `qar-runtime-launcher` and every dependency) lives in
+ * the installation's `bin/` folder; an application never ships its own copy.
+ * The installer records the folder under
+ * `HKLM` or `HKCU\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`.
  *
  * @par Prefer dynamic loading
  * Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
- * in exactly one translation unit, and call qar_library_load() before any
- * other API call. The application then carries no link-time dependency on the
- * SDK, chooses the SDK folder at run time, and lets the SDK's own dependency
- * libraries resolve out of that folder instead of out of the application's.
- * Link-time linking also works, but then the whole `bin/` content has to sit
- * next to the executable or on the library search path.
+ * in exactly one translation unit, and call `qar_library_load(NULL)` before
+ * any other API call. It loads `<InstallFolder>/bin/qar-streaming-c.dll` from
+ * its absolute path and resolves the runtime's dependencies out of that folder,
+ * never out of the application's. With no QAROS installed it prints
+ * "QAROS is not installed" and returns false. The application carries no
+ * link-time dependency on the runtime. Link-time linking also works, but then
+ * the whole `bin/` content has to sit next to the executable or on the library
+ * search path.
  *
- * @par The two paths you must set
- * qar_library_load() takes the library **file**:
- * `<sdk>/bin/qar-streaming-c.dll`. QarRuntimeInit::runtime_binaries_folder_path
- * takes the **folder** that file came from: `<sdk>/bin`. Relative paths resolve
- * against the current working directory, so derive both from the install
- * location. Leaving the folder empty starts no launcher, and peer invites then
- * never complete.
+ * @par Runtime binaries folder
+ * Leave QarRuntimeInit::runtime_binaries_folder_path empty: the runtime then
+ * uses the folder the loaded `qar-streaming-c` came from, which is the
+ * installed `bin/`. That is where it finds `qar-runtime-launcher`. Set it only
+ * to point at another runtime tree (our own development builds);
+ * qar_installed_bin_folder() returns the installed one.
  *
  * @par Basic flow: get a session, get a target app, stream to it
  * 1. qar_library_init() - once per process.
- * 2. qar_runtime_create() - with runtime_binaries_folder_path set as above.
- * 3. qar_runtime_onboard() with exactly one chained mode extension, or
+ * 2. qar_runtime_create() - runtime_binaries_folder_path left empty.
+ * 3. qar_runtime_onboard() with exactly one chained mode extension (a source
+ *    app on the hub's PC uses QarOnboardLocalAppExt and needs no code), or
  *    qar_runtime_rejoin() with a previously persisted QarOnboardingId -
  *    **the only calls that produce an active `QarSession*`**. There is no
  *    "current session" getter, so keep the returned pointer: it is the first
@@ -346,7 +349,23 @@ typedef enum QarStatusCode
 	QAR_STATUS_ONBOARDING_HUB_UNREACHABLE = 1802,
 	/// qar_runtime_forget was called while the slot still has an active
 	/// session — destroy the active session handle first.
-	QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE = 1803
+	QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE = 1803,
+	/// Local enrollment: the user denied the app in the QAROS hub, or its
+	/// approval was revoked. Stop and tell the user.
+	QAR_STATUS_ONBOARDING_APPROVAL_DENIED = 1804,
+	/// Local enrollment: nobody answered the approval prompt in time. Offer a
+	/// retry.
+	QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT = 1805,
+	/// Local enrollment: the process serving the enrollment pipe is not the
+	/// installed QAROS hub. Stop; do not retry silently.
+	QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC = 1806,
+	/// Local enrollment: the app no longer matches what the user approved
+	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
+	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1807,
+	/// Local enrollment: the installed hub tier is below
+	/// QarOnboardLocalAppExt.minimum_hub_tier. Ask the user to install QAROS
+	/// with the required protection.
+	QAR_STATUS_ONBOARDING_HUB_TIER_TOO_LOW = 1808
 } QarStatusCode;
 
 /**
@@ -1066,6 +1085,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT = 0x1007,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
@@ -1368,6 +1388,7 @@ typedef struct QarRejoinInit
  * extensions through header.next:
  * - QarOnboardCodeExt for code onboarding
  * - QarOnboardInviteExt for a full invite blob
+ * - QarOnboardLocalAppExt for a source app on the hub's own PC (no code)
  */
 typedef struct QarOnboardInit
 {
@@ -1391,9 +1412,9 @@ typedef struct QarOnboardCodeExt
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
 	/// Required; short code shown on the hub onboarding screen, or the code
-	/// text of any other invite the hub minted (qar_onboarding_invite_get_code),
-	/// such as the launch code QAROS writes to the stdin of an app it starts.
-	/// Copied before the call returns.
+	/// text of any other invite the hub minted
+	/// (qar_onboarding_invite_get_code), such as the launch code QAROS writes
+	/// to the stdin of an app it starts. Copied before the call returns.
 	const char* code;
 } QarOnboardCodeExt;
 
@@ -1440,6 +1461,64 @@ typedef struct QarOnboardPeerIdExt
 	/// Required; a zero id is rejected.
 	QarPeerId peer_id;
 } QarOnboardPeerIdExt;
+
+/**
+ * @brief Protection level of the installed QAROS hub, weakest first.
+ */
+typedef enum QarHubTier
+{
+	/// Our own development and CI builds only; never in a distributed DLL.
+	QAR_HUB_TIER_DEVELOPMENT = 0,
+	/// Per-user install with a signed package identity.
+	QAR_HUB_TIER_USER_PACKAGE = 1,
+	/// Per-machine install whose system service guards the hub's secrets.
+	QAR_HUB_TIER_SYSTEM_SERVICE = 2
+} QarHubTier;
+
+/**
+ * @brief Extension: join the QAROS hub installed on this PC as a local source
+ * app, with no code.
+ *
+ * Chain into QarOnboardInit.header.next as the only mode extension. The hub
+ * identifies the calling process from Windows (its executable, signature and
+ * user), asks the user once ("Allow <app> to join QAROS?"), and signs a
+ * 30-minute certificate for a key that exists only in this process's memory.
+ * Later starts of the same app join silently while it still matches what the
+ * user approved. The runtime renews the certificate before it expires.
+ *
+ * - Stateless: writes nothing to disk; out_onboarding_id is the zero id.
+ *   qar_runtime_rejoin and qar_runtime_forget do not apply.
+ * - Not combinable with QarOnboardHostExt (local only) or QarOnboardPeerIdExt
+ *   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ * - The progress callback reports "Waiting for approval in QAROS hub" while
+ *   the prompt is open.
+ * - Windows only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
+ */
+typedef struct QarOnboardLocalAppExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT */
+	/// Max wait for the user's first-time approval; 0 -> hub default (120 s).
+	uint32_t approval_timeout_ms;
+	/// Weakest hub installation this app accepts; default
+	/// QAR_HUB_TIER_USER_PACKAGE. QAR_HUB_TIER_DEVELOPMENT is reachable only
+	/// with development builds of QAROS.
+	QarHubTier minimum_hub_tier;
+} QarOnboardLocalAppExt;
+
+/**
+ * @brief What the loaded qar-streaming-c reports about itself
+ * (qar_runtime_info).
+ */
+typedef struct QarRuntimeInfo
+{
+	/// Product version, e.g. "0.9.0" or "0.9.0-rc.2". Static storage.
+	const char* version;
+	/// "release" or "demo". Static storage.
+	const char* flavor;
+	/// C API generation, "v0". Static storage.
+	const char* c_api;
+} QarRuntimeInfo;
 
 /**
  * @brief Mint an invite to hand to a sibling instance (session-scoped).
@@ -2004,19 +2083,34 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @brief Dynamic library load/unload helpers for the C API.
  * @{ */
 /**
- * @brief Load the shared library from a custom path for dynamic mode.
+ * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
- * @param library_path Path to the library **file** itself, for example
- *        `<sdk>/bin/qar-streaming-c.dll`, absolute or relative to the current
- *        working directory. The SDK's own dependency libraries are resolved
- *        from that same folder, so the folder must stay intact.
- * @return true on success. Call this before qar_library_init().
+ * @param library_path NULL loads the runtime of the QAROS installed on this PC
+ *        (`<InstallFolder>/bin/qar-streaming-c.dll`, Windows only); this is
+ *        the normal call. A non-NULL path names the library **file** itself,
+ *        absolute or relative to the current working directory, and is meant
+ *        for our own development builds. The runtime's dependency libraries
+ *        are resolved from the library's own folder.
+ * @return true on success; false, with a printed reason, when QAROS is not
+ *         installed or the library fails to load. Call this before
+ *         qar_library_init().
  */
 static inline bool qar_library_load(const char* library_path);
 /** @brief Unload the shared library previously loaded. */
 static inline void qar_library_unload(void);
 /** @brief Check if the shared library is currently loaded. */
 static inline bool qar_is_library_loaded(void);
+/**
+ * @brief UTF-8 `<InstallFolder>/bin` of the installed QAROS.
+ *
+ * Reads `HKLM`, then `HKCU\SOFTWARE\Quaternar\QAROS` value `InstallFolder`.
+ * Windows only; elsewhere it always returns false.
+ *
+ * @param out Receives the NUL-terminated folder.
+ * @param capacity Size of out in bytes.
+ * @return false when QAROS is not installed or out is too small.
+ */
+static inline bool qar_installed_bin_folder(char* out, size_t capacity);
 /** @} */ /* end of qar_c_dynamic_loading */
 #endif
 
@@ -2048,6 +2142,18 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @return QarResult Success or error code.
  */
 static inline QarResult qar_library_destroy(void);
+
+/**
+ * @brief Version, flavor and C API generation of the loaded qar-streaming-c.
+ *
+ * Works before qar_library_init(). With one QAROS installation per PC, this
+ * is the installed runtime's identity; use it in diagnostics. The strings are
+ * static and stay valid until the library is unloaded.
+ *
+ * @param out_info Receives the info; must not be NULL.
+ * @return QarResult Success, or QAR_STATUS_LOGIC_ERROR for a NULL out_info.
+ */
+static inline QarResult qar_runtime_info(QarRuntimeInfo* out_info);
 /** @} */ /* end of qar_c_library */
 
 // ============================================================================
@@ -2141,11 +2247,11 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
 /**
  * @brief Create a runtime instance that can host sessions and streams.
  *
- * QarRuntimeInit::runtime_binaries_folder_path must name the SDK `bin` folder,
- * the one the shared library itself was loaded from. That is where the runtime
- * finds `qar-runtime-launcher`, the process that answers
+ * QarRuntimeInit::runtime_binaries_folder_path names the runtime `bin` folder,
+ * where the runtime finds `qar-runtime-launcher`, the process that answers
  * qar_session_invite_target_app() and starts the device applications. Left
- * empty, the runtime still creates sessions but no peer can ever be invited.
+ * empty, it defaults to the folder the loaded qar-streaming-c came from: the
+ * installed QAROS `bin/` for every distributed application.
  *
  * @param init Runtime initialization parameters.
  * @param out_runtime Out pointer receiving the created runtime handle.
@@ -2197,6 +2303,9 @@ static inline QarOnboardHostExt qar_onboard_host_ext_default(void);
 static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
 /** @brief Default init for QarOnboardPeerIdExt (zero peer id; set it). */
 static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
+/** @brief Default init for QarOnboardLocalAppExt (hub default approval
+ * timeout, minimum tier QAR_HUB_TIER_USER_PACKAGE). */
+static inline QarOnboardLocalAppExt qar_onboard_local_app_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
 /** @brief Default init for QarRequestOnboardingCodesInit (one code, hub
@@ -5513,6 +5622,17 @@ qar_onboard_peer_id_ext_default(void)
 	return ext;
 }
 
+static inline QarOnboardLocalAppExt
+qar_onboard_local_app_ext_default(void)
+{
+	QarOnboardLocalAppExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT, NULL }, // header
+		0, // approval_timeout_ms (0 -> hub default, 120 s)
+		QAR_HUB_TIER_USER_PACKAGE // minimum_hub_tier
+	};
+	return ext;
+}
+
 static inline QarRequestInviteInit
 qar_request_invite_init_default(void)
 {
@@ -6583,7 +6703,8 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 	  (init, out_runtime))                                                     \
 	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
 	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
-	X(ACTIVE, QarResult, library_destroy, (void), ())
+	X(ACTIVE, QarResult, library_destroy, (void), ())                          \
+	X(ACTIVE, QarResult, runtime_info, (QarRuntimeInfo * out_info), (out_info))
 
 QAR_DECLARE_MODULE_COMMON(RUNTIME, Runtime, runtime, QAR_RUNTIME_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RUNTIME_FUNCTION_LIST)
@@ -6865,6 +6986,95 @@ qar_loadlib(const char* path)
 	);
 }
 
+/// Key the QAROS installer writes, under HKLM (per machine) or HKCU (per
+/// user). One installation per PC, so at most one of the two exists.
+#define QAR_INSTALL_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS"
+
+/// `<InstallFolder>\bin` of the installed QAROS, wide. False when QAROS is not
+/// installed.
+static inline bool
+qar_installed_bin_folder_w(wchar_t* out, DWORD capacity_chars)
+{
+	const HKEY roots[2] = { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER };
+	for(int i = 0; i < 2; ++i)
+	{
+		DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
+		const LSTATUS status = RegGetValueW(
+			roots[i],
+			QAR_INSTALL_REGISTRY_KEY,
+			L"InstallFolder",
+			RRF_RT_REG_SZ,
+			NULL,
+			out,
+			&size
+		);
+		if(status != ERROR_SUCCESS)
+		{
+			continue;
+		}
+		const size_t length = wcslen(out);
+		if(length + 5 >= capacity_chars)
+		{
+			return false;
+		}
+		wcscat_s(out, capacity_chars, L"\\bin");
+		return true;
+	}
+	return false;
+}
+
+/// UTF-8 form of qar_installed_bin_folder_w, for
+/// QarRuntimeInit::runtime_binaries_folder_path. Leaving that path empty has
+/// the same effect: the runtime uses the folder qar-streaming-c was loaded
+/// from.
+static inline bool
+qar_installed_bin_folder(char* out, size_t capacity)
+{
+	wchar_t folder[MAX_PATH];
+	if(!qar_installed_bin_folder_w(folder, MAX_PATH))
+	{
+		return false;
+	}
+	const int written = WideCharToMultiByte(
+		CP_UTF8, 0, folder, -1, out, (int)capacity, NULL, NULL
+	);
+	return written > 0;
+}
+
+/// Loads the installed runtime from an absolute path, searching only its own
+/// folder and System32 for dependencies, never the application's folder.
+static inline HMODULE
+qar_loadlib_installed(void)
+{
+	wchar_t path[MAX_PATH];
+	if(!qar_installed_bin_folder_w(path, MAX_PATH))
+	{
+		printf(
+			"QAROS is not installed: no InstallFolder under "
+			"HKLM or HKCU\\SOFTWARE\\Quaternar\\QAROS.\n"
+		);
+		return NULL;
+	}
+	if(wcslen(path) + 22 >= MAX_PATH)
+	{
+		return NULL;
+	}
+	wcscat_s(path, MAX_PATH, L"\\qar-streaming-c.dll");
+	HMODULE handle = LoadLibraryExW(
+		path,
+		NULL,
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
+	);
+	if(handle == NULL)
+	{
+		printf(
+			"Loading the installed QAROS runtime failed: Error %lu\n",
+			GetLastError()
+		);
+	}
+	return handle;
+}
+
 static inline void
 qar_close_library(QAR_DLL_HANDLE_TYPE handle)
 {
@@ -6907,6 +7117,24 @@ qar_loadlib(const char* path)
 
 	free(abs_path);
 	return handle;
+}
+
+/// No installed-runtime lookup on this platform yet: pass the library path.
+static inline void*
+qar_loadlib_installed(void)
+{
+	printf(
+		"qar_library_load(NULL) is supported on Windows only; pass the path.\n"
+	);
+	return NULL;
+}
+
+static inline bool
+qar_installed_bin_folder(char* out, size_t capacity)
+{
+	(void)out;
+	(void)capacity;
+	return false;
 }
 
 static inline void
@@ -7023,7 +7251,10 @@ qar_library_load(const char* library_path)
 		return true;
 	}
 
-	g_qar_dynamic_library_handle = qar_loadlib(library_path);
+	// NULL: the runtime of the QAROS installed on this PC (GitHub #196).
+	g_qar_dynamic_library_handle = library_path != NULL
+									   ? qar_loadlib(library_path)
+									   : qar_loadlib_installed();
 	if(g_qar_dynamic_library_handle == NULL)
 	{
 		return false;

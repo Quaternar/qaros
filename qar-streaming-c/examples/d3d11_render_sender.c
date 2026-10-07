@@ -26,7 +26,7 @@
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target d3d11_render_sender
  * ./build/x64-windows/Debug/d3d11_render_sender.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
+ * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
  *
  * \section d3d11_rendering_setup Library, Runtime, Session, and App Volume
@@ -77,7 +77,8 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "d3d11_render_sender";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"Usage: %s <installed|path-to-qar-streaming-c-library> "
+		"[runtime-binaries-dir] "
 		"[pairing-code]\n",
 		name
 	);
@@ -253,7 +254,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* library_path = argv[1];
+	const char* library_path = library_path_argument(argv[1]);
 	const char* runtime_dir = NULL;
 	char runtime_dir_buffer[1024] = { 0 };
 	if(argc >= 3)
@@ -270,7 +271,7 @@ main(int argc, char** argv)
 
 	if(!qar_library_load(library_path))
 	{
-		fprintf(stderr, "Failed to load '%s'.\n", library_path);
+		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
 

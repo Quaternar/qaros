@@ -23,7 +23,7 @@
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target app_volume_management
  * ./build/x64-windows/Debug/app_volume_management.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
+ * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
  *
  * \section app_volume_args Parse Arguments
@@ -79,7 +79,8 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "app_volume_management";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"Usage: %s <installed|path-to-qar-streaming-c-library> "
+		"[runtime-binaries-dir] "
 		"[pairing-code]\n",
 		name
 	);
@@ -287,7 +288,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* library_path = argv[1];
+	const char* library_path = library_path_argument(argv[1]);
 	const char* runtime_dir = NULL;
 	char runtime_dir_buffer[1024] = { 0 };
 
@@ -308,7 +309,7 @@ main(int argc, char** argv)
 	//! [app_setup]
 	if(!qar_library_load(library_path))
 	{
-		fprintf(stderr, "Failed to load '%s'.\n", library_path);
+		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
 
