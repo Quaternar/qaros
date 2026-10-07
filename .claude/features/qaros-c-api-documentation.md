@@ -279,10 +279,11 @@ Fill the two TODOs in `user-guide/deployment-and-installation.md`:
   deprecated entries keep exporting and return deprecation errors, loaded
   structs are app-owned. Write it as a user-facing promise.
 
-### T13 — MSIX promotion — BLOCKED(two items in windows-msix-packaging feature)
-When config-seed-to-LocalState and the startup-task tray toggle land, rewrite
-the MSIX section of deployment-and-installation.md as the primary install path
-and demote ZIP.
+### T13 — Installer as the only install path — BLOCKED (Quaternar GitHub #196)
+The full MSIX and the runtime ZIP are retired in favour of an NSIS installer
+(per user or per machine) with a sparse MSIX identity. Every source app loads the
+installed `qar-streaming-c.dll`. When #196 lands, rewrite
+deployment-and-installation.md around it and drop the ZIP and MSIX sections.
 
 ### T14 — Run-verify examples against a real runtime — TODO
 Syntax passes; do an end-to-end run: drop a binary package into
