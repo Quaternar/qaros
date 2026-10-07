@@ -17,8 +17,8 @@
  * Every application runs against the QAROS installed on the PC. The runtime
  * (`qar-streaming-c.dll`, `qar-runtime-launcher` and every dependency) lives in
  * the installation's `bin/` folder; an application never ships its own copy.
- * The installer records the folder under
- * `HKLM` or `HKCU\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`.
+ * The installer (per machine) records the folder under
+ * `HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`.
  *
  * @par Prefer dynamic loading
  * Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
@@ -1469,6 +1469,12 @@ typedef struct QarOnboardPeerIdExt
  * Later starts of the same app join silently while it still matches what the
  * user approved. The runtime renews the certificate before it expires.
  *
+ * - Joins the hub of the QAROS installation this runtime belongs to: the
+ *   QAR_INSTANCE environment variable when set, else the installation holding
+ *   the loaded qar-streaming-c, else the installed (HKLM) one. The hub's
+ *   qar-runtime-launcher must run as this user in this Windows session, from
+ *   that installation's bin/, signed with the QAROS key pinned in the runtime;
+ *   otherwise QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC.
  * - Stateless: writes nothing to disk; out_onboarding_id is the zero id.
  *   qar_runtime_rejoin and qar_runtime_forget do not apply.
  * - Not combinable with QarOnboardHostExt (local only) or QarOnboardPeerIdExt
@@ -2082,7 +2088,7 @@ static inline bool qar_is_library_loaded(void);
 /**
  * @brief UTF-8 `<InstallFolder>/bin` of the installed QAROS.
  *
- * Reads `HKLM`, then `HKCU\SOFTWARE\Quaternar\QAROS` value `InstallFolder`.
+ * Reads `HKLM\SOFTWARE\Quaternar\QAROS` value `InstallFolder`.
  * Windows only; elsewhere it always returns false.
  *
  * @param out Receives the NUL-terminated folder.
@@ -6964,8 +6970,8 @@ qar_loadlib(const char* path)
 	);
 }
 
-/// Key the QAROS installer writes, under HKLM (per machine) or HKCU (per
-/// user). One installation per PC, so at most one of the two exists.
+/// Key the QAROS installer writes, per machine, under HKLM. An installation is
+/// never read from HKCU: every process of the user can write that hive.
 #define QAR_INSTALL_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS"
 
 /// `<InstallFolder>\bin` of the installed QAROS, wide. False when QAROS is not
@@ -6973,32 +6979,27 @@ qar_loadlib(const char* path)
 static inline bool
 qar_installed_bin_folder_w(wchar_t* out, DWORD capacity_chars)
 {
-	const HKEY roots[2] = { HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER };
-	for(int i = 0; i < 2; ++i)
+	DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
+	const LSTATUS status = RegGetValueW(
+		HKEY_LOCAL_MACHINE,
+		QAR_INSTALL_REGISTRY_KEY,
+		L"InstallFolder",
+		RRF_RT_REG_SZ,
+		NULL,
+		out,
+		&size
+	);
+	if(status != ERROR_SUCCESS)
 	{
-		DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
-		const LSTATUS status = RegGetValueW(
-			roots[i],
-			QAR_INSTALL_REGISTRY_KEY,
-			L"InstallFolder",
-			RRF_RT_REG_SZ,
-			NULL,
-			out,
-			&size
-		);
-		if(status != ERROR_SUCCESS)
-		{
-			continue;
-		}
-		const size_t length = wcslen(out);
-		if(length + 5 >= capacity_chars)
-		{
-			return false;
-		}
-		wcscat_s(out, capacity_chars, L"\\bin");
-		return true;
+		return false;
 	}
-	return false;
+	const size_t length = wcslen(out);
+	if(length + 5 >= capacity_chars)
+	{
+		return false;
+	}
+	wcscat_s(out, capacity_chars, L"\\bin");
+	return true;
 }
 
 /// UTF-8 form of qar_installed_bin_folder_w, for
@@ -7029,7 +7030,7 @@ qar_loadlib_installed(void)
 	{
 		printf(
 			"QAROS is not installed: no InstallFolder under "
-			"HKLM or HKCU\\SOFTWARE\\Quaternar\\QAROS.\n"
+			"HKLM\\SOFTWARE\\Quaternar\\QAROS.\n"
 		);
 		return NULL;
 	}
