@@ -44,7 +44,7 @@ The core examples take `installed` as their first argument to load the installed
 1. Launch a Developer PowerShell or command prompt configured for MSVC (the Visual Studio Build Tools installer provides shortcuts).
 2. Configure the project with CMake presets: `cmake --preset x64-windows`.
 3. Build the desired configuration, for example Debug: `cmake --build --preset x64-windows-debug` (use `x64-windows-release` for Release binaries).
-4. Run the provided samples from the generated binaries under `build/x64-windows/<Config>/`. For example: `./build/x64-windows/Debug/dynamic_loading.exe` or `./build/x64-windows/Debug/cpu_rendering_visualizer.exe`.
+4. Run the samples from `build/x64-windows/qar-streaming-c/examples/<Config>/`, for example `./build/x64-windows/qar-streaming-c/examples/Debug/dynamic_loading.exe installed`.
 
 The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) loads the installed QAROS, joins as a local app with one approval in QAROS (no code), and runs a separate stereo camera and sender for each rendering target discovered through render requests.
 
