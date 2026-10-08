@@ -22,6 +22,7 @@ Tile tags:
 | **Built-in** | Ships with QAROS: StereoKit, CPU Renderer, Test OpenXR. |
 | **Detected** | Found on this PC (see [Detected apps](#detected-apps)). |
 | *(none)* | A preset you saved. |
+| **Developer** | Visible from the Developer UI mode up. |
 | **Debug** | Visible only in the Debug UI mode. |
 | **N on** | N copies of this app are running. |
 
@@ -40,7 +41,7 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 ## Adding your own app
 
 1. Click **+ Add source app**.
-2. In the Debug UI mode, pick the type first: **OpenXR app** or **QAROS API app**. In the other modes only OpenXR apps can be added.
+2. In the Developer or Debug UI mode, pick the type first: **OpenXR app** or **QAROS API app**. In Basic mode only OpenXR apps can be added.
 3. Set **Executable** (type a path or **Browse**). **Name** defaults to the executable name.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
 
@@ -50,6 +51,8 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 | QAROS API app | Executable, Arguments (one per line) | One process for all targets |
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
+
+To test your own QAROS API app: switch to Developer mode (Settings, no password), add it as above with type **QAROS API app**, then launch its tile. Check **Running** for its status and the Hub's log folder for its stdout/stderr.
 
 A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it, hands it a one-time launch code of its own (the code on the onboarding screen stays as it is) and its GPU, and restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launching from QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
 
@@ -86,11 +89,19 @@ On start, and when you press refresh, the visualizer looks in its own folder for
 
 | File | Tile |
 |---|---|
-| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Debug mode only) |
+| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Developer mode and up) |
 
-## UI modes and debug-only apps
+## UI modes and mode-gated apps
 
-The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug needs the debug password in Settings). CPU Renderer, Test OpenXR and every QAROS API app are debug-only: outside Debug mode their tiles and running rows are hidden, but apps already running keep running.
+The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug needs the debug password in Settings).
+
+| Apps | Shown from |
+|---|---|
+| StereoKit, your OpenXR presets | Basic |
+| QAROS API apps (yours and the Vulkan cube) | Developer |
+| CPU Renderer, Test OpenXR | Debug |
+
+In a lower mode their tiles and running rows are hidden, but apps already running keep running.
 
 ## Persistence
 
