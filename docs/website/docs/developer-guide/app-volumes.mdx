@@ -47,9 +47,9 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
-var options = new AppVolumeOptions
+// The common name is required: GetOrCreate returns the existing volume of that name.
+var options = new AppVolumeOptions("assembly-view.myapp.example.com")
 {
-    CommonName  = "assembly-view.myapp.example.com",
     DisplayName = "Assembly View",
 
     // Pose is the cuboid CENTER, room space.
@@ -91,12 +91,16 @@ Because other peers (and gestures) can change these too, read the *live* values 
 To pin a volume to a geographic pose (ECEF WGS84 — see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
 
 ```c
-QarGeoAnchorFrame frame = qar_geo_anchor_frame_default();
-/* fill origin_world (meters, ECEF) and the local axis unit vectors */
+QarGeoAnchorFrame frame;
+frame.world_ref_system = QAR_WORLD_REF_SYSTEM_ECEF_WGS84_METERS;
+frame.handedness = QAR_HANDEDNESS_RIGHT;
+/* fill origin_world (meters, ECEF) and the axis_x/y/z_world unit vectors */
 qar_app_volumes_change_app_world_anchor(session, &volume_id, &frame);
 /* ... */
 qar_app_volumes_clear_app_world_anchor(session, &volume_id);
 ```
+
+The compiled tutorial builds a full east/up/south frame from a latitude/longitude: [Pin to the Earth with a World Anchor](/docs/developer-guide/tutorials/c/app-volume-management).
 
 ## Coordination between users
 
@@ -118,27 +122,32 @@ Each `QarAppVolumeGestureMappingRule` chooses:
 - **scale sensitivity** — constant, inverse-to-app-scale, or proportional-to-app-scale, so zoom feels right at any magnification,
 - whether the gesture works from outside the volume, and the controller-ray style.
 
-The default configuration already gives you grab-to-move (6-DoF → `app_pose`) and pinch-to-zoom (distance → `app_scale`, proportional).
+The default configuration already gives you grab-to-move (6-DoF → `app_pose`) and pinch-to-zoom (distance → `app_scale`, proportional). To change it, start from `qar_app_volume_gesture_configuration_default()` and edit rules in place — worked in [Customise the Gesture Configuration](/docs/developer-guide/tutorials/c/app-volume-management).
 
 To consume gestures yourself — e.g. clicking parts of your model — subscribe:
 
 ```c
-static void on_gesture(const QarAppVolumeGestureEvent* ev, void* state)
+static void on_gesture(QarAppVolumeGesture* g, void* state)
 {
-    /* ev->source_peer_id : who gestured
-       ev->phase          : started / updated / ended / instant / canceled
-       ev->start_point / ev->action_point : room space, meters
-       ev->translation_delta / ev->rotation_delta : accumulated deltas */
+    /* g is valid only during this call - copy what you keep */
+    QarPeerId peer; QarAppVolumeId volume;
+    QarGestureKind kind; QarGesturePhase phase;
+    QarVector3 action, start; bool has_action, has_start;
+    qar_app_volume_gesture_get_lifecycle(g, &peer, &volume);
+    qar_app_volume_gesture_get_classification(g, &kind, &phase);
+    qar_app_volume_gesture_get_points(g, &action, &has_action, &start, &has_start);
+    /* qar_app_volume_gesture_get_deltas: accumulated deltas in app volume
+       space, plus whether the library already applied them to app_pose/scale */
 }
 
-qar_app_volumes_subscribe_gesture_updates(session, &volume_id, on_gesture, NULL);
+qar_app_volumes_subscribe_all_gesture_events(session, &volume_id, on_gesture, NULL, NULL);
 ```
 
-To hit-test a click against your content, transform `action_point` from room space into your app space using the volume's latest pose, `app_pose`, and `app_scale`. Remember the cuboid convention: the volume pose is its **center**, so account for the half-extents when mapping a room-space point into the volume's local frame.
+Gesture start and action points already arrive in **app content space** (as do a render sender's view poses and hands) (app units, under the app pose and scale the gesture began with), so hit-test them against your model directly. A point you hold only in **room space** — a GUI panel position, a device pose — goes through two steps: room → app volume space via the volume's latest pose (its position is the cuboid **center**, so the box spans ± half the extents), then app volume → app content space via `app_pose` and `app_scale`. The compiled tutorial implements both steps and the cuboid test: [Room-Space Point to App Content Space](/docs/developer-guide/tutorials/c/app-volume-management).
 
 ## Compiled tutorial
 
 This page is backed by the compiled example `app_volume_management.c`:
 
 - Source: `qaros/qar-streaming-c/examples/app_volume_management.c`
-- Example walkthrough: [App Volume Management](/docs/developer-guide/tutorials/c/app-volume-management)
+- Example walkthrough: [App Volume Management](/docs/developer-guide/tutorials/c/app-volume-management) — create and list, gesture configuration, world anchor set/clear, room → app point mapping

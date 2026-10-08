@@ -13,12 +13,11 @@ A QAROS Hub and its devices are built to share a LAN. This page covers the ports
 | Traffic | Protocol / port | Notes |
 |---|---|---|
 | QAROS service range | TCP + UDP **19120–19200** | The general range the Hub's services use. Open it once for the Hub machine. |
-| Discovery beacon | UDP multicast **`239.77.77.77:7445`** | The Hub broadcasts a beacon roughly every 30 seconds so devices find it with zero configuration. |
-| Discovery requests | TCP **7445** (framed) | Framed TCP discovery runs on the same port as the multicast beacon. |
-| Pairing and onboarding | TCP **7445** (framed) | The same Hub listener dispatches discovery requests, EC-JPAKE pairing, and shared-password SecureChannel onboarding by first frame. |
+| Discovery beacon | UDP multicast **`239.77.77.77:7445`** | The Hub broadcasts a beacon every 5 seconds so devices find it with zero configuration. The beacon names the Hub's onboarding port. |
+| Discovery requests, pairing and onboarding | TCP, one port from **19120–19199** (framed) | One Hub listener dispatches discovery requests, EC-JPAKE pairing, and shared-password SecureChannel onboarding by first frame. The Hub takes the first free port of its range (not the router port); `discoveryPort` pins it. There is no fixed onboarding port. |
 | Session traffic | TCP **19120-19200** (Zenoh mTLS) | All in-session communication, mutually authenticated with Hub-issued certificates. Hub, launched apps, and devices run as Zenoh peers: they connect to known endpoints and listen for full-mesh peer links in this bounded range. |
 
-The MSIX package registers these firewall rules automatically. For ZIP installs, create them once or accept the Windows firewall prompt when the Hub first starts.
+The system installer registers these firewall rules automatically. For runtime ZIP installs, create them once or accept the Windows firewall prompt when the Hub first starts.
 
 ## Deployment models
 
@@ -28,16 +27,16 @@ The MSIX package registers these firewall rules automatically. For ZIP installs,
 
 ## Discovery is unauthenticated and LAN-scoped
 
-Discovery (the multicast beacon and framed TCP discovery on `7445`) is **deliberately unauthenticated** and carries **no secrets** - only coordination metadata such as the Hub's display name, a nonce, its server ID, and where to reach the pairing service. A forged beacon can at worst redirect a *connection attempt*; it cannot onboard a device, because the pairing code is the trust boundary and never travels over any transport.
+Discovery (the multicast beacon and framed TCP discovery on the onboarding port) is **deliberately unauthenticated** and carries **no secrets** - only coordination metadata such as the Hub's display name, a nonce, its server ID, and where to reach the pairing service. A forged beacon can at worst redirect a *connection attempt*; it cannot onboard a device, because the pairing code is the trust boundary and never travels over any transport.
 
-Because it is unauthenticated, **do not expose discovery to the internet.** Keep multicast `239.77.77.77:7445` and the framed TCP discovery on the LAN. Off-LAN reach is the job of a relay, not of opening discovery to the world.
+Because it is unauthenticated, **do not expose discovery to the internet.** Keep multicast `239.77.77.77:7445` and the Hub port range on the LAN. Off-LAN reach is the job of a relay, not of opening discovery to the world.
 
 ## Connecting two Hubs (federation)
 
 Two Hubs can be joined so that a device onboarded to one is trusted by the other:
 
 1. On the visualizer, open the **hub-connect** screen (tray menu -> *Connect to other Hub*).
-2. Enter the **remote Hub's host address** and its **current pairing code**.
+2. Pick the remote Hub from the nearby list, or enter its address as **`host:port`** (the port is shown with its pairing code; there is no default port), and its **current pairing code**. Hubs run by your own user account on this PC are listed first and marked *(yours)*.
 3. On a successful connection, the two Hubs **merge their CA trust bundles** through a trust-store service. From then on, devices onboarded to either Hub are accepted by both.
 
 ### What federation does and does not do - read this

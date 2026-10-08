@@ -21,6 +21,10 @@ This guide is self-contained. If you want the mental model first, read
 
 ## Setting up
 
+Your application joins the Hub running on this PC (or another one). Start it first with
+`bin/qaros-hub-service.exe` from the runtime ZIP, or **QAROS Hub** from the Start menu after
+the installer; see [Installation](/docs/operator-guide/installation).
+
 <CodeTabs>
 <Lang value="c">
 
@@ -52,6 +56,10 @@ Both modes expose identical function names.
 
 Dynamic loading is recommended for integrating into an existing application: your
 software keeps working on machines without QAROS installed.
+The runtime ZIP ships no import library, so with it dynamic loading is the only
+option. Point `qar_library_load()` at `<sdk>/bin/qar-streaming-c.dll` and
+`QarRuntimeInit::runtime_binaries_folder_path` at `<sdk>/bin`; leaving the folder
+empty starts no launcher.
 
 ```c
 // Dynamic-loading mode: one macro before the include, one macro in ONE .c file.
@@ -103,14 +111,14 @@ for expected native failures.
   Unity (via .NET Standard 2.0/2.1) and modern .NET alike. Unsafe blocks are
   enabled internally for zero-copy frame access.
 - **Native library** — the managed assembly P/Invokes into the native
-  **`qar-streaming-c`** library. Place that DLL/.so where the .NET runtime can
-  resolve it (next to your executable, or on the platform's library search
-  path); the C# package does not carry it.
+  **`qar-streaming-c`** library. The NuGet package carries the native runtime
+  and copies it next to your application on build and publish.
 
 ```xml
 <!-- your .csproj -->
 <ItemGroup>
-  <PackageReference Include="QarStreamingSharp" Version="0.*" />
+  <PackageReference Include="Quaternar.Qaros.Streaming" Version="0.*" />
+  <!-- demo runtime: Quaternar.Qaros.Streaming.Demo -->
 </ItemGroup>
 ```
 

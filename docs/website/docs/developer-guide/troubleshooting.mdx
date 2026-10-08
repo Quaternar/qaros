@@ -19,6 +19,9 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 | `QAR_STATUS_PAKE_ERROR` | Pairing code wrong or expired (codes live ~10 s) | Re-prompt the user for the current code and retry |
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Discovery couldn't reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
 | `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` | `forget` called while the session is active | Call `qar_session_handle_destroy` first, then `forget` |
+| `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` | The stream lost its peer and is reconnecting | Skip the frame and keep calling; a dead peer is noticed within ~2 s, a restarted one streams again within a few seconds |
+| `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | The sender's app volume does not resolve yet (or was closed), so there is no app content space to hand poses out in | Keep calling `begin_frame`; create the volume before the sender and recreate one you closed |
+| `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` | The sender's stream was closed for good | Destroy the sender; a new render request brings a new one |
 
 ## Checking results
 
@@ -81,7 +84,7 @@ is not yet compiled from a published sample project.
 - **Calling API functions from inside callbacks.** Result/progress/update callbacks run on library threads; blocking API calls from there can deadlock. Queue to your own thread.
 - **Zero-initializing init structs by hand.** Always use `qar_*_default()` — it stamps `header.type`, without which calls fail.
 - **Mismatched projection metadata.** If streamed content "swims" or sits at the wrong depth, your `show_frame` near/far or per-view poses don't match what you actually rendered with. This is a metadata bug, not a network problem — see [Rendering Streams](/docs/developer-guide/rendering-streams#the-frame-loop).
-- **Confusing panel and volume pose conventions.** Panel pose = top-left corner; volume pose = cuboid center.
+- **Confusing panel and volume pose conventions.** Panel pose = midpoint of the top edge; volume pose = cuboid center.
 - **Destroying the runtime while async operations run.** Cancel (and wait for the exactly-once result callback) before teardown.
 
 ## Where to look
@@ -89,6 +92,12 @@ is not yet compiled from a published sample project.
 - **Library logs** — enable with `QarLibraryInit.enable_console_logging` and/or `log_folder_path`.
 - **Hub-side logs** — the QAROS Hub log folder on the Hub machine.
 - **Warping monitor** — the visualizer's timing view shows per-volume stream latency/FPS/jitter, which quickly separates "my app renders slowly" from "the network is dropping frames".
+
+## Crash dumps
+
+If your process crashes while the C API is loaded, it writes `<time>_<process>_<pid>.crash.txt` and a `.dmp` into `crashes/` under the `log_folder_path` you passed to `qar_library_init` (otherwise `%TEMP%\quaternar\crashes`). Hub processes write theirs next to their logs (see [Running the Hub](/docs/operator-guide/running-the-hub#crash-dumps)). Attach both files and the logs beside them to a bug report.
+
+For a GPU crash or device loss, set `QAR_VULKAN_CRASH_DIAGNOSTIC=1` before starting the processes. With the Vulkan SDK's crash diagnostic layer installed, QAROS loads it and it names the command the GPU was executing (output folder: the layer's `CDL_OUTPUT_PATH`); without the layer the variable does nothing. It is off by default because it records every command buffer.
 
 ## Getting help
 

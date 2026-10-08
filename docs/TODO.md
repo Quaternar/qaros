@@ -8,7 +8,7 @@ items here instead of leaving `:::note TODO` admonitions in the pages.
 
 Status legend: TODO · BLOCKED(reason) · NEEDS-INPUT(who).
 
-Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
+Last swept: 2026-10-06 (synced with internal docs; done items removed).
 
 ---
 
@@ -30,12 +30,13 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
   `operator-guide/running-the-hub` document this workaround. When a local
   "show my code" screen exists, update both and add the click path.
 
-- **MSIX as the primary install path** — BLOCKED(two items) / T13. Promotion needs
-  (1) seeding the launcher config into the package `LocalState` (packaged install
-  root is read-only) and (2) a tray toggle for the startup task. Tracked in the
-  `windows-msix-packaging` feature. When landed, rewrite the MSIX section of
-  `operator-guide/installation` as the primary path and demote ZIP, and revisit
-  `operator-guide/maintenance-and-updates`.
+- **Classic system installer** — BLOCKED(product). The planned installer is an MSI plus a signed
+  sparse MSIX identity, installing one shared runtime that source apps load instead of carrying
+  their own copy. Today the "system installer" is the interim full MSIX bundle
+  (`QAROS Hub <v>.msixbundle`). When the MSI ships, update `operator-guide/installation`
+  (artifact table, data root, install folder), `operator-guide/maintenance-and-updates`, and
+  `developer-guide/getting-started` (how an app finds the installed runtime; the NuGet and Unity
+  ZIP stop bundling it).
 
 ## Blocked on the C# binding not being published in `qaros`
 
@@ -52,17 +53,13 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
     references).
   - Add a `Tutorials > C#` subfolder (`developer-guide/tutorials/csharp/*.mdx`)
     mirroring the 5 C tutorials 1:1.
-  - Publish real NuGet package metadata; confirm the package id used in
-    `developer-guide/getting-started` (currently `QarStreamingSharp`).
-  - Verify the C# member names the docs currently infer (not all were in the
-    binding fact-check): `session.GuiPanels.GetOrCreate` / `NavigateToUri`,
-    `session.AppVolumes.GetOrCreate`, `session.RenderSenders.Create`,
-    `session.Peers.UpdateDisplayName`, `runtime.OnboardWithCode` / `Rejoin` /
-    `Forget`, and options/DTO field names. Confirmed members: `Result<T>`,
-    `.IsSuccess`/`.Info`/`.Value`/`.EnsureSuccess()`/`.ValueOrThrow()`,
-    `NativeCallException`, `session.Peers.GetAll()` → `Result<PeerSpec[]>`,
-    `session.Peers.Updated` event, `SubscribeUpdates` → `Result<IDisposable>`,
-    `IDisposable` handles, the `Qar` namespace, target frameworks.
+  - The NuGet ids are `Quaternar.Qaros.Streaming[.Demo]` (now in
+    `developer-guide/getting-started`); publish them where integrators can reach them.
+  - C# members the docs use are confirmed against the binding: `session.AppVolumes.GetOrCreate`
+    / `session.GuiPanels.GetOrCreate` (options take the required common name in their
+    constructor), `GuiPanels.NavigateToUri`, `session.RenderSenders.Create`,
+    `session.Peers.UpdateDisplayName`, `runtime.Onboard` / `Rejoin` / `Forget`,
+    `session.InviteTargetApp`. Remaining risk is in options/DTO field names inside the snippets.
 
 ## Needs team input (no single in-repo source)
 
@@ -82,6 +79,12 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
 - **ZED camera end-to-end setup** — NEEDS-INPUT(team). Drivers, which machine runs
   the ZED source, and volume placement. `user-guide/onboarding-devices` states it
   depends on the deployment.
+- **Launcher config keys left out of the reference** — NEEDS-INPUT(team) / T9.
+  `operator-guide/launcher-config-reference` omits: `hardwareUniqueName` (read and
+  passed to the Hub, effect unclear); source-app `type: "ApiApp"` (how the launcher
+  locates the API application is not configurable from the entry); the exact
+  semantic difference of `startupTarget.type` `"local"` vs `"auto"`; behaviour when
+  `schema_version` is omitted.
 
 ## Content to add when the source work lands
 
@@ -91,19 +94,8 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
   convention normatively in the C headers rather than by OpenXR inheritance.
   `developer-guide/coordinate-systems` currently frames both as inherited platform
   behavior.
-- **Worked room→app hit-testing example** — TODO / T11. Add a room-space point →
-  app-space point helper (respecting the center-of-cuboid convention) to
-  `qar-streaming-c/examples/app_volume_management.c` with a snippet section, then
-  reference it from `developer-guide/app-volumes`.
-- **D3D11 render-sender example** — TODO / T11. Add a D3D11 sender example
-  (guard `#ifdef QAR_ENABLE_D3D11`, chain `QarStreamParamsD3D11`) and extend
-  `developer-guide/rendering-streams` / the `cpu-rendering` tutorial.
-- **Gesture-config + world-anchor tutorial sections** — TODO / T11. Extend the
-  `app_volume_management.c` example (gesture rules, world-anchor set/clear) and the
-  `tutorials/c/app-volume-management` page. Verify `QarAppVolumeGestureEvent` field
-  names against the generated header first.
 - **Visualizer UI walkthrough with screenshots** — TODO / T7. Tray menu, visualizer
-  window, app-volumes panel, warping/timing view, hub-connect screen. Store under
+  window, Source Applications panel (tiles, add flow, Running list), Logs panel, app-volumes panel, warping/timing view, hub-connect screen. Store under
   `docs/website/static/img/screenshots/`. Referenced honestly (no tour) in
   `operator-guide/running-the-hub`.
 - **Developer troubleshooting growth** — TODO. Grow `developer-guide/troubleshooting`
@@ -113,7 +105,7 @@ Last swept: 2026-07-08 (three-audience Knowledge Base restructure).
 
 ## Security documentation — track findings to closure
 
-`operator-guide/security-deep-dive` presents the intended design and folds these
+`operator-guide/security-deep-dive` (T10 — DONE) presents the intended design and folds these
 **current, known** gaps into its limitations/roadmap honestly. They are engineering
 items, tracked here so the docs can be tightened as each is fixed (do not overstate
 guarantees in the meantime):
@@ -127,14 +119,21 @@ guarantees in the meantime):
   re-pair under a new id).
 - No CA-signing rate limiter; no SNI hostname verification; admin/revocation control
   surface is in-process only (no authenticated remote control plane yet).
+- T10 left out / to verify before documenting: (a) whether a Hub leaving a federation
+  actually triggers trust withdrawal in production (a hub-leave handler exists, no
+  publisher found) - the page says there is no operator withdraw action; (b) that Hub B
+  also merges Hub A's root (page only describes A merging B's); (c) how a push-invited
+  remote device (HoloLens/Android) receives its provisioned key - page only covers
+  Hub-launched processes; (d) whether step-ca rejects or clamps a `certLifetimeHours`
+  above the 24 h provisioner cap.
+- T10 blacklist drift: resolved by ADR-0254 (hub publishes its revocation list; peers that read
+  it refuse the device, others accept it until expiry); `managing-devices` and
+  `security-deep-dive` rewritten to match.
+- There is no production online renewal (gateway renewal binding unwired), so
+  "silent rejoin" lasts only until 75 % of the cert lifetime (24 h cap).
 
 ## Repo hygiene / housekeeping
 
-- **Retire stale internal C API docs** — TODO / T15.
-  `qar-streaming/libs/qar-streaming-c/docs/API_Reference.md` still teaches the removed
-  `qar_runtime_create_session` / `qar_session_join` flow and wrong signatures. Delete
-  it (pointing at docs.quaternar.com) or regenerate. Decide one source of truth vs.
-  its `Getting_Started.md`.
 - **Run-verify examples against a real runtime** — TODO / T14. The 5 C examples pass
   `clang -fsyntax-only` but are not yet link/run-verified end-to-end against a real
   runtime DLL + Hub. Drop a binary package into `qaros/package/`, build, and run
@@ -144,3 +143,20 @@ guarantees in the meantime):
   then in Quaternar commit `.gitmodules` + the `qaros` gitlink + the CMake mirror
   change + the `default_inits.h` C-compat fix. Stage selectively — the Quaternar
   working tree has unrelated changes.
+
+## To verify (added 2026-10-06 sync with internal docs)
+
+- **Launcher config `sourceApps[].type: "ApiApp"`** — NEEDS-INPUT(team). QAROS API apps are added
+  from the visualizer; whether the file-based `sourceApps[]` accepts them, and with which keys, is
+  not verified. `operator-guide/launcher-config-reference` keeps listing only the older kinds.
+- **Reconnect in the visualizer UI** — TODO. What a viewer/operator sees while a stream reconnects
+  (status text, frozen frame) was not traced. `operator-guide/running-the-hub` gives timings only.
+- **HoloLens player name on device** — TODO. `player-installation-to-device/hololens-2` still says
+  the app appears as *QuaternAR Player* / *Skyline Player*; the shipped package is
+  `QAROS Player HoloLens <v>.msix`. Confirm the tile name and whether `Dependencies/` and the `.cer`
+  must be selected in Device Portal.
+- **App-facing log streaming** — NEEDS-INPUT(team). Best-effort log streaming with lost-message
+  markers is visible in the visualizer's Logs panel only; the C API has no log subscription. Document
+  an app API if one is planned.
+- **API app launch policy wording** — TODO(engineering). The registry enum comment says "one process
+  for every target", the behaviour is one shared process for all targets (what the docs say).

@@ -1,0 +1,13 @@
+# SPIR-V words are little endian; generate aligned uint32_t arrays, not byte casts.
+file(WRITE "${OUTPUT}" "#pragma once\n#include <cstdint>\nnamespace cube_shaders {\n")
+foreach(stage vert frag)
+  file(READ "${INPUT_DIRECTORY}/cube.${stage}.spv" bytes HEX)
+  string(LENGTH "${bytes}" length)
+  math(EXPR remainder "${length} % 8")
+  if(length EQUAL 0 OR NOT remainder EQUAL 0)
+    message(FATAL_ERROR "Invalid SPIR-V word length for cube.${stage}")
+  endif()
+  string(REGEX REPLACE "(..)(..)(..)(..)" "0x\\4\\3\\2\\1u," words "${bytes}")
+  file(APPEND "${OUTPUT}" "inline constexpr uint32_t ${stage}[] = {${words}};\n")
+endforeach()
+file(APPEND "${OUTPUT}" "}\n")

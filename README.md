@@ -16,17 +16,18 @@ winget install --id LLVM.LLVM ---exact
 
 ## Obtain QarOS packages
 
-1. Request the latest QarOS binary package from https://www.quaternar.com/.
-2. Unzip the archive you receive and move its contents into the repository's `package/` directory (the packages folder).
-3. The packages folder should have this form
+1. Request the latest QAROS runtime ZIP (`QAROS <version>.zip`) from https://www.quaternar.com/.
+2. Unzip the archive and move the contents of its top-level folder into the repository's `package/` directory.
+3. The package folder should have this form
 
 ```
-packages
-    |- bin
-    |- lib
-    |- include
-    |- shared
+package
+    |- bin       # qar-streaming-c.dll, qar-runtime-launcher, runtime DLLs
+    |- include   # qar_streaming.h matching the binaries
+    |- devices   # device player apps
 ```
+
+The runtime ZIP has no import library: the examples load `package/bin/qar-streaming-c.dll` at run time.
 
 ## Documentation
 
@@ -54,6 +55,8 @@ packages
 2. Configure the project with CMake presets: `cmake --preset x64-windows`.
 3. Build the desired configuration, for example Debug: `cmake --build --preset x64-windows-debug` (use `x64-windows-release` for Release binaries).
 4. Run the provided samples from the generated binaries under `build/x64-windows/<Config>/`. For example: `./build/x64-windows/Debug/dynamic_loading.exe` or `./build/x64-windows/Debug/cpu_rendering_visualizer.exe`.
+
+The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) demonstrates dynamic DLL loading, terminal onboarding, and a separate stereo camera and sender for each rendering target discovered through render requests.
 
 ## Support channels
 

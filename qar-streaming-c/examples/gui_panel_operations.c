@@ -254,7 +254,6 @@ main(int argc, char** argv)
 	);
 	//! [gui_list]
 
-	log_result("qar_session_leave", qar_session_leave(session));
 	qar_session_handle_destroy(session);
 	qar_runtime_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();

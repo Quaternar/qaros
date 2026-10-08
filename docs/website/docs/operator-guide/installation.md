@@ -1,34 +1,64 @@
 ---
 sidebar_position: 3
 title: Installation
-description: How QAROS is distributed and installed - ZIP runtime, NuGet SDK, MSIX installer - and where its data lives.
+description: How QAROS is distributed and installed - runtime ZIP, system installer, Unity ZIP, C# NuGet, device apps - and where its data lives.
 ---
 
 # Deployment and Installation
 
-QAROS is distributed in three artifact types, each aimed at a different consumer:
+QAROS ships each release in two flavors (release and demo) as these artifacts:
 
 | Artifact | For whom | Contents |
 |---|---|---|
-| **ZIP** (`QAROS Hub <version>.zip`) | Operators installing a Hub; integrators who want a self-contained runtime | `bin/` with the Hub processes (`qaros-hub-service`, `qar-runtime-launcher`, `qar-streaming-viz`), the CA tooling, runtime DLLs, and assets |
-| **NuGet** | Developers integrating the C API into their build | The `qar-streaming-c` library, headers, and launcher runtime for development |
-| **MSIX** (`QAROS Hub <version>.msixbundle`) | End users on Windows - one-click Hub install | The same Hub processes packaged as a signed, full-trust desktop app |
-| **APK** (`QAROS Hub Quest/Spaces <version>.apk`) | Meta Quest, P&C Solutions METALENSE 2, and Android target devices | The device player app |
+| **Runtime ZIP** (`QAROS <version>.zip`, `QAROS Demo <version>.zip`) | Running QAROS with no install and no admin rights: a lab PC, a CI box, a shared folder | `bin/` with the Hub processes (`qaros-hub-service`, `qar-runtime-launcher`, `qar-streaming-viz`), the C API library and every runtime DLL, the CA tooling, assets and the `qar-vulkan-source` example app; `include/` with the C API header; `devices/` with the device player apps |
+| **System installer** (`QAROS Hub <version>.msixbundle`, `QAROS Hub Demo <version>.msixbundle`) | Machines that should have one runtime installed and shared by all their source apps | The same Hub processes and runtime, installed once per system |
+| **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | The Unity packages (runtime included) and `devices/` |
+| **C# NuGet** (`Quaternar.Qaros.Streaming`, `Quaternar.Qaros.Streaming.Demo`) | .NET developers | The C# binding; copies the native runtime next to the application on build and publish |
 
-## Installing a Hub from the ZIP (recommended today)
+Every ZIP has one top-level folder and carries `CHANGELOG.md`, `third_party_licenses.md` and `README-Licensing.md`. Installer and runtime ZIP are both fully supported; pick the ZIP when you cannot or do not want to install.
+
+The device player apps are in `devices/` of every ZIP:
+
+| File | Device |
+|---|---|
+| `android/QAROS Player Quest <version>.apk` | Meta Quest |
+| `android/QAROS Player MetaLens <version>.apk` | P&C Solutions METALENSE 2 |
+| `hololens/QAROS Player HoloLens <version>.msix` (+ `.cer`, `Dependencies/`) | HoloLens 2 |
+| `README.md` | Install steps for each |
+
+## Installing a Hub from the runtime ZIP
 
 1. Unzip the archive to a writable location.
-2. Start `bin/qaros-hub-service.exe`. It starts the launcher and puts the QAROS icon in the tray.
-3. Open the Hub UI and configure your source apps and target devices there. Hub configuration is persistent across restarts.
-4. Make sure the firewall permits the QAROS port range **19120-19200 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The MSIX package registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
+2. Start `bin/qaros-hub-service.exe`. It starts the launcher and the visualizer and puts the QAROS icon in the tray. Always start QAROS this way: do not start `qar-runtime-launcher.exe` or `qar-streaming-viz.exe` directly.
+3. Open the visualizer and set up your source apps there (see [Source Applications](/docs/operator-guide/source-applications)). Hub configuration is persistent across restarts. File-based launcher settings are listed in the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference).
+4. Make sure the firewall permits the QAROS port range **19120-19200 (TCP+UDP)**. It carries session traffic and, since the onboarding (pairing) listener moved into it, onboarding too: a rule for TCP `7445` alone no longer lets a device pair. Discovery additionally uses UDP multicast `239.77.77.77:7445`. (The installer registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
 
-Data written at runtime (identity slots, CA state, session state, logs, and persisted Hub configuration) is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`), so upgrading is "replace the folder".
+## Where data and logs live
 
-## Installing via MSIX
+The **data root** holds everything the Hub keeps between runs: identity slots, CA state, session state and persisted Hub configuration. It is outside the install directory, so upgrading is "replace the folder". The **log root** holds the log files of a run.
 
-The MSIX bundle installs the Hub as a regular Windows app (with distinct release and demo package identities) and registers the firewall rules and an optional autostart task.
+| Install | Data root | Log root |
+|---|---|---|
+| Runtime ZIP | `%LOCALAPPDATA%\Quaternar\Qaros` | `%TEMP%\quaternar\logs` |
+| System installer | `%LOCALAPPDATA%\Packages\<package family name>\LocalState\Quaternar` | `%TEMP%\quaternar\logs` (Windows may redirect it into the package's `LocalCache`) |
+| Development build (run from a build tree) | `%TEMP%\quaternar\worktrees\<worktree id>` when started by `qaros-hub-service`, else `%TEMP%\quaternar` | Same as the data root |
+| Any, overridden | The folder in the `QAR_APP_DATA_ROOT` environment variable | Same as the data root |
 
-The MSIX pipeline (packaging, signing, firewall declarations) is built and verified, but the packaged install path is still not the recommended deployment path. Until that changes, install a Hub from the ZIP. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates) for the current MSIX status.
+| Logs of | Folder |
+|---|---|
+| Tray (`qaros-hub-service`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
+| Launcher and every process it starts (visualizer, source apps, mixer) | `<log root>\qar-launcher-default\<session-id>`, emptied when the Hub starts |
+
+- Deleting the data root resets the Hub: devices must onboard again.
+- The visualizer keeps its settings and window layout (`imgui.ini`) under `<data root>\streaming-viz`, never next to the executable.
+- Copy the log folder **before** restarting the Hub if you need it.
+- `logFolder` in the [launcher configuration](/docs/operator-guide/launcher-config-reference#paths) moves the launcher logs.
+
+## Installing with the system installer
+
+The installer puts the Hub on the machine as a regular Windows app, registers the firewall rules and an optional autostart task (`qaros-hub-service`). Release and demo install side by side under distinct identities. Start **QAROS Hub** from the Start menu; it runs `qaros-hub-service.exe`, as with the ZIP.
+
+The installer is being reworked into a classic installer that source applications can share the runtime from. Until then, applications built on the Unity package or the C# NuGet still carry their own runtime copy.
 
 ## Installing player apps on devices
 
@@ -36,18 +66,19 @@ For **HoloLens 2**, **P&C Solutions METALENSE 2**, and **Meta Quest**, use the d
 
 ## The SDK package for integrators (this repository)
 
-This repository (`qaros`) is the public SDK: it contains the C API headers (including the single-file `qar_streaming.h`), compiled examples, the C# bindings, and this documentation. The proprietary runtime binaries are delivered separately:
+This repository (`qaros`) is the public SDK: it contains the C API header (the single-file `qar_streaming.h`), compiled examples, and this documentation. The runtime binaries are delivered separately:
 
-1. Request the QAROS binary package from [quaternar.com](https://www.quaternar.com/).
-2. Unzip it into the repository's `package/` directory, giving:
+1. Request the QAROS runtime ZIP from [quaternar.com](https://www.quaternar.com/).
+2. Unzip its contents into the repository's `package/` directory, giving:
 
 ```text
 package/
-  bin/       # runtime DLLs + services your app loads/spawns
-  lib/       # import libraries for static linking
-  include/   # headers matching the binary version
-  shared/    # shared assets
+  bin/       # qar-streaming-c.dll, qar-runtime-launcher and every runtime DLL
+  include/   # the header matching the binary version
+  devices/   # device player apps
 ```
+
+The runtime ZIP carries no import library: applications load the C API dynamically from `bin/` (see [Developer Guide: Getting Started](/docs/developer-guide/getting-started)). Deploy `bin/` whole; do not copy single DLLs out of it.
 
 3. Build the examples against it (see [Developer Guide: Getting Started](/docs/developer-guide/getting-started)).
 

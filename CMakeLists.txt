@@ -21,6 +21,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(BUILD_CORE_EXAMPLES "Build core examples showing basic api usage without any need for external libraries or dependencies" ON)
+option(BUILD_VULKAN_EXAMPLE "Build the Windows Vulkan multi-user cube source (Vulkan SDK and glm required)" OFF)
+option(BUILD_VULKAN_EXAMPLE_TESTS "Build GPU readback verification for the cube source" OFF)
+
+if(BUILD_VULKAN_EXAMPLE_TESTS)
+  enable_testing()
+endif()
 
 add_subdirectory(qar-streaming-c)
 

@@ -32,25 +32,26 @@ Each Hub operates its own private certificate authority (based on `step-ca`), lo
 
 ## Where data lives
 
-Everything the Hub writes at runtime - identity slots, CA state, session state, and logs - is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`). That is what makes upgrading a ZIP install "replace the folder", and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
+Everything the Hub keeps between runs - identity slots, CA state, session state - is kept out of the install directory, under the per-user data root (`%LOCALAPPDATA%\Quaternar\...`); logs go to `%TEMP%\quaternar\logs` ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)). That is what makes upgrading a ZIP install "replace the folder", and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
 
 ## What the operator owns
 
 Four things are yours to manage:
 
-- **Configuration** - source apps, target devices, and other Hub behavior, managed through the Hub UI and persisted across restarts.
+- **Configuration** - source apps (see [Source Applications](/docs/operator-guide/source-applications)), target devices, and other Hub behavior, managed through the visualizer and persisted across restarts.
 - **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) relay or Hub federation.
 - **Device trust** - minting and reading pairing codes, connecting peers, and forgetting or blacklisting devices.
-- **Updates** - moving between versions across the ZIP / MSIX / APK artifact matrix, and backing up Hub identity.
+- **Updates** - moving between versions across the runtime ZIP, system installer and device apps, and backing up Hub identity.
 
 ## What's in this guide
 
 | Page | What it covers |
 |---|---|
 | [System Requirements](/docs/operator-guide/system-requirements) | Hardware, OS, network, and per-device requirements for a Hub. |
-| [Installation](/docs/operator-guide/installation) | The artifact matrix (ZIP, NuGet, MSIX, APK) and how to install a Hub. |
+| [Installation](/docs/operator-guide/installation) | The artifacts (runtime ZIP, system installer, Unity ZIP, C# NuGet, device apps) and how to install a Hub. |
 | [Player Installation to Device](/docs/operator-guide/player-installation-to-device) | Operator-side player installation section with separate pages for HoloLens 2, P&C Solutions METALENSE 2, and Meta Quest. |
-| [Running the Hub](/docs/operator-guide/running-the-hub) | Starting the tray service, the startup sequence, and the visualizer. |
+| [Running the Hub](/docs/operator-guide/running-the-hub) | Starting the tray service, the startup sequence, the visualizer, reconnects, logs and crash dumps. |
+| [Source Applications](/docs/operator-guide/source-applications) | Launching, configuring and stopping the apps that stream into the room. |
 | [Networking & Federation](/docs/operator-guide/networking-and-federation) | Ports and firewall, LAN vs relay, and connecting two Hubs. |
 | [Security Model](/docs/operator-guide/security-model) | The four-layer trust model, the per-Hub CA, and onboarding. |
 | [Managing Devices](/docs/operator-guide/managing-devices) | Pairing codes, connecting peers, and forgetting/blacklisting devices. |

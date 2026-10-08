@@ -270,44 +270,6 @@ page's TODO), every `C#` tab in `onboarding-and-sessions.mdx`,
 - Consider a second doxygen project (doxygen supports C#) or csharp snippets
   via the same `//! [region]` mechanism if the C# sources are doxygen inputs.
 
-### T9 — Launcher configuration schema reference — TODO
-New page `user-guide/launcher-config-reference.md` (or grow the section in
-using-the-hub.md). Source of truth: `qar-runtime-launcher/src/LauncherConfig.cpp`
-(parsing) + `qar-runtime-launcher/qar-runtime-launcher.jsonc` (annotated
-defaults; note the working tree also has a `.json`→`.jsonc` rename in flight).
-For every key: type, default, effect, example. Key groups already sketched in
-using-the-hub.md: sourceApps[], targetApps[], networking
-(discoveryPort/discoveryHost/onboardingPakePort/sessionEndpoints/
-onboardingInviteIntervalSec), behavior flags (sendDefaultInvite, enableMixer,
-unifyTargetAppWithMixer, applyDeterministicIds, handleInvites,
-detectConnectedPeers, replyToServiceExists, handleSourceAppLaunchRequests,
-targetAppOverride), paths (caDir, runtimeStorageRoot, logFolder,
-startupTargetPath), startupTarget{type, hubConnectionId, trustedHubCaBundles[]}.
-
-### T10 — Advanced security page (auditor level) — TODO
-New page `user-guide/security-deep-dive.md` (link from
-security-and-onboarding.md's TODO). Port + de-internalize from the main repo's
-`docs/Onboarding and Certificates.md` (exhaustive: layer protocols, EC-JPAKE
-transcript binding, SecureChannel nonce scheme, CA gateway policy inventory,
-URI SANs `qar://peer/<id>` + `qar://session/<id>`, storage layout, renewal,
-revocation/blacklist, hub federation via CaTrustStoreService, assumptions
-A1–A7, limitations L1–L11, roadmap). Keep the public page free of source paths.
-
-### T11 — More compiled tutorials + link the "Compiled tutorial" TODOs — TODO
-- Extend `qaros/qar-streaming-c/examples/app_volume_management.c` with gesture
-  configuration (`qar_app_volume_gesture_configuration_default()` then
-  customize rules) + world-anchor set/clear + a room→app hit-testing helper
-  (needs the volume's latest pose/app_pose/app_scale; verify
-  `QarAppVolumeGestureEvent` field names in the generated header first).
-- Add a D3D11 render-sender example (guard with `#ifdef QAR_ENABLE_D3D11`,
-  chain `QarStreamParamsD3D11`).
-- Then replace each developer-guide page's "Compiled tutorial" TODO with links
-  to the generated pages: URL pattern
-  `/api/qar-streaming-c/pages/qar-c-tutorial-<page-id-with-dashes>/` (doxygen
-  `\page qar_c_tutorial_onboarding` → `qar-c-tutorial-onboarding`).
-- Sidebar: `qaros/docs/website/sidebar_api.ts` may pin an Examples category —
-  check it lists the new tutorial pages.
-
 ### T12 — System requirements + compatibility policy — TODO
 Fill the two TODOs in `user-guide/deployment-and-installation.md`:
 - Hardware/OS/network requirements: needs input from the team (no single
@@ -317,10 +279,11 @@ Fill the two TODOs in `user-guide/deployment-and-installation.md`:
   deprecated entries keep exporting and return deprecation errors, loaded
   structs are app-owned. Write it as a user-facing promise.
 
-### T13 — MSIX promotion — BLOCKED(two items in windows-msix-packaging feature)
-When config-seed-to-LocalState and the startup-task tray toggle land, rewrite
-the MSIX section of deployment-and-installation.md as the primary install path
-and demote ZIP.
+### T13 — Installer as the only install path — BLOCKED (Quaternar GitHub #196)
+The full MSIX and the runtime ZIP are retired in favour of an NSIS installer
+(per user or per machine) with a sparse MSIX identity. Every source app loads the
+installed `qar-streaming-c.dll`. When #196 lands, rewrite
+deployment-and-installation.md around it and drop the ZIP and MSIX sections.
 
 ### T14 — Run-verify examples against a real runtime — TODO
 Syntax passes; do an end-to-end run: drop a binary package into
@@ -329,29 +292,6 @@ x64-windows-debug`, start a hub, run `onboarding_and_rejoin.exe
 <dll> <bin-dir> <code>` twice (first onboards, second must rejoin silently),
 then with `--forget`. Fix anything the compiler didn't catch (arg order,
 runtime behavior). Update the tutorial prose if flows differ.
-
-### T15 — Retire stale internal docs — TODO
-`qar-streaming/libs/qar-streaming-c/docs/API_Reference.md` still teaches the
-removed `qar_runtime_create_session`/`qar_session_join` flow and wrong
-signatures (`qar_result_is_error(&r)` — actual takes QarResult by value).
-Either delete it pointing to docs.quaternar.com, or regenerate from the new
-docs. `Getting_Started.md` there is current-ish but duplicates the qaros site;
-decide one source of truth.
-
-### T16 — qaros README refresh — TODO (small)
-`qaros/README.md`: add a "Documentation" map pointing at the new
-user-guide/developer-guide split and mention the examples are the compiled
-sources for all tutorials; mention the `[pairing-code]` argv the examples now
-take.
-
-### T17 — qaros repo hygiene found during work — TODO (small)
-- `qaros/.clangd` forces `-std=c++17` and an absent compile_commands.json, so
-  the IDE shows false errors in the C examples (missing include path). Add a
-  `qaros/qar-streaming-c/examples/.clangd` with
-  `CompileFlags: {Add: [-std=c11, -I../include, -I., -DQAR_ENABLE_DYNAMIC_LOADING], Remove: [-std=c++17]}`
-  or generate compile_commands via the qaros CMake preset.
-- `docusaurus.config.ts` `editUrl` still points at the facebook template —
-  point it at `https://github.com/Quaternar/qaros/tree/main/docs/website/`.
 
 ### T18 — Commit & submodule pinning — TODO (needs human decision)
 Work spans two repos. Suggested order: (1) commit inside `qaros` (new docs,
