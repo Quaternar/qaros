@@ -4,7 +4,7 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
 
 ## Run
 
-1. Have the QAROS service running on this computer and obtain an onboarding code from it.
+1. Start the QAROS Hub on this computer with `bin\qaros-hub-service.exe` and take an onboarding code from the visualizer's onboarding screen.
 2. Start the source from its application folder:
 
    ```powershell
@@ -29,7 +29,7 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
 
 Any executable built on the QAROS C or C# API can be launched from the visualizer the same way as this cube, once it follows the launch contract (code on stdin, `QAR_GPU_ADAPTER_ID`, own app volume, stop on end of stdin; Developer Guide, *Onboarding and Sessions*, "Launched by QAROS").
 
-1. Start the QAROS runtime and open the visualizer.
+1. Start the QAROS Hub with `bin\qaros-hub-service.exe`; it opens the visualizer.
 2. Settings → **UI mode** → **Developer** (no password). QAROS API apps show from Developer mode up.
 3. Source Applications → **+ Add source app** → **QAROS API app**.
 4. **Executable**: path to your `.exe` (type or **Browse**). **Arguments**: one per line, optional. **Name** defaults to the executable name.

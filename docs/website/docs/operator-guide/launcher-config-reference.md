@@ -52,14 +52,14 @@ Migrations applied on load:
 
 ## Paths
 
-All paths default to subfolders of the per-user application-data root (see [Installation](/docs/operator-guide/installation)).
+Paths default to the data root or the log root ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)).
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `caDir` | path | `<app-data>/hub-ca` | Hub certificate authority directory. |
-| `runtimeStorageRoot` | path | `<app-data>` | Root of identity store, trust store and launcher session state. |
-| `logFolder` | path | `<app-data>/qar-launcher-default/<session-id>` | Log folder. The default folder is emptied on every start; a configured one is not. |
-| `startupTargetPath` | path | - | File the launcher writes the Hub-interconnect target to after connecting to another Hub. Without it the interconnect is not restored on the next start. Set by the tray to `startup-target.json` next to its config file. |
+| `caDir` | path | `<data root>/hub-ca` | Hub certificate authority directory. |
+| `runtimeStorageRoot` | path | `<data root>` | Root of identity store, trust store and launcher session state. |
+| `logFolder` | path | `<log root>/qar-launcher-default/<session-id>` | Log folder. The default folder is emptied on every start; a configured one is not. |
+| `startupTargetPath` | path | - | File the launcher writes the Hub-interconnect target to after connecting to another Hub. Without it the interconnect is not restored on the next start. Set by the tray to `startup-target.json`: next to the config file passed as the tray's first argument, otherwise in the tray's log folder (`<log root>/qaros-hub-service`). |
 
 ```json
 { "caDir": "C:/ProgramData/Quaternar/hub-ca", "logFolder": "C:/ProgramData/Quaternar/logs/runtime-launcher" }
