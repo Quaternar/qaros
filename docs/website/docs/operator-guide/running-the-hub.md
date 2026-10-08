@@ -34,6 +34,8 @@ $env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros-hub-service.exe
 
 - A Hub is identified by its data root. Starting `qaros-hub-service.exe` again with the same root replaces the running one; a different root starts a second Hub next to it, with its own tray icon, launcher and visualizer.
 - Each Hub has its own identity, CA, session, Hub configuration and source-app presets. Devices onboarded to one are not onboarded to the other.
+- Ports do not collide: each Hub takes the next free router port (19120, 19121, ...) and its own onboarding (pairing) port from the same range, bound exclusively, so a second Hub never shares the first one's. Pin them with `routerPort` / `routerPortRangeStart` / `discoveryPort` only for firewalled setups ([Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference#networking)).
+- To pair with a specific Hub by address, use `host:port`: the port is shown with that Hub's onboarding code. An app given only a code finds the Hub of the same Windows user on its own.
 - With `QAR_APP_DATA_ROOT` set, logs and crash dumps stay under that root, so runs never mix.
 - A Hub started without `QAR_APP_DATA_ROOT` uses the default root of its install ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)).
 
@@ -57,7 +59,7 @@ QAROS recovers on its own; nothing needs restarting by hand.
 | A stream stops delivering frames | The receiver probes the sender and reconnects the stream once the sender is gone. | ~5 s from kill to reconnected stream |
 | A source app is killed and relaunched | The relaunched app takes over its streams from the dead instance. A second copy is refused only while the first is provably still live. | ~2-3 s |
 | **Stop** on a running app | The Hub asks the app to stop and kills it after about 1.3 s. | ~1.3 s |
-| A QAROS API app exits within 10 s of starting | The Hub restarts it with a fresh one-time launch code (the onboarding screen's code is not affected), backing off from 2 s up to 60 s, and reports the first failure. | 2 s, doubling |
+| A QAROS API app exits within 10 s of starting | The Hub restarts it with a fresh one-time launch invite (the onboarding screen's code is not affected), backing off from 2 s up to 60 s, and reports the first failure. | 2 s, doubling |
 | The Hub's router is unreachable | Processes keep retrying with backoff up to 10 s and reconnect once it is back, without a restart. | up to 10 s after it returns |
 
 ### When an app restarts

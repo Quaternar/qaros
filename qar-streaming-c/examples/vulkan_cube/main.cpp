@@ -1,7 +1,9 @@
 #include "renderer.hpp"
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -10,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <thread>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
@@ -377,16 +380,103 @@ RequestedAdapter()
 	return adapter;
 }
 
+// A hub address as host:port. There is no default port: a hub claims its
+// onboarding port from a range, so the port must be given.
+bool
+ParseHubAddress(const std::string& address, std::string& host, uint16_t& port)
+{
+	const auto colon = address.rfind(':');
+	if(colon == std::string::npos || colon == 0)
+	{
+		return false;
+	}
+	const std::string portText = address.substr(colon + 1);
+	unsigned long value = 0;
+	const auto [end, error] = std::from_chars(
+		portText.data(), portText.data() + portText.size(), value
+	);
+	if(error != std::errc{} || end != portText.data() + portText.size()
+	   || value == 0 || value > 65535)
+	{
+		return false;
+	}
+	host = address.substr(0, colon);
+	port = static_cast<uint16_t>(value);
+	return true;
+}
+
+// Onboards with the first stdin line. QAROS writes a full invite there, one
+// line of JSON with the hub's address, port and a one-time code. Anything
+// else is a code typed by hand, which finds this user's hub on its own unless
+// a hub-host:port argument names one.
+bool
+Onboard(
+	QarRuntime* runtime,
+	const std::string& line,
+	const char* hubAddress,
+	QarGraphicsDeviceId& adapter,
+	QarSession** session
+)
+{
+	auto init = qar_onboard_init_default();
+	init.presentation.display_name = "Vulkan Cube Source";
+	QarOnboardingId onboarding{};
+	if(line.front() == '{')
+	{
+		QarOnboardingInvite* invite = nullptr;
+		if(not Check(qar_onboarding_invite_deserialize(
+			   reinterpret_cast<const uint8_t*>(line.data()),
+			   line.size(),
+			   &invite
+		   )))
+		{
+			return false;
+		}
+		auto inviteExt = qar_onboard_invite_ext_default();
+		inviteExt.invite = invite;
+		init.header.next = &inviteExt.header;
+		inviteExt.header.next = &adapter.header;
+		const bool onboarded = Check(qar_runtime_onboard(
+			runtime, &init, nullptr, nullptr, nullptr, &onboarding, session
+		));
+		qar_onboarding_invite_handle_destroy(invite);
+		return onboarded;
+	}
+	auto codeExt = qar_onboard_code_ext_default();
+	auto host = qar_onboard_host_ext_default();
+	codeExt.code = line.c_str();
+	init.header.next = &codeExt.header;
+	codeExt.header.next = &adapter.header;
+	std::string hostname;
+	if(hubAddress != nullptr)
+	{
+		if(not ParseHubAddress(hubAddress, hostname, host.port))
+		{
+			std::cerr << "hub-host must be host:port, for example "
+						 "192.168.1.20:19121\n";
+			return false;
+		}
+		host.hostname = hostname.c_str();
+		adapter.header.next = &host.header;
+	}
+	return Check(qar_runtime_onboard(
+		runtime, &init, nullptr, nullptr, nullptr, &onboarding, session
+	));
+}
+
 int
 main(int argc, char** argv)
 {
 	if(argc > 1 && std::string(argv[1]) == "--help")
 	{
 		std::cout
-			<< "Usage: qar-vulkan-source [qar-streaming-c.dll] [hub-host]\n"
-			   "Defaults to the SDK beside this executable. Enter onboarding "
-			   "code on stdin. QAR_GPU_ADAPTER_ID=<LUID or UUID hex> selects "
-			   "the GPU.\n";
+			<< "Usage: qar-vulkan-source [qar-streaming-c.dll] "
+			   "[hub-host:port]\n"
+			   "Defaults to the SDK beside this executable. The first stdin "
+			   "line is the onboarding invite QAROS writes there, or a code "
+			   "typed by hand. A typed code finds this user's hub unless "
+			   "hub-host:port names one. QAR_GPU_ADAPTER_ID=<LUID or UUID "
+			   "hex> selects the GPU.\n";
 		return 0;
 	}
 	std::array<wchar_t, 32768> executable{};
@@ -432,13 +522,10 @@ main(int argc, char** argv)
 		if(gpu.Create(RequestedAdapter())
 		   && Check(qar_runtime_create(&runtimeInit, &runtime)))
 		{
-			std::string code;
+			std::string line;
 			std::cout << "Hub onboarding code: " << std::flush;
-			if(std::getline(std::cin, code) && not code.empty())
+			if(std::getline(std::cin, line) && not line.empty())
 			{
-				auto init = qar_onboard_init_default();
-				auto codeExt = qar_onboard_code_ext_default();
-				auto host = qar_onboard_host_ext_default();
 				auto adapter = qar_graphics_device_id_default();
 				VkPhysicalDeviceIDProperties id{
 					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
@@ -450,26 +537,14 @@ main(int argc, char** argv)
 				vkGetPhysicalDeviceProperties2(gpu.physical, &properties);
 				adapter.id_type = QAR_GPU_DEVICE_ID_TYPE_LUID;
 				std::memcpy(&adapter.luid, id.deviceLUID, VK_LUID_SIZE);
-				init.presentation.display_name = "Vulkan Cube Source";
-				codeExt.code = code.c_str();
-				init.header.next = &codeExt.header;
-				codeExt.header.next = &adapter.header;
-				if(argc > 2)
-				{
-					host.hostname = argv[2];
-					adapter.header.next = &host.header;
-				}
-				QarOnboardingId onboarding{};
 				if(id.deviceLUIDValid
-				   && Check(qar_runtime_onboard(
+				   && Onboard(
 					   runtime,
-					   &init,
-					   nullptr,
-					   nullptr,
-					   nullptr,
-					   &onboarding,
+					   line,
+					   argc > 2 ? argv[2] : nullptr,
+					   adapter,
 					   &session
-				   )))
+				   ))
 				{
 					auto stop = CreateEventW(
 						nullptr, TRUE, FALSE, StopEventName().c_str()

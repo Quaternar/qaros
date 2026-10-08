@@ -127,7 +127,11 @@ Key points:
 - `qar_runtime_rejoin` pops no UI and is silent — call it optimistically on every start.
 - `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: it means "this identity has no persisted slot here — onboard instead".
 - `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (codes live ~10 seconds) — just re-prompt.
-- `qar_runtime_onboard` targets the **local Hub** by default when you chain `QarOnboardCodeExt`. To reach a remote Hub, chain a `QarOnboardHostExt` after the code extension (see [API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader)).
+- With `QarOnboardCodeExt` alone, `qar_runtime_onboard` finds **your own Hub**. A Hub has no fixed onboarding port (it claims one from its port range), so the lookup goes:
+  1. The `hub-endpoint.json` file the Hub writes into the QAROS data folder on start. The data folder is per Windows user, so this finds the Hub of the same user on this PC, with no network.
+  2. Otherwise a discovery beacon from a Hub run by the same user on this PC, listening up to 6 s.
+  3. Otherwise it fails with `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE`, asking for the Hub's host and port.
+- To reach a specific Hub, chain a `QarOnboardHostExt` after the code extension with **both** `hostname` and `port` (see [API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader)). The port is shown with the Hub's pairing code; `port = 0` is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
 - Both calls have `_async` variants whose result callback delivers the same `(onboarding_id, session)` pair exactly once — use those to keep your UI thread responsive, and pass a `QarCancelToken` so the user can abort.
 
 ## Sibling onboarding: one app, several API instances
@@ -236,19 +240,38 @@ An operator can add your executable as a **QAROS API app** in the visualizer's [
 
 | What | How | Format |
 |---|---|---|
-| A launch code: its own one-time onboarding code | First line of **stdin**, newline-terminated. Never on the command line, never logged, never shown on the Hub's onboarding screen. | Opaque text (`qar-code:...`). Pass it unchanged; do not parse it. |
+| A launch invite: everything needed to reach this Hub, with its own one-time code | First line of **stdin**, newline-terminated. Never on the command line, never logged, never shown on the Hub's onboarding screen. | One line of JSON starting with `{`: the Hub's IP, its onboarding port, a one-time pairing code and the CA fingerprint. Pass it unchanged to `qar_onboarding_invite_deserialize`; do not parse it yourself. |
 | The target's GPU | Environment variable `QAR_GPU_ADAPTER_ID` | Lowercase hex of the adapter id bytes: LUID (16 digits) on Windows, UUID (32 digits). Absent or empty when unknown. |
 | Arguments | Command line | One argument per line the operator entered |
 
 The working directory is the executable's folder; stdout and stderr go to the Hub's log folder. To work as an API app:
 
-1. Read the code from stdin and call `qar_runtime_onboard` with `QarOnboardCodeExt`, exactly as you would with a code typed from the onboarding screen. Do not prompt for anything else: nobody is there to answer.
+1. Read the first stdin line. If it starts with `{`, it is the launch invite: turn it into a handle with `qar_onboarding_invite_deserialize` and call `qar_runtime_onboard` with `QarOnboardInviteExt`. Anything else is a code typed by hand (when someone runs your app from a console): use `QarOnboardCodeExt`, which finds that user's Hub. Do not prompt for anything else: nobody is there to answer.
+
+   ```c
+   QarOnboardInit init = qar_onboard_init_default();
+   QarOnboardInviteExt invite_ext = qar_onboard_invite_ext_default();
+   QarOnboardCodeExt code_ext = qar_onboard_code_ext_default();
+   QarOnboardingInvite* invite = NULL;
+   if(line[0] == '{')
+   {
+       qar_onboarding_invite_deserialize((const uint8_t*)line, strlen(line), &invite);
+       invite_ext.invite = invite;
+       init.header.next = &invite_ext.header;
+   }
+   else
+   {
+       code_ext.code = line;
+       init.header.next = &code_ext.header;
+   }
+   /* qar_runtime_onboard(runtime, &init, ...), then qar_onboarding_invite_handle_destroy(invite) */
+   ```
 2. If `QAR_GPU_ADAPTER_ID` is set, pick that adapter for rendering and chain it as a `QarGraphicsDeviceId` ([above](#choosing-the-gpu)). Fail with an error if no adapter matches.
 3. Create your own app volume (`qar_app_volumes_get_or_create`); QAROS registers none for an API app.
 4. Subscribe to render requests and serve every target that requests your content ([Rendering Streams](/docs/developer-guide/rendering-streams#accepting-render-stream-requests)).
 5. Treat end of stdin as a request to stop. QAROS closes stdin on **Stop** and kills the process about 1.3 s later.
 
-An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s) and the operator is notified of the first failure. The launch code is valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one. The code on the Hub's onboarding screen is separate and does not change when QAROS starts your app, so people can keep pairing devices with it meanwhile. The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this contract.
+An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s) and the operator is notified of the first failure. The launch invite is valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one. Apps written against the earlier contract, which read the line as a code, must accept the JSON invite. The code on the Hub's onboarding screen is separate and does not change when QAROS starts your app, so people can keep pairing devices with it meanwhile. The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this contract.
 
 ## Getting devices into the session
 

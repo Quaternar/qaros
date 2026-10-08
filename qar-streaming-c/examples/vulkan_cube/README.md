@@ -11,7 +11,12 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
    .\qar-vulkan-source.exe
    ```
 
-3. At `Hub onboarding code:`, enter the code and press Enter. The app connects to the local hub on localhost by default.
+3. At `Hub onboarding code:`, enter the code and press Enter. The app finds your own hub: first through the `hub-endpoint.json` file the hub writes to the QAROS data folder, then through a discovery beacon from your user account (up to 6 s). To reach another hub, pass its address as the second argument, `host:port` (the port is shown with the hub's code; there is no default port):
+
+   ```powershell
+   .\qar-vulkan-source.exe .\qar-streaming-c.dll 192.168.1.20:19121
+   ```
+
 4. Open the application's content on a target viewer. Additional viewers automatically get their own rendering streams and cameras.
 
 - Enter an onboarding code each time the app starts.
@@ -21,13 +26,13 @@ A standalone Windows source app rendering a rotating, colored cube with stereo c
   $env:QAR_GPU_ADAPTER_ID = "a1b2000000000000"; .\qar-vulkan-source.exe
   ```
 
-- The QAROS runtime ships this app next to the visualizer, which lists it as the **Vulkan cube** tile in Source Applications (Developer UI mode and up). Started from there, the app gets its onboarding code on stdin and `QAR_GPU_ADAPTER_ID` set to the target's GPU, so no prompt needs an answer. The contract is in the Developer Guide, *Onboarding and Sessions*, "Launched by QAROS".
+- The QAROS runtime ships this app next to the visualizer, which lists it as the **Vulkan cube** tile in Source Applications (Developer UI mode and up). Started from there, the app gets a full onboarding invite on stdin (one line of JSON with the hub's address, onboarding port and a one-time code, passed to `qar_onboarding_invite_deserialize`) and `QAR_GPU_ADAPTER_ID` set to the target's GPU, so no prompt needs an answer. The contract is in the Developer Guide, *Onboarding and Sessions*, "Launched by QAROS".
 - Press Ctrl+C to stop the source.
 - Requires an NVIDIA GPU supporting Vulkan external memory and semaphores.
 
 ## Test your own app in the visualizer
 
-Any executable built on the QAROS C or C# API can be launched from the visualizer the same way as this cube, once it follows the launch contract (code on stdin, `QAR_GPU_ADAPTER_ID`, own app volume, stop on end of stdin; Developer Guide, *Onboarding and Sessions*, "Launched by QAROS").
+Any executable built on the QAROS C or C# API can be launched from the visualizer the same way as this cube, once it follows the launch contract (invite on stdin, `QAR_GPU_ADAPTER_ID`, own app volume, stop on end of stdin; Developer Guide, *Onboarding and Sessions*, "Launched by QAROS").
 
 1. Start the QAROS Hub with `bin\qaros-hub-service.exe`; it opens the visualizer.
 2. Settings → **UI mode** → **Developer** (no password). QAROS API apps show from Developer mode up.

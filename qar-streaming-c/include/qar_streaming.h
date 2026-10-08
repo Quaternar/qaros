@@ -342,7 +342,8 @@ typedef enum QarStatusCode
 	/// Generic onboarding failure. Inspect qar_result_message for details.
 	QAR_STATUS_ONBOARDING_FAILED = 1801,
 	/// Discovery could not reach a hub — verify the hub is running (and, when a
-	/// QarOnboardHostExt is chained, the hostname/port) and retry.
+	/// QarOnboardHostExt is chained, the hostname/port) and retry. Without
+	/// QarOnboardHostExt: no hub of this user was found; pass its host:port.
 	QAR_STATUS_ONBOARDING_HUB_UNREACHABLE = 1802,
 	/// qar_runtime_forget was called while the slot still has an active
 	/// session — destroy the active session handle first.
@@ -1383,17 +1384,23 @@ typedef struct QarOnboardInit
  * @brief Extension: onboard with the short code shown on the hub onboarding
  * screen.
  *
- * Always targets the local hub on this PC (loopback + standard discovery
- * port); to reach a remote hub, also chain QarOnboardHostExt.
+ * Without QarOnboardHostExt it finds this user's hub: first through the
+ * hub-endpoint.json file the hub writes to the QAROS data root, then through
+ * a discovery beacon whose owner is this user, listening up to 6 s. When
+ * neither answers, onboarding fails with QAR_STATUS_ONBOARDING_HUB_UNREACHABLE
+ * asking for the hub's host:port. To reach a specific hub, chain
+ * QarOnboardHostExt.
  */
 typedef struct QarOnboardCodeExt
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
 	/// Required; short code shown on the hub onboarding screen, or the code
-	/// text of any other invite the hub minted (qar_onboarding_invite_get_code),
-	/// such as the launch code QAROS writes to the stdin of an app it starts.
-	/// Copied before the call returns.
+	/// text of any other invite the hub minted
+	/// (qar_onboarding_invite_get_code), such as the addressed code
+	/// (qar-code:...) an app is given by hand. Copied before the call returns.
+	/// QAROS hands an app it launches a full invite instead: use
+	/// qar_onboarding_invite_deserialize and QarOnboardInviteExt for that.
 	const char* code;
 } QarOnboardCodeExt;
 
@@ -1401,14 +1408,17 @@ typedef struct QarOnboardCodeExt
  * @brief Extension: override the hub discovery endpoint for
  * qar_runtime_onboard when QarOnboardCodeExt is chained.
  *
- * Chain into QarOnboardInit.header.next; absent -> local hub.
+ * Chain into QarOnboardInit.header.next; absent -> this user's hub (see
+ * QarOnboardCodeExt).
  */
 typedef struct QarOnboardHostExt
 {
 	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT
 								*/
 	const char* hostname; /**< required; plain host or IP, no URL formats */
-	uint16_t port;		  /**< 0 -> standard discovery port */
+	uint16_t port; /**< required; the hub's onboarding port. Hubs claim it
+					  from their port range, so there is no default: 0 is
+					  rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED */
 } QarOnboardHostExt;
 
 /**
