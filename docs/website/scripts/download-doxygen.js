@@ -32,17 +32,41 @@ function download(url, dest) {
 						return;
 					}
 					if (response.statusCode !== 200) {
+						response.resume();
+						file.close();
 						reject(new Error(`Download failed with status ${response.statusCode} for ${currentUrl}`));
 						return;
 					}
 					response.pipe(file);
 				})
-				.on("error", reject);
+				.on("error", (error) => {
+					file.close();
+					reject(error);
+				});
 		}
 		file.on("finish", () => file.close(resolve));
 		file.on("error", reject);
 		request(url, 5);
 	});
+}
+
+// Tries each source in order; a failed or mismatching download moves on to the next.
+async function downloadFromFirstSource(release, archivePath) {
+	const failures = [];
+	for (const url of release.urls) {
+		console.log(`Downloading Doxygen ${release.version} from ${url} ...`);
+		try {
+			await download(url, archivePath);
+			if (sha256File(archivePath) === release.sha256) {
+				return;
+			}
+			failures.push(`${url}: hash mismatch`);
+		} catch (error) {
+			failures.push(error.message || String(error));
+		}
+		fs.rmSync(archivePath, { force: true });
+	}
+	throw new Error(`Could not download Doxygen ${release.version}:\n  ${failures.join("\n  ")}`);
 }
 
 function sha256File(filePath) {
@@ -74,8 +98,7 @@ async function main() {
 	fs.mkdirSync(TOOLS_DIR, { recursive: true });
 
 	if (!fs.existsSync(archivePath) || sha256File(archivePath) !== release.sha256) {
-		console.log(`Downloading Doxygen ${release.version} from ${release.url} ...`);
-		await download(release.url, archivePath);
+		await downloadFromFirstSource(release, archivePath);
 	}
 
 	const actualHash = sha256File(archivePath);
