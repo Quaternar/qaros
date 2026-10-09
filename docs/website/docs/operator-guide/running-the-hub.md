@@ -71,6 +71,7 @@ Restarting a source app (crash, kill, or **Stop** then **Launch**) is safe: the 
 - Every process writes its log files into the Hub's log folder (default `<log root>/qar-launcher-default/<session-id>`, `%TEMP%\quaternar\logs\...` for an installed Hub; see [Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)). Set it with `logFolder` ([Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference#paths)). The default folder is emptied when the Hub starts: copy it **before** restarting if you need it.
 - The tray writes its own log and the launcher's console output to `<log root>/qaros-hub-service`.
 - Processes started by the Hub also write `<name>_stdout.log` and `<name>_stderr.log` there.
+- Log files roll over so a Hub that runs for months never fills the disk. The current file keeps its name. Once it is a day old or 256 MB, it is renamed to `<name>.<UTC time>.log`, for example `launcher_stdout.20261009T120000Z.log`, and a new one starts. The oldest of these are deleted so each log file and its rolled-over copies stay under 3 GB together.
 - The visualizer's **Logs** panel streams log lines live. Delivery is best-effort: a gap shows as a warning line `[viz] N log messages lost`, and a restarted process as `[viz] peer log stream restarted`. The log files stay complete. Log-level changes from the panel are always delivered.
 
 ## Crash dumps
@@ -84,7 +85,27 @@ A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a
 | Your application on the C API | `crashes/` under the `log_folder_path` it passes to `qar_library_init` |
 | Anything else | `%TEMP%\quaternar\crashes` |
 
-When reporting a crash, send both files together with the log files next to them.
+When reporting a crash, send both files together with the log files next to them. The crash report below collects all of them for you.
+
+## When something goes wrong
+
+The visualizer opens only once it works: it has joined the Hub's session. If the Hub cannot get there, the tray shows a **QAROS Hub** window instead of the splash just closing. It also shows this window when a part of the Hub keeps crashing.
+
+| You see | What happened |
+|---|---|
+| QAROS Hub could not start. | The visualizer could not join the Hub's session, or did not within 60 s. The details say why. |
+| QAROS Hub did not finish starting. | Nothing was ready after 120 s. The details name the last step. |
+| \<part\> keeps crashing. | One process (the visualizer, a mixer, a source app…) was restarted 10 times within 10 minutes. |
+| QAROS Hub keeps stopping. | The launcher itself stopped 10 times within 10 minutes. |
+| A tray notification "A QAROS process crashed" | A process wrote a crash dump. Click the notification for the window. |
+
+In the window:
+
+- **Copy details** copies the text, ready to paste into an email or a ticket. You can also select part of it.
+- **Create crash report** saves `QAROS-crash-report-<date>-<time>.zip` in your Downloads folder and selects it in Explorer. It holds the Hub's logs and crash dumps from the last 7 days, plus `report.txt`, which says what happened and lists every file. It holds no keys or certificates. Send it to Quaternar support.
+- **Clean data and start fresh** deletes the Hub's data on this PC and starts it again: paired devices, certificates, sessions, receivers and settings. Logs and crash dumps are kept. Every device has to be paired again. Use it when the Hub stays stuck, after creating a crash report.
+
+You can create a crash report at any time from the tray menu: **Create crash report…**.
 
 ## Connecting two Hubs
 
