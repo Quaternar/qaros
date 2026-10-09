@@ -13,41 +13,37 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QAROS takes care of encoding, transport, and — via the [mixer](/docs/operator-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
 
-## Accepting render stream requests
+## Finding rendering targets
 
-**Use `qar_render_sender_subscribe_requests()` to discover rendering targets automatically.** Subscribe once after joining and keep the subscription alive: later targets requesting your content arrive through the same callback. A peer merely joining the session is not a request to render your application.
+**Your application decides which targets it renders for**: one, some or all of them. QAROS does not choose for it, not even for an app it launches. Find the targets in the peer list:
 
-- Read the target ID with `qar_render_request_get_target_peer_id()` and queue it for your render thread.
-- Create the app volume first, then one sender and one camera per target ID. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
-- Deduplicate repeated requests for a target already served.
-- Callbacks run asynchronously. Synchronize the handoff and keep callback state alive through session/subscription teardown. Destroy every delivered request handle after reading it.
+- Watch peers with `qar_peer_subscribe_updates()`, and list the ones already there once with `qar_query_peer_specs()`. Subscribe first, so a target joining in between is not missed.
+- A peer for which `qar_peer_spec_is_target_app()` is true and whose app state is `QAR_APP_STATE_RUNNING` is a target you can render for: a headset, the Android streamer, a visualizer receiver.
+- Create the app volume first, then one sender and one camera per target you serve. **The sender attaches its target to your app volume**, and that is what makes the target ask for your content. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
+- Callbacks run asynchronously. Queue the target ID for your render thread, synchronize the handoff, and keep callback state alive through session/subscription teardown.
 - See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, stdin onboarding and multi-camera loop.
 
-There is no API for pulling a peer into your stream by address — instead, a peer that wants your content (a Visualizer app volume, a headset viewer, ...) sends a **render stream request**, and your application subscribes to be notified of these:
-
 ```c
-static void on_render_request(QarRenderStreamRequest* request, void* user_state)
+static void on_peer(QarPeerSpec* peer, void* user_state)
 {
+    bool is_target_app = false;
+    QarAppState state = QAR_APP_STATE_UNKNOWN;
     QarPeerId target_peer_id = qar_peer_id_default();
-    qar_result_log_if_error(
-        qar_render_request_get_target_peer_id(request, &target_peer_id));
+    if(qar_result_is_error(qar_peer_spec_is_target_app(peer, &is_target_app)) || !is_target_app
+       || qar_result_is_error(qar_peer_spec_get_app_state(peer, &state))
+       || state != QAR_APP_STATE_RUNNING
+       || qar_result_is_error(qar_peer_spec_get_id(peer, &target_peer_id)))
+        return;
 
-    QarStreamId stream_id = qar_stream_id_default();
-    qar_result_log_if_error(
-        qar_render_request_get_stream_id(request, &stream_id));
-
-    /* Create the sender for this peer, e.g. by handing target_peer_id off
-       to your render thread — see "Creating a sender" below. */
-
-    qar_render_request_handle_destroy(request);
+    /* Not served yet? Hand target_peer_id to your render thread, which
+       creates its sender - see "Creating a sender" below. */
 }
 
 qar_result_log_if_error(
-    qar_render_sender_subscribe_requests(session, on_render_request, NULL, NULL));
+    qar_peer_subscribe_updates(session, on_peer, NULL, subscription_token));
 ```
 
-The callback fires once per incoming request for as long as the subscription is alive (until the session is destroyed or you cancel it via the optional `QarCancelToken`). Each request carries the requesting peer's ID — pass it as `init.peer_id` when you create the matching sender — and a `QarStreamId` you can use to correlate multiple requests. Always destroy the request handle once you are done reading it.
-
+`qar_render_sender_subscribe_requests()` reports targets that already request your content. A target requests it only once it is attached to your app volume, and nothing is attached to a new application's own volume. So it is not a way to find targets: a sender for the target is what attaches it.
 ## Creating a sender
 
 <CodeTabs>
@@ -117,7 +113,7 @@ is not yet compiled from a published sample project.
 
 Key choices:
 
-- **Target peer** — a sender streams to one peer: the requesting peer's ID from the [render stream request](#accepting-render-stream-requests) above, or one obtained through [peer enumeration](/docs/developer-guide/peers).
+- **Target peer** — a sender streams to one peer: a target app from the [peer list](#finding-rendering-targets) above, or one you invited yourself.
 - **App volume** — required. Create the volume first and pass its ID so the mixer composites the stream inside that box; a stream without one is not placed in the scene. See [App Volumes](/docs/developer-guide/app-volumes).
 - **Graphics API** — `QAR_GRAPHICS_API_CPU` (portable, always available, no extension), or a GPU API with exactly one matching extension in `init.header.next`: `QAR_GRAPHICS_API_D3D11` + `QarStreamParamsD3D11`, `QAR_GRAPHICS_API_VULKAN` + `QarStreamParamsVulkan`, or `QAR_GRAPHICS_API_OPENGL` + the `QarStreamParamsOpenGl*` struct matching your context (EGL, WGL or GLX). GPU frame textures are created on the session's adapter (see [choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)).
 - **Frame views** — the order you declare in `frame_views` is guaranteed: the layout (`qar_render_sender_layout`) and every frame list their views in exactly that order, each with the `eye` and `data_type` you declared at that position. Textures come in the order the views first use them (one per view for `SEPARATED_TEXTURES`, one per data type for side by side and layered); each view's `texture_index` names its texture. A view the layout provides that you did not declare follows yours.
@@ -203,8 +199,8 @@ This is how a source application implements grabbing, pointing, and touch agains
 
 ## Lifecycle and failure
 
-- `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected (typically `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING`) and recover on their own. A dead peer is noticed within about 2 s, and a killed and restarted peer streams again within a few seconds.
-- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. A target that wants your content again sends a new render request.
+- `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected (typically `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING`) and recover on their own. A receiver that pauses (its display is not visible) makes them fail with `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` until it resumes; keep the sender. A dead peer is noticed within about 2 s, and a killed and restarted peer streams again within a few seconds.
+- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
 - If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
 - Rendering senders are per requested target. For several users viewing the same scene, create a sender and camera for each target discovered through the request subscription; use each target's poses and FOV even when the scene objects are shared.

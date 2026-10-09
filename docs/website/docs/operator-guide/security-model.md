@@ -14,7 +14,7 @@ QAROS deployments often run on factory floors, in hospitals, and on corporate ne
 
 ### Layer 0 — Discovery (open by design)
 
-Devices find the Hub with zero configuration: the Hub broadcasts a beacon on the local network (UDP multicast `239.77.77.77:7445`) and answers discovery requests on TCP `7445`. This layer is deliberately unauthenticated and carries **no secrets** — only coordination metadata (device name, invitation nonce, server ID, where to reach the pairing service). A forged beacon can at worst redirect a *connection attempt*; pairing still fails without the correct code.
+Devices find the Hub with zero configuration: the Hub broadcasts a beacon on the local network (UDP multicast `239.77.77.77:7445`) and answers discovery requests on its onboarding TCP port, which it claims from its port range and names in the beacon. This layer is deliberately unauthenticated and carries **no secrets** — only coordination metadata (device name, invitation nonce, server ID, where to reach the pairing service). A forged beacon can at worst redirect a *connection attempt*; pairing still fails without the correct code.
 
 ### Layer 1 — Pairing (EC-JPAKE)
 

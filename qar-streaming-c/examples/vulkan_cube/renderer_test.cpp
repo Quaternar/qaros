@@ -431,8 +431,8 @@ main()
 	}
 	for(size_t cycle = 0; cycle < 2; ++cycle)
 	{
-		if(not cameraA.Submit(first.frame, centered, .4f)
-		   || not cameraB.Submit(second.frame, shifted, .4f))
+		if(not cameraA.Render(first.frame, centered, .4f)
+		   || not cameraB.Render(second.frame, shifted, .4f))
 		{
 			return 1;
 		}

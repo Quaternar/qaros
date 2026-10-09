@@ -198,7 +198,8 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	}
 	if(not physical && not requestedAdapter.empty())
 	{
-		std::cerr << "QAR_GPU_ADAPTER_ID " << requestedAdapter
+		std::cerr << "The GPU the launch invite names (" << requestedAdapter
+				  << ")"
 				  << " names no NVIDIA graphics GPU with external "
 					 "memory/semaphore support\n";
 		return false;
@@ -209,9 +210,8 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 		return false;
 	}
 	std::cout << "Rendering on " << DescribeAdapter(physical)
-			  << (requestedAdapter.empty()
-					  ? ", the first supported GPU\n"
-					  : ", chosen by QAR_GPU_ADAPTER_ID\n");
+			  << (requestedAdapter.empty() ? ", the first supported GPU\n"
+										   : ", named by the launch invite\n");
 	const float priority = 1;
 	VkDeviceQueueCreateInfo queueInfo{
 		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
@@ -247,9 +247,21 @@ VulkanDevice::~VulkanDevice()
 }
 
 bool
+VulkanDevice::Submit(
+	const VkSubmitInfo& submit, VkFence fence, const char* what
+)
+{
+	const std::lock_guard<std::mutex> guard(m_queueLock);
+	return CheckVk(vkQueueSubmit(queue, 1, &submit, fence), what);
+}
+
+bool
 CubeCamera::Create()
 {
+	// One command buffer per frame in flight, each reset on its own, so a
+	// frame is recorded while the previous one may still run on the GPU.
 	VkCommandPoolCreateInfo pool{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+	pool.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	pool.queueFamilyIndex = m_gpu->family;
 	if(not CheckVk(
 		   vkCreateCommandPool(m_gpu->device, &pool, nullptr, &m_pool),
@@ -258,26 +270,30 @@ CubeCamera::Create()
 	{
 		return false;
 	}
-	VkCommandBufferAllocateInfo allocation{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-	};
-	allocation.commandPool = m_pool;
-	allocation.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocation.commandBufferCount = 1;
-	if(not CheckVk(
-		   vkAllocateCommandBuffers(m_gpu->device, &allocation, &m_commands),
-		   "allocate camera commands"
-	   ))
+	for(Slot& slot : m_slots)
 	{
-		return false;
-	}
-	VkFenceCreateInfo fence{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-	if(not CheckVk(
-		   vkCreateFence(m_gpu->device, &fence, nullptr, &m_fence),
-		   "create camera fence"
-	   ))
-	{
-		return false;
+		VkCommandBufferAllocateInfo allocation{
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+		};
+		allocation.commandPool = m_pool;
+		allocation.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocation.commandBufferCount = 1;
+		// Created signaled: a slot that never ran is free to use.
+		VkFenceCreateInfo fence{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+		fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		if(not CheckVk(
+			   vkAllocateCommandBuffers(
+				   m_gpu->device, &allocation, &slot.commands
+			   ),
+			   "allocate camera commands"
+		   )
+		   || not CheckVk(
+			   vkCreateFence(m_gpu->device, &fence, nullptr, &slot.fence),
+			   "create camera fence"
+		   ))
+		{
+			return false;
+		}
 	}
 	return CreatePipeline();
 }
@@ -466,18 +482,97 @@ FindFrameView(
 	return -1;
 }
 void
-CubeCamera::ClearTargets()
+CubeCamera::DestroyTargets()
 {
-	for(auto buffer : m_buffers)
+	for(auto& [images, target] : m_targets)
 	{
-		vkDestroyFramebuffer(m_gpu->device, buffer, nullptr);
+		vkDestroyFramebuffer(m_gpu->device, target.framebuffer, nullptr);
+		for(VkImageView view : target.views)
+		{
+			vkDestroyImageView(m_gpu->device, view, nullptr);
+		}
 	}
-	for(auto view : m_views)
+	m_targets.clear();
+}
+
+const CubeCamera::EyeTarget*
+CubeCamera::TargetFor(
+	const QarVideoTextureVulkan& color,
+	const QarVideoTextureVulkan& depth,
+	const uint32_t width,
+	const uint32_t height
+)
+{
+	const ImagePair images{ color.image, depth.image };
+	if(const auto found = m_targets.find(images); found != m_targets.end())
 	{
-		vkDestroyImageView(m_gpu->device, view, nullptr);
+		return &found->second;
 	}
-	m_buffers.clear();
-	m_views.clear();
+	EyeTarget target{};
+	const std::array<VkImage, 2> sources{ color.image, depth.image };
+	for(size_t i = 0; i < 2; ++i)
+	{
+		VkImageViewCreateInfo view{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		view.image = sources[i];
+		view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		view.format = i == 0 ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_D32_SFLOAT;
+		view.subresourceRange = { static_cast<VkImageAspectFlags>(
+									  i == 0 ? VK_IMAGE_ASPECT_COLOR_BIT
+											 : VK_IMAGE_ASPECT_DEPTH_BIT
+								  ),
+								  0,
+								  1,
+								  0,
+								  1 };
+		if(not CheckVk(
+			   vkCreateImageView(
+				   m_gpu->device, &view, nullptr, &target.views[i]
+			   ),
+			   "create camera image view"
+		   ))
+		{
+			return nullptr;
+		}
+	}
+	VkFramebufferCreateInfo framebuffer{
+		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO
+	};
+	framebuffer.renderPass = m_pass;
+	framebuffer.attachmentCount = 2;
+	framebuffer.pAttachments = target.views.data();
+	framebuffer.width = width;
+	framebuffer.height = height;
+	framebuffer.layers = 1;
+	if(not CheckVk(
+		   vkCreateFramebuffer(
+			   m_gpu->device, &framebuffer, nullptr, &target.framebuffer
+		   ),
+		   "create camera framebuffer"
+	   ))
+	{
+		return nullptr;
+	}
+	return &m_targets.emplace(images, target).first->second;
+}
+
+bool
+CubeCamera::NextSlot(Slot*& slot)
+{
+	// The slot's previous frame was submitted kFramesInFlight frames ago, so
+	// this wait normally returns at once; it only blocks when the GPU falls
+	// that far behind, which is the back-pressure a renderer should have.
+	slot = &m_slots[m_nextSlot];
+	m_nextSlot = (m_nextSlot + 1) % m_slots.size();
+	return CheckVk(
+			   vkWaitForFences(
+				   m_gpu->device, 1, &slot->fence, VK_TRUE, UINT64_MAX
+			   ),
+			   "wait for camera slot"
+		   )
+		   && CheckVk(
+			   vkResetFences(m_gpu->device, 1, &slot->fence),
+			   "reset camera slot"
+		   );
 }
 
 // OpenXR signs, forward Vulkan Z [0,1]. View poses are already in app content
@@ -507,20 +602,22 @@ ViewProjection(const QarPose& pose, const QarFov& fov)
 }
 
 bool
-CubeCamera::Submit(
+CubeCamera::Render(
 	QarVideoFrameVulkan& frame,
 	const std::array<CameraView, 2>& cameras,
 	float seconds
 )
 {
-	if(m_pending)
+	// Separated textures: one color and one depth texture per eye.
+	if(frame.texture_views_count != 4 || frame.textures_count != 4)
 	{
-		std::cerr << "Camera still has submitted work\n";
+		std::cerr << "Expected separated stereo color/depth layout\n";
 		return false;
 	}
-	ClearTargets();
-	if(not CheckVk(
-		   vkResetCommandPool(m_gpu->device, m_pool, 0), "reset camera pool"
+	Slot* slot = nullptr;
+	if(not NextSlot(slot)
+	   || not CheckVk(
+		   vkResetCommandBuffer(slot->commands, 0), "reset camera commands"
 	   ))
 	{
 		return false;
@@ -530,12 +627,12 @@ CubeCamera::Submit(
 	};
 	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	if(not CheckVk(
-		   vkBeginCommandBuffer(m_commands, &begin), "begin cube commands"
+		   vkBeginCommandBuffer(slot->commands, &begin), "begin cube commands"
 	   ))
 	{
 		return false;
 	}
-	std::vector<VkImageMemoryBarrier> acquire, release;
+	std::array<VkImageMemoryBarrier, 4> acquire{}, release{};
 	for(size_t i = 0; i < frame.textures_count; ++i)
 	{
 		auto& texture = frame.textures[i];
@@ -565,17 +662,17 @@ CubeCamera::Submit(
 									 1,
 									 0,
 									 1 };
-		acquire.push_back(barrier);
+		acquire[i] = barrier;
 		barrier.srcAccessMask = barrier.dstAccessMask;
 		barrier.dstAccessMask = 0;
 		barrier.oldLayout = barrier.newLayout;
 		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		barrier.srcQueueFamilyIndex = m_gpu->family;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL;
-		release.push_back(barrier);
+		release[i] = barrier;
 	}
 	vkCmdPipelineBarrier(
-		m_commands,
+		slot->commands,
 		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
@@ -584,15 +681,15 @@ CubeCamera::Submit(
 		nullptr,
 		0,
 		nullptr,
-		static_cast<uint32_t>(acquire.size()),
+		static_cast<uint32_t>(frame.textures_count),
 		acquire.data()
 	);
-	// Separated textures: one color and one depth texture per eye.
-	if(frame.texture_views_count != 4 || frame.textures_count != 4)
-	{
-		std::cerr << "Expected separated stereo color/depth layout\n";
-		return false;
-	}
+	const glm::mat4 model = glm::scale(
+		glm::rotate(
+			glm::mat4(1), seconds * .8f, glm::normalize(glm::vec3(1, 1, 0))
+		),
+		glm::vec3(.3f)
+	);
 	for(size_t eye = 0; eye < 2; ++eye)
 	{
 		const QarVideoFrameViewEye viewEye =
@@ -609,75 +706,28 @@ CubeCamera::Submit(
 		}
 		const auto& colorView = frame.texture_views[colorIndex];
 		const auto& depthView = frame.texture_views[depthIndex];
-		std::array<VkImageView, 2> views{};
-		const std::array<size_t, 2> indices{ colorView.texture_index,
-											 depthView.texture_index };
-		for(size_t i = 0; i < 2; ++i)
-		{
-			VkImageViewCreateInfo view{
-				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
-			};
-			view.image = frame.textures[indices[i]].image;
-			view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			view.format =
-				i == 0 ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_D32_SFLOAT;
-			view.subresourceRange = { static_cast<VkImageAspectFlags>(
-										  i == 0 ? VK_IMAGE_ASPECT_COLOR_BIT
-												 : VK_IMAGE_ASPECT_DEPTH_BIT
-									  ),
-									  0,
-									  1,
-									  0,
-									  1 };
-			if(not CheckVk(
-				   vkCreateImageView(m_gpu->device, &view, nullptr, &views[i]),
-				   "create camera image view"
-			   ))
-			{
-				return false;
-			}
-			m_views.push_back(views[i]);
-		}
 		const uint32_t width = colorView.end_x - colorView.start_x,
 					   height = colorView.end_y - colorView.start_y;
-		VkFramebufferCreateInfo framebuffer{
-			VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO
-		};
-		framebuffer.renderPass = m_pass;
-		framebuffer.attachmentCount = 2;
-		framebuffer.pAttachments = views.data();
-		framebuffer.width = width;
-		framebuffer.height = height;
-		framebuffer.layers = 1;
-		VkFramebuffer buffer = VK_NULL_HANDLE;
-		if(not CheckVk(
-			   vkCreateFramebuffer(
-				   m_gpu->device, &framebuffer, nullptr, &buffer
-			   ),
-			   "create camera framebuffer"
-		   ))
+		const EyeTarget* target = TargetFor(
+			frame.textures[colorView.texture_index],
+			frame.textures[depthView.texture_index],
+			width,
+			height
+		);
+		if(target == nullptr)
 		{
 			return false;
 		}
-		m_buffers.push_back(buffer);
 		const std::array<VkClearValue, 2> clears{
 			VkClearValue{ .color = { { .08f, .08f, .1f, 1 } } },
 			VkClearValue{ .depthStencil = { 1, 0 } }
 		};
 		VkRenderPassBeginInfo pass{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		pass.renderPass = m_pass;
-		pass.framebuffer = buffer;
+		pass.framebuffer = target->framebuffer;
 		pass.renderArea.extent = { width, height };
 		pass.clearValueCount = 2;
 		pass.pClearValues = clears.data();
-		const glm::mat4 placed =
-			glm::translate(glm::mat4(1), glm::vec3(0, 0, 0));
-		const glm::mat4 model = glm::scale(
-			glm::rotate(
-				placed, seconds * .8f, glm::normalize(glm::vec3(1, 1, 0))
-			),
-			glm::vec3(.3f)
-		);
 		const glm::mat4 mvp =
 			ViewProjection(cameras[eye].pose, cameras[eye].fov) * model;
 		const VkViewport viewport{ 0,
@@ -687,25 +737,25 @@ CubeCamera::Submit(
 								   0,
 								   1 };
 		const VkRect2D scissor{ { 0, 0 }, { width, height } };
-		vkCmdBeginRenderPass(m_commands, &pass, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdSetViewport(m_commands, 0, 1, &viewport);
-		vkCmdSetScissor(m_commands, 0, 1, &scissor);
+		vkCmdBeginRenderPass(slot->commands, &pass, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdSetViewport(slot->commands, 0, 1, &viewport);
+		vkCmdSetScissor(slot->commands, 0, 1, &scissor);
 		vkCmdBindPipeline(
-			m_commands, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline
+			slot->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline
 		);
 		vkCmdPushConstants(
-			m_commands,
+			slot->commands,
 			m_layout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
 			sizeof(mvp),
 			&mvp
 		);
-		vkCmdDraw(m_commands, 36, 1, 0, 0);
-		vkCmdEndRenderPass(m_commands);
+		vkCmdDraw(slot->commands, 36, 1, 0, 0);
+		vkCmdEndRenderPass(slot->commands);
 	}
 	vkCmdPipelineBarrier(
-		m_commands,
+		slot->commands,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
 			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
@@ -715,34 +765,27 @@ CubeCamera::Submit(
 		nullptr,
 		0,
 		nullptr,
-		static_cast<uint32_t>(release.size()),
+		static_cast<uint32_t>(frame.textures_count),
 		release.data()
 	);
-	if(not CheckVk(vkEndCommandBuffer(m_commands), "end cube commands"))
+	if(not CheckVk(vkEndCommandBuffer(slot->commands), "end cube commands"))
 	{
 		return false;
 	}
-	if(not CheckVk(
-		   vkResetFences(m_gpu->device, 1, &m_fence), "reset camera fence"
-	   ))
-	{
-		return false;
-	}
+	// The semaphore hands the frame to the sender, which waits for it on the
+	// GPU; the fence only tells this camera when the slot is free again.
 	VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 	submit.commandBufferCount = 1;
-	submit.pCommandBuffers = &m_commands;
+	submit.pCommandBuffers = &slot->commands;
 	if(frame.synchronization.semaphore)
 	{
 		submit.signalSemaphoreCount = 1;
 		submit.pSignalSemaphores = &frame.synchronization.semaphore;
 	}
-	if(not CheckVk(
-		   vkQueueSubmit(m_gpu->queue, 1, &submit, m_fence), "submit cube frame"
-	   ))
+	if(not m_gpu->Submit(submit, slot->fence, "submit cube frame"))
 	{
 		return false;
 	}
-	m_pending = true;
 	for(size_t i = 0; i < frame.textures_count; ++i)
 	{
 		frame.textures[i].layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
@@ -751,18 +794,14 @@ CubeCamera::Submit(
 	frame.synchronization.fence = VK_NULL_HANDLE;
 	return true;
 }
+
 bool
 CubeCamera::Discard(QarVideoFrameVulkan& frame)
 {
-	// A begun cycle that could not render must still signal the borrowed
-	// semaphore so the sender can consume it on its discard/teardown path.
-	if(m_pending)
-	{
-		return Drain();
-	}
-	if(not CheckVk(
-		   vkResetFences(m_gpu->device, 1, &m_fence), "reset discard fence"
-	   ))
+	// A begun frame that could not be rendered still signals the borrowed
+	// semaphore, so the sender can consume it on its discard path.
+	Slot* slot = nullptr;
+	if(not NextSlot(slot))
 	{
 		return false;
 	}
@@ -772,57 +811,38 @@ CubeCamera::Discard(QarVideoFrameVulkan& frame)
 		submit.signalSemaphoreCount = 1;
 		submit.pSignalSemaphores = &frame.synchronization.semaphore;
 	}
-	if(not CheckVk(
-		   vkQueueSubmit(m_gpu->queue, 1, &submit, m_fence),
-		   "signal discarded camera frame"
-	   ))
-	{
-		return false;
-	}
-	m_pending = true;
-	return Drain();
+	return m_gpu->Submit(submit, slot->fence, "signal discarded camera frame");
 }
-bool
-CubeCamera::Complete(bool& ready)
-{
-	ready = false;
-	const auto status = vkGetFenceStatus(m_gpu->device, m_fence);
-	if(status == VK_NOT_READY)
-	{
-		return true;
-	}
-	if(not CheckVk(status, "poll cube frame"))
-	{
-		return false;
-	}
-	ready = true;
-	m_pending = false;
-	return true;
-}
+
 bool
 CubeCamera::Drain()
 {
-	if(not m_pending)
+	bool drained = true;
+	for(const Slot& slot : m_slots)
 	{
-		return true;
+		if(slot.fence != VK_NULL_HANDLE
+		   && not CheckVk(
+			   vkWaitForFences(
+				   m_gpu->device, 1, &slot.fence, VK_TRUE, UINT64_MAX
+			   ),
+			   "drain camera submission"
+		   ))
+		{
+			drained = false;
+		}
 	}
-	if(not CheckVk(
-		   vkWaitForFences(m_gpu->device, 1, &m_fence, VK_TRUE, UINT64_MAX),
-		   "drain camera submission"
-	   ))
-	{
-		return false;
-	}
-	m_pending = false;
-	return true;
+	return drained;
 }
+
 CubeCamera::~CubeCamera()
 {
+	// The camera's own work must finish before the attachments and command
+	// buffers it refers to go away.
 	if(not Drain())
 	{
 		std::cerr << "Camera drain failed during teardown\n";
 	}
-	ClearTargets();
+	DestroyTargets();
 	if(m_pipeline)
 	{
 		vkDestroyPipeline(m_gpu->device, m_pipeline, nullptr);
@@ -835,9 +855,12 @@ CubeCamera::~CubeCamera()
 	{
 		vkDestroyRenderPass(m_gpu->device, m_pass, nullptr);
 	}
-	if(m_fence)
+	for(const Slot& slot : m_slots)
 	{
-		vkDestroyFence(m_gpu->device, m_fence, nullptr);
+		if(slot.fence)
+		{
+			vkDestroyFence(m_gpu->device, slot.fence, nullptr);
+		}
 	}
 	if(m_pool)
 	{

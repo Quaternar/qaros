@@ -29,21 +29,34 @@ The device player apps are in `devices/` of every ZIP:
 ## Installing a Hub from the runtime ZIP
 
 1. Unzip the archive to a writable location.
-2. Start `bin/qaros-hub-service.exe`. It starts the launcher and puts the QAROS icon in the tray.
+2. Start `bin/qaros-hub-service.exe`. It starts the launcher and the visualizer and puts the QAROS icon in the tray. Always start QAROS this way: do not start `qar-runtime-launcher.exe` or `qar-streaming-viz.exe` directly.
 3. Open the visualizer and set up your source apps there (see [Source Applications](/docs/operator-guide/source-applications)). Hub configuration is persistent across restarts. File-based launcher settings are listed in the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference).
-4. Make sure the firewall permits the QAROS port range **19120-19200 (TCP+UDP)**; discovery additionally uses UDP multicast `239.77.77.77:7445` and session traffic uses mTLS on `7447`. (The installer registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
+4. Make sure the firewall permits the QAROS port range **19120-19200 (TCP+UDP)**. It carries session traffic and, since the onboarding (pairing) listener moved into it, onboarding too: a rule for TCP `7445` alone no longer lets a device pair. Discovery additionally uses UDP multicast `239.77.77.77:7445`. (The installer registers these rules automatically; for ZIP installs create them once or accept the Windows prompt.)
 
-Data written at runtime (identity slots, CA state, session state, logs, and persisted Hub configuration) is kept out of the install directory, so upgrading is "replace the folder":
+## Where data and logs live
 
-| Install | Data root |
+The **data root** holds everything the Hub keeps between runs: identity slots, CA state, session state and persisted Hub configuration. It is outside the install directory, so upgrading is "replace the folder". The **log root** holds the log files of a run.
+
+| Install | Data root | Log root |
+|---|---|---|
+| Runtime ZIP | `%LOCALAPPDATA%\Quaternar\Qaros` | `%TEMP%\quaternar\logs` |
+| System installer | `%LOCALAPPDATA%\Packages\<package family name>\LocalState\Quaternar` | `%TEMP%\quaternar\logs` (Windows may redirect it into the package's `LocalCache`) |
+| Development build (run from a build tree) | `%TEMP%\quaternar\worktrees\<worktree id>` when started by `qaros-hub-service`, else `%TEMP%\quaternar` | Same as the data root |
+| Any, overridden | The folder in the `QAR_APP_DATA_ROOT` environment variable | Same as the data root |
+
+| Logs of | Folder |
 |---|---|
-| Runtime ZIP | `%LOCALAPPDATA%\Quaternar\Qaros` |
-| System installer | `%LOCALAPPDATA%\Packages\<package family name>\LocalState\Quaternar` |
-| Either, overridden | The folder in the `QAR_APP_DATA_ROOT` environment variable |
+| Tray (`qaros-hub-service`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
+| Launcher and every process it starts (visualizer, source apps, mixer) | `<log root>\qar-launcher-default\<session-id>`, emptied when the Hub starts |
+
+- Deleting the data root resets the Hub: devices must onboard again.
+- The visualizer keeps its settings and window layout (`imgui.ini`) under `<data root>\streaming-viz`, never next to the executable.
+- Copy the log folder **before** restarting the Hub if you need it.
+- `logFolder` in the [launcher configuration](/docs/operator-guide/launcher-config-reference#paths) moves the launcher logs.
 
 ## Installing with the system installer
 
-The installer puts the Hub on the machine as a regular Windows app, registers the firewall rules and an optional autostart task (`qaros-hub-service`). Release and demo install side by side under distinct identities.
+The installer puts the Hub on the machine as a regular Windows app, registers the firewall rules and an optional autostart task (`qaros-hub-service`). Release and demo install side by side under distinct identities. Start **QAROS Hub** from the Start menu; it runs `qaros-hub-service.exe`, as with the ZIP.
 
 The installer is being reworked into a classic installer that source applications can share the runtime from. Until then, applications built on the Unity package or the C# NuGet still carry their own runtime copy.
 

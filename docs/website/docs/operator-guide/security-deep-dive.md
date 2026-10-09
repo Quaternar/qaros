@@ -16,9 +16,9 @@ The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enro
 
 | Layer | Transport | Purpose | Authentication | Confidential |
 |---|---|---|---|---|
-| 0a Beacon | UDP multicast `239.77.77.77:7445`, every 30 s | Announce a Hub on the LAN | None | No |
-| 0b Discovery | Framed TCP `7445` | Return the invitation metadata (no code) | None | No |
-| 1 Pairing | Framed TCP `7445` (same listener) | EC-JPAKE - prove knowledge of the code | Pairing code | Handshake only |
+| 0a Beacon | UDP multicast `239.77.77.77:7445`, every 5 s for a Hub | Announce a Hub on the LAN | None | No |
+| 0b Discovery | Framed TCP, the Hub's onboarding port (claimed from 19120-19199) | Return the invitation metadata (no code) | None | No |
+| 1 Pairing | Framed TCP, same onboarding port (same listener) | EC-JPAKE - prove knowledge of the code | Pairing code | Handshake only |
 | 2 Enrolment | Secure channel over the pairing connection | Issue the device certificate | Key from layer 1 (or a provisioned key) | Yes (AES-256-GCM) |
 | 3 Session | Zenoh over TLS, TCP `19120-19200` | All session traffic | Mutual TLS, Hub-CA certificates | Yes |
 

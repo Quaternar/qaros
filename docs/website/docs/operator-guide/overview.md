@@ -32,7 +32,7 @@ Each Hub operates its own private certificate authority (based on `step-ca`), lo
 
 ## Where data lives
 
-Everything the Hub writes at runtime - identity slots, CA state, session state, and logs - is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`). That is what makes upgrading a ZIP install "replace the folder", and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
+Everything the Hub keeps between runs - identity slots, CA state, session state - is kept out of the install directory, under the per-user data root (`%LOCALAPPDATA%\Quaternar\...`); logs go to `%TEMP%\quaternar\logs` ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)). That is what makes upgrading a ZIP install "replace the folder", and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
 
 ## What the operator owns
 
