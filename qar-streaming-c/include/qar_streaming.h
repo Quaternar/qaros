@@ -155,6 +155,15 @@
  * content space. What arrives through data streams and shared objects - app
  * volume and GUI panel state, another peer's published data - is in the
  * publishing peer's room space, and is never converted for you.
+ *
+ * @section qar_text_encoding Text encoding
+ *
+ * Every `const char*` the API takes or hands back is UTF-8, paths included,
+ * whatever the host process's ANSI code page. A path under a user profile
+ * named with a non-ASCII character must be passed as UTF-8, not in the code
+ * page: on Windows convert from UTF-16 with
+ * `WideCharToMultiByte(CP_UTF8, ...)` (C# and Unity strings marshal as UTF-8
+ * with `UnmanagedType.LPUTF8Str`).
  */
 #ifndef QAR_TYPES_H
 #define QAR_TYPES_H
@@ -1214,12 +1223,13 @@ typedef struct QarRuntimeInit
 	QarStructureHeader header;
 	/// The SDK `bin` folder - the one the shared library was loaded from, not
 	/// the application folder. The runtime starts `qar-runtime-launcher` from
-	/// here, and without it qar_session_invite_peer() never completes.
+	/// here, and without it qar_session_invite_peer() never completes. UTF-8
+	/// (see @ref qar_text_encoding).
 	const char* runtime_binaries_folder_path;
 	/// Root directory where device certificates and session state are stored.
 	/// If NULL or empty, defaults to platform specific application data folder.
 	/// For example, on Windows this defaults to
-	/// `%LOCALAPPDATA%\Quaternar\QarOS`.
+	/// `%LOCALAPPDATA%\Quaternar\QarOS`. UTF-8 (see @ref qar_text_encoding).
 	const char* storage_folder_path;
 } QarRuntimeInit;
 
@@ -2019,7 +2029,8 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @param library_path Path to the library **file** itself, for example
  *        `<sdk>/bin/qar-streaming-c.dll`, absolute or relative to the current
  *        working directory. The SDK's own dependency libraries are resolved
- *        from that same folder, so the folder must stay intact.
+ *        from that same folder, so the folder must stay intact. UTF-8, like
+ *        every path in this API (see @ref qar_text_encoding).
  * @return true on success. Call this before qar_library_init().
  */
 static inline bool qar_library_load(const char* library_path);
@@ -6855,11 +6866,28 @@ QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
 
 typedef HMODULE QAR_DLL_HANDLE_TYPE;
 
+/* `path` is UTF-8 like every path in the API. The ...A Win32 calls would read
+ * it in the ANSI code page and miss a folder named with a non-ASCII character,
+ * so it goes through the wide calls. */
 static inline HMODULE
 qar_loadlib(const char* path)
 {
-	char abs_path[MAX_PATH];
-	DWORD result = GetFullPathNameA(path, MAX_PATH, abs_path, NULL);
+	wchar_t wide_path[MAX_PATH];
+	if(MultiByteToWideChar(
+		   CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide_path, MAX_PATH
+	   )
+	   == 0)
+	{
+		printf(
+			"'%s' is not a UTF-8 path that fits MAX_PATH: Error %lu\n",
+			path,
+			GetLastError()
+		);
+		return NULL;
+	}
+
+	wchar_t abs_path[MAX_PATH];
+	DWORD result = GetFullPathNameW(wide_path, MAX_PATH, abs_path, NULL);
 	if(result == 0 || result >= MAX_PATH)
 	{
 		printf(
@@ -6868,7 +6896,7 @@ qar_loadlib(const char* path)
 		return NULL;
 	}
 
-	return LoadLibraryExA(
+	return LoadLibraryExW(
 		abs_path,
 		NULL,
 		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR

@@ -380,6 +380,15 @@ RequestedAdapter()
 	return adapter;
 }
 
+// A path as UTF-8, which is what every QAROS C API path is. string() would give
+// the ANSI code page instead.
+std::string
+Utf8(const std::filesystem::path& path)
+{
+	const std::u8string text = path.u8string();
+	return std::string(text.begin(), text.end());
+}
+
 // A hub address as host:port. There is no default port: a hub claims its
 // onboarding port from a range, so the port must be given.
 bool
@@ -498,8 +507,8 @@ main(int argc, char** argv)
 		std::cerr << "Invalid SDK path: " << error.message() << '\n';
 		return 1;
 	}
-	const auto binaries = library.parent_path().string();
-	if(not qar_library_load(library.string().c_str()))
+	const auto binaries = Utf8(library.parent_path());
+	if(not qar_library_load(Utf8(library).c_str()))
 	{
 		std::cerr << "Failed to load SDK DLL (check header/runtime versions)\n";
 		return 2;
