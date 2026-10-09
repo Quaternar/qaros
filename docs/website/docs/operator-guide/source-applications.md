@@ -52,7 +52,32 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it, hands it a one-time launch code of its own (the code on the onboarding screen stays as it is) and its GPU, and restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launching from QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
+A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it and tells it its GPU; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
+
+## Approved local apps
+
+A source app running on this PC joins QAROS without a code, after someone allowed it once. Whoever starts it, a user or QAROS, the first start asks:
+
+1. **"Allow &lt;app&gt; to join QAROS?"** opens in the Visualizer, or as a window of the QAROS tray when no Visualizer is open.
+2. Check what Windows reports about the app: publisher, product, executable, path and signature. Text the app supplies about itself is shown separately as "App says:"; do not rely on it.
+3. Click **Allow** to admit it, or **Deny**. Deny is the default; Enter and Space never approve. Closing the window denies. Unanswered, the prompt expires after 120 s (the app can ask for longer) and the app is told nobody answered.
+
+The first answer, in the Visualizer or the tray, wins and closes the other. Deny remembers nothing: the next start of the app asks again.
+
+| After you allow an app that is | Later starts |
+|---|---|
+| code-signed | join silently, also after updates in place. Moved or re-signed: refused until you revoke it. |
+| not signed | join silently while the file is unchanged. Rebuilt or updated in place: asks again. A copy elsewhere: refused until you revoke it. |
+
+### Listing and revoking
+
+The Visualizer's **Connection** panel has an **Approved apps** section: one row per approved app with its name and path, publisher, rule (signed publisher or exact file), when it was approved and when it was last seen.
+
+- To revoke an app, click its trash icon and confirm **Revoke**. Its next start asks again.
+- A running copy is not renewed and peers that have read the Hub's revocation list refuse it at once; others accept it until its certificate expires, at most 30 minutes.
+- An app reported as "no longer matches its approval" (moved, copied, re-signed) joins again only after you revoke its old approval and allow it anew.
+
+Approvals belong to the signed-in Windows user and survive QAROS upgrades.
 
 ## OpenXR apps
 

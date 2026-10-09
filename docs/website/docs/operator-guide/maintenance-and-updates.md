@@ -1,7 +1,7 @@
 ---
 title: Maintenance & Updates
 sidebar_position: 10
-description: Upgrading a Hub across the runtime ZIP, system installer and device apps, the C API compatibility promise, and backing up Hub identity, storage, and logs.
+description: Upgrading a Hub with the installer and the device apps, the C API compatibility promise, and backing up Hub identity, storage, and logs.
 ---
 
 # Maintenance & Updates
@@ -12,9 +12,8 @@ This page covers keeping a Hub running over time: how to upgrade, what compatibi
 
 QAROS ships as several artifacts (see [Installation](/docs/operator-guide/installation)); each upgrades differently:
 
-- **Runtime ZIP.** Upgrading is "replace the folder." All runtime state lives outside the install directory under the per-user application-data root, so unzipping a new version to a fresh location and starting its tray service preserves identity, CA state, session state, and persisted Hub configuration.
-- **System installer.** Install the new version; Windows upgrades it in place, together with the firewall and autostart declarations. Release and demo install under distinct identities and upgrade independently. The ZIP and the installer keep their data in different roots (see [Installation](/docs/operator-guide/installation#installing-a-hub-from-the-runtime-zip)), so switching between them does not carry Hub state over.
-- **Device players.** Install the new player from `devices/` of the same release on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, redeploy the package on HoloLens 2. Keep Hub and players on the same release.
+- **QAROS.** Run the newer installer over the installed version ([Installation: Upgrade](/docs/operator-guide/installation#upgrade)). All runtime state lives outside the install folder, so identity, CA state, session state, approved local apps and Hub configuration are kept.
+- **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, redeploy the package on HoloLens 2. Keep Hub and players on the same release.
 - **Applications on the C API.** A runtime update reaches every application that loads it, which is why the compatibility promise below matters.
 
 ## Compatibility promise
@@ -39,4 +38,4 @@ Three categories matter under the per-user application-data root:
 
 ## Version numbers
 
-Every artifact carries the product version `X.Y.Z`, with `-rc.N` for release candidates. `CHANGELOG.md` at the root of every ZIP lists what changed. An application reads a peer's product version through the peer API (`qar_peer_spec_get_version_id`).
+Every artifact carries the product version `X.Y.Z`, with `-rc.N` for release candidates. The release notes list what changed. An application reads a peer's product version through the peer API (`qar_peer_spec_get_version_id`).

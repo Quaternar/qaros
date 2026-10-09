@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: Getting Started
-description: Set up the QAROS SDK in C or C# — the package, static vs. dynamic loading, and your first program.
+description: Install QAROS, build the Vulkan cube source app from this repository, allow it once and see it on a viewer. Then the shape of your own app in C or C#.
 ---
 
 import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
@@ -9,56 +9,119 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 # Getting Started
 
+This page takes you from a clean Windows PC to a rotating cube streamed into QAROS by a source app you built yourself. The app is the [Vulkan cube example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube); your own source app works the same way.
+
+| Step | You | Takes |
+|---|---|---|
+| 1 | install QAROS, accept the administrator prompt once | a few minutes |
+| 2 | clone this repository | seconds |
+| 3 | build the cube | several minutes the first time |
+| 4 | run it; it asks QAROS to join, with no code | seconds |
+| 5 | click **Allow** in QAROS, once | seconds |
+| 6 | see the cube on the Visualizer or a headset | |
+
+## What you need
+
+| | |
+|---|---|
+| PC | Windows 10 or 11, x64, NVIDIA GPU (see [System Requirements](/docs/operator-guide/system-requirements)) |
+| Rights | an administrator account, once, to install QAROS |
+| Tools | Visual Studio 2022 Build Tools with "Desktop development with C++", CMake 3.29 or newer, Git |
+
+Install the tools from a PowerShell prompt, if you do not have them yet:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+winget install --id Kitware.CMake -e
+winget install --id Git.Git -e
+```
+
+## 1. Install QAROS
+
+1. Run `QAROS-Setup-<version>.exe` and accept the Windows administrator prompt. QAROS installs for all users of the PC, into `C:\Program Files\Quaternar\QAROS`.
+2. The QAROS icon appears in the notification area of the taskbar. If it does not, start **QAROS** from the Start menu.
+
+Details (what is installed, firewall, upgrade, uninstall): [Installation](/docs/operator-guide/installation).
+
+## 2. Get this repository
+
+```powershell
+git clone https://github.com/Quaternar/qaros.git
+cd qaros
+```
+
+You need no other download: the C API header is in the repository, and every app loads the QAROS runtime you just installed.
+
+## 3. Build the cube
+
+Open **Developer PowerShell for VS 2022** from the Start menu, go to the `qaros` folder and run:
+
+```powershell
+cmake --preset x64-windows -DBUILD_VULKAN_EXAMPLE=ON -DVCPKG_MANIFEST_FEATURES=examples-vulkan
+cmake --build --preset x64-windows-release --target qar-vulkan-source
+```
+
+The first configure downloads vcpkg and builds the Vulkan dependencies, which takes several minutes. Later builds are fast.
+
+## 4. Run it
+
+```powershell
+.\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
+```
+
+The console names the GPU, then shows `Waiting for approval in QAROS hub`.
+
+## 5. Allow it
+
+QAROS asks **"Allow qar-vulkan-source.exe to join QAROS?"**, in the Visualizer if it is open, otherwise in a window of its own. It shows the app's path and signature. Click **Allow** within 120 seconds.
+
+The console shows `Connected. Waiting for rendering targets.` QAROS remembers the approval: the next run joins without asking, as long as you run the same executable from the same place.
+
+## 6. See it
+
+- **On this PC:** left-click the QAROS tray icon to open the Visualizer. The cube streams into its own app volume, 1.5 m in front of the room origin.
+- **On a headset:** install the QAROS player on the device ([Player Installation](/docs/operator-guide/player-installation-to-device)) and join the hub with its pairing code ([User Guide: Getting Started](/docs/user-guide/getting-started)). Every viewer gets its own camera of the cube.
+
+Stop the cube with **Ctrl+C**.
+
+## If something goes wrong
+
+The cube prints what happened and what to do. The common cases:
+
+| The cube says | Do this |
+|---|---|
+| `Could not load QAROS. Install QAROS on this PC...` | install QAROS (step 1) |
+| `QAROS is not running on this PC...` | start **QAROS** from the Start menu |
+| `Nobody answered the approval prompt in QAROS in time...` | press Enter to ask again, then click **Allow** |
+| `QAROS did not allow this app to join...` | someone clicked **Deny**: run the cube again |
+| `This app no longer matches what QAROS approved...` | you moved or copied the executable: revoke its approval ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)) and run it again |
+
+More: [Troubleshooting](/docs/developer-guide/troubleshooting).
+
+:::note Rebuilding
+The cube is not code-signed, so QAROS approves this exact file. After every rebuild QAROS asks again. A code-signed app keeps its approval across updates: see [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#the-trust-record).
+:::
+
+## Your own source app
+
 <LanguageSwitcher />
 
-QAROS ships a native **C API** and an idiomatic **C#/.NET binding** over it. Pick
-your language above — the selection follows you across the whole Developer Guide.
-Whichever you choose, the simplest integration is genuinely simple: initialize
-the library, create a runtime, obtain a session, do work, tear down in reverse.
-
-This guide is self-contained. If you want the mental model first, read
-[Concepts](/docs/developer-guide/concepts); otherwise start here.
-
-## Setting up
+QAROS ships a native **C API** and a **C#/.NET binding** over it. Pick your language above; the selection follows you across the whole Developer Guide. Every app has the same shape: initialize the library, create a runtime, obtain a session, do work, tear down in reverse. For the mental model read [Concepts](/docs/developer-guide/concepts).
 
 <CodeTabs>
 <Lang value="c">
 
-The C SDK consists of:
+The C SDK is:
 
-- **`qar_streaming.h`** — a single amalgamated header containing the complete v0
-  C API. It is auto-generated from the authoritative API sources on every
-  runtime build, so the header in a given package always matches its binaries
-  exactly. **Never edit it.**
-- **`qar-streaming-c.dll` / `.so`** — the library your app links against or loads
-  at runtime.
-- **Runtime binaries** — the services the library spawns/uses, in the binary
-  package's `bin/` folder.
-- **Examples** — small, self-contained C programs in `qar-streaming-c/examples/`,
-  compiled as part of this repository so they are always valid against the
-  current header. The [Tutorials](/docs/developer-guide/tutorials/c/dynamic-loading)
-  are built from them.
+- **`qar_streaming.h`**: one generated header with the complete v0 C API, in `qar-streaming-c/include/` of this repository. **Never edit it.**
+- **`qar-streaming-c.dll`**: the runtime library, from the QAROS installed on the PC. Your app ships no copy of it.
+- **Examples**: small programs in `qar-streaming-c/examples/`, compiled by this repository's build so they always match the header. The [Tutorials](/docs/developer-guide/tutorials/c/dynamic-loading) are built from them.
 
-### Static linking vs. dynamic loading
+### Load the installed runtime
 
-Both modes expose identical function names.
-
-| | Static / import-library linking | Dynamic loading |
-|---|---|---|
-| How | Link `qar-streaming-c.lib`, call functions directly | Define `QAR_ENABLE_DYNAMIC_LOADING`, load the DLL at runtime |
-| Startup dependency | DLL must be present at process start | Your app starts without QAROS; loads it on demand |
-| Failure mode | Loader error dialog | You handle a `bool` load failure gracefully |
-| Recommended for | Tools that always ship with QAROS | Plugins and apps where AR/VR is optional |
-
-Dynamic loading is recommended for integrating into an existing application: your
-software keeps working on machines without QAROS installed.
-The runtime ZIP ships no import library, so with it dynamic loading is the only
-option. Point `qar_library_load()` at `<sdk>/bin/qar-streaming-c.dll` and
-`QarRuntimeInit::runtime_binaries_folder_path` at `<sdk>/bin`; leaving the folder
-empty starts no launcher.
+Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()` in one source file and call `qar_library_load(NULL)` before any other API call. It finds the installed QAROS (`HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`) and loads `<InstallFolder>\bin\qar-streaming-c.dll`. Without QAROS it prints "QAROS is not installed" and returns `false`, so your app keeps working without AR/VR. Leave `QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder the library came from.
 
 ```c
-// Dynamic-loading mode: one macro before the include, one macro in ONE .c file.
 #define QAR_ENABLE_DYNAMIC_LOADING
 #include <qar_streaming.h>
 
@@ -66,49 +129,35 @@ QAR_IMPLEMENT_DYNAMIC_LOADING() // exactly once per application
 
 int main(int argc, char** argv)
 {
-    if (not qar_library_load("path/to/qar-streaming-c.dll"))
+    if (not qar_library_load(NULL)) // the installed QAROS
     {
-        // QAROS not present — run without AR/VR features
+        // QAROS not installed: run without AR/VR features
         return 1;
     }
-    // ... use the API exactly as in static mode ...
+    // ... use the API ...
     qar_library_unload();
     return 0;
 }
 ```
 
-Functions are loaded from the DLL *by symbol name* into application-owned
-function tables — there is no loader struct in the ABI, so newer DLLs keep
-working with older applications and vice versa. Full walkthrough:
-[Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading).
+Functions are loaded *by symbol name* into tables your application owns, so newer runtimes keep working with older applications. Linking the import library also works, but then the whole runtime `bin/` has to sit next to your executable. Walkthrough: [Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading).
 
-### Building the examples
+### Build the other examples
 
 ```powershell
-# 1. Drop the QAROS binary package into ./package (see the Operator Guide's
-#    Installation page for the package layout).
-# 2. Configure and build
 cmake --preset x64-windows
 cmake --build --preset x64-windows-debug
-
-# 3. Run an example
-./build/x64-windows/Debug/dynamic_loading.exe ./package/bin/qar-streaming-c.dll
+# "installed" loads the installed QAROS; a path loads that qar-streaming-c.dll instead
+.\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe installed
 ```
 
 </Lang>
 <Lang value="csharp">
 
-The C# binding wraps the native C API in the `Qar` namespace with `SafeHandle`s,
-`IDisposable`, and a `Result<T>` return type — no manual pointers, no exceptions
-for expected native failures.
+The C# binding wraps the C API in the `Qar` namespace with `SafeHandle`s, `IDisposable` and a `Result<T>` return type: no manual pointers, no exceptions for expected native failures.
 
-- **NuGet package** — reference it from your project. It multi-targets
-  **`netstandard2.0`**, **`netstandard2.1`**, and **`net8.0`**, so it works in
-  Unity (via .NET Standard 2.0/2.1) and modern .NET alike. Unsafe blocks are
-  enabled internally for zero-copy frame access.
-- **Native library** — the managed assembly P/Invokes into the native
-  **`qar-streaming-c`** library. The NuGet package carries the native runtime
-  and copies it next to your application on build and publish.
+- **NuGet package**: multi-targets `netstandard2.0`, `netstandard2.1` and `net8.0`, so it works in Unity and modern .NET alike.
+- **Native library**: the managed assembly calls into `qar-streaming-c`. The NuGet package carries the native runtime and copies it next to your application on build and publish.
 
 ```xml
 <!-- your .csproj -->
@@ -119,38 +168,15 @@ for expected native failures.
 ```
 
 :::info
-The C# snippets in this guide are accurate to the shipping binding surface but
-are illustrative — a compiled C# examples project is not yet published in this
-repository, so treat exact member signatures as a guide rather than copy-paste
-gospel. See [Language Bindings](/docs/developer-guide/language-bindings).
+The C# snippets in this guide follow the shipping binding but are illustrative: no compiled C# example project is published in this repository yet. See [Language Bindings](/docs/developer-guide/language-bindings).
 :::
-
-Your first runtime and session, with `Result<T>` and `using` for disposal:
-
-```csharp
-using Qar;
-
-Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
-
-using var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow();
-
-// Obtain a session by onboarding — see Onboarding & Sessions.
-// using var session = ...;
-
-// On scope exit, `using` disposes the session then the runtime, then:
-Library.Destroy().EnsureSuccess();
-```
-
-Unity uses this same package; see [Language Bindings](/docs/developer-guide/language-bindings)
-for Unity lifecycle notes.
 
 </Lang>
 </CodeTabs>
 
-## The canonical program skeleton
+### The program skeleton
 
-Every QAROS application has the same shape: **library init → runtime → session →
-work → teardown in reverse.**
+**Library init, runtime, session, work, teardown in reverse.**
 
 <CodeTabs>
 <Lang value="c">
@@ -170,10 +196,10 @@ int main(void)
     QarRuntime* runtime = NULL;
     qar_result_log_if_error(qar_runtime_create(&rt_init, &runtime));
 
-    // 3. Obtain a session: rejoin if we onboarded before, else onboard
+    // 3. Obtain a session: on the QAROS PC, join as a local app
     //    (see Onboarding and Sessions)
 
-    // 4. Do work: streams, panels, volumes, peers
+    // 4. Do work: app volume, render streams, panels
 
     // 5. Teardown, in reverse
     qar_runtime_destroy(runtime);
@@ -193,11 +219,11 @@ Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess()
 // `using` guarantees teardown in reverse construction order.
 using (var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow())
 {
-    // Obtain a session: rejoin if we onboarded before, else onboard
+    // Obtain a session: on the QAROS PC, join as a local app
     // (see Onboarding and Sessions)
     // using var session = ...;
 
-    // Do work: streams, panels, volumes, peers
+    // Do work: app volume, render streams, panels
 }
 
 Library.Destroy().EnsureSuccess();
@@ -206,8 +232,4 @@ Library.Destroy().EnsureSuccess();
 </Lang>
 </CodeTabs>
 
-Steps 3 and 4 are what the rest of this guide is about. Read
-[API Conventions](/docs/developer-guide/api-conventions) once — the API follows a
-handful of strict patterns in both languages, and knowing them makes every module
-predictable. Then continue to
-[Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).
+Next: read [API Conventions](/docs/developer-guide/api-conventions) once (the API follows a handful of strict patterns), then [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) for step 3 and [Rendering Streams](/docs/developer-guide/rendering-streams) for step 4.

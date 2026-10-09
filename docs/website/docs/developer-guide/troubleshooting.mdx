@@ -11,13 +11,36 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
+## Joining QAROS as a local app
+
+What the user sees when a source app on the QAROS PC cannot join, and what fixes it. The [Vulkan cube](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) prints each of these.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `qar_library_load(NULL)` returns `false`, "QAROS is not installed" | no QAROS installation on this PC | install QAROS ([Installation](/docs/operator-guide/installation)) |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | QAROS is installed but not running: no tray icon | start **QAROS** from the Start menu, then start the app again |
+| `QAR_STATUS_ONBOARDING_APPROVAL_DENIED` (1804) | someone clicked **Deny** or closed the prompt, or an operator revoked the app | start the app again and click **Allow**. Nothing is remembered from a Deny. |
+| `QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT` (1805) | nobody answered the prompt within 120 s | retry, and answer the prompt in the Visualizer or the QAROS tray window. Raise `approval_timeout_ms` if users need longer (at most 10 minutes). |
+| `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC` (1806) | the program serving the local enrollment pipe is not the installed, signed QAROS | do not retry. Reinstall QAROS from the official installer; if it persists, contact your administrator. |
+| `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1807) | the executable was moved, copied, re-signed or modified since its approval, or its signature is invalid | revoke the old approval ([Approved local apps](/docs/operator-guide/source-applications#approved-local-apps)) and start the app again. An invalid signature can never be approved: re-sign or rebuild. |
+| `QAR_STATUS_ONBOARDING_FAILED` (1801), message names a runtime version or flavor | the app loaded a `qar-streaming-c.dll` other than the installed one | load the installed runtime with `qar_library_load(NULL)`; do not ship a copy |
+| asked again after every build | the app is not code-signed, so its approval is for one exact file | expected during development; sign release builds ([The trust record](/docs/developer-guide/onboarding-and-sessions#the-trust-record)) |
+
+## Choosing the GPU
+
+| Symptom | Fix |
+|---|---|
+| the app renders on one GPU while the session uses another | render on one adapter and pass the same adapter as `QarGraphicsDeviceId` ([Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)) |
+| `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from onboard with a `QarGraphicsDeviceId` | the adapter is not supported: only NVIDIA GPUs are |
+| the Vulkan cube picks the wrong GPU | set `QAR_GPU_ADAPTER_ID` to the adapter's LUID as 16 lowercase hex digits; QAROS sets it for apps it starts. The cube prints the GPU it uses and stops when no GPU matches. |
+
 ## Status codes that are part of normal flow
 
 | Status | Meaning | What to do |
 |---|---|---|
 | `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` | The onboarding ID has no persisted slot on this machine | Fall back to `qar_runtime_onboard` — this is the expected first-run path |
 | `QAR_STATUS_PAKE_ERROR` | Pairing code wrong or expired (codes live ~10 s) | Re-prompt the user for the current code and retry |
-| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Discovery couldn't reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Code onboarding could not reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
 | `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` | `forget` called while the session is active | Call `qar_session_handle_destroy` first, then `forget` |
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` | The stream lost its peer and is reconnecting | Skip the frame and keep calling; a dead peer is noticed within ~2 s, a restarted one streams again within a few seconds |
 | `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | The sender's app volume does not resolve yet (or was closed), so there is no app content space to hand poses out in | Keep calling `begin_frame`; create the volume before the sender and recreate one you closed |

@@ -32,7 +32,7 @@ Each Hub operates its own private certificate authority (based on `step-ca`), lo
 
 ## Where data lives
 
-Everything the Hub writes at runtime - identity slots, CA state, session state, and logs - is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`). That is what makes upgrading a ZIP install "replace the folder", and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
+Everything the Hub writes at runtime - identity slots, CA state, session state, and logs - is kept out of the install directory, under the per-user application-data root (`%LOCALAPPDATA%\Quaternar\...`). That is why an upgrade keeps it, and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
 
 ## What the operator owns
 
@@ -41,14 +41,14 @@ Four things are yours to manage:
 - **Configuration** - source apps (see [Source Applications](/docs/operator-guide/source-applications)), target devices, and other Hub behavior, managed through the visualizer and persisted across restarts.
 - **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) relay or Hub federation.
 - **Device trust** - minting and reading pairing codes, connecting peers, and forgetting or blacklisting devices.
-- **Updates** - moving between versions across the runtime ZIP, system installer and device apps, and backing up Hub identity.
+- **Updates** - moving between versions with the installer and the device apps, and backing up Hub identity.
 
 ## What's in this guide
 
 | Page | What it covers |
 |---|---|
 | [System Requirements](/docs/operator-guide/system-requirements) | Hardware, OS, network, and per-device requirements for a Hub. |
-| [Installation](/docs/operator-guide/installation) | The artifacts (runtime ZIP, system installer, Unity ZIP, C# NuGet, device apps) and how to install a Hub. |
+| [Installation](/docs/operator-guide/installation) | The per-machine installer, what it installs, upgrade and uninstall; Unity ZIP, C# NuGet, device apps. |
 | [Player Installation to Device](/docs/operator-guide/player-installation-to-device) | Operator-side player installation section with separate pages for HoloLens 2, P&C Solutions METALENSE 2, and Meta Quest. |
 | [Running the Hub](/docs/operator-guide/running-the-hub) | Starting the tray service, the startup sequence, the visualizer, reconnects, logs and crash dumps. |
 | [Source Applications](/docs/operator-guide/source-applications) | Launching, configuring and stopping the apps that stream into the room. |

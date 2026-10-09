@@ -18,7 +18,7 @@ A QAROS Hub and its devices are built to share a LAN. This page covers the ports
 | Pairing and onboarding | TCP **7445** (framed) | The same Hub listener dispatches discovery requests, EC-JPAKE pairing, and shared-password SecureChannel onboarding by first frame. |
 | Session traffic | TCP **19120-19200** (Zenoh mTLS) | All in-session communication, mutually authenticated with Hub-issued certificates. Hub, launched apps, and devices run as Zenoh peers: they connect to known endpoints and listen for full-mesh peer links in this bounded range. |
 
-The system installer registers these firewall rules automatically. For runtime ZIP installs, create them once or accept the Windows firewall prompt when the Hub first starts.
+The installer registers these firewall rules ([Installation](/docs/operator-guide/installation#what-the-installer-does)).
 
 ## Deployment models
 

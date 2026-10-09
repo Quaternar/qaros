@@ -21,7 +21,7 @@
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target gui_panel_operations
  * ./build/x64-windows/Debug/gui_panel_operations.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
+ * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
  *
  * \section gui_panels_args Parse Arguments
@@ -53,7 +53,8 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "gui_panel_operations";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"Usage: %s <installed|path-to-qar-streaming-c-library> "
+		"[runtime-binaries-dir] "
 		"[pairing-code]\n",
 		name
 	);
@@ -73,7 +74,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* library_path = argv[1];
+	const char* library_path = library_path_argument(argv[1]);
 	const char* runtime_dir = NULL;
 	char runtime_dir_buffer[1024] = { 0 };
 
@@ -94,7 +95,7 @@ main(int argc, char** argv)
 	//! [gui_setup]
 	if(!qar_library_load(library_path))
 	{
-		fprintf(stderr, "Failed to load '%s'.\n", library_path);
+		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
 

@@ -30,13 +30,11 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
   `operator-guide/running-the-hub` document this workaround. When a local
   "show my code" screen exists, update both and add the click path.
 
-- **Classic system installer** — BLOCKED(product). The planned installer is an MSI plus a signed
-  sparse MSIX identity, installing one shared runtime that source apps load instead of carrying
-  their own copy. Today the "system installer" is the interim full MSIX bundle
-  (`QAROS Hub <v>.msixbundle`). When the MSI ships, update `operator-guide/installation`
-  (artifact table, data root, install folder), `operator-guide/maintenance-and-updates`, and
-  `developer-guide/getting-started` (how an app finds the installed runtime; the NuGet and Unity
-  ZIP stop bundling it).
+- **Per-machine installer** (Quaternar #223) — documented as `QAROS-Setup-<version>.exe`.
+  Verify against the first release-signed RC: setup file name and download location, tray
+  autostart default, the uninstaller's user-data prompt, the demo setup's name, and whether the
+  NuGet and Unity ZIP still bundle the runtime. Add Visualizer screenshots of the approval prompt
+  and the Approved apps list.
 
 ## Blocked on the C# binding not being published in `qaros`
 
