@@ -1650,8 +1650,10 @@ typedef struct QarGuiPanelInit
 	 */
 	QarStructureHeader header;
 	/// Required stable identity key used by gui_panels_get_or_create()
-	/// to derive the panel's id. Must not be NULL.
+	/// to derive the panel's id. Must not be NULL or empty, and must be
+	/// ASCII.
 	const char* common_name;
+	/// UTF-8 label shown to users; any characters, emoji included.
 	const char* display_name;
 	QarPose pose;
 	QarGuiPanelSize size;
@@ -1691,8 +1693,9 @@ typedef struct QarAppVolumeInit
 	QarStructureHeader header;
 	/// Required stable identity key used by
 	/// app_volumes_get_or_create() to derive the volume's id. Must not
-	/// be NULL.
+	/// be NULL or empty, and must be ASCII.
 	const char* common_name;
+	/// UTF-8 label shown to users; any characters, emoji included.
 	const char* display_name;
 	/// Placement of the cuboid's centre in room space, and the rotation taking
 	/// app volume space into room space. See the QarAppVolumeSize
