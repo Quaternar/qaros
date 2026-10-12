@@ -141,8 +141,8 @@ using var runtime = Runtime.Create(new RuntimeOptions()).ValueOrThrow();
 Library.Destroy().EnsureSuccess();
 ```
 
-Unity uses this same package; see [Language Bindings](/docs/developer-guide/language-bindings)
-for Unity lifecycle notes.
+Unity projects get this binding, with the runtime, from the QAROS Unity packages instead; see
+[Unity](/docs/developer-guide/unity).
 
 </Lang>
 </CodeTabs>

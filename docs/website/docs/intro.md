@@ -39,4 +39,5 @@ A **Hub** (a powerful workstation) runs your 3D applications and the QAROS runti
 | Understand the security model | [Security Model](/docs/operator-guide/security-model) |
 | Integrate the API into my app | [Developer Guide: Getting Started](/docs/developer-guide/getting-started) |
 | Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |
+| Stream a Unity scene | [Unity](/docs/developer-guide/unity) |
 | Browse the full C API | [C API Reference](/api/qar-streaming-c/) |
