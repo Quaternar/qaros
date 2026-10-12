@@ -16,6 +16,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-12
+
 First versioned release. Everything below is the baseline later entries are measured against.
 
 ### Breaking
@@ -50,6 +52,17 @@ First versioned release. Everything below is the baseline later entries are meas
 - **Unity:** each endpoint's app volume is kept by its new `AppVolumeCommonName` (default
   `<product name>/<endpoint name>`): reconnecting gets the same volume and placement back, and a
   disconnect no longer removes it.
+- **C API:** `QarTimePoint` is now `{ int64_t unix_ns; }`: nanoseconds since the Unix epoch
+  (UTC), replacing `count` + `precision`. `QarDeviceHandsWithJoints` shrinks by 8 bytes and its
+  hands move. Read `unix_ns` where you read `count`/`precision`, and rebuild against the new
+  header.
+- **C#:** `TimePoint` is now `TimePoint(long unixNanoseconds)`: `UnixNanoseconds`,
+  comparison, subtraction to a `TimeSpan`, and conversion to and from `System.DateTime`
+  (`ToDateTime()`, `FromDateTime()`, implicit `DateTime`, UTC, 100 ns resolution) and
+  `DateTimeOffset`. `Count` and `Precision` are gone; read `UnixNanoseconds` or convert.
+- **SDK:** every timestamp a peer sends is one nanosecond count since the Unix epoch. Peers
+  built before this change cannot exchange messages with peers built after it; update all of
+  them together.
 - **C API:** `QarHand` is gone; `QarHandedness` names both the hand of a gesture and the axis
   handedness of a `QarGeoAnchorFrame`, renumbered `QAR_HANDEDNESS_UNSPECIFIED = 0`,
   `QAR_HANDEDNESS_LEFT = 1`, `QAR_HANDEDNESS_RIGHT = 2` (`RIGHT` was 0).
@@ -451,4 +464,5 @@ First versioned release. Everything below is the baseline later entries are meas
   peer that has not received the list keeps accepting the device until its certificate expires (at
   most 24 h); a missing list never blocks anyone.
 
-[Unreleased]: https://github.com/Quaternar/qaros/commits/main
+[Unreleased]: https://github.com/Quaternar/qaros/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Quaternar/qaros/releases/tag/v0.9.0

@@ -1,0 +1,218 @@
+---
+sidebar_position: 8
+title: Rendering Streams
+description: Stream your rendered frames into the room — the render sender, frame loop, layouts, CPU and D3D11 paths, and hand tracking.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
+
+# Rendering Streams
+
+<LanguageSwitcher />
+
+The **render sender** is how your application's pixels reach the room. You create one sender per target, then drive a simple loop: *begin frame → render into the provided textures → show frame*. QAROS takes care of encoding, transport, and — via the [mixer](/docs/operator-guide/the-mixer) — warping and compositing your content into every viewer's personal view.
+
+## Finding rendering targets
+
+**Your application decides which targets it renders for**: one, some or all of them. QAROS does not choose for it, not even for an app it launches. Find the targets in the peer list:
+
+- Watch peers with `qar_peer_subscribe_updates()`, and list the ones already there once with `qar_query_peer_specs()`. Subscribe first, so a target joining in between is not missed.
+- A peer for which `qar_peer_spec_is_target_app()` is true and whose app state is `QAR_APP_STATE_RUNNING` is a target you can render for: a headset, the Android streamer, a visualizer receiver.
+- Create the app volume first, then one sender and one camera per target you serve. **The sender attaches its target to your app volume**, and that is what makes the target ask for your content. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
+- Callbacks run asynchronously. Queue the target ID for your render thread, synchronize the handoff, and keep callback state alive through session/subscription teardown.
+- See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, stdin onboarding and multi-camera loop.
+
+```c
+static void on_peer(QarPeerSpec* peer, void* user_state)
+{
+    bool is_target_app = false;
+    QarAppState state = QAR_APP_STATE_UNKNOWN;
+    QarPeerId target_peer_id = qar_peer_id_default();
+    if(qar_result_is_error(qar_peer_spec_is_target_app(peer, &is_target_app)) || !is_target_app
+       || qar_result_is_error(qar_peer_spec_get_app_state(peer, &state))
+       || state != QAR_APP_STATE_RUNNING
+       || qar_result_is_error(qar_peer_spec_get_id(peer, &target_peer_id)))
+        return;
+
+    /* Not served yet? Hand target_peer_id to your render thread, which
+       creates its sender - see "Creating a sender" below. */
+}
+
+qar_result_log_if_error(
+    qar_peer_subscribe_updates(session, on_peer, NULL, subscription_token));
+```
+
+`qar_render_sender_subscribe_requests()` reports targets that already request your content. A target requests it only once it is attached to your app volume, and nothing is attached to a new application's own volume. So it is not a way to find targets: a sender for the target is what attaches it.
+## Creating a sender
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+QarRenderSenderInit init = qar_render_sender_init_default();
+init.peer_id = target_peer_id;          /* who receives this stream        */
+init.enable_auto_reconnects = true;     /* survive network hiccups         */
+init.app_volume_id = &volume_id;        /* composite into our app volume   */
+init.graphics_api = QAR_GRAPHICS_API_CPU;
+init.color_format = QAR_PIXEL_FORMAT_R8G8B8A8;
+init.depth_format = QAR_PIXEL_FORMAT_R32_FLOAT;
+
+/* Describe the views inside one video frame: stereo color + depth. */
+init.texture_layout = QAR_FRAME_LAYOUT_SIDE_BY_SIDE;
+init.frame_views[0] = (QarRenderFrameView){
+    .data_type = QAR_VIDEO_FRAME_VIEW_TYPE_COLOR,
+    .eye = QAR_VIDEO_FRAME_VIEW_EYE_LEFT,
+    .texture_index = 0 };
+/* ... one entry per view (right eye, depth views, ...) ... */
+init.frame_views_count = 4;
+
+QarRenderSender* sender = NULL;
+qar_result_log_if_error(
+    qar_render_sender_create(session, &init, NULL, &sender));
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+var options = new RenderSenderOptions
+{
+    PeerId              = targetPeerId,   // who receives this stream
+    EnableAutoReconnects = true,          // survive network hiccups
+    AppVolumeId         = volumeId,       // composite into our app volume
+    GraphicsApi         = GraphicsApi.Cpu,
+    ColorFormat         = PixelFormat.R8G8B8A8,
+    DepthFormat         = PixelFormat.R32Float,
+
+    // Describe the views inside one video frame: stereo color + depth.
+    TextureLayout = FrameLayout.SideBySide,
+    FrameViews = new[]
+    {
+        new RenderFrameView
+        {
+            DataType     = VideoFrameViewType.Color,
+            Eye          = VideoFrameViewEye.Left,
+            TextureIndex = 0,
+        },
+        // ... one entry per view (right eye, depth views, ...) ...
+    },
+};
+
+// RenderSender is IDisposable — dispose it to release the native sender.
+using RenderSender sender = session.RenderSenders.Create(options).ValueOrThrow();
+```
+
+</Lang>
+</CodeTabs>
+
+:::info
+The C# snippet above is illustrative — it tracks the `Quaternar.Qaros` binding surface but
+is not yet compiled from a published sample project.
+:::
+
+Key choices:
+
+- **Target peer** — a sender streams to one peer: a target app from the [peer list](#finding-rendering-targets) above, or one you invited yourself.
+- **App volume** — required. Create the volume first and pass its ID so the mixer composites the stream inside that box; a stream without one is not placed in the scene. See [App Volumes](/docs/developer-guide/app-volumes).
+- **Graphics API** — `QAR_GRAPHICS_API_CPU` (portable, always available, no extension), or a GPU API with exactly one matching extension in `init.header.next`: `QAR_GRAPHICS_API_D3D11` + `QarStreamParamsD3D11`, `QAR_GRAPHICS_API_VULKAN` + `QarStreamParamsVulkan`, or `QAR_GRAPHICS_API_OPENGL` + the `QarStreamParamsOpenGl*` struct matching your context (EGL, WGL or GLX). GPU frame textures are created on the session's adapter (see [choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)).
+- **Frame views** — the order you declare in `frame_views` is guaranteed: the layout (`qar_render_sender_layout`) and every frame list their views in exactly that order, each with the `eye` and `data_type` you declared at that position. Textures come in the order the views first use them (one per view for `SEPARATED_TEXTURES`, one per data type for side by side and layered); each view's `texture_index` names its texture. A view the layout provides that you did not declare follows yours.
+- **Frame layout** — how views pack into textures: `SIDE_BY_SIDE` (both eyes in one texture), `SEPARATED_TEXTURES`, or `LAYERED` (texture array). The negotiated layout can be queried (`qar_render_sender_layout`) and changed at runtime (`qar_render_sender_change_layout`).
+- **Depth matters.** Sending real depth (not just color) is what enables correct occlusion between app volumes and low-latency warping. Send it whenever you can.
+
+## The frame loop
+
+```c
+for (;;)
+{
+    /* 1. Begin: get the poses/FOVs you must render with. */
+    QarRenderFrameInfo* info = NULL;
+    QarResult r = qar_render_sender_begin_frame(sender, NULL, &info);
+    if (qar_result_is_error(r)) { /* reconnecting? volume unresolved? */ continue; }
+
+    QarPose pose;  QarFov fov;
+    qar_render_frame_info_get_view_pose(info, 0, &pose);
+    qar_render_frame_info_get_view_fov(info, 0, &fov);
+    /* ... same for the other views ... */
+
+    /* 2. Get the frame's textures and render into them. */
+    QarVideoFrameCpu frame;
+    qar_render_sender_frame_cpu(sender, &frame);
+    /* frame.textures[i].texture_data / .pitch / .size — write your pixels.
+       frame.texture_views[i] is the view you declared at frame_views[i];
+       its texture_index names the texture it lives in.               */
+    render_my_scene(&frame, &pose, &fov);
+
+    /* 3. Show: submit with the projection metadata you used. */
+    QarRenderFrameShow show = qar_render_frame_show_default();
+    show.rendered_near_far.near_plane = 0.1f;
+    show.rendered_near_far.far_plane = 100.0f;
+    show.depth_scale = 1.0f;
+    qar_result_log_if_error(qar_render_sender_show_frame(sender, &show));
+
+    qar_render_frame_info_handle_destroy(info);
+}
+```
+
+`begin_frame` fails with the recoverable `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` until the sender's app volume resolves (and again if it is closed): there is no app content space to hand poses out in yet, and no room-space pose is given instead. Keep calling — the call waits about 16 ms, so the loop does not spin — and recreate a volume you closed.
+
+The contract to respect: **render with the pose and FOV that `begin_frame` gives you, and report the near/far you actually used in `show_frame`.** The mixer uses exactly this metadata (plus your depth buffer) to re-project your frame to the viewer's latest head pose — wrong metadata shows up as swimming or misplaced content, not as an error code.
+
+Per-frame overrides are possible when you must deviate: chain a `QarRenderFrameShowViewOverridesExt` into `show.header.next` with per-view pose/FOV overrides.
+
+`begin_frame` also has an async variant (`qar_render_sender_begin_frame_async`) so render threads can pipeline instead of blocking.
+
+## The D3D11 path
+
+On Windows, request `QAR_GRAPHICS_API_D3D11` and chain `QarStreamParamsD3D11`:
+
+```c
+QarStreamParamsD3D11 d3d = qar_stream_params_d3d11_default();
+d3d.d3d11_device = my_device1;
+d3d.d3d11_context = my_context1;
+d3d.color_bind_flags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+d3d.depth_bind_flags = D3D11_BIND_DEPTH_STENCIL;
+d3d.acquire_keyed_mutex_sync = true; /* let QAROS manage keyed-mutex sync */
+init.header.next = &d3d.header;
+```
+
+`qar_render_sender_frame_d3d11` then hands you shared D3D11 textures to render into directly — no CPU copy ([D3D11 Rendering tutorial](/docs/developer-guide/tutorials/c/d3d11-rendering)). Set `acquire_keyed_mutex_sync = false` only if you need to manage the keyed-mutex acquire/release chain yourself (e.g. when copying through a chain of shared textures).
+
+## Reading back the viewer: hand tracking
+
+The stream is bidirectional: the target device reports input, and you can read the viewer's hands each frame:
+
+```c
+QarDeviceHandsWithJoints hands;
+if (qar_result_is_success(qar_render_sender_last_hands(sender, &hands)))
+{
+    /* 26 joints per hand, with locations and velocities, in app content
+       space: the same space your view poses are in */
+}
+```
+
+Hand poses, joint radii and velocities come in **app content space**, the space you render in (app units, under the volume's app pose and scale), so hit-test them against your content directly. `pose` is the hand's aim pose (its −Z is the hand ray). The last sample repeats for up to 1 s, then the hand reports untracked: poll once per frame. While the app volume is unresolved, both hands report untracked.
+
+Hand data another peer publishes on a data stream is different: it is in that publisher's **room space** and is never converted for you.
+
+This is how a source application implements grabbing, pointing, and touch against its own content (combine with [gesture events](/docs/developer-guide/app-volumes#gestures) for higher-level interactions).
+
+## Lifecycle and failure
+
+- `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected (typically `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING`) and recover on their own. A receiver that pauses (its display is not visible) makes them fail with `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` until it resumes; keep the sender. A dead peer is noticed within about 2 s, and a killed and restarted peer streams again within a few seconds.
+- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
+- If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
+- Destroy with `qar_render_stream_handle_destroy(sender)`.
+- Rendering senders are per requested target. For several users viewing the same scene, create a sender and camera for each target discovered through the request subscription; use each target's poses and FOV even when the scene objects are shared.
+
+## Compiled tutorial
+
+This page is backed by the compiled example `cpu_rendering_visualizer.c`, which obtains a session, subscribes to render stream requests, and streams a CPU-rendered gradient to the requesting peer:
+
+- Source: `qaros/qar-streaming-c/examples/cpu_rendering_visualizer.c`
+- Example walkthrough: [CPU Rendering with a Visualizer](/docs/developer-guide/tutorials/c/cpu-rendering)
+
+The D3D11 path is backed by `d3d11_render_sender.c`, which chains a D3D11.1 device into the sender and clears each colour view of the shared textures on the GPU:
+
+- Source: `qaros/qar-streaming-c/examples/d3d11_render_sender.c`
+- Example walkthrough: [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering)
