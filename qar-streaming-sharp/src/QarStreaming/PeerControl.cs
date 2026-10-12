@@ -29,7 +29,6 @@ namespace Qar
         public Result<PeerSpec[]> GetAll()
         {
             return _context.QueryHandles(
-                NativeMethods.qar_impl_query_peer_specs_count,
                 NativeMethods.qar_impl_query_peer_specs,
                 handle => PeerSpec.FromHandle(handle, true));
         }

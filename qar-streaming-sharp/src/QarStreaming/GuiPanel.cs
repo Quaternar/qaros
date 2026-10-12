@@ -61,6 +61,7 @@ namespace Qar
 
         public GuiPanelState State { get; }
 
+        /// <summary>The peers the panel is narrowed to. Empty means visible to every peer, not to none.</summary>
         public PeerId[] VisibleToPeers { get; }
 
         internal static Result<GuiPanel> FromHandle(IntPtr handle, bool destroyHandle)

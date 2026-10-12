@@ -943,6 +943,10 @@ namespace Qar
         public GuiPanelSize Size { get; set; }
         public string? ContentUri { get; set; }
         public StreamId? ContentStreamId { get; set; }
+        /// <summary>
+        /// Peers the panel is shown to. Empty, the default, means visible to every peer. A panel
+        /// meant only for some peers is created with them here rather than narrowed afterwards.
+        /// </summary>
         public PeerId[] VisibleToPeers { get; set; }
         internal Structure? Extension { get; private set; }
 

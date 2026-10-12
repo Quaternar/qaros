@@ -246,7 +246,6 @@ namespace Qar
         public Result<AppVolume[]> GetAll()
         {
             return _context.QueryHandles(
-                NativeMethods.qar_impl_query_app_volumes_count,
                 NativeMethods.qar_impl_query_app_volumes,
                 handle => AppVolume.FromHandle(handle, true));
         }

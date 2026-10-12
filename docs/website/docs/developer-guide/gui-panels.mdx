@@ -92,7 +92,7 @@ Panel states: `VISIBLE`, `MINIMIZED`, `HIDDEN`, `CLOSED`.
 
 ### Per-peer visibility
 
-By default a panel is visible to everyone. Restrict it by editing the visibility set — for example an operator-only control panel:
+By default a panel is visible to everyone: an **empty** visibility set means every peer, never none. Removing the last peer therefore shows the panel to everyone again; to hide it, set its state. A panel meant only for some peers is best created with them in `QarGuiPanelInit::visible_to_peers`. An existing one is narrowed by editing the set — for example an operator-only control panel:
 
 ```c
 const QarPeerId* add[] = { &operator_peer_id };

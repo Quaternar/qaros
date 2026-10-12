@@ -117,6 +117,11 @@ namespace Qar
             return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_stream(_context.DangerousHandle, ref nativeId, ref nativeStreamId));
         }
 
+        /// <summary>
+        /// Adds and removes peers from the panel's visible-to list. An empty list means the
+        /// panel is visible to every peer: removing the last peer shows it to everyone again,
+        /// it never hides it. Hide a panel through its state instead.
+        /// </summary>
         public Result<Unit> UpdateVisibleTo(GuiPanelId id, PeerId[] additions, PeerId[] removals)
         {
             var nativeId = id.ToNative();
@@ -131,7 +136,6 @@ namespace Qar
         public Result<GuiPanel[]> GetAll()
         {
             return _context.QueryHandles(
-                NativeMethods.qar_impl_query_gui_panels_count,
                 NativeMethods.qar_impl_query_gui_panels,
                 handle => GuiPanel.FromHandle(handle, true));
         }

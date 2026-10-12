@@ -29,26 +29,41 @@ namespace Qar
                 throw new ObjectDisposedException(nameof(Session));
         }
 
+        // Every native query is a full shared-object reconcile that waits out its
+        // reply window, so a list is read with one query call, not a count call
+        // followed by a query. A buffer the query fills completely may have cut
+        // the list short: its handles are released and the query repeated with a
+        // larger one.
+        private const int InitialQueryCapacity = 32;
+
         internal Result<T[]> QueryHandles<T>(
-            CountFunc countFunc,
             QueryFunc queryFunc,
             Func<IntPtr, Result<T>> snapshot)
         {
-            UIntPtr count;
-            var countInfo = Results.ToInfo(countFunc(DangerousHandle, out count));
-            if (!countInfo.IsSuccess)
-                return Result<T[]>.Failure(countInfo);
-            var handles = new IntPtr[NativeConvert.ToInt32(count)];
-            UIntPtr written;
-            var queryInfo = Results.ToInfo(queryFunc(DangerousHandle, handles, count, out written));
-            if (!queryInfo.IsSuccess)
-                return Result<T[]>.Failure(queryInfo);
-            var writtenCount = NativeConvert.ToInt32(written);
-            if (writtenCount > handles.Length)
-                return Result<T[]>.Failure(new ResultInfo(StatusCode.LogicError, 0, "Native query wrote more handles than the provided buffer can hold."));
-            var result = new List<T>(writtenCount);
+            var capacity = InitialQueryCapacity;
+            while (true)
+            {
+                var handles = new IntPtr[capacity];
+                UIntPtr written;
+                var queryInfo = Results.ToInfo(queryFunc(DangerousHandle, handles, (UIntPtr)capacity, out written));
+                if (!queryInfo.IsSuccess)
+                    return Result<T[]>.Failure(queryInfo);
+                var writtenCount = NativeConvert.ToInt32(written);
+                if (writtenCount > handles.Length)
+                    return Result<T[]>.Failure(new ResultInfo(StatusCode.LogicError, 0, "Native query wrote more handles than the provided buffer can hold."));
+                var snapshots = SnapshotHandles(queryInfo, handles, writtenCount, snapshot);
+                if (writtenCount < capacity)
+                    return snapshots;
+                capacity *= 2;
+            }
+        }
+
+        // Reads and releases every handle, so none leaks when the first one fails.
+        private static Result<T[]> SnapshotHandles<T>(ResultInfo queryInfo, IntPtr[] handles, int count, Func<IntPtr, Result<T>> snapshot)
+        {
+            var result = new List<T>(count);
             ResultInfo? firstSnapshotFailure = null;
-            for (var i = 0; i < writtenCount; i++)
+            for (var i = 0; i < count; i++)
             {
                 var item = snapshot(handles[i]);
                 if (item.IsSuccess)
@@ -102,8 +117,6 @@ namespace Qar
         {
             _handle.Dispose();
         }
-
-        internal delegate ResultNative CountFunc(IntPtr session, out UIntPtr count);
 
         internal delegate ResultNative QueryFunc(IntPtr session, IntPtr[] handles, UIntPtr bufferSize, out UIntPtr written);
     }

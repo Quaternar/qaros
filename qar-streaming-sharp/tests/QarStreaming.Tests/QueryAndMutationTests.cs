@@ -44,7 +44,7 @@ namespace QarStreaming.Tests
             Assert.Equal(id, volume.Id);
         }
 
-        [Fact(Skip = "Removing a panel's last visible-to peer makes it vanish from GetAll; product behaviour under review, docs/c-api-ext/01-improvements.md E4.")]
+        [Fact]
         public void GuiPanelVisibleToPeersRoundTrips()
         {
             using var scope = _fixture.CreateSessionScope();
@@ -54,35 +54,26 @@ namespace QarStreaming.Tests
                 DisplayName = "peer-panel"
             }).ValueOrThrow();
             scope.Session.GuiPanels.UpdateVisibleTo(id, new[] { myPeer.Id }, Array.Empty<PeerId>()).EnsureSuccess();
-            var created = QarNativeAssert.WaitUntil(
-                () =>
-                {
-                    var panel = QarNativeAssert.WaitForPanelInQuery(scope.Session, id);
-                    return panel.VisibleToPeers.Any(peer => peer == myPeer.Id) ? panel : null;
-                },
-                panel => panel.Id == id,
-                "gui panel visible-to added state");
+            var created = WaitForListedPanel(scope.Session, id, panel => panel.VisibleToPeers.Contains(myPeer.Id), "gui panel visible-to added state");
             Assert.Contains(myPeer.Id, created.VisibleToPeers);
+            // Emptying the list shows the panel to every peer: it stays listed, with no peers.
             scope.Session.GuiPanels.UpdateVisibleTo(id, Array.Empty<PeerId>(), new[] { myPeer.Id }).EnsureSuccess();
-            var cleared = QarNativeAssert.WaitUntil(
-                () =>
-                {
-                    var panel = QarNativeAssert.WaitForPanelInQuery(scope.Session, id);
-                    return panel.VisibleToPeers.Length == 0 ? panel : null;
-                },
-                panel => panel.Id == id,
-                "gui panel visible-to cleared state");
+            var cleared = WaitForListedPanel(scope.Session, id, panel => panel.VisibleToPeers.Length == 0, "gui panel visible-to cleared state");
             Assert.Empty(cleared.VisibleToPeers);
             scope.Session.GuiPanels.UpdateVisibleTo(id, new[] { myPeer.Id }, Array.Empty<PeerId>()).EnsureSuccess();
-            var restored = QarNativeAssert.WaitUntil(
-                () =>
-                {
-                    var panel = QarNativeAssert.WaitForPanelInQuery(scope.Session, id);
-                    return panel.VisibleToPeers.Any(peer => peer == myPeer.Id) ? panel : null;
-                },
-                panel => panel.Id == id,
-                "gui panel visible-to restored state");
+            var restored = WaitForListedPanel(scope.Session, id, panel => panel.VisibleToPeers.Contains(myPeer.Id), "gui panel visible-to restored state");
             Assert.Contains(myPeer.Id, restored.VisibleToPeers);
+        }
+
+        // Polls GetAll until it lists `id` in the wanted state. A failing GetAll fails the
+        // wait with its error rather than reading as "not listed yet".
+        private static GuiPanel WaitForListedPanel(Session session, GuiPanelId id, Predicate<GuiPanel> predicate, string description)
+        {
+            return QarNativeAssert.WaitUntil(
+                () => session.GuiPanels.GetAll().ValueOrThrow().FirstOrDefault(panel => panel.Id == id),
+                predicate,
+                description,
+                (int)QarNativeAssert.Budget.TotalMilliseconds);
         }
 
         [Fact]

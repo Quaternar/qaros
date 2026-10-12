@@ -1657,6 +1657,10 @@ typedef struct QarGuiPanelInit
 	const char* display_name;
 	QarPose pose;
 	QarGuiPanelSize size;
+	/// Peers the new panel is shown to, copied during the call. Empty (count
+	/// 0, the default) means visible to every peer. A panel meant only for
+	/// some peers is created with them here rather than narrowed afterwards
+	/// with qar_gui_panels_update_visible_to().
 	const QarPeerId* visible_to_peers;
 	size_t visible_to_peer_count;
 } QarGuiPanelInit;
@@ -2142,6 +2146,37 @@ static inline void qar_result_log_if_error(QarResult result);
 /**
  * @defgroup qar_c_cancel Cancellation
  * @ingroup qar_c_api
+ *
+ * @anchor qar_c_subscription_end
+ * **Ending a subscription.** Every `qar_*_subscribe_*` function hands its
+ * subscription to the cancel token passed to it (where a NULL token is
+ * allowed, the subscription is the session's alone). These calls end it:
+ * qar_cancel_token_cancel() and qar_cancel_token_handle_destroy() on that
+ * token, qar_session_handle_destroy() on its session, qar_library_destroy().
+ * When one of them returns:
+ * - a callback of the subscription that was running on another thread has
+ *   returned: the call waited for it,
+ * - no callback of the subscription starts afterwards.
+ *
+ * So `user_state` only has to stay valid until that call returns, and may be
+ * freed right after it.
+ *
+ * **From inside the subscription's own callback** a call cannot wait for the
+ * callback it is made from. qar_cancel_token_cancel() and
+ * qar_cancel_token_handle_destroy() are allowed there: they return without
+ * waiting for that callback, which then finishes normally, and no further
+ * callback of the subscription starts. Keep `user_state` valid until that
+ * callback returns. Do not destroy the session or the library from a
+ * callback.
+ *
+ * Waiting for a callback means: do not end a subscription while holding a
+ * lock its callback takes, and do not end subscription A from a callback of
+ * subscription B while a callback of B can be ending A.
+ *
+ * A token's timeout (qar_cancel_token_create_with_timeout(),
+ * qar_cancel_token_cancel_after()) stops its subscriptions shortly after it
+ * expires but does not wait for a running callback. Cancel or destroy the
+ * token before freeing `user_state`.
  * @{ */
 // Forward declarations
 /** @brief Create a new cancellation token (non-signaled). */
@@ -2150,9 +2185,21 @@ static inline QarResult qar_cancel_token_create(QarCancelToken** out_token);
 static inline QarResult qar_cancel_token_create_with_timeout(
 	QarCancelToken** out_token, uint32_t timeout_ms
 );
-/** @brief Destroy a token handle without canceling. */
+/**
+ * @brief Destroy a token handle, cancelling what it owns.
+ *
+ * Ends every subscription started with it, waiting for a running callback;
+ * see @ref qar_c_subscription_end "Ending a subscription".
+ */
 static inline void qar_cancel_token_handle_destroy(QarCancelToken* handle);
-/** @brief Signal cancellation on a token. */
+/**
+ * @brief Signal cancellation on a token.
+ *
+ * Ends every subscription started with it: returns once no callback of
+ * those subscriptions is running on another thread, and none starts
+ * afterwards. Called from inside one of their callbacks it does not wait for
+ * that callback; see @ref qar_c_subscription_end "Ending a subscription".
+ */
 static inline QarResult qar_cancel_token_cancel(QarCancelToken* token);
 /** @brief Schedule cancellation after timeout_ms. */
 static inline QarResult
@@ -2805,6 +2852,10 @@ typedef void (*qar_peer_update_callback_t)(
  * The push form of qar_query_peer_specs(), and the way to learn that a peer
  * invited with qar_session_invite_target_app() has joined and reached
  * QAR_APP_STATE_RUNNING.
+ *
+ * @param token Required; cancelling or destroying it ends the subscription
+ *              and waits for a running callback, see
+ *              @ref qar_c_subscription_end "Ending a subscription".
  */
 static inline QarResult qar_peer_subscribe_updates(
 	QarSession* session,
@@ -2840,13 +2891,14 @@ static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
  *
  * Callbacks run asynchronously, so synchronize handoff to the render thread.
  * Release each delivered request with qar_render_request_handle_destroy().
- * Keep user_state alive until subscription teardown has completed.
+ * Keep user_state alive until the call ending the subscription has returned,
+ * see @ref qar_c_subscription_end "Ending a subscription".
  *
  * @param session Active session.
  * @param callback Required callback for each pending request.
  * @param user_state Application state passed unchanged to the callback.
- * @param token Optional cancellation token; otherwise subscription lasts until
- * session teardown.
+ * @param token Required cancellation token owning the subscription;
+ * cancelling or destroying it, or destroying the session, ends it.
  * @return Success when subscribed, or a subscription setup error.
  */
 static inline QarResult qar_render_sender_subscribe_requests(
@@ -3231,7 +3283,22 @@ static inline QarResult qar_gui_panels_set_stream(
 	QarSession* session, const QarGuiPanelId* id, const QarStreamId* stream_id
 );
 
-/** @brief Update which peers can see the panel. */
+/**
+ * @brief Update which peers can see the panel.
+ *
+ * The visible-to list narrows who sees the panel. **An empty list means the
+ * panel is visible to every peer**: a new panel starts empty, and removing the
+ * last peer from the list makes the panel visible to everyone again, never to
+ * no one. To hide a panel from everyone, change its state instead.
+ *
+ * @param session Session that owns the panel.
+ * @param id Panel to change.
+ * @param peer_ids_additions Peers to add; may be NULL when additions_count is 0.
+ * @param additions_count Number of entries in @p peer_ids_additions.
+ * @param peer_ids_removals Peers to remove; may be NULL when removals_count is 0.
+ * @param removals_count Number of entries in @p peer_ids_removals.
+ * @return Success, or the panel error (e.g. QAR_STATUS_GUI_PANEL_INVALID_ID).
+ */
 static inline QarResult qar_gui_panels_update_visible_to(
 	QarSession* session,
 	const QarGuiPanelId* id,
@@ -3243,14 +3310,24 @@ static inline QarResult qar_gui_panels_update_visible_to(
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
 );
-/** @brief Subscribe to updates for all panels. */
+/**
+ * @brief Subscribe to updates for all panels.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_gui_panels_subscribe_updates(
 	QarSession* session,
 	qar_gui_panel_update_callback_t callback,
 	void* user_state,
 	QarCancelToken* token
 );
-/** @brief Subscribe to updates for a specific panel. */
+/**
+ * @brief Subscribe to updates for a specific panel.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_gui_panels_subscribe_panel_updates(
 	QarSession* session,
 	const QarGuiPanelId* id,
@@ -3331,7 +3408,8 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
  * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ *              until the session is destroyed. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_gui_panels_subscribe_gesture_events(
@@ -3365,7 +3443,8 @@ static inline QarResult qar_gui_panels_subscribe_gesture_events(
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
  * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ *              until the session is destroyed. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_gui_panels_subscribe_all_gesture_events(
@@ -3523,10 +3602,18 @@ static inline QarResult qar_gui_panel_get_content_stream_id(
 static inline QarResult
 qar_gui_panel_get_state(QarGuiPanel* handle, QarGuiPanelState* out_state);
 
+/**
+ * @brief Number of peers in the panel's visible-to list. 0 means the panel is
+ * visible to every peer (see qar_gui_panels_update_visible_to()).
+ */
 static inline QarResult qar_gui_panel_get_visible_to_peers_count(
 	QarGuiPanel* handle, size_t* out_count
 );
 
+/**
+ * @brief The peers the panel is narrowed to. An empty list means the panel is
+ * visible to every peer, not to none.
+ */
 static inline QarResult qar_gui_panel_get_visible_to_peers(
 	QarGuiPanel* handle,
 	QarPeerId* out_peers,
@@ -3631,7 +3718,12 @@ typedef void (*qar_app_volume_update_callback_t)(
 typedef void (*qar_app_volume_gesture_event_callback_t)(
 	QarAppVolumeGesture* gesture, void* user_state
 );
-/** @brief Subscribe to updates for app volumes. */
+/**
+ * @brief Subscribe to updates for app volumes.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_app_volumes_subscribe_updates(
 	QarSession* session,
 	qar_app_volume_update_callback_t callback,
@@ -3662,8 +3754,8 @@ static inline QarResult qar_app_volumes_subscribe_updates(
  * @param gesture_kind The single gesture kind this subscription delivers.
  * @param callback Invoked for every matching gesture event; must not be NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
- * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ * @param token Cancel token owning the subscription; must not be NULL. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_app_volumes_subscribe_gesture_events(
@@ -3700,8 +3792,8 @@ static inline QarResult qar_app_volumes_subscribe_gesture_events(
  * @param callback Invoked for every gesture event of every kind; must not be
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
- * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ * @param token Cancel token owning the subscription; must not be NULL. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_app_volumes_subscribe_all_gesture_events(

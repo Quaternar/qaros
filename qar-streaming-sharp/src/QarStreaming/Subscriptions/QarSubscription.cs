@@ -100,10 +100,21 @@ namespace Qar.Native
                 _token.Dispose();
         }
 
+        /// <summary>
+        /// Ends delivery. When this returns, a handler call running on another
+        /// thread has finished and no further one starts: the native cancel
+        /// waits for it (ADR-0283), and only then are the registry entry and
+        /// the callback delegate released. Called from inside this
+        /// subscription's own handler it cannot wait for that call: it returns
+        /// at once, the handler finishes and no further call starts. Do not
+        /// dispose while holding a lock the handler takes.
+        /// </summary>
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
+            // Blocks until no native callback of this subscription runs on
+            // another thread; after it, none starts.
             _token.Cancel();
             NativeCallbackRegistry.Unregister(UserState);
             if (_hasStandardCancellationRegistration)
@@ -143,6 +154,7 @@ namespace Qar.Native
                 if (sub.IsDisposed) return;
                 var peer = PeerSpec.FromHandle(handle, false);
                 if (peer.IsSuccess) sub._handler(sub, new PeerSpecUpdatedEventArgs(peer.Value));
+                GC.KeepAlive(sub);
             }
             catch
             {
@@ -180,6 +192,7 @@ namespace Qar.Native
                 if (sub.IsDisposed) return;
                 var panel = GuiPanel.FromHandle(handle, false);
                 if (panel.IsSuccess) sub._handler(sub, new GuiPanelUpdatedEventArgs(panel.Value));
+                GC.KeepAlive(sub);
             }
             catch
             {
@@ -217,6 +230,7 @@ namespace Qar.Native
                 if (sub.IsDisposed) return;
                 var volume = AppVolume.FromHandle(handle, false);
                 if (volume.IsSuccess) sub._handler(sub, new AppVolumeUpdatedEventArgs(volume.Value));
+                GC.KeepAlive(sub);
             }
             catch
             {
@@ -255,6 +269,7 @@ namespace Qar.Native
                 // The handle dies with this call, so it is read into a managed
                 // copy here rather than handed to the application.
                 sub._handler(sub, new AppVolumeGestureEventArgs(AppVolumeGestureEvent.FromHandle(gesture)));
+                GC.KeepAlive(sub);
             }
             catch
             {
@@ -293,6 +308,7 @@ namespace Qar.Native
                 // The handle dies with this call, so it is read into a managed
                 // copy here rather than handed to the application.
                 sub._handler(sub, new GuiPanelGestureEventArgs(GuiPanelGestureEvent.FromHandle(gesture)));
+                GC.KeepAlive(sub);
             }
             catch
             {
@@ -338,6 +354,7 @@ namespace Qar.Native
                 if (!streamInfo.IsSuccess)
                     return;
                 sub._handler(sub, new RenderStreamRequestEventArgs(new RenderStreamRequest(PeerId.FromNative(peerId), StreamId.FromNative(streamId))));
+                GC.KeepAlive(sub);
             }
             catch
             {

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Qar;
+using QarStreaming.Tests.Ext;
 using Xunit;
 
 namespace QarStreaming.Tests
@@ -34,6 +35,67 @@ namespace QarStreaming.Tests
             scope.Session.Peers.UpdateDisplayName("peer-two").EnsureSuccess();
             Thread.Sleep(300);
             Assert.Equal(before, Volatile.Read(ref count));
+        }
+
+        [Fact]
+        public void DisposeWaitsForTheHandlerThatIsRunning()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            using var entered = new ManualResetEventSlim(false);
+            var first = 0;
+            var finished = 0;
+            var subscription = scope.Session.Peers.SubscribeUpdates(
+                (sender, args) =>
+                {
+                    if (Interlocked.Exchange(ref first, 1) != 0)
+                        return;
+                    entered.Set();
+                    Thread.Sleep(ExtTime.Scaled(TimeSpan.FromMilliseconds(400)));
+                    Volatile.Write(ref finished, 1);
+                }).ValueOrThrow();
+            QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    scope.Session.Peers.UpdateDisplayName("slow-handler").EnsureSuccess();
+                    return entered.IsSet;
+                },
+                "handler entered");
+            subscription.Dispose();
+            Assert.Equal(1, Volatile.Read(ref finished));
+        }
+
+        [Fact]
+        public void DisposeFromInsideTheHandlerStopsDelivery()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            IDisposable? subscription = null;
+            var disposedInHandler = 0;
+            var callsAfterDispose = 0;
+            subscription = scope.Session.Peers.SubscribeUpdates(
+                (sender, args) =>
+                {
+                    if (Volatile.Read(ref disposedInHandler) != 0)
+                    {
+                        Interlocked.Increment(ref callsAfterDispose);
+                        return;
+                    }
+                    var own = Volatile.Read(ref subscription);
+                    if (own == null)
+                        return;
+                    own.Dispose();
+                    Volatile.Write(ref disposedInHandler, 1);
+                }).ValueOrThrow();
+            QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    scope.Session.Peers.UpdateDisplayName("dispose-inside").EnsureSuccess();
+                    return Volatile.Read(ref disposedInHandler) != 0;
+                },
+                "handler disposed its own subscription");
+            for (var i = 0; i < 5; ++i)
+                scope.Session.Peers.UpdateDisplayName("after-dispose-" + i).EnsureSuccess();
+            Thread.Sleep(300);
+            Assert.Equal(0, Volatile.Read(ref callsAfterDispose));
         }
 
         [Fact]
