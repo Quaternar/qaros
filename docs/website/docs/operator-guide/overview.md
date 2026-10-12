@@ -8,7 +8,7 @@ description: The operator's mental model of a QAROS Hub - its processes, data, a
 
 This guide is for the people who install, secure, configure, run, and maintain a QAROS **Hub** - the machine that brings applications and devices together into one shared, streamed room. This page gives you the mental model; the rest of the guide fills in the detail.
 
-![QAROS world overview](/img/diagrams/qaros-world-overview.png)
+![QAROS world overview](../img/diagrams/qaros-world-overview.png)
 
 ## The Hub is three processes
 

@@ -24,8 +24,12 @@ doxygen/*/doxygen
 doxygen/.tools
 docusaurus-config-navbar-*
 sidebar-category-doxygen-*
+sidebar-category-docfx-*
 
 # Rasterized by docs:diagrams from the editable SVG sources in
-# assets/diagrams and assets/brand; never committed, regenerated on every build.
-static/img/diagrams/
-static/img/brand/
+# assets/diagrams and assets/brand; regenerated on every build. Anchored to the
+# working copy: the frozen copies under versioned_docs/ are committed.
+/docs/img/diagrams/
+/static/img/brand/
+# DocFX metadata (YAML) the C# API pages are rendered from.
+docfx/*/_yaml

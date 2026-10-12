@@ -8,7 +8,7 @@ description: How world (geo), room, app-volume, and app-content spaces relate, a
 
 Everything in QAROS is placed somewhere, and "somewhere" always means *a pose in a specific space*. There are four nested spaces you need to know. Getting them straight makes the whole API — app volumes, panels, gestures, streaming poses — fall into place.
 
-![Coordinate spaces](/img/diagrams/coordinate-spaces.png)
+![Coordinate spaces](../img/diagrams/coordinate-spaces.png)
 
 ## The space hierarchy
 

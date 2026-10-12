@@ -2,14 +2,20 @@
   "watch": [
     "../../qar-streaming-c/include",
     "../../qar-streaming-c/examples",
+    "../../qar-streaming-sharp/src",
+    "../../qar-streaming-sharp/QarStreamingSharp.csproj",
+    "docfx/qar-streaming-sharp",
     "doxygen/qar-streaming-c/Doxyfile",
     "doxygen2docusaurus.json",
     "assets/diagrams"
   ],
-  "ext": "h,c,hpp,cpp,json,svg",
+  "ext": "h,c,hpp,cpp,cs,csproj,json,md,svg",
   "ignore": [
     "doxygen/qar-streaming-c/doxygen/**",
-    "api/**"
+    "api/**",
+    "docfx/*/_yaml/**",
+    "**/bin/**",
+    "**/obj/**"
   ],
   "delay": 500,
   "exec": "npm run docs:generate"

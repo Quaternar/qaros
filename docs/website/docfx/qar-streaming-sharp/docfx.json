@@ -1,0 +1,19 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "../../../../qar-streaming-sharp",
+          "files": ["QarStreamingSharp.csproj"]
+        }
+      ],
+      "properties": {
+        "TargetFramework": "net8.0"
+      },
+      "output": "_yaml",
+      "namespaceLayout": "flattened",
+      "memberLayout": "samePage",
+      "enumSortOrder": "declaringOrder"
+    }
+  ]
+}

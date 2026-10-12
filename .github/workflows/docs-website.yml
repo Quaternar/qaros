@@ -5,10 +5,18 @@ on:
     branches: [main]
     paths:
       - "docs/website/**"
+      - "qar-streaming-c/include/**"
+      - "qar-streaming-c/examples/**"
+      - "qar-streaming-sharp/src/**"
+      - "qar-streaming-sharp/QarStreamingSharp.csproj"
       - ".github/workflows/docs-website.yml"
   pull_request:
     paths:
       - "docs/website/**"
+      - "qar-streaming-c/include/**"
+      - "qar-streaming-c/examples/**"
+      - "qar-streaming-sharp/src/**"
+      - "qar-streaming-sharp/QarStreamingSharp.csproj"
       - ".github/workflows/docs-website.yml"
   workflow_dispatch:
 
@@ -39,6 +47,13 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: docs/website/package-lock.json
+
+      # C# API reference: DocFX (pinned in docs/website/dotnet-tools.json) reads
+      # qar-streaming-sharp through Roslyn, so only the SDK is needed.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
 
       - name: Install system dependencies
         run: |

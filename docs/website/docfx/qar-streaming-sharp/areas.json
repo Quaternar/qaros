@@ -1,0 +1,54 @@
+{
+  "$comment": "Groups the public types of qar-streaming-sharp on the C# API landing page and in its sidebar, in this order. A type is placed by its exact name in `types` first, then by the longest matching name prefix in `prefixes`. Names are DocFX display names (`Result<T>`). scripts/run-docfx.js warns about every type no area claims and lists it under `Other`, so a new type never disappears.",
+  "areas": [
+    {
+      "label": "Library and runtime",
+      "description": "Load the native library and create the runtime that onboards and rejoins sessions.",
+      "types": ["Library", "LibraryOptions", "LogSeverity", "Runtime", "RuntimeOptions", "Structure", "StructureType"]
+    },
+    {
+      "label": "Onboarding and sessions",
+      "description": "Join a QAROS session for the first time, rejoin it later, invite devices and start target apps.",
+      "types": ["Session", "SessionId", "ForgetOptions", "RejoinOptions", "ActionProgress", "ActionSeverity", "TargetAppConnectionString", "GraphicsDeviceId", "GpuDeviceIdType"],
+      "prefixes": ["Onboard", "RequestOnboarding"]
+    },
+    {
+      "label": "Peers and hands",
+      "description": "The peers in a session, their presentation and the hand-tracking data devices send.",
+      "types": ["AppState", "DeviceHandsWithJoints", "Hand", "Handedness"],
+      "prefixes": ["Peer", "HandJoint"]
+    },
+    {
+      "label": "App volumes",
+      "description": "The 3D volumes an application renders into, their gestures and world anchoring.",
+      "types": ["AppScaleSensitivityMode", "AppWorldAnchor", "GeoAnchorFrame", "WorldReferenceSystem"],
+      "prefixes": ["AppVolume", "Gesture"]
+    },
+    {
+      "label": "GUI panels",
+      "description": "Flat 2D panels placed in the room and the gestures users make on them.",
+      "prefixes": ["GuiPanel"]
+    },
+    {
+      "label": "Rendering",
+      "description": "Render senders stream frames for a target peer: frame begin/show, views, stream parameters per graphics API.",
+      "types": ["Fov", "FrameLayout", "GraphicsAPI", "NearFar", "PixelFormat", "StreamId", "SyncFrameD3D11", "DXGIKeyedMutexSync", "OpenGlContextCallbacks", "ImageSize", "TextureSize"],
+      "prefixes": ["RenderSender", "RenderFrame", "RenderStream", "StreamParams"]
+    },
+    {
+      "label": "Video senders and frames",
+      "description": "Video streams without a primary render target, and the frame and texture types every sender hands out.",
+      "prefixes": ["PrimarylessVideoSender", "VideoFrame", "VideoTexture"]
+    },
+    {
+      "label": "Results and errors",
+      "description": "Every call returns a `Result<T>` instead of throwing; these types carry the outcome.",
+      "types": ["Result<T>", "ResultInfo", "StatusCode", "NativeCallException", "Unit"]
+    },
+    {
+      "label": "Math and time",
+      "description": "Value types shared by every area.",
+      "types": ["Pose", "Quaternion", "Vector3", "Vector3d", "TimePoint"]
+    }
+  ]
+}
