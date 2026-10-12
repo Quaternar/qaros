@@ -8,6 +8,7 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>One GUI panel update; <see cref="Panel"/> is a snapshot, safe to keep.</summary>
     public sealed class GuiPanelUpdatedEventArgs : EventArgs
     {
         public GuiPanelUpdatedEventArgs(GuiPanel panel) { Panel = panel; }

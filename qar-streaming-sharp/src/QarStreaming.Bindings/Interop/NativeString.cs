@@ -54,7 +54,11 @@ namespace Qar.Native
 
         public IntPtr Pointer { get; private set; }
 
-        public static NativeUtf8String FromString(string? value)
+        /// <summary>
+        /// A NUL-terminated UTF-8 copy of a UTF-16 string: every <c>char*</c> of the C API is
+        /// UTF-8, whatever the ANSI code page. Null for null.
+        /// </summary>
+        public static NativeUtf8String FromUtf8(string? value)
         {
             if (value == null)
                 return new NativeUtf8String(IntPtr.Zero);

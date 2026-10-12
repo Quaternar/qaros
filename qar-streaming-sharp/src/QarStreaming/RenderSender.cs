@@ -8,6 +8,32 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// Streams the application's rendered frames to one target peer, displayed in the bound app
+    /// volume. Create one per target with <see cref="RenderSenderControl.Create"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Frame loop: <see cref="BeginFrame"/> (or <see cref="BeginFrameAsync(CancellationToken)"/> /
+    /// <see cref="TryBeginFrame"/>) hands out the per-view poses and FOVs; render with exactly
+    /// those into the frame from <see cref="GetCpuFrame"/>, <see cref="GetD3D11Frame"/>,
+    /// <see cref="GetOpenGlFrame"/> or <see cref="GetVulkanFrame"/> (the one matching the
+    /// sender's graphics API); then <see cref="ShowFrame"/> with the near/far actually used. The
+    /// mixer re-projects the frame with that metadata and the depth, so wrong metadata shows as
+    /// swimming content, not as an error. Only one frame cycle is open at a time; calling
+    /// <see cref="ShowFrame"/> without a begun frame fails with
+    /// <see cref="StatusCode.LogicError"/>.
+    /// </para>
+    /// <para>
+    /// Everything the sender hands out (view poses, hands) is in the bound app volume's app
+    /// content space, never room space. With auto-reconnects enabled, frame calls fail with
+    /// <see cref="StatusCode.MediaStreamingStreamIsReconnecting"/> while the stream reconnects
+    /// and recover on their own; keep the sender.
+    /// <see cref="StatusCode.RenderingProducerStreamIsClosed"/> from begin-frame means the
+    /// stream closed for good: dispose the sender and create a new one if the target is still
+    /// to be served.
+    /// </para>
+    /// </remarks>
     public sealed class RenderSender : IDisposable
     {
         private readonly RenderSenderSafeHandle _handle;
@@ -17,6 +43,15 @@ namespace Qar
             _handle = handle ?? throw new ArgumentNullException(nameof(handle));
         }
 
+        /// <summary>
+        /// The negotiated frame layout. Available as soon as the sender exists, before the first
+        /// begin-frame and while reconnecting, so size lasting resources from it.
+        /// </summary>
+        /// <remarks>
+        /// Its views come in the order declared in <see cref="RenderSenderOptions.FrameViews"/>,
+        /// or after <see cref="ChangeLayout"/> in the order of that layout, and every frame
+        /// matches it.
+        /// </remarks>
         public Result<VideoFrameLayout> GetLayout()
         {
             ThrowIfDisposed();
@@ -33,6 +68,16 @@ namespace Qar
             return info.IsSuccess ? Result<StreamId>.Success(info, StreamId.FromNative(native)) : Result<StreamId>.Failure(info);
         }
 
+        /// <summary>
+        /// Requests a layout for subsequent frames; their views and textures keep the order given
+        /// in <paramref name="layout"/>.
+        /// </summary>
+        /// <remarks>
+        /// Not callable inside a frame cycle: between a successful begin-frame and its
+        /// <see cref="ShowFrame"/> it fails with <see cref="StatusCode.LogicError"/> and changes
+        /// nothing.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="layout"/> is null.</exception>
         public Result<Unit> ChangeLayout(VideoFrameLayout layout)
         {
             if (layout == null)
@@ -42,6 +87,11 @@ namespace Qar
             return Results.FromNative(NativeMethods.qar_impl_render_sender_change_layout(_handle.DangerousGetHandle(), ref native));
         }
 
+        /// <summary>
+        /// CPU-backed frame access. The frame exists from creation, so its textures, views and
+        /// sizes are readable before the first begin-frame; its pixels may be written only inside
+        /// a frame cycle.
+        /// </summary>
         public Result<VideoFrameCpu> GetCpuFrame()
         {
             ThrowIfDisposed();
@@ -50,6 +100,15 @@ namespace Qar
             return info.IsSuccess ? Result<VideoFrameCpu>.Success(info, VideoFrameCpu.FromNative(native)) : Result<VideoFrameCpu>.Failure(info);
         }
 
+        /// <summary>
+        /// D3D11-backed frame access: shared textures to render into directly. Readable before
+        /// the first begin-frame, writable only inside a frame cycle.
+        /// </summary>
+        /// <remarks>
+        /// The sender acquires and releases the textures' keyed mutexes itself unless
+        /// <see cref="StreamParamsD3D11.AcquireKeyedMutexSync"/> was false at creation; then the
+        /// application drives the keyed-mutex chain with the frame's synchronization data.
+        /// </remarks>
         public Result<VideoFrameD3D11> GetD3D11Frame()
         {
             ThrowIfDisposed();
@@ -69,7 +128,19 @@ namespace Qar
         /// nothing is handed out in room space instead. That is recoverable - keep
         /// calling, it succeeds once the volume resolves; a removed volume never
         /// does, so recreate it. Meanwhile <see cref="GetLastHands"/> reports both
-        /// hands untracked.
+        /// hands untracked. The call is held about 16 ms before failing, so a retry
+        /// loop does not spin.
+        /// <para>
+        /// While the receiver has paused the stream (for example its display is not
+        /// visible) the call waits instead of failing, and the frame begins once the
+        /// receiver resumes. Cancel <paramref name="cancellationToken"/> to stop
+        /// waiting; the call then fails. A frame still open from a previous
+        /// begin-frame without <see cref="ShowFrame"/> is ended first.
+        /// </para>
+        /// <para>
+        /// Read the returned <see cref="RenderFrameInfo"/> before <see cref="ShowFrame"/>
+        /// and dispose it afterwards.
+        /// </para>
         /// </remarks>
         public Result<RenderFrameInfo> BeginFrame(CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -86,6 +157,10 @@ namespace Qar
         }
 
         /// <summary>Async <see cref="BeginFrame"/>; fails the same way, including with <see cref="StatusCode.RenderingProducerAppVolumeUnresolved"/>.</summary>
+        /// <remarks>
+        /// Like <see cref="BeginFrame"/> it waits through a paused stream; cancel
+        /// <paramref name="cancellationToken"/> to stop waiting.
+        /// </remarks>
         public Task<Result<RenderFrameInfo>> BeginFrameAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             ThrowIfDisposed();
@@ -121,6 +196,10 @@ namespace Qar
         /// A failure is a real failure, such as
         /// <see cref="StatusCode.RenderingProducerAppVolumeUnresolved"/> (recoverable).
         /// </summary>
+        /// <remarks>
+        /// While the receiver has paused the stream the wait does not complete: the
+        /// call keeps succeeding with null until the receiver resumes.
+        /// </remarks>
         public Result<RenderFrameInfo?> TryBeginFrame()
         {
             ThrowIfDisposed();
@@ -148,10 +227,17 @@ namespace Qar
         /// <summary>
         /// Sender-owned Vulkan frame and its current image state; requires a library
         /// built with QAR_ENABLE_VULKAN (otherwise <see cref="EntryPointNotFoundException"/>).
-        /// Valid until the next call or this sender's disposal. Inside a frame cycle,
+        /// Valid until the next begin-frame or this sender's disposal. Inside a frame cycle,
         /// record final layouts, queue ownership and synchronization on it before
         /// <see cref="ShowFrame"/>.
         /// </summary>
+        /// <remarks>
+        /// Readable from creation, so resources can be created against the real images during
+        /// initialization. Every begin-frame discards the previously returned frame: fetch it
+        /// again in each frame cycle, and do not write through an instance from an earlier
+        /// cycle. <see cref="ShowFrame"/> of a Vulkan sender fails with
+        /// <see cref="StatusCode.LogicError"/> when this was not called in the current cycle.
+        /// </remarks>
         public Result<VideoFrameVulkan> GetVulkanFrame()
         {
             ThrowIfDisposed();
@@ -160,6 +246,13 @@ namespace Qar
         }
 
         /// <summary>Submits the rendered frame. <see cref="RenderFrameShow.RenderedNearFar"/> and any view-override pose are in app content space.</summary>
+        /// <remarks>
+        /// Report the near/far actually rendered with; the defaults (0.1 to 100) are used when
+        /// <paramref name="frameShow"/> is null. When a view was rendered with a pose or FOV
+        /// other than the one <see cref="RenderFrameInfo"/> handed out, declare it with
+        /// <see cref="RenderFrameShow.WithViewOverrides"/>. Fails with
+        /// <see cref="StatusCode.LogicError"/> when no frame was begun.
+        /// </remarks>
         public Result<Unit> ShowFrame(RenderFrameShow? frameShow = null)
         {
             ThrowIfDisposed();
@@ -198,6 +291,10 @@ namespace Qar
             return info.IsSuccess ? Result<DeviceHandsWithJoints>.Success(info, DeviceHandsWithJoints.FromNative(native)) : Result<DeviceHandsWithJoints>.Failure(info);
         }
 
+        /// <summary>
+        /// Ends the stream to the target. Every <see cref="RenderFrameInfo"/> this sender handed
+        /// out becomes invalid.
+        /// </summary>
         public void Dispose()
         {
             _handle.Dispose();

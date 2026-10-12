@@ -132,9 +132,9 @@ namespace Qar.Native
             return new PeerPresentationNative
             {
                 Header = NativeDefaults.Header(StructureType.PeerPresentation, next),
-                DisplayName = scope.AllocString(options.DisplayName),
-                AppVersion = scope.AllocString(options.AppVersion),
-                AppCustomPeerInfo = scope.AllocString(options.AppCustomPeerInfo)
+                DisplayName = scope.AllocUtf8(options.DisplayName),
+                AppVersion = scope.AllocUtf8(options.AppVersion),
+                AppCustomPeerInfo = scope.AllocUtf8(options.AppCustomPeerInfo)
             };
         }
 
@@ -246,7 +246,7 @@ namespace Qar.Native
             return new SessionInviteTargetAppInitNative
             {
                 Header = NativeDefaults.Header(StructureType.SessionInviteTargetAppInit),
-                ConnectionString = scope.AllocString(connectionString)
+                ConnectionString = scope.AllocUtf8(connectionString)
             };
         }
 
@@ -256,8 +256,8 @@ namespace Qar.Native
             return new GuiPanelInitNative
             {
                 Header = NativeDefaults.Header(StructureType.GuiPanelInit, next),
-                CommonName = scope.AllocString(options.CommonName),
-                DisplayName = scope.AllocString(options.DisplayName),
+                CommonName = scope.AllocUtf8(options.CommonName),
+                DisplayName = scope.AllocUtf8(options.DisplayName),
                 Pose = options.Pose.ToNative(),
                 Size = options.Size.ToNative(),
                 VisibleToPeers = scope.AllocArray(peers),
@@ -273,8 +273,8 @@ namespace Qar.Native
             return new AppVolumeInitNative
             {
                 Header = NativeDefaults.Header(StructureType.AppVolumeInit, next),
-                CommonName = scope.AllocString(options.CommonName),
-                DisplayName = scope.AllocString(options.DisplayName),
+                CommonName = scope.AllocUtf8(options.CommonName),
+                DisplayName = scope.AllocUtf8(options.DisplayName),
                 Pose = options.Pose.ToNative(),
                 Size = options.Size.ToNative(),
                 InitialPeers = scope.AllocPointerArray(options.InitialPeers ?? Array.Empty<PeerId>()),

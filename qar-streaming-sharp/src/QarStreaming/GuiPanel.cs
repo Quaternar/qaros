@@ -8,6 +8,10 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// An immutable snapshot of one GUI panel, safe to keep. Get a newer one from
+    /// <see cref="GuiPanelControl.SubscribeUpdates(EventHandler{GuiPanelUpdatedEventArgs}, CancellationToken)"/>.
+    /// </summary>
     public sealed class GuiPanel
     {
         private GuiPanel(GuiPanelId id, string displayName, Pose pose, GuiPanelSize size, string contentUri, GuiPanelState state, PeerId[] visibleToPeers)
@@ -53,12 +57,22 @@ namespace Qar
 
         public GuiPanelSize Size { get; }
 
+        /// <summary>
+        /// Which of <see cref="ContentUri"/> and <see cref="ContentStreamId"/> is set; the other
+        /// is null. Fixed when the panel is created.
+        /// </summary>
         public GuiPanelContentType ContentType { get; }
 
+        /// <summary>The web page shown, for <see cref="GuiPanelContentType.WebsiteUri"/>; null otherwise.</summary>
         public string? ContentUri { get; }
 
+        /// <summary>The video stream shown, for <see cref="GuiPanelContentType.StreamId"/>; null otherwise.</summary>
         public StreamId? ContentStreamId { get; }
 
+        /// <summary>
+        /// Whether peers see the panel. A <see cref="GuiPanelState.Closed"/> panel is reopened by
+        /// <see cref="GuiPanelControl.GetOrCreate"/> with the same common name.
+        /// </summary>
         public GuiPanelState State { get; }
 
         /// <summary>The peers the panel is narrowed to. Empty means visible to every peer, not to none.</summary>

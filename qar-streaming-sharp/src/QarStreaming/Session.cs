@@ -6,6 +6,18 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// An active session, the entry point to peers, GUI panels, app volumes and senders. Only
+    /// <see cref="Runtime.Onboard"/> and <see cref="Runtime.Rejoin"/> produce one, and there is no
+    /// getter for a "current" session: keep the instance.
+    /// </summary>
+    /// <remarks>
+    /// The caller owns the session. <see cref="Dispose"/> tears the session down but keeps the
+    /// persisted identity, so the next start can <see cref="Runtime.Rejoin"/> silently; erasing the
+    /// identity is <see cref="Runtime.Forget"/>. Disposing ends every subscription of the session
+    /// and waits for a handler running on another thread, so never dispose it from a QAROS
+    /// callback or event handler, nor while holding a lock a handler takes.
+    /// </remarks>
     public sealed partial class Session : IDisposable
     {
         private readonly SessionNativeContext _context;
@@ -53,6 +65,19 @@ namespace Qar
             return Result<GraphicsDeviceId?>.Success(info, present ? GraphicsDeviceId.FromNative(native) : null);
         }
 
+        /// <summary>
+        /// Asks the hub this session onboarded through for a fresh invite, to onboard another API
+        /// instance (a helper process, a plugin sandbox) without a code. Blocks until the hub
+        /// answers.
+        /// </summary>
+        /// <remarks>
+        /// The caller owns and disposes the invite. Hand it over with
+        /// <see cref="OnboardingInvite.Serialize"/>; the other instance, with a runtime and storage
+        /// folder of its own, onboards with <see cref="OnboardingInvite.Deserialize"/> and
+        /// <see cref="OnboardOptions.UseInvite"/>. Invites expire: mint one when it is needed.
+        /// Fails with <see cref="StatusCode.ArgumentNotSupported"/> when the hub cannot be resolved
+        /// from this session, for example while it is not connected.
+        /// </remarks>
         public Result<OnboardingInvite> RequestOnboardingInvite(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
@@ -82,6 +107,14 @@ namespace Qar
         /// Codes other callers hold and the hub's onboarding screen code stay valid. The caller owns and
         /// disposes every returned invite.
         /// </summary>
+        /// <remarks>
+        /// Blocks until the hub answers. Each code works once (a failed attempt also uses it up) and
+        /// is never shown on the hub's screen. Hand a device either its text
+        /// (<see cref="OnboardingInvite.GetCode"/>, for <see cref="OnboardOptions.UseCode"/>) or the
+        /// serialized invite (for <see cref="OnboardOptions.UseInvite"/>). Fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/> for a count or lifetime out of range, or
+        /// when the hub cannot be resolved from this session.
+        /// </remarks>
         public Result<IReadOnlyList<OnboardingInvite>> RequestOnboardingCodes(RequestOnboardingCodesOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
@@ -110,6 +143,10 @@ namespace Qar
             }
         }
 
+        /// <summary>
+        /// Async <see cref="RequestOnboardingInvite"/>. Canceling
+        /// <paramref name="cancellationToken"/> cancels the task.
+        /// </summary>
         public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
@@ -147,6 +184,12 @@ namespace Qar
         }
 
         /// <summary>Finds an already-connected render target from its connection string.</summary>
+        /// <remarks>
+        /// Takes the strings <see cref="TargetAppConnectionString"/> builds. It only looks at the
+        /// peers this session knows now: it neither invites nor waits, and fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/> when no peer matches. To start a target
+        /// app, use <see cref="InviteTargetApp"/>.
+        /// </remarks>
         public Result<PeerId> FindRenderTarget(string connection)
         {
             if (connection == null)
@@ -154,7 +197,7 @@ namespace Qar
             using (var scope = new NativeMemoryScope())
             {
                 var peer = PeerIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(_context.DangerousHandle, scope.AllocString(connection), ref peer));
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(_context.DangerousHandle, scope.AllocUtf8(connection), ref peer));
                 return info.IsSuccess ? Result<PeerId>.Success(info, PeerId.FromNative(peer)) : Result<PeerId>.Failure(info);
             }
         }
@@ -262,6 +305,11 @@ namespace Qar
             return peer == IntPtr.Zero ? PeerId.Default : PeerId.FromNativePointer(peer);
         }
 
+        /// <summary>
+        /// Tears the session down but keeps its persisted identity for a later
+        /// <see cref="Runtime.Rejoin"/>. Waits for subscription handlers running on other threads;
+        /// do not call it from one.
+        /// </summary>
         public void Dispose()
         {
             _context.Dispose();
@@ -293,7 +341,7 @@ namespace Qar
         {
             if (host == null)
                 throw new ArgumentNullException(nameof(host));
-            using (var nativeHost = NativeUtf8String.FromString(host))
+            using (var nativeHost = NativeUtf8String.FromUtf8(host))
                 return NativeString.GetString((buffer, size) => build(nativeHost.Pointer, buffer, size));
         }
     }

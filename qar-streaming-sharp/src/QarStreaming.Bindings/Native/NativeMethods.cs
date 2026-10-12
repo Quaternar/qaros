@@ -494,7 +494,7 @@ namespace Qar.Native
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_app_volumes_remove_gesture_mode(IntPtr session, ref AppVolumeIdNative volumeId, uint modeId);
 
-        /// <param name="peer">Pointer to a PeerIdNative, or zero for the default every peer without its own mode follows.</param>
+        // peer: pointer to a PeerIdNative, or zero for the default every peer without its own mode follows.
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_app_volumes_select_gesture_mode(IntPtr session, ref AppVolumeIdNative volumeId, IntPtr peer, uint modeId);
 
@@ -510,7 +510,7 @@ namespace Qar.Native
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_app_volume_get_gesture_mode(IntPtr handle, uint modeId, ref AppVolumeGestureConfigurationNative outConfig);
 
-        /// <param name="peer">Pointer to a PeerIdNative, or zero for the default.</param>
+        // peer: pointer to a PeerIdNative, or zero for the default.
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_app_volume_get_active_gesture_mode(IntPtr handle, IntPtr peer, out uint outModeId);
 

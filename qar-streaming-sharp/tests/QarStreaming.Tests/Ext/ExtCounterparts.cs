@@ -177,7 +177,7 @@ namespace QarStreaming.Tests.Ext
                 var init = new ExtPeerInitNative
                 {
                     Header = NativeDefaults.Header(ExtStructureType.PeerInit),
-                    DisplayName = scope.AllocString(displayName),
+                    DisplayName = scope.AllocUtf8(displayName),
                 };
                 ExtResults.Ensure(ExtNativeMethods.qar_impl_ext_peer_create(hub.Handle, ref init, out var handle));
                 return new ExtPeer(handle);
@@ -511,7 +511,7 @@ namespace QarStreaming.Tests.Ext
                 var init = new ExtTargetAppResponderInitNative
                 {
                     Header = NativeDefaults.Header(ExtStructureType.TargetAppResponderInit),
-                    MachineId = scope.AllocString(machineId),
+                    MachineId = scope.AllocUtf8(machineId),
                 };
                 ExtResults.Ensure(ExtNativeMethods.qar_impl_ext_target_app_responder_create(hub.Handle, ref init, out var handle));
                 return new ExtTargetAppResponder(handle);

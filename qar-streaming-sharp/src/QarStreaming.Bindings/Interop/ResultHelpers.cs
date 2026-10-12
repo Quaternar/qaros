@@ -81,7 +81,11 @@ namespace Qar.Native
     {
         private readonly List<IntPtr> _allocations = new List<IntPtr>();
 
-        public IntPtr AllocString(string? value)
+        /// <summary>
+        /// A NUL-terminated UTF-8 copy of a UTF-16 string, freed with the scope: every <c>char*</c>
+        /// of the C API is UTF-8, whatever the ANSI code page. Null for null.
+        /// </summary>
+        public IntPtr AllocUtf8(string? value)
         {
             if (value == null)
                 return IntPtr.Zero;
@@ -324,13 +328,13 @@ namespace Qar.Native
                     return scope.AllocStruct(new OnboardCodeExtNative
                     {
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardCodeExt),
-                        Code = scope.AllocString(onboardCode.Code)
+                        Code = scope.AllocUtf8(onboardCode.Code)
                     });
                 case OnboardHost onboardHost:
                     return scope.AllocStruct(new OnboardHostExtNative
                     {
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardHostExt),
-                        Hostname = scope.AllocString(onboardHost.Hostname),
+                        Hostname = scope.AllocUtf8(onboardHost.Hostname),
                         Port = onboardHost.Port
                     });
                 case OnboardInvite onboardInvite:
@@ -456,7 +460,7 @@ namespace Qar.Native
                 return false;
             using (var scope = new NativeMemoryScope())
             {
-                var result = Results.ToInfo(NativeMethods.qar_impl_uuid_from_string(scope.AllocString(text), data));
+                var result = Results.ToInfo(NativeMethods.qar_impl_uuid_from_string(scope.AllocUtf8(text), data));
                 return result.IsSuccess;
             }
         }

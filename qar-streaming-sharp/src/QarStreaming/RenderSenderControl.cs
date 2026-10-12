@@ -5,6 +5,10 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// Creates render senders and delivers render stream requests for a session; reached through
+    /// <see cref="Session.RenderSenders"/>.
+    /// </summary>
     public sealed class RenderSenderControl
     {
         private readonly SessionNativeContext _context;
@@ -14,6 +18,25 @@ namespace Qar
             _context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
+        /// <summary>
+        /// Creates a sender that renders for <see cref="RenderSenderOptions.PeerId"/> into the app
+        /// volume <see cref="RenderSenderOptions.AppVolumeId"/>, which must already exist.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The sender attaches its target to the app volume, which makes the target request the
+        /// content, and the call waits for that request: it does not return until the target
+        /// asks for the stream. Bound the wait with <paramref name="cancellationToken"/>, or use
+        /// <see cref="CreateAsync(RenderSenderOptions, CancellationToken)"/>.
+        /// </para>
+        /// <para>
+        /// Create one sender per target served; which targets to serve is the application's
+        /// decision. A <see cref="PeerId.Unique"/> target belongs to no peer, so the stream never
+        /// negotiates. A missing app volume id fails with
+        /// <see cref="StatusCode.AppVolumeInvalidId"/>.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
         public Result<RenderSender> Create(RenderSenderOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (options == null)
@@ -31,6 +54,8 @@ namespace Qar
             }
         }
 
+        /// <summary>Async <see cref="Create"/>; completes once the target has requested the stream.</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
         public Task<Result<RenderSender>> CreateAsync(RenderSenderOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (options == null)
@@ -62,6 +87,27 @@ namespace Qar
             return state.Task;
         }
 
+        /// <summary>
+        /// Raises <paramref name="handler"/> for each render stream request for this
+        /// application's content.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A target requests the content only once it is attached to the application's app
+        /// volume, so this does not discover targets for a new application: find those in the
+        /// peer list and create a sender for each one served, which attaches it. It sees
+        /// requests for a volume something else attached a target to. Repeated requests for a
+        /// target already served need no further sender.
+        /// </para>
+        /// <para>
+        /// The handler runs on a native thread: hand the target id to the render thread with
+        /// proper synchronization. Exceptions thrown by the handler are swallowed. Disposing the
+        /// returned subscription, or cancelling <paramref name="cancellationToken"/>, ends it;
+        /// once <c>Dispose</c> returns no handler call is running on another thread and none
+        /// starts.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="handler"/> is null.</exception>
         public Result<IDisposable> SubscribeRequests(EventHandler<RenderStreamRequestEventArgs> handler, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (handler == null)

@@ -3,6 +3,15 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// The key of an identity slot, minted by the first <see cref="Runtime.Onboard"/>. It is the one
+    /// thing an application persists: hand it back to <see cref="Runtime.Rejoin"/> on every start
+    /// and to <see cref="Runtime.Forget"/> to unpair.
+    /// </summary>
+    /// <remarks>
+    /// Store it as text: <see cref="ToString"/> writes the UUID string <see cref="Parse"/> reads.
+    /// Equality is by byte content.
+    /// </remarks>
     public readonly struct OnboardingId : IEquatable<OnboardingId>
     {
         private readonly byte[]? _data;
@@ -12,6 +21,7 @@ namespace Qar
             _data = IdBytes.Normalize(data);
         }
 
+        /// <summary>The all-zero id, meaning "no id". Rejoin and forget reject it.</summary>
         public static OnboardingId Default { get { return new OnboardingId(new byte[NativeConstants.MaxIdLength]); } }
         public static OnboardingId Parse(string text) { OnboardingId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
         public static bool TryParse(string text, out OnboardingId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(OnboardingId); return false; } id = new OnboardingId(data); return true; }
@@ -31,10 +41,22 @@ namespace Qar
         internal static OnboardingId FromNativePointer(IntPtr ptr) { return FromNative(System.Runtime.InteropServices.Marshal.PtrToStructure<OnboardingIdNative>(ptr)); }
     }
 
+    /// <summary>
+    /// How this peer presents itself to the others. Never a storage key. A property left null keeps
+    /// its persisted value, or gets a generated default on the first onboard.
+    /// </summary>
     public sealed class PeerPresentationOptions
     {
+        /// <summary>
+        /// Human label shown to other peers; any UTF-8. It also feeds a sanitized debug label in the
+        /// device certificate and the storage slot folder name.
+        /// </summary>
         public string? DisplayName { get; set; }
         public string? AppVersion { get; set; }
+        /// <summary>
+        /// Application-defined metadata, for example a JSON blob to coordinate instances of your
+        /// own application across the session. Read back as <see cref="PeerSpec.AppCustomPeerInfo"/>.
+        /// </summary>
         public string? AppCustomPeerInfo { get; set; }
         internal Structure? Extension { get; private set; }
 
@@ -45,6 +67,7 @@ namespace Qar
         }
     }
 
+    /// <summary>Options of <see cref="Runtime.Rejoin"/>.</summary>
     public sealed class RejoinOptions
     {
         public RejoinOptions(OnboardingId onboardingId)
@@ -52,7 +75,11 @@ namespace Qar
             OnboardingId = onboardingId;
         }
 
+        /// <summary>
+        /// The id a previous onboard returned. <see cref="OnboardingId.Default"/> is rejected.
+        /// </summary>
         public OnboardingId OnboardingId { get; set; }
+        /// <summary>Presentation updates; null fields keep the persisted values.</summary>
         public PeerPresentationOptions? Presentation { get; set; }
         internal Structure? Extension { get; private set; }
 
@@ -75,8 +102,16 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Options of <see cref="Runtime.Onboard"/>. Choose exactly one mode: <see cref="UseCode"/> or
+    /// <see cref="UseInvite"/>; the last call wins.
+    /// </summary>
     public sealed class OnboardOptions
     {
+        /// <summary>
+        /// Unset to create a new identity slot; an id an earlier onboard returned re-enrolls that
+        /// slot.
+        /// </summary>
         public OnboardingId? OnboardingId { get; set; }
         public PeerPresentationOptions? Presentation { get; set; }
         internal Structure Mode { get; private set; } = new OnboardCode(string.Empty);
@@ -87,12 +122,31 @@ namespace Qar
             return this;
         }
 
+        /// <summary>
+        /// Onboards with a pairing code: the short code on the hub's onboarding screen, or the text
+        /// of any code the hub minted (<see cref="OnboardingInvite.GetCode"/>). Without
+        /// <see cref="WithHost"/> it finds this user's hub on this PC by itself.
+        /// </summary>
+        /// <remarks>
+        /// The code is a secret: do not log it or pass it on a command line. Replaces an earlier
+        /// mode, including a <see cref="WithHost"/> made before this call.
+        /// </remarks>
         public OnboardOptions UseCode(string code)
         {
             Mode = new OnboardCode(code ?? throw new ArgumentNullException(nameof(code)));
             return this;
         }
 
+        /// <summary>
+        /// Onboards from a full invite: one a sibling instance obtained with
+        /// <see cref="Session.RequestOnboardingInvite"/>, or the launch invite QAROS writes as the
+        /// first stdin line of an API app it starts (<see cref="OnboardingInvite.Deserialize"/>).
+        /// No discovery, no code.
+        /// </summary>
+        /// <remarks>
+        /// The invite is borrowed: the caller keeps ownership and must not dispose it before the
+        /// onboard call has completed. Replaces an earlier mode.
+        /// </remarks>
         public OnboardOptions UseInvite(OnboardingInvite invite)
         {
             Mode = new OnboardInvite(invite ?? throw new ArgumentNullException(nameof(invite)));
@@ -104,6 +158,7 @@ namespace Qar
         /// The port is required: hubs claim their onboarding port from a range, so there is no
         /// default. Without WithHost, code onboarding finds this user's hub on its own.
         /// </summary>
+        /// <exception cref="InvalidOperationException">The mode is an invite (<see cref="UseInvite"/>).</exception>
         public OnboardOptions WithHost(string hostname, ushort port)
         {
             if (!(Mode is OnboardCode))
@@ -139,6 +194,9 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Onboarding mode extension behind <see cref="OnboardOptions.UseCode"/>; prefer that method.
+    /// </summary>
     public sealed class OnboardCode : Structure
     {
         public OnboardCode(string code)
@@ -150,6 +208,10 @@ namespace Qar
         public string Code { get; set; }
     }
 
+    /// <summary>
+    /// The hub to code-onboard against, behind <see cref="OnboardOptions.WithHost"/>; prefer that
+    /// method.
+    /// </summary>
     public sealed class OnboardHost : Structure
     {
         public OnboardHost(string hostname, ushort port)
@@ -159,10 +221,16 @@ namespace Qar
             Port = port;
         }
 
+        /// <summary>A plain host name or IP address, not a URL.</summary>
         public string Hostname { get; set; }
+        /// <summary>The hub's onboarding port, shown with its code. Required: 0 is rejected.</summary>
         public ushort Port { get; set; }
     }
 
+    /// <summary>
+    /// Onboarding mode extension behind <see cref="OnboardOptions.UseInvite"/>; prefer that method.
+    /// The invite is borrowed, not owned.
+    /// </summary>
     public sealed class OnboardInvite : Structure
     {
         public OnboardInvite(OnboardingInvite invite)
@@ -232,6 +300,10 @@ namespace Qar
         public string Message { get; }
     }
 
+    /// <summary>
+    /// What <see cref="Runtime.Onboard"/> produces. Persist <see cref="OnboardingId"/> before
+    /// anything else; the caller owns and disposes <see cref="Session"/>.
+    /// </summary>
     public readonly struct OnboardSession
     {
         public OnboardSession(OnboardingId onboardingId, Session session)

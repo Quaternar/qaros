@@ -8,6 +8,10 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// An immutable snapshot of one peer, taken when it was read or delivered; safe to keep. It does
+    /// not change: read a new one, or watch <see cref="PeerControl.SubscribeUpdates()"/>.
+    /// </summary>
     public sealed class PeerSpec
     {
         internal PeerSpec(PeerId id, string displayName, string appVersion, string appCustomPeerInfo, AppState appState, string versionId, string roomTag, bool isTargetApp)
@@ -28,12 +32,18 @@ namespace Qar
 
         public string AppVersion { get; }
 
+        /// <summary>Application-defined metadata the peer presented itself with.</summary>
         public string AppCustomPeerInfo { get; }
 
+        /// <summary>
+        /// Whether the peer is still starting, live or gone. A target app is ready to be rendered
+        /// for once this is <see cref="AppState.Running"/>.
+        /// </summary>
         public AppState AppState { get; }
 
         public string VersionId { get; }
 
+        /// <summary>The physical room the peer is in, to group peers in multi-room deployments.</summary>
         public string RoomTag { get; }
 
         /// <summary>

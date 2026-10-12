@@ -8,18 +8,29 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// A peer's lifecycle state. A target app is ready to be rendered for only while it is
+    /// <see cref="Running"/>.
+    /// </summary>
     public enum AppState
     {
         Unknown = 0,
         Initializing = 1,
         Running = 10,
         ShuttingDown = 100,
+        /// <summary>The peer left for good and never comes back under its id.</summary>
         Retired = 200
     }
 
+    /// <summary>
+    /// The graphics backend a sender's frame textures live on. Every GPU value requires exactly
+    /// the matching stream-parameter extension on the options; <see cref="Cpu"/> takes none.
+    /// </summary>
     public enum GraphicsAPI
     {
+        /// <summary>Library-owned CPU memory; portable and always available.</summary>
         Cpu = 0,
+        /// <summary>Windows only. Requires <see cref="StreamParamsD3D11"/>.</summary>
         D3D11 = 4,
         /// <summary>Requires a library built with QAR_ENABLE_VULKAN and <see cref="StreamParamsVulkan"/>.</summary>
         Vulkan = 6,
@@ -101,15 +112,20 @@ namespace Qar
         R32Float = 2,
         R8G8B8A8 = 51,
         B8G8R8A8 = 53,
+        /// <summary>Four-byte BGR colour with an unused X byte. X is not alpha.</summary>
         B8G8R8X8 = 56,
         R16G16B16A16 = 55,
         D32Float = 101
     }
 
+    /// <summary>How the views of one video frame are packed into textures.</summary>
     public enum FrameLayout
     {
+        /// <summary>All views of one data type share one texture, side by side (both eyes in one texture).</summary>
         SideBySide = 0,
+        /// <summary>One texture per view.</summary>
         SeparatedTextures = 1,
+        /// <summary>One texture array per data type, the views in its layers.</summary>
         Layered = 2
     }
 
@@ -122,6 +138,10 @@ namespace Qar
 
     public enum VideoFrameViewEye
     {
+        /// <summary>
+        /// Not bound to an eye. A render sender gives such a view the head pose and the left
+        /// eye's field of view.
+        /// </summary>
         None = 0,
         Left = 10,
         Right = 20
@@ -137,9 +157,11 @@ namespace Qar
 
     public enum WorldReferenceSystem
     {
+        /// <summary>Earth-centred, Earth-fixed WGS84, in metres.</summary>
         EcefWgs84Meters = 0
     }
 
+    /// <summary>Handedness of the axes of a <see cref="GeoAnchorFrame"/>.</summary>
     public enum Handedness
     {
         Right = 0,
@@ -149,15 +171,37 @@ namespace Qar
     public enum AppVolumeLifetimeStatus
     {
         Active = 0,
+        /// <summary>
+        /// Retired with <see cref="AppVolumeControl.Close"/>. A render sender bound to it hands
+        /// out no more frames; recreate the volume to stream into it again.
+        /// </summary>
         Closed = 1
     }
 
+    /// <summary>What a hand interaction with an app volume was recognised as.</summary>
     public enum GestureKind
     {
+        /// <summary>Short tap or click, emitted as an <see cref="GesturePhase.Instant"/> event.</summary>
         Click = 0,
+        /// <summary>Single-pointer hover over a targetable surface or volume.</summary>
         Hover = 1,
+        /// <summary>
+        /// Single-pointer 6DoF manipulation. The translation delta is the accumulated
+        /// hand-position offset and the rotation delta the accumulated hand-orientation offset,
+        /// both in the target volume's app volume space and shaped by its mapping rule.
+        /// </summary>
         SinglePointer6Dof = 2,
+        /// <summary>
+        /// Two-hand distance change, recognised in the user's head-yaw frame. The translation
+        /// delta is the accumulated change of the distance between the two hands as a vector
+        /// along their separation: its length is the distance change and all components share
+        /// one sign. Measured between the hands, not between the points their rays strike.
+        /// </summary>
         DualPointerTranslateDistance = 3,
+        /// <summary>
+        /// Two-hand rotation of the inter-hand vector, recognised about the user's head-yaw axes
+        /// and reported in the target volume's app volume space.
+        /// </summary>
         DualPointerRotate = 4
     }
 
@@ -166,10 +210,16 @@ namespace Qar
         Started = 0,
         Updated = 1,
         Ended = 2,
+        /// <summary>A single event with no lifecycle: no started, updated or ended phase follows.</summary>
         Instant = 3,
         Canceled = 4
     }
 
+    /// <summary>
+    /// Bitmask of the axes a mapping rule lets a gesture translate along or rotate about; see
+    /// <see cref="AppVolumeGestureMappingRule.TranslationAxes"/> and
+    /// <see cref="AppVolumeGestureMappingRule.RotationAxes"/>.
+    /// </summary>
     [Flags]
     public enum AppVolumeAxisFlags
     {
@@ -190,10 +240,18 @@ namespace Qar
         BasedOnAppScale = 2
     }
 
+    /// <summary>
+    /// What the library applies a mapped gesture to by itself. Either way the gesture still
+    /// reaches the volume's gesture subscribers; <see cref="AppVolumeGestureEvent.WasMappedToAppTransform"/>
+    /// tells whether it was already applied.
+    /// </summary>
     public enum GestureAppTransformMapping
     {
+        /// <summary>Nothing: the gesture is left to the application.</summary>
         None = 0,
+        /// <summary>The deltas move the volume's app pose (built-in move).</summary>
         AppPose = 1,
+        /// <summary>The deltas change the volume's app scale (built-in zoom).</summary>
         AppScale = 2
     }
 
@@ -212,12 +270,22 @@ namespace Qar
         Done = 3
     }
 
+    /// <summary>
+    /// Which onboarding path an onboarding invite carries. More may be added, so do not treat
+    /// "not <see cref="Pake"/>" as <see cref="Password"/>.
+    /// </summary>
     public enum OnboardingMethod
     {
+        /// <summary>Code-based EC-JPAKE.</summary>
         Pake = 0,
+        /// <summary>Shared-password channel.</summary>
         Password = 1
     }
 
+    /// <summary>
+    /// Native structure type tag of a <see cref="Structure"/>. Each extension class sets its own
+    /// in its constructor.
+    /// </summary>
     public enum StructureType
     {
         Unknown = 0,
@@ -254,6 +322,7 @@ namespace Qar
         AppVolumeGestureAllowedPeersExt = 0x5504
     }
 
+    /// <summary>Minimum severity the library logs; see <see cref="LibraryOptions.LogSeverity"/>.</summary>
     public enum LogSeverity
     {
         Trace = 0,
@@ -264,12 +333,21 @@ namespace Qar
         Fatal = 5
     }
 
+    /// <summary>
+    /// What a GUI panel shows. Fixed at creation: <see cref="GuiPanelControl.NavigateToUri"/> on a
+    /// stream panel fails with <see cref="StatusCode.GuiPanelChangeNotPermitted"/>.
+    /// </summary>
     public enum GuiPanelContentType
     {
         WebsiteUri = 0,
+        /// <summary>The video of a <see cref="PrimarylessVideoSender"/> owned by the same session.</summary>
         StreamId = 1
     }
 
+    /// <summary>
+    /// A 3D vector. It carries no space of its own; the member holding it names the space (see
+    /// <see cref="Pose"/>).
+    /// </summary>
     public readonly struct Vector3
     {
         public Vector3(float x, float y, float z)
@@ -294,6 +372,7 @@ namespace Qar
         }
     }
 
+    /// <summary>Double-precision 3D vector, used for Earth-fixed world coordinates in <see cref="GeoAnchorFrame"/>.</summary>
     public readonly struct Vector3d
     {
         public Vector3d(double x, double y, double z)
@@ -318,6 +397,10 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Rotation quaternion, Hamilton convention, stored and constructed in x, y, z, w order (w
+    /// last). <c>default(Quaternion)</c> is all zeros, not a rotation; use <see cref="Identity"/>.
+    /// </summary>
     public readonly struct Quaternion
     {
         public Quaternion(float x, float y, float z, float w)
@@ -387,6 +470,10 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Field of view of one render view, in view space: angles in radians from the view's -Z
+    /// axis, with OpenXR signs - left and down negative, right and up positive.
+    /// </summary>
     public readonly struct Fov
     {
         public Fov(float angleLeft, float angleRight, float angleUp, float angleDown)
@@ -413,6 +500,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Near and far clip distances along a view's -Z, in the units of the poses the view was
+    /// rendered with: app units for a render sender. A near plane greater than the far plane
+    /// declares reverse-Z.
+    /// </summary>
     public readonly struct NearFar
     {
         public NearFar(float nearPlane, float farPlane)
@@ -443,7 +535,9 @@ namespace Qar
             Precision = precision;
         }
 
+        /// <summary>Ticks in the unit <see cref="Precision"/> names.</summary>
         public ulong Count { get; }
+        /// <summary>Unit of <see cref="Count"/>: 0 is milliseconds, 1 is nanoseconds.</summary>
         public byte Precision { get; }
 
         internal static TimePoint FromNative(TimePointNative value)
@@ -452,6 +546,10 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// A peer's 16-byte UUID. Compared by content; <c>default(PeerId)</c> equals
+    /// <see cref="Default"/>.
+    /// </summary>
     public readonly struct PeerId : IEquatable<PeerId>
     {
         private readonly byte[]? _data;
@@ -461,15 +559,27 @@ namespace Qar
             _data = IdBytes.Normalize(data);
         }
 
+        /// <summary>The all-zero id, meaning "no peer".</summary>
         public static PeerId Default { get { return new PeerId(new byte[NativeConstants.MaxIdLength]); } }
+        /// <summary>
+        /// A fresh id that identifies no peer in any session. Never use it as a render target
+        /// (<see cref="RenderSenderOptions.PeerId"/>): a stream created with one never produces
+        /// a frame.
+        /// </summary>
         public static PeerId Unique() { return FromNative(NativeMethods.qar_impl_peer_id_unique()); }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces.</summary>
+        /// <exception cref="FormatException"><paramref name="text"/> is not a UUID string.</exception>
         public static PeerId Parse(string text) { PeerId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces; false, with a default id, when it is not one.</summary>
         public static bool TryParse(string text, out PeerId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(PeerId); return false; } id = new PeerId(data); return true; }
+        /// <summary>A copy of the 16 bytes.</summary>
         public byte[] ToByteArray() { return IdBytes.Copy(_data); }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
         public ReadOnlySpan<byte> AsSpan() { return IdBytes.AsSpan(_data); }
+        /// <summary>Copies the 16 bytes; false, copying nothing, when <paramref name="destination"/> is shorter.</summary>
         public bool TryCopyTo(Span<byte> destination) { return IdBytes.TryCopyTo(_data, destination); }
 #endif
+        /// <summary>The 36-character UUID text, which <see cref="Parse"/> accepts back.</summary>
         public override string ToString() { return IdBytes.ToAscii(_data); }
         public bool Equals(PeerId other) { return IdBytes.Equals(_data, other._data); }
         public override bool Equals(object? obj) { return obj is PeerId other && Equals(other); }
@@ -481,19 +591,30 @@ namespace Qar
         internal static PeerId FromNativePointer(IntPtr ptr) { return FromNative(Marshal.PtrToStructure<PeerIdNative>(ptr)); }
     }
 
+    /// <summary>
+    /// A session's 16-byte UUID. Compared by content; <c>default(SessionId)</c> equals
+    /// <see cref="Default"/>.
+    /// </summary>
     public readonly struct SessionId : IEquatable<SessionId>
     {
         private readonly byte[]? _data;
         private SessionId(byte[] data) { _data = IdBytes.Normalize(data); }
+        /// <summary>The all-zero id, meaning "none".</summary>
         public static SessionId Default { get { return new SessionId(new byte[NativeConstants.MaxIdLength]); } }
         public static SessionId Unique() { return FromNative(NativeMethods.qar_impl_session_id_unique()); }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces.</summary>
+        /// <exception cref="FormatException"><paramref name="text"/> is not a UUID string.</exception>
         public static SessionId Parse(string text) { SessionId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces; false, with a default id, when it is not one.</summary>
         public static bool TryParse(string text, out SessionId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(SessionId); return false; } id = new SessionId(data); return true; }
+        /// <summary>A copy of the 16 bytes.</summary>
         public byte[] ToByteArray() { return IdBytes.Copy(_data); }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
         public ReadOnlySpan<byte> AsSpan() { return IdBytes.AsSpan(_data); }
+        /// <summary>Copies the 16 bytes; false, copying nothing, when <paramref name="destination"/> is shorter.</summary>
         public bool TryCopyTo(Span<byte> destination) { return IdBytes.TryCopyTo(_data, destination); }
 #endif
+        /// <summary>The 36-character UUID text, which <see cref="Parse"/> accepts back.</summary>
         public override string ToString() { return IdBytes.ToAscii(_data); }
         public bool Equals(SessionId other) { return IdBytes.Equals(_data, other._data); }
         public override bool Equals(object? obj) { return obj is SessionId other && Equals(other); }
@@ -504,19 +625,31 @@ namespace Qar
         internal static SessionId FromNative(SessionIdNative value) { return new SessionId(value.Data); }
     }
 
+    /// <summary>
+    /// A GUI panel's 16-byte UUID, derived from the panel's common name by
+    /// <see cref="GuiPanelControl.GetOrCreate"/>. Compared by content; <c>default(GuiPanelId)</c>
+    /// equals <see cref="Default"/>.
+    /// </summary>
     public readonly struct GuiPanelId : IEquatable<GuiPanelId>
     {
         private readonly byte[]? _data;
         private GuiPanelId(byte[] data) { _data = IdBytes.Normalize(data); }
+        /// <summary>The all-zero id, meaning "none".</summary>
         public static GuiPanelId Default { get { return new GuiPanelId(new byte[NativeConstants.MaxIdLength]); } }
         public static GuiPanelId Unique() { return FromNative(NativeMethods.qar_impl_gui_panel_id_unique()); }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces.</summary>
+        /// <exception cref="FormatException"><paramref name="text"/> is not a UUID string.</exception>
         public static GuiPanelId Parse(string text) { GuiPanelId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces; false, with a default id, when it is not one.</summary>
         public static bool TryParse(string text, out GuiPanelId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(GuiPanelId); return false; } id = new GuiPanelId(data); return true; }
+        /// <summary>A copy of the 16 bytes.</summary>
         public byte[] ToByteArray() { return IdBytes.Copy(_data); }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
         public ReadOnlySpan<byte> AsSpan() { return IdBytes.AsSpan(_data); }
+        /// <summary>Copies the 16 bytes; false, copying nothing, when <paramref name="destination"/> is shorter.</summary>
         public bool TryCopyTo(Span<byte> destination) { return IdBytes.TryCopyTo(_data, destination); }
 #endif
+        /// <summary>The 36-character UUID text, which <see cref="Parse"/> accepts back.</summary>
         public override string ToString() { return IdBytes.ToAscii(_data); }
         public bool Equals(GuiPanelId other) { return IdBytes.Equals(_data, other._data); }
         public override bool Equals(object? obj) { return obj is GuiPanelId other && Equals(other); }
@@ -527,18 +660,30 @@ namespace Qar
         internal static GuiPanelId FromNative(GuiPanelIdNative value) { return new GuiPanelId(value.Data); }
     }
 
+    /// <summary>
+    /// An app volume's 16-byte UUID, derived from the volume's common name by
+    /// <see cref="AppVolumeControl.GetOrCreate"/>. Compared by content; <c>default(AppVolumeId)</c>
+    /// equals <see cref="Default"/>.
+    /// </summary>
     public readonly struct AppVolumeId : IEquatable<AppVolumeId>
     {
         private readonly byte[]? _data;
         private AppVolumeId(byte[] data) { _data = IdBytes.Normalize(data); }
+        /// <summary>The all-zero id, meaning "none".</summary>
         public static AppVolumeId Default { get { return new AppVolumeId(new byte[NativeConstants.MaxIdLength]); } }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces.</summary>
+        /// <exception cref="FormatException"><paramref name="text"/> is not a UUID string.</exception>
         public static AppVolumeId Parse(string text) { AppVolumeId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces; false, with a default id, when it is not one.</summary>
         public static bool TryParse(string text, out AppVolumeId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(AppVolumeId); return false; } id = new AppVolumeId(data); return true; }
+        /// <summary>A copy of the 16 bytes.</summary>
         public byte[] ToByteArray() { return IdBytes.Copy(_data); }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
         public ReadOnlySpan<byte> AsSpan() { return IdBytes.AsSpan(_data); }
+        /// <summary>Copies the 16 bytes; false, copying nothing, when <paramref name="destination"/> is shorter.</summary>
         public bool TryCopyTo(Span<byte> destination) { return IdBytes.TryCopyTo(_data, destination); }
 #endif
+        /// <summary>The 36-character UUID text, which <see cref="Parse"/> accepts back.</summary>
         public override string ToString() { return IdBytes.ToAscii(_data); }
         public bool Equals(AppVolumeId other) { return IdBytes.Equals(_data, other._data); }
         public override bool Equals(object? obj) { return obj is AppVolumeId other && Equals(other); }
@@ -549,18 +694,30 @@ namespace Qar
         internal static AppVolumeId FromNative(AppVolumeIdNative value) { return new AppVolumeId(value.Data); }
     }
 
+    /// <summary>
+    /// A logical video stream's 16-byte UUID, generated by the library for each
+    /// <see cref="PrimarylessVideoSender"/> (<see cref="PrimarylessVideoSender.GetStreamId"/>).
+    /// Compared by content; <c>default(StreamId)</c> equals <see cref="Default"/>.
+    /// </summary>
     public readonly struct StreamId : IEquatable<StreamId>
     {
         private readonly byte[]? _data;
         private StreamId(byte[] data) { _data = IdBytes.Normalize(data); }
+        /// <summary>The all-zero id, meaning "none".</summary>
         public static StreamId Default { get { return new StreamId(new byte[NativeConstants.MaxIdLength]); } }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces.</summary>
+        /// <exception cref="FormatException"><paramref name="text"/> is not a UUID string.</exception>
         public static StreamId Parse(string text) { StreamId id; if (!TryParse(text, out id)) throw new FormatException("QAR IDs must use the native UUID string format."); return id; }
+        /// <summary>Parses the UUID text <see cref="ToString"/> produces; false, with a default id, when it is not one.</summary>
         public static bool TryParse(string text, out StreamId id) { byte[] data; if (!IdBytes.TryParse(text, out data)) { id = default(StreamId); return false; } id = new StreamId(data); return true; }
+        /// <summary>A copy of the 16 bytes.</summary>
         public byte[] ToByteArray() { return IdBytes.Copy(_data); }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
         public ReadOnlySpan<byte> AsSpan() { return IdBytes.AsSpan(_data); }
+        /// <summary>Copies the 16 bytes; false, copying nothing, when <paramref name="destination"/> is shorter.</summary>
         public bool TryCopyTo(Span<byte> destination) { return IdBytes.TryCopyTo(_data, destination); }
 #endif
+        /// <summary>The 36-character UUID text, which <see cref="Parse"/> accepts back.</summary>
         public override string ToString() { return IdBytes.ToAscii(_data); }
         public bool Equals(StreamId other) { return IdBytes.Equals(_data, other._data); }
         public override bool Equals(object? obj) { return obj is StreamId other && Equals(other); }
@@ -571,6 +728,15 @@ namespace Qar
         internal static StreamId FromNative(StreamIdNative value) { return new StreamId(value.Data); }
     }
 
+    /// <summary>
+    /// Base of the extension structures chained onto an options object with its
+    /// <c>WithExtension</c> method. The options are copied into native memory for the duration
+    /// of the call that takes them.
+    /// </summary>
+    /// <remarks>
+    /// An instance belongs to one chain at a time: appending it to a second options object cuts
+    /// off whatever followed it in the first, so create a new instance per options object.
+    /// </remarks>
     public abstract class Structure
     {
         protected Structure(StructureType type)
@@ -641,11 +807,15 @@ namespace Qar
         /// <summary>The adapter UUID, 16 bytes; used when <see cref="IdType"/> is <see cref="GpuDeviceIdType.Uuid"/>.</summary>
         public byte[] Uuid { get; set; }
 
+        /// <summary>Selects the adapter by its LUID, as on Windows; see <see cref="Luid"/> for the packing.</summary>
         public static GraphicsDeviceId FromLuid(long luid)
         {
             return new GraphicsDeviceId { IdType = GpuDeviceIdType.Luid, Luid = luid };
         }
 
+        /// <summary>Selects the adapter by its 16-byte UUID, as on non-Windows platforms. The array is copied.</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="uuid"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="uuid"/> is not 16 bytes long.</exception>
         public static GraphicsDeviceId FromUuid(byte[] uuid)
         {
             if (uuid == null)
@@ -683,6 +853,10 @@ namespace Qar
     /// optional and called on the library's internal graphics thread; zero uses
     /// the library's own platform implementation for that step.
     /// </summary>
+    /// <remarks>
+    /// A pointer obtained with <c>Marshal.GetFunctionPointerForDelegate</c> is valid only while
+    /// its delegate is reachable: keep the delegates alive for as long as the sender exists.
+    /// </remarks>
     public readonly struct OpenGlContextCallbacks
     {
         public OpenGlContextCallbacks(IntPtr userState, IntPtr getProcAddress, IntPtr makeCurrent, IntPtr captureCurrent, IntPtr restoreCurrent)
@@ -694,10 +868,29 @@ namespace Qar
             RestoreCurrent = restoreCurrent;
         }
 
+        /// <summary>Passed unchanged to every callback; may be zero.</summary>
         public IntPtr UserState { get; }
+        /// <summary>
+        /// <c>void* (void* userState, const char* name)</c>: resolves a GL entry point, as
+        /// eglGetProcAddress, wglGetProcAddress or glXGetProcAddressARB do. Zero uses the
+        /// platform loader.
+        /// </summary>
         public IntPtr GetProcAddress { get; }
+        /// <summary>
+        /// <c>bool (void* userState)</c>: binds the extension's context to the calling thread with
+        /// the handles passed in the extension.
+        /// </summary>
         public IntPtr MakeCurrent { get; }
+        /// <summary>
+        /// <c>QarOpenGlContextThreadState (void* userState)</c>: reads the thread's current binding
+        /// before <see cref="MakeCurrent"/> replaces it.
+        /// </summary>
         public IntPtr CaptureCurrent { get; }
+        /// <summary>
+        /// <c>bool (void* userState, const QarOpenGlContextThreadState* state)</c>: re-binds what
+        /// <see cref="CaptureCurrent"/> read once the library is done. When the state's
+        /// <c>has_context</c> is false the thread had nothing bound, so bind nothing.
+        /// </summary>
         public IntPtr RestoreCurrent { get; }
 
         internal OpenGlContextCallbacksNative ToNative()
@@ -721,6 +914,7 @@ namespace Qar
         /// <summary>Required. EGLContext, HGLRC or GLXContext; a null context is rejected.</summary>
         public IntPtr Context { get; set; }
 
+        /// <summary>Optional overrides of how the library binds the context; the default uses the library's own.</summary>
         public OpenGlContextCallbacks Callbacks { get; set; }
     }
 
@@ -784,6 +978,10 @@ namespace Qar
         public IntPtr Device { get; set; }
     }
 
+    /// <summary>
+    /// Extension: adopt the application's D3D11.1 device, so the sender's frame textures are
+    /// shared D3D11 textures it renders into directly, with no CPU copy. Windows only.
+    /// </summary>
     public sealed class StreamParamsD3D11 : Structure
     {
         public StreamParamsD3D11()
@@ -792,13 +990,27 @@ namespace Qar
             AcquireKeyedMutexSync = true;
         }
 
+        /// <summary>ID3D11DeviceContext1*.</summary>
         public IntPtr D3D11Context { get; set; }
+        /// <summary>ID3D11Device1*.</summary>
         public IntPtr D3D11Device { get; set; }
+        /// <summary>D3D11_BIND_FLAG bits of the colour textures, for example RENDER_TARGET | SHADER_RESOURCE.</summary>
         public uint ColorBindFlags { get; set; }
+        /// <summary>D3D11_BIND_FLAG bits of the depth textures, for example DEPTH_STENCIL.</summary>
         public uint DepthBindFlags { get; set; }
+        /// <summary>
+        /// True (the default) lets the library acquire and release the textures' keyed mutexes.
+        /// Set false only to drive the acquire/release key chain yourself, for example when copying
+        /// through a chain of shared textures; the keys are in <see cref="SyncFrameD3D11"/>.
+        /// </summary>
         public bool AcquireKeyedMutexSync { get; set; }
     }
 
+    /// <summary>
+    /// Extension of <see cref="RenderFrameShow"/>: the pose or field of view a view was really
+    /// rendered with, when it differs from what <see cref="RenderSender.BeginFrame"/> handed out.
+    /// <see cref="RenderFrameShow.WithViewOverrides"/> chains one.
+    /// </summary>
     public sealed class RenderFrameShowViewOverrides : Structure
     {
         public RenderFrameShowViewOverrides()
@@ -807,9 +1019,14 @@ namespace Qar
             ViewOverrides = Array.Empty<RenderFrameViewOverride>();
         }
 
+        /// <summary>At most 8 are sent; the rest are silently dropped.</summary>
         public RenderFrameViewOverride[] ViewOverrides { get; set; }
     }
 
+    /// <summary>
+    /// Arguments of <see cref="Library.Init"/>, which must run once per process before any other
+    /// call. The defaults match <c>qar_library_init_default()</c>.
+    /// </summary>
     public sealed class LibraryOptions
     {
         public LibraryOptions()
@@ -818,8 +1035,15 @@ namespace Qar
             LogSeverity = LogSeverity.Info;
         }
 
+        /// <summary>Defaults to true.</summary>
         public bool EnableConsoleLogging { get; set; }
+        /// <summary>
+        /// Folder for <c>qar_streaming.log</c>; null (the default) writes no log file. The file
+        /// starts empty on each init and rolls over once it is a day old or 256 MiB; the oldest
+        /// rolled files are deleted so the log takes at most 3 GiB.
+        /// </summary>
         public string? LogFolderPath { get; set; }
+        /// <summary>Minimum severity logged. Defaults to <see cref="LogSeverity.Info"/>.</summary>
         public LogSeverity LogSeverity { get; set; }
         internal Structure? Extension { get; private set; }
 
@@ -830,9 +1054,20 @@ namespace Qar
         }
     }
 
+    /// <summary>Arguments of <see cref="Runtime.Create"/>.</summary>
     public sealed class RuntimeOptions
     {
+        /// <summary>
+        /// The SDK <c>bin</c> folder: the one the native library was loaded from, not the
+        /// application folder. The runtime starts <c>qar-runtime-launcher</c> from it; left null
+        /// or empty, no launcher starts and peer invites never complete.
+        /// A relative path resolves against the current working directory.
+        /// </summary>
         public string? RuntimeBinariesFolderPath { get; set; }
+        /// <summary>
+        /// Root of the device certificates and session state. Null or empty uses the platform's
+        /// application data folder, on Windows <c>%LOCALAPPDATA%\Quaternar\QarOS</c>.
+        /// </summary>
         public string? StorageFolderPath { get; set; }
         internal Structure? Extension { get; private set; }
 
@@ -843,6 +1078,14 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Arguments of a render sender: one stream rendered for one target peer, displayed in one
+    /// app volume. The defaults match <c>qar_render_sender_init_default()</c>.
+    /// </summary>
+    /// <remarks>
+    /// The stream-parameter property matching <see cref="GraphicsAPI"/> must be set and the other
+    /// two left null; creating the sender throws <see cref="ArgumentException"/> otherwise.
+    /// </remarks>
     public sealed class RenderSenderOptions
     {
         public RenderSenderOptions(PeerId peerId, GraphicsAPI graphicsAPI)
@@ -865,10 +1108,16 @@ namespace Qar
         /// </summary>
         public PeerId PeerId { get; set; }
         public GraphicsAPI GraphicsAPI { get; set; }
+        /// <summary>
+        /// True (the default) keeps the sender across network drops and target restarts: frame
+        /// calls fail while it is disconnected, typically with
+        /// <see cref="StatusCode.MediaStreamingStreamIsReconnecting"/>, and recover on their own.
+        /// </summary>
         public bool EnableAutoReconnects { get; set; }
+        /// <summary>Defaults to <see cref="FrameLayout.SideBySide"/>.</summary>
         public FrameLayout TextureLayout { get; set; }
         /// <summary>
-        /// The views of one video frame. <b>The order is guaranteed</b>: the
+        /// The views of one video frame; at most 8 are sent. <b>The order is guaranteed</b>: the
         /// layout (<see cref="RenderSender"/> layout) and every frame the sender
         /// hands back list their views in exactly this order, each with the eye
         /// and data type declared at its position. Textures come in the order the
@@ -885,7 +1134,9 @@ namespace Qar
         /// Null is rejected with <see cref="StatusCode.AppVolumeInvalidId"/>.
         /// </summary>
         public AppVolumeId? AppVolumeId { get; set; }
+        /// <summary>Defaults to <see cref="PixelFormat.B8G8R8A8"/>.</summary>
         public PixelFormat ColorFormat { get; set; }
+        /// <summary>Defaults to <see cref="PixelFormat.D32Float"/>.</summary>
         public PixelFormat DepthFormat { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.D3D11"/>; must be null otherwise.</summary>
         public StreamParamsD3D11? StreamParamsD3D11 { get; set; }
@@ -895,6 +1146,15 @@ namespace Qar
         public StreamParamsOpenGl? StreamParamsOpenGl { get; set; }
     }
 
+    /// <summary>
+    /// Arguments of <see cref="PrimarylessVideoSender"/>: application-owned video, such as GUI
+    /// panel content, under a library-generated <see cref="StreamId"/>. Unlike a render sender it
+    /// answers no receiver request and may exist before any receiver connects.
+    /// </summary>
+    /// <remarks>
+    /// The stream-parameter property matching <see cref="GraphicsAPI"/> must be set and the other
+    /// two left null; creating the sender throws <see cref="ArgumentException"/> otherwise.
+    /// </remarks>
     public sealed class PrimarylessVideoSenderOptions
     {
         public PrimarylessVideoSenderOptions(VideoFrameLayout layout)
@@ -905,9 +1165,17 @@ namespace Qar
             GraphicsAPI = GraphicsAPI.Cpu;
         }
 
+        /// <summary>Required. The views and textures the application writes; change it later with <see cref="PrimarylessVideoSender.ChangeLayout"/>.</summary>
         public VideoFrameLayout Layout { get; set; }
+        /// <summary>Defaults to true.</summary>
         public bool EnableReconnects { get; set; }
+        /// <summary>
+        /// Defaults to 5 minutes. Must be positive and is sent in whole milliseconds; creating
+        /// the sender throws <see cref="ArgumentOutOfRangeException"/> otherwise, even with
+        /// <see cref="EnableReconnects"/> false.
+        /// </summary>
         public TimeSpan ReconnectTimeout { get; set; }
+        /// <summary>Defaults to <see cref="GraphicsAPI.Cpu"/>.</summary>
         public GraphicsAPI GraphicsAPI { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.D3D11"/>; must be null otherwise.</summary>
         public StreamParamsD3D11? StreamParamsD3D11 { get; set; }
@@ -917,6 +1185,7 @@ namespace Qar
         public StreamParamsOpenGl? StreamParamsOpenGl { get; set; }
     }
 
+    /// <summary>Arguments of <see cref="GuiPanelControl.GetOrCreate"/>.</summary>
     public sealed class GuiPanelOptions
     {
         /// <param name="commonName">
@@ -932,16 +1201,32 @@ namespace Qar
             VisibleToPeers = Array.Empty<PeerId>();
         }
 
-        /// <summary>Required stable identity key the panel's id is derived from.</summary>
+        /// <summary>
+        /// Required stable identity key the panel's id is derived from. Must be ASCII and
+        /// non-empty; put any other text in <see cref="DisplayName"/>.
+        /// </summary>
         public string CommonName { get; set; }
+        /// <summary>Label shown to users; any text, emoji included.</summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// The panel's pose in room space: the midpoint of its top edge, front
         /// normal along -Z of the pose, the surface hanging below it.
         /// </summary>
         public Pose Pose { get; set; }
+        /// <summary>Defaults to <see cref="GuiPanelSize.Default"/>.</summary>
         public GuiPanelSize Size { get; set; }
+        /// <summary>
+        /// Website to show. Set at most one of this and <see cref="ContentStreamId"/>, or
+        /// <see cref="GuiPanelControl.GetOrCreate"/> throws <see cref="ArgumentException"/>; with
+        /// neither, a website panel is created with the default URL. The content type is fixed at
+        /// creation.
+        /// </summary>
         public string? ContentUri { get; set; }
+        /// <summary>
+        /// Video to show: the <see cref="PrimarylessVideoSender.GetStreamId"/> of a video sender owned
+        /// by the same session, whose layout sizes the panel's receiver. Excludes
+        /// <see cref="ContentUri"/>.
+        /// </summary>
         public StreamId? ContentStreamId { get; set; }
         /// <summary>
         /// Peers the panel is shown to. Empty, the default, means visible to every peer. A panel
@@ -957,6 +1242,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Arguments of <see cref="AppVolumeControl.GetOrCreate"/>. The defaults match
+    /// <c>qar_app_volume_init_default()</c>: identity poses, a 1 m cube, app scale 1, no world
+    /// anchor and the default gesture configuration.
+    /// </summary>
     public sealed class AppVolumeOptions
     {
         /// <param name="commonName">
@@ -974,8 +1264,12 @@ namespace Qar
             AppScale = 1.0f;
         }
 
-        /// <summary>Required stable identity key the volume's id is derived from.</summary>
+        /// <summary>
+        /// Required stable identity key the volume's id is derived from. Must be ASCII and
+        /// non-empty; put any other text in <see cref="DisplayName"/>.
+        /// </summary>
         public string CommonName { get; set; }
+        /// <summary>Label shown to users; any text, emoji included.</summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// Placement of the cuboid's centre in room space, and the rotation taking
@@ -998,7 +1292,12 @@ namespace Qar
         /// <see cref="AppPose"/> remains in app-volume metres.
         /// </summary>
         public float AppScale { get; set; }
+        /// <summary>Pins the volume to an Earth-fixed frame; null, the default, sets no anchor.</summary>
         public GeoAnchorFrame? AppWorldAnchor { get; set; }
+        /// <summary>
+        /// Rules of the default gesture mode and the allowed peers. Null, the default, gives the
+        /// configuration a parameterless <see cref="AppVolumeGestureConfiguration"/> describes.
+        /// </summary>
         public AppVolumeGestureConfiguration? GestureConfiguration { get; set; }
         internal Structure? Extension { get; private set; }
 
@@ -1009,6 +1308,16 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Arguments of <see cref="RenderSender.ShowFrame"/>: the projection metadata the frame was
+    /// rendered with. The defaults match <c>qar_render_frame_show_default()</c>: near 0.1, far
+    /// 100, depth scale 1.
+    /// </summary>
+    /// <remarks>
+    /// Report what was really used. The mixer re-projects the frame to the viewer's latest head
+    /// pose from this metadata and the depth buffer; wrong values show up as swimming or
+    /// misplaced content, not as an error.
+    /// </remarks>
     public sealed class RenderFrameShow
     {
         public RenderFrameShow()
@@ -1029,6 +1338,7 @@ namespace Qar
             return this;
         }
 
+        /// <summary>Chains a <see cref="RenderFrameShowViewOverrides"/> carrying <paramref name="viewOverrides"/>.</summary>
         public RenderFrameShow WithViewOverrides(params RenderFrameViewOverride[] viewOverrides)
         {
             return WithExtension(new RenderFrameShowViewOverrides
@@ -1038,6 +1348,7 @@ namespace Qar
         }
     }
 
+    /// <summary>One view declared in <see cref="RenderSenderOptions.FrameViews"/>.</summary>
     public readonly struct RenderFrameView
     {
         public RenderFrameView(VideoFrameViewType dataType, VideoFrameViewEye eye, uint textureIndex)
@@ -1062,6 +1373,7 @@ namespace Qar
         }
     }
 
+    /// <summary>An image size in pixels.</summary>
     public readonly struct ImageSize
     {
         public ImageSize(uint width, uint height)
@@ -1074,6 +1386,7 @@ namespace Qar
         public uint Height { get; }
     }
 
+    /// <summary>One texture of a frame layout; width and height in pixels.</summary>
     public readonly struct TextureSize
     {
         public TextureSize(PixelFormat format, uint width, uint height, uint arrayLayers)
@@ -1100,6 +1413,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// Where one view of a video frame lives: a pixel rectangle in one texture (and array layer).
+    /// The end coordinates are exclusive and may be smaller than the start ones, which flips the
+    /// view.
+    /// </summary>
     public readonly struct VideoFrameView
     {
         public VideoFrameView(
@@ -1128,6 +1446,7 @@ namespace Qar
         public uint StartY { get; }
         public uint EndX { get; }
         public uint EndY { get; }
+        /// <summary>Index into the frame's or layout's textures.</summary>
         public uint TextureIndex { get; }
         public uint ArrayLayerIndex { get; }
         public PixelFormat TextureFormat { get; }
@@ -1156,6 +1475,7 @@ namespace Qar
         }
     }
 
+    /// <summary>The views of a video frame and the textures backing them.</summary>
     public sealed class VideoFrameLayout
     {
         public VideoFrameLayout()
@@ -1164,7 +1484,9 @@ namespace Qar
             Textures = Array.Empty<TextureSize>();
         }
 
+        /// <summary>At most 8 are sent; the rest are silently dropped.</summary>
         public VideoFrameView[] Views { get; set; }
+        /// <summary>At most 4 are sent; the rest are silently dropped.</summary>
         public TextureSize[] Textures { get; set; }
 
         internal VideoFrameLayoutNative ToNative()
@@ -1187,6 +1509,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// A GUI panel's surface size in metres and the zoom of the content drawn on it. The
+    /// surface spans panel-space X from -Width/2 to +Width/2 and hangs down from the pose to
+    /// -Height.
+    /// </summary>
     public readonly struct GuiPanelSize
     {
         public GuiPanelSize(float widthMeters, float heightMeters, float contentScale)
@@ -1198,12 +1525,30 @@ namespace Qar
 
         public float WidthMeters { get; }
         public float HeightMeters { get; }
+        /// <summary>
+        /// Zoom of the content raster on the surface: 1.0 fits the content across the full panel,
+        /// 2.0 shows it at twice the size so only half fits, 0.5 at half size. It changes how
+        /// contacts map to content pixels, not the panel's size.
+        /// </summary>
+        /// <remarks>
+        /// A website panel takes it as the page zoom, like a desktop browser's Ctrl+ and Ctrl-:
+        /// the page is drawn larger and reflowed to the panel width. Only the application sets
+        /// it; the panel's own + and - buttons resize the panel instead. A stream panel ignores
+        /// it: its video is always drawn at full panel width and scrolled vertically when taller
+        /// than the panel.
+        /// </remarks>
         public float ContentScale { get; }
+        /// <summary>1 m by 1 m, content scale 1.</summary>
         public static GuiPanelSize Default { get { return new GuiPanelSize(1.0f, 1.0f, 1.0f); } }
         internal GuiPanelSizeNative ToNative() { return new GuiPanelSizeNative { WidthMeters = WidthMeters, HeightMeters = HeightMeters, ContentScale = ContentScale }; }
         internal static GuiPanelSize FromNative(GuiPanelSizeNative value) { return new GuiPanelSize(value.WidthMeters, value.HeightMeters, value.ContentScale); }
     }
 
+    /// <summary>
+    /// A local frame fully defined in world coordinates: its origin and unit axes in
+    /// <see cref="WorldReferenceSystem"/> (ECEF WGS84, metres, double precision), plus the
+    /// handedness of those axes. Pins an app volume to the Earth.
+    /// </summary>
     public readonly struct GeoAnchorFrame
     {
         public GeoAnchorFrame(WorldReferenceSystem worldReferenceSystem, Vector3d originWorld, Vector3d axisXWorld, Vector3d axisYWorld, Vector3d axisZWorld, Handedness handedness)
@@ -1217,9 +1562,13 @@ namespace Qar
         }
 
         public WorldReferenceSystem WorldReferenceSystem { get; }
+        /// <summary>Origin of the local frame, in ECEF metres.</summary>
         public Vector3d OriginWorld { get; }
+        /// <summary>The local +X axis as a unit vector in world coordinates.</summary>
         public Vector3d AxisXWorld { get; }
+        /// <summary>The local +Y axis as a unit vector in world coordinates.</summary>
         public Vector3d AxisYWorld { get; }
+        /// <summary>The local +Z axis as a unit vector in world coordinates.</summary>
         public Vector3d AxisZWorld { get; }
         public Handedness Handedness { get; }
         internal GeoAnchorFrameNative ToNative()
@@ -1240,6 +1589,7 @@ namespace Qar
         }
     }
 
+    /// <summary>An app volume's world anchor, if it has one.</summary>
     public readonly struct AppWorldAnchor
     {
         public AppWorldAnchor(bool hasAnchor, GeoAnchorFrame anchor)
@@ -1249,10 +1599,16 @@ namespace Qar
         }
 
         public bool HasAnchor { get; }
+        /// <summary>Valid only when <see cref="HasAnchor"/> is true.</summary>
         public GeoAnchorFrame Anchor { get; }
         internal static AppWorldAnchor FromNative(AppWorldAnchorNative value) { return new AppWorldAnchor(value.HasAnchor, GeoAnchorFrame.FromNative(value.Anchor)); }
     }
 
+    /// <summary>
+    /// An app volume cuboid's extents in metres, centred on the volume's pose: it spans plus and
+    /// minus half of each extent along app volume space X, Y and Z. Note the constructor order:
+    /// width (X), length (Z), height (Y).
+    /// </summary>
     public readonly struct AppVolumeSize
     {
         public AppVolumeSize(float widthMeters, float lengthMeters, float heightMeters)
@@ -1262,14 +1618,23 @@ namespace Qar
             HeightMeters = heightMeters;
         }
 
+        /// <summary>Along app volume space X.</summary>
         public float WidthMeters { get; }
+        /// <summary>Along app volume space Z, the horizontal depth.</summary>
         public float LengthMeters { get; }
+        /// <summary>Along app volume space Y, the vertical rise.</summary>
         public float HeightMeters { get; }
+        /// <summary>A 1 m cube.</summary>
         public static AppVolumeSize Default { get { return new AppVolumeSize(1.0f, 1.0f, 1.0f); } }
         internal AppVolumeSizeNative ToNative() { return new AppVolumeSizeNative { WidthMeters = WidthMeters, LengthMeters = LengthMeters, HeightMeters = HeightMeters }; }
         internal static AppVolumeSize FromNative(AppVolumeSizeNative value) { return new AppVolumeSize(value.WidthMeters, value.LengthMeters, value.HeightMeters); }
     }
 
+    /// <summary>
+    /// Whether a peer holds the volume's editing lock (<see cref="AppVolumeControl.StartEditing"/>)
+    /// to move or resize the box itself. A peer manipulating the app with a gesture is not
+    /// editing it.
+    /// </summary>
     public readonly struct AppVolumeEditingStatus
     {
         public AppVolumeEditingStatus(bool isBeingEdited, PeerId editorPeer)
@@ -1279,10 +1644,15 @@ namespace Qar
         }
 
         public bool IsBeingEdited { get; }
+        /// <summary>Meaningful only while <see cref="IsBeingEdited"/> is true.</summary>
         public PeerId EditorPeer { get; }
         internal static AppVolumeEditingStatus FromNative(AppVolumeEditingStatusNative value) { return new AppVolumeEditingStatus(value.IsBeingEdited, PeerId.FromNative(value.EditorPeer)); }
     }
 
+    /// <summary>
+    /// How the hand ray is drawn for gestures a mapping rule matches. The colour is RGBA, 0 to
+    /// 255 per channel; <see cref="Default"/> is a solid opaque white line.
+    /// </summary>
     public readonly struct AppVolumeControllerRayStyle
     {
         public AppVolumeControllerRayStyle(AppVolumeControllerRayLineStyle lineStyle, byte colorR, byte colorG, byte colorB, byte colorA)
@@ -1322,6 +1692,16 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// How one gesture kind on an app volume is shaped and what it is applied to. Its priority is
+    /// its position in <see cref="AppVolumeGestureConfiguration.MappingRules"/>, not a field.
+    /// </summary>
+    /// <remarks>
+    /// The parameterless constructor mirrors <c>qar_app_volume_gesture_mapping_rule_default()</c>:
+    /// an enabled <see cref="GestureKind.Click"/> rule, precision 1, constant sensitivity, all
+    /// axes, gestures from outside the volume accepted, the default ray, no app transform.
+    /// Hover and click reach the application even without a rule of their own.
+    /// </remarks>
     public sealed class AppVolumeGestureMappingRule
     {
         public AppVolumeGestureMappingRule()
@@ -1338,11 +1718,21 @@ namespace Qar
         }
 
         public GestureKind GestureKind { get; set; }
+        /// <summary>
+        /// A disabled hover or click rule does not stop delivery: those two always reach the
+        /// application, through a built-in rule ranked after every configured one.
+        /// </summary>
         public bool Enabled { get; set; }
+        /// <summary>
+        /// Hand centimetres per app-volume centimetre. With constant sensitivity 1.0 maps 1 cm of
+        /// hand movement to 1 cm, 2.0 to 0.5 cm (finer control) and 0.5 to 2 cm.
+        /// <see cref="AppScaleSensitivityMode"/> scales the result after precision is applied.
+        /// </summary>
         public float Precision { get; set; }
         public AppScaleSensitivityMode AppScaleSensitivityMode { get; set; }
         public AppVolumeAxisFlags TranslationAxes { get; set; }
         public AppVolumeAxisFlags RotationAxes { get; set; }
+        /// <summary>Whether a gesture made with the hand outside the volume's cuboid is accepted; tested at the hand's position.</summary>
         public bool EnableGesturesFromOutsideOfVolume { get; set; }
         public AppVolumeControllerRayStyle ControllerRayStyle { get; set; }
         public GestureAppTransformMapping AppTransformMapping { get; set; }
@@ -1512,6 +1902,7 @@ namespace Qar
         public bool WasMappedToAppTransform { get; }
         /// <summary>False for two-hand gestures, which have no single hand.</summary>
         public bool HasHand { get; }
+        /// <summary>Meaningful only when <see cref="HasHand"/> is true.</summary>
         public Hand Hand { get; }
         /// <summary>Lifecycle id, unique within the source peer; 0 for an instant gesture.</summary>
         public ulong GestureId { get; }
@@ -1559,6 +1950,12 @@ namespace Qar
     }
 
     /// <summary>A position on a GUI panel in panel-content-space pixels: origin top-left as the viewer sees it, +X right, +Y down.</summary>
+    /// <remarks>
+    /// Clamped to the image the renderer is displaying: x in [0, width - 1], y in
+    /// [0, height - 1]. For a stream panel that is the video at its sender's own resolution, and
+    /// on a video the renderer has scrolled it is the pixel under the finger, not one relative
+    /// to the visible part.
+    /// </remarks>
     public readonly struct GuiPanelPoint
     {
         public GuiPanelPoint(int xPixels, int yPixels)
@@ -1637,6 +2034,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// The pose and/or field of view one view was really rendered with, when it deviates from
+    /// what <see cref="RenderSender.BeginFrame"/> handed out. Only the parts whose flag is set are
+    /// used.
+    /// </summary>
     public readonly struct RenderFrameViewOverride
     {
         public RenderFrameViewOverride(UIntPtr viewIndex, bool overridePose, bool overrideFov, Pose pose, Fov fov)
@@ -1648,6 +2050,7 @@ namespace Qar
             Fov = fov;
         }
 
+        /// <summary>Index of the view in the sender's layout order.</summary>
         public UIntPtr ViewIndex { get; }
         public bool OverridePose { get; }
         public bool OverrideFov { get; }
@@ -1665,6 +2068,7 @@ namespace Qar
         }
     }
 
+    /// <summary>One sender-owned CPU texture. The pixel memory is not copied: <see cref="TextureData"/> points into the sender.</summary>
     public readonly struct VideoTextureCpu
     {
         public VideoTextureCpu(TextureSize size, uint pitch, IntPtr textureData, UIntPtr textureDataSize)
@@ -1676,10 +2080,20 @@ namespace Qar
         }
 
         public TextureSize Size { get; }
+        /// <summary>Row stride in bytes.</summary>
         public uint Pitch { get; }
+        /// <summary>
+        /// The sender's pixel buffer, <see cref="TextureDataSize"/> bytes. Write into it only
+        /// inside a frame cycle, and never after the sender is disposed.
+        /// </summary>
         public IntPtr TextureData { get; }
+        /// <summary>Size of <see cref="TextureData"/> in bytes.</summary>
         public UIntPtr TextureDataSize { get; }
 #if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
+        /// <summary>
+        /// Read-only view of <see cref="TextureData"/>; empty when there is none. Write pixels
+        /// through <see cref="TextureData"/>.
+        /// </summary>
         public unsafe ReadOnlySpan<byte> TextureDataSpan
         {
             get
@@ -1693,6 +2107,17 @@ namespace Qar
         internal static VideoTextureCpu FromNative(VideoTextureCpuNative value) { return new VideoTextureCpu(TextureSize.FromNative(value.Size), value.Pitch, value.TextureData, value.TextureDataSize); }
     }
 
+    /// <summary>
+    /// A snapshot of a sender's CPU frame: its views and textures, in layout order. The pixel
+    /// memory stays the sender's.
+    /// </summary>
+    /// <remarks>
+    /// A render sender's frame exists from creation, so it can be read before the first
+    /// <see cref="RenderSender.BeginFrame"/> to size resources; its contents may be written only
+    /// between a successful begin-frame and <see cref="RenderSender.ShowFrame"/>. A
+    /// <see cref="PrimarylessVideoSender"/> hands it out during the send cycle
+    /// <see cref="PrimarylessVideoSender.TryBeginFrame"/> reserved.
+    /// </remarks>
     public readonly struct VideoFrameCpu
     {
         public VideoFrameCpu(VideoFrameView[] textureViews, VideoTextureCpu[] textures)
@@ -1701,6 +2126,7 @@ namespace Qar
             Textures = textures;
         }
 
+        /// <summary>The views in layout order; each view's texture index names its texture.</summary>
         public VideoFrameView[] TextureViews { get; }
         public VideoTextureCpu[] Textures { get; }
         internal static VideoFrameCpu FromNative(VideoFrameCpuNative value)
@@ -1720,10 +2146,16 @@ namespace Qar
         }
 
         public TextureSize Size { get; }
+        /// <summary>ID3D11Texture2D*, a shared texture created on the session's adapter.</summary>
         public IntPtr Texture { get; }
         internal static VideoTextureD3D11 FromNative(VideoTextureD3D11Native value) { return new VideoTextureD3D11(TextureSize.FromNative(value.Size), value.Texture); }
     }
 
+    /// <summary>
+    /// The keyed mutex of one shared D3D11 texture and the keys for its AcquireSync and
+    /// ReleaseSync. Needed only when <see cref="StreamParamsD3D11.AcquireKeyedMutexSync"/> is
+    /// false and the application drives the key chain itself.
+    /// </summary>
     public readonly struct DXGIKeyedMutexSync
     {
         public DXGIKeyedMutexSync(IntPtr mutex, uint acquire, uint release)
@@ -1733,6 +2165,7 @@ namespace Qar
             Release = release;
         }
 
+        /// <summary>IDXGIKeyedMutex*.</summary>
         public IntPtr Mutex { get; }
         public uint Acquire { get; }
         public uint Release { get; }
@@ -1746,6 +2179,7 @@ namespace Qar
             TextureSync = textureSync;
         }
 
+        /// <summary>One entry per frame texture; empty when no external synchronization is needed.</summary>
         public DXGIKeyedMutexSync[] TextureSync { get; }
         internal static SyncFrameD3D11 FromNative(SyncFrameD3D11Native value)
         {
@@ -1753,6 +2187,11 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// A snapshot of a sender's D3D11 frame: its views, its shared textures and their keyed-mutex
+    /// synchronization. The textures stay the sender's; render into them only inside a frame
+    /// cycle. A render sender's frame is readable from creation, before the first begin-frame.
+    /// </summary>
     public readonly struct VideoFrameD3D11
     {
         public VideoFrameD3D11(VideoFrameView[] textureViews, VideoTextureD3D11[] textures, SyncFrameD3D11 synchronization)
@@ -1788,6 +2227,11 @@ namespace Qar
         internal static VideoTextureOpenGl FromNative(VideoTextureOpenGlNative value) { return new VideoTextureOpenGl(TextureSize.FromNative(value.Size), value.Texture); }
     }
 
+    /// <summary>
+    /// A snapshot of a sender's OpenGL frame: its views and textures. The textures stay the
+    /// sender's; render into them only inside a frame cycle. A render sender's frame is readable
+    /// from creation, before the first begin-frame.
+    /// </summary>
     public readonly struct VideoFrameOpenGl
     {
         public VideoFrameOpenGl(VideoFrameView[] textureViews, VideoTextureOpenGl[] textures)
@@ -1828,6 +2272,7 @@ namespace Qar
         public uint FormatFeatures { get; }
         /// <summary>VkImageLayout the image is in.</summary>
         public int Layout { get; }
+        /// <summary>Queue family that owns the image.</summary>
         public uint QueueFamilyIndex { get; }
         internal static VideoTextureVulkan FromNative(VideoTextureVulkanNative value) { return new VideoTextureVulkan(TextureSize.FromNative(value.Size), value.Image, value.ImageMemory, value.FormatFeatures, value.Layout, value.QueueFamilyIndex); }
     }
@@ -1933,6 +2378,7 @@ namespace Qar
         }
         public uint JointId { get; }
         public HandJoint Joint { get { return (HandJoint)JointId; } }
+        /// <summary>Bits of <see cref="HandJointLocationFlags"/>.</summary>
         public ulong Flags { get; }
         /// <summary>
         /// Units per second, in the axes and units of the joint poses: the bound
@@ -1969,8 +2415,11 @@ namespace Qar
         /// <see cref="RenderSender.GetLastHands"/>.
         /// </summary>
         public Pose Pose { get; }
+        /// <summary>26 entries, indexed by <see cref="HandJoint"/>.</summary>
         public HandJointLocation[] JointLocations { get; }
+        /// <summary>Whether <see cref="JointVelocities"/> carries data.</summary>
         public bool HasVelocity { get; }
+        /// <summary>26 entries, indexed by <see cref="HandJoint"/>; meaningful only when <see cref="HasVelocity"/> is true.</summary>
         public HandJointVelocity[] JointVelocities { get; }
         internal static HandJoints FromNative(HandJointsNative value)
         {
@@ -1999,6 +2448,7 @@ namespace Qar
             LeftHand = leftHand;
             RightHand = rightHand;
         }
+        /// <summary>The peer whose device sent the sample.</summary>
         public PeerId DeviceId { get; }
         public TimePoint DeviceTimestamp { get; }
         public HandJoints LeftHand { get; }

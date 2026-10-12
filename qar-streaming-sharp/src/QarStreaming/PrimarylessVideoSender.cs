@@ -3,6 +3,26 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// Application-owned video stream, such as GUI panel content, that exists before any receiver
+    /// connects and is delivered to every receiver that requests its stream id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unlike <see cref="RenderSender"/>, which answers one target's render request and hands
+    /// out poses and FOVs to render with, this sender carries an arbitrary layout and no render
+    /// metadata. Use <see cref="RenderSender"/> for remote-rendered content shown in an app
+    /// volume, this one for video the application produces on its own.
+    /// </para>
+    /// <para>
+    /// Frame cycle: <see cref="TryBeginFrame"/> until it returns true, write the frame
+    /// (<see cref="GetCpuFrame"/>, <see cref="GetD3D11Frame"/>, <see cref="GetOpenGlFrame"/> or
+    /// <see cref="GetVulkanFrame"/>, matching the sender's graphics API), then
+    /// <see cref="ShowFrame"/>. The frame exists from creation and may be inspected outside a
+    /// cycle; its contents and synchronization may be written only inside one. Its texture
+    /// handles stay stable until a layout change, so they can be cached between cycles.
+    /// </para>
+    /// </remarks>
     public sealed class PrimarylessVideoSender : IDisposable
     {
         private readonly VideoSenderSafeHandle _handle;
@@ -20,6 +40,19 @@ namespace Qar
             return info.IsSuccess ? Result<StreamId>.Success(info, StreamId.FromNative(native)) : Result<StreamId>.Failure(info);
         }
 
+        /// <summary>
+        /// Non-blocking: true when a frame cycle was begun for the receivers ready at this
+        /// moment; false when no cycle exists yet, so poll again later.
+        /// </summary>
+        /// <remarks>
+        /// Receivers that become ready afterwards get the next cycle. Recoverable failures, to
+        /// keep polling through: <see cref="StatusCode.MediaStreamingNoActiveTransfers"/> while
+        /// no receiver is connected (the normal state before the first one requests the
+        /// stream), <see cref="StatusCode.MediaStreamingStreamIsPaused"/> while every receiver
+        /// has paused it, and <see cref="StatusCode.MediaStreamingStreamIsReconnecting"/> while
+        /// every receiver is reconnecting. Calling it again before <see cref="ShowFrame"/> fails
+        /// with <see cref="StatusCode.LogicError"/>: only one cycle may be open.
+        /// </remarks>
         public Result<bool> TryBeginFrame()
         {
             ThrowIfDisposed();
@@ -36,6 +69,15 @@ namespace Qar
             return info.IsSuccess ? Result<VideoFrameLayout>.Success(info, VideoFrameLayout.FromNative(native)) : Result<VideoFrameLayout>.Failure(info);
         }
 
+        /// <summary>
+        /// Replaces the frame layout. The new frame resources are created synchronously on the
+        /// calling thread; if that fails, the previous layout and frame stay usable.
+        /// </summary>
+        /// <remarks>
+        /// Texture handles cached from an earlier frame do not survive a successful change: fetch
+        /// the frame again.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="layout"/> is null.</exception>
         public Result<Unit> ChangeLayout(VideoFrameLayout layout)
         {
             if (layout == null)
@@ -75,6 +117,13 @@ namespace Qar
         /// (otherwise <see cref="EntryPointNotFoundException"/>). Valid until the next
         /// call or this sender's disposal.
         /// </summary>
+        /// <remarks>
+        /// Inside a frame cycle, record on it the layout and queue family each image was left in
+        /// (<see cref="VideoFrameVulkan.SetTextureState"/>) and the synchronization the rendering
+        /// signals (<see cref="VideoFrameVulkan.SetSynchronization"/>) before
+        /// <see cref="ShowFrame"/>. <see cref="ShowFrame"/> fails with
+        /// <see cref="StatusCode.LogicError"/> when this was not called in the current cycle.
+        /// </remarks>
         public Result<VideoFrameVulkan> GetVulkanFrame()
         {
             ThrowIfDisposed();
@@ -82,12 +131,22 @@ namespace Qar
             return Results.FromHandle(info, frame, VideoFrameVulkan.FromNativePointer);
         }
 
+        /// <summary>
+        /// Sends the written frame to the receivers reserved by <see cref="TryBeginFrame"/> and
+        /// ends the cycle.
+        /// </summary>
+        /// <remarks>
+        /// Succeeds when at least one reserved receiver got the frame; fails with
+        /// <see cref="StatusCode.MediaStreamingNoActiveTransfers"/> when all of them were lost
+        /// before delivery.
+        /// </remarks>
         public Result<Unit> ShowFrame()
         {
             ThrowIfDisposed();
             return Results.FromNative(NativeMethods.qar_impl_video_sender_show_frame(_handle.DangerousGetHandle()));
         }
 
+        /// <summary>Closes the stream to every receiver, draining frames still being sent first.</summary>
         public void Dispose()
         {
             _handle.Dispose();

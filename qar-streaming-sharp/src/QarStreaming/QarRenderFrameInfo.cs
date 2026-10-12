@@ -9,6 +9,15 @@ using Qar.Native;
 namespace Qar
 {
     /// <summary>Per-frame information from a successful begin-frame. Everything it hands out is in the bound app volume's app content space.</summary>
+    /// <remarks>
+    /// Valid only for the frame it was begun with: read the poses and FOVs before
+    /// <see cref="RenderSender.ShowFrame"/>, which ends that frame, then dispose it. Read after
+    /// that, the getters fail with <see cref="StatusCode.LogicError"/>, or return the next
+    /// frame's values once that one is begun; disposing the sender invalidates it. A view index
+    /// is a position in the sender's layout (<see cref="RenderSender.GetLayout"/>), in the order
+    /// of <see cref="RenderSenderOptions.FrameViews"/>; one out of range fails with
+    /// <see cref="StatusCode.LogicError"/>.
+    /// </remarks>
     public sealed class RenderFrameInfo : IDisposable
     {
         private readonly RenderFrameInfoSafeHandle _handle;

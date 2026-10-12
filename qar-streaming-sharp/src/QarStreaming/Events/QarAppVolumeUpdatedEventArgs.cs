@@ -8,6 +8,7 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>One app volume update; <see cref="Volume"/> is a snapshot, safe to keep.</summary>
     public sealed class AppVolumeUpdatedEventArgs : EventArgs
     {
         public AppVolumeUpdatedEventArgs(AppVolume volume) { Volume = volume; }

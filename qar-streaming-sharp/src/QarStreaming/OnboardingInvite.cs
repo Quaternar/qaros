@@ -3,6 +3,16 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// A one-time onboarding invite minted by the hub: everything another instance needs to
+    /// onboard with <see cref="OnboardOptions.UseInvite"/>, or a code to hand out by
+    /// <see cref="GetCode"/>.
+    /// </summary>
+    /// <remarks>
+    /// The caller owns every instance and disposes it; an onboard only borrows it. Invites expire
+    /// (<see cref="GetExpiresUnix"/>) and work once: mint them when needed and do not stockpile
+    /// them. They carry a secret, so never log their bytes or code.
+    /// </remarks>
     public sealed class OnboardingInvite : IDisposable
     {
         private readonly OnboardingInviteSafeHandle _handle;
@@ -28,6 +38,7 @@ namespace Qar
             return info.IsSuccess ? Result<OnboardingMethod>.Success(info, method) : Result<OnboardingMethod>.Failure(info);
         }
 
+        /// <summary>Expiry in Unix seconds, so a UI can warn before handing out a stale invite.</summary>
         public Result<long> GetExpiresUnix()
         {
             ThrowIfDisposed();
@@ -40,6 +51,10 @@ namespace Qar
         /// The code text to onboard with (OnboardCode). It names its own invitation, so it works for any
         /// code the hub minted. It is a secret: never log it.
         /// </summary>
+        /// <remarks>
+        /// Only a <see cref="OnboardingMethod.Pake"/> invite has one; any other fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>.
+        /// </remarks>
         public Result<string> GetCode()
         {
             ThrowIfDisposed();
@@ -54,6 +69,10 @@ namespace Qar
             return Result<string>.Success(info, System.Text.Encoding.UTF8.GetString(buffer, 0, NativeConvert.ToInt32(length)));
         }
 
+        /// <summary>
+        /// The invite as bytes for your IPC boundary (pipe, shared memory, config field); the
+        /// receiving instance turns them back with <see cref="Deserialize"/>.
+        /// </summary>
         public Result<byte[]> Serialize()
         {
             ThrowIfDisposed();
@@ -74,6 +93,11 @@ namespace Qar
             return Result<byte[]>.Success(info, result);
         }
 
+        /// <summary>
+        /// Parses invite bytes from <see cref="Serialize"/>, or the launch invite QAROS writes as
+        /// the first stdin line of an API app it starts: pass that JSON line's UTF-8 bytes unchanged.
+        /// Bytes that are not an invite fail with <see cref="StatusCode.PakeError"/>.
+        /// </summary>
         public static Result<OnboardingInvite> Deserialize(byte[] inviteData)
         {
             if (inviteData == null)

@@ -8,6 +8,25 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>
+    /// An immutable snapshot of one app volume: the box in the room a remote 3D application
+    /// renders into, and how the application's content sits inside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Safe to keep; it never changes. Get a newer one from
+    /// <see cref="AppVolumeControl.SubscribeUpdates(EventHandler{AppVolumeUpdatedEventArgs}, CancellationToken)"/>,
+    /// or read the live transform with the <c>AppVolumeControl.GetLatest*</c> methods, which can
+    /// be ahead of the last snapshot.
+    /// </para>
+    /// <para>
+    /// Three spaces: <see cref="Pose"/> places the box in room space. App volume space is the
+    /// box's own frame: origin at the cuboid centre, +X along width, +Y up along height, +Z
+    /// along length, in metres. App content space, the space the application renders in, is
+    /// app volume space taken into <see cref="AppPose"/> with positions divided by
+    /// <see cref="AppScale"/>. Nothing clips the content to the box.
+    /// </para>
+    /// </remarks>
     public sealed class AppVolume
     {
         internal AppVolume(AppVolumeId id, string displayName, Pose pose, AppVolumeSize size, AppVolumeLifetimeStatus lifetimeStatus, AppVolumeEditingStatus editingStatus, PeerId[] usedByPeers, Pose appPose, float appScale, AppWorldAnchor appWorldAnchor, AppVolumeGestureConfiguration gestureConfiguration, AppVolumeGestureState gestureState)
@@ -35,10 +54,23 @@ namespace Qar
 
         public AppVolumeSize Size { get; }
 
+        /// <summary>
+        /// <see cref="AppVolumeLifetimeStatus.Closed"/> after <see cref="AppVolumeControl.Close"/>;
+        /// <see cref="AppVolumeControl.GetOrCreate"/> with the same common name reopens it.
+        /// </summary>
         public AppVolumeLifetimeStatus LifetimeStatus { get; }
 
+        /// <summary>
+        /// Which peer, if any, is moving or resizing the box itself
+        /// (<see cref="AppVolumeControl.StartEditing"/>). A peer manipulating the app with a
+        /// gesture is in <see cref="AppVolumeGestureState.Holder"/> instead.
+        /// </summary>
         public AppVolumeEditingStatus EditingStatus { get; }
 
+        /// <summary>
+        /// The peers using the volume (<see cref="AppVolumeControl.UpdateUsedByPeers"/>).
+        /// <see cref="AppVolumeGestureState.ActiveModeByPeer"/> covers exactly these peers.
+        /// </summary>
         public PeerId[] UsedByPeers { get; }
 
         /// <summary>Origin of the rendering application in app volume space, in volume metres; not scaled by <see cref="AppScale"/>.</summary>
@@ -47,6 +79,10 @@ namespace Qar
         /// <summary>Room-metres per app-metre: the factor between app content space and app volume space.</summary>
         public float AppScale { get; }
 
+        /// <summary>
+        /// The Earth-fixed frame (ECEF WGS84) the volume is pinned to, if one was set with
+        /// <see cref="AppVolumeControl.ChangeAppWorldAnchor"/>.
+        /// </summary>
         public AppWorldAnchor AppWorldAnchor { get; }
 
         /// <summary>The rules of gesture mode <see cref="AppVolumeGestureState.DefaultMode"/> and the allowed peers.</summary>

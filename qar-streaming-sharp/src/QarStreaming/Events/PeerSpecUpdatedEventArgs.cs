@@ -8,6 +8,7 @@ using Qar.Native;
 
 namespace Qar
 {
+    /// <summary>One peer update; <see cref="Peer"/> is a snapshot, safe to keep.</summary>
     public sealed class PeerSpecUpdatedEventArgs : EventArgs
     {
         public PeerSpecUpdatedEventArgs(PeerSpec peer) { Peer = peer; }

@@ -20,6 +20,10 @@ namespace Qar
         NotImplemented = 4,
         ArgumentNotSupported = 5,
         Timeout = 6,
+        /// <summary>
+        /// A programming error, such as an invalid handle or a missing required argument; the
+        /// binding also reports a native call that succeeded without its output this way.
+        /// </summary>
         LogicError = 7,
         GuiPanelChangeNotPermitted = 304,
         GuiPanelInvalidId = 305,
@@ -61,6 +65,14 @@ namespace Qar
         OnboardingSessionStillActive = 1803
     }
 
+    /// <summary>
+    /// The outcome of a native call: a <see cref="StatusCode"/> and a diagnostic message.
+    /// </summary>
+    /// <remarks>
+    /// Some failures are expected control flow rather than errors, for example
+    /// <see cref="StatusCode.OnboardingSessionNotFound"/> from a rejoin. Equality compares
+    /// <see cref="StatusCode"/> only; the message and <see cref="ErrorHandle"/> are ignored.
+    /// </remarks>
     public readonly struct ResultInfo : IEquatable<ResultInfo>
     {
         private readonly string? _message;
@@ -85,12 +97,14 @@ namespace Qar
 
         public StatusCode StatusCode { get; }
 
+        /// <summary>The native diagnostic object behind a failure; 0 on success.</summary>
         public uint ErrorHandle { get; }
 
         public string Message { get { return _message ?? (_lazyMessage == null ? string.Empty : _lazyMessage.Value); } }
 
         public bool IsSuccess { get { return StatusCode == StatusCode.Success; } }
 
+        /// <exception cref="NativeCallException">The result is a failure.</exception>
         public void EnsureSuccess()
         {
             if (!IsSuccess)
@@ -133,11 +147,23 @@ namespace Qar
         }
     }
 
+    /// <summary>The value of a <see cref="Result{T}"/> whose operation returns nothing.</summary>
     public readonly struct Unit
     {
         public static readonly Unit Value = new Unit();
     }
 
+    /// <summary>
+    /// A value or a failure. A native failure is returned, never thrown: check
+    /// <see cref="IsSuccess"/>, or opt into an exception with <see cref="ValueOrThrow"/> or
+    /// <see cref="EnsureSuccess"/>.
+    /// </summary>
+    /// <remarks>
+    /// The binding throws only for managed misuse: a null argument, or an
+    /// <see cref="ObjectDisposedException"/> for an object already disposed. An async method
+    /// completes its task with a failed result on a native failure; only managed cancellation
+    /// cancels the task.
+    /// </remarks>
     public readonly struct Result<T>
     {
         private readonly T _value;
@@ -150,6 +176,7 @@ namespace Qar
 
         public ResultInfo Info { get; }
 
+        /// <exception cref="InvalidOperationException">The result is a failure.</exception>
         public T Value
         {
             get
@@ -172,11 +199,13 @@ namespace Qar
             return new Result<T>(info, default(T)!);
         }
 
+        /// <exception cref="NativeCallException">The result is a failure.</exception>
         public void EnsureSuccess()
         {
             Info.EnsureSuccess();
         }
 
+        /// <exception cref="NativeCallException">The result is a failure.</exception>
         public T ValueOrThrow()
         {
             if (!IsSuccess)
@@ -185,6 +214,10 @@ namespace Qar
         }
     }
 
+    /// <summary>
+    /// A native failure turned into an exception on request, by <see cref="Result{T}.ValueOrThrow"/>
+    /// or <c>EnsureSuccess</c>. <see cref="Result"/> carries the status code.
+    /// </summary>
     public sealed class NativeCallException : Exception
     {
         public NativeCallException(ResultInfo result)
