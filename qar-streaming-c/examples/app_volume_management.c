@@ -93,8 +93,7 @@ print_usage(const char* program_name)
 static void
 configure_gestures(QarSession* session, const QarAppVolumeId* volume_id)
 {
-	QarAppVolumeGestureConfiguration config =
-		qar_app_volume_gesture_configuration_default();
+	QarAppVolumeGestureConfiguration config = qar_app_volume_gesture_configuration_default();
 
 	for(size_t i = 0; i < config.mapping_rule_count; ++i)
 	{
@@ -104,8 +103,7 @@ configure_gestures(QarSession* session, const QarAppVolumeId* volume_id)
 			/* Finer one-hand drag (2 cm of hand -> 1 cm of app), sliding
 			 * along the floor plane and turning about the vertical axis. */
 			rule->precision = 2.0f;
-			rule->translation_axes =
-				QAR_APP_VOLUME_AXIS_X | QAR_APP_VOLUME_AXIS_Z;
+			rule->translation_axes = QAR_APP_VOLUME_AXIS_X | QAR_APP_VOLUME_AXIS_Z;
 			rule->rotation_axes = QAR_APP_VOLUME_AXIS_Y;
 		}
 		else if(rule->gesture_kind == QAR_GESTURE_CLICK)
@@ -117,9 +115,7 @@ configure_gestures(QarSession* session, const QarAppVolumeId* volume_id)
 
 	log_result(
 		"qar_app_volumes_change_gesture_configuration",
-		qar_app_volumes_change_gesture_configuration(
-			session, volume_id, &config
-		)
+		qar_app_volumes_change_gesture_configuration(session, volume_id, &config)
 	);
 }
 //! [app_gestures]
@@ -164,8 +160,7 @@ static void
 pin_and_unpin_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
 {
 	QarGeoAnchorFrame anchor = geo_anchor_from_lat_lon(50.0870, 14.4208, 200.0);
-	QarResult set_result =
-		qar_app_volumes_change_app_world_anchor(session, volume_id, &anchor);
+	QarResult set_result = qar_app_volumes_change_app_world_anchor(session, volume_id, &anchor);
 	log_result("qar_app_volumes_change_app_world_anchor", set_result);
 	if(qar_result_is_error(set_result))
 	{
@@ -212,9 +207,7 @@ room_to_volume(const QarPose* volume_pose, QarVector3 room_point)
 /** \brief App volume space -> app content space: undo the app pose (volume
  *  metres, unscaled), then divide by app_scale (room metres per app metre). */
 static QarVector3
-volume_to_app_content(
-	const QarPose* app_pose, float app_scale, QarVector3 volume_point
-)
+volume_to_app_content(const QarPose* app_pose, float app_scale, QarVector3 volume_point)
 {
 	QarVector3 app = room_to_volume(app_pose, volume_point);
 	app.x /= app_scale;
@@ -233,27 +226,17 @@ is_inside_volume(const QarAppVolumeSize* size, QarVector3 volume_point)
 }
 
 static void
-hit_test_room_point(
-	QarSession* session, const QarAppVolumeId* volume_id, QarVector3 room_point
-)
+hit_test_room_point(QarSession* session, const QarAppVolumeId* volume_id, QarVector3 room_point)
 {
 	QarPose volume_pose = qar_pose_default();
 	QarAppVolumeSize size = qar_app_volume_size_default();
 	QarPose app_pose = qar_pose_default();
 	float app_scale = 1.0f;
 
-	if(qar_result_is_error(
-		   qar_app_volume_get_latest_pose(session, volume_id, &volume_pose)
-	   )
-	   || qar_result_is_error(
-		   qar_app_volume_get_latest_size(session, volume_id, &size)
-	   )
-	   || qar_result_is_error(
-		   qar_app_volume_get_latest_app_pose(session, volume_id, &app_pose)
-	   )
-	   || qar_result_is_error(
-		   qar_app_volume_get_latest_app_scale(session, volume_id, &app_scale)
-	   )
+	if(qar_result_is_error(qar_app_volume_get_latest_pose(session, volume_id, &volume_pose))
+	   || qar_result_is_error(qar_app_volume_get_latest_size(session, volume_id, &size))
+	   || qar_result_is_error(qar_app_volume_get_latest_app_pose(session, volume_id, &app_pose))
+	   || qar_result_is_error(qar_app_volume_get_latest_app_scale(session, volume_id, &app_scale))
 	   || app_scale <= 0.0f)
 	{
 		printf("Volume state not available yet\n");
@@ -261,8 +244,7 @@ hit_test_room_point(
 	}
 
 	const QarVector3 in_volume = room_to_volume(&volume_pose, room_point);
-	const QarVector3 in_app =
-		volume_to_app_content(&app_pose, app_scale, in_volume);
+	const QarVector3 in_app = volume_to_app_content(&app_pose, app_scale, in_volume);
 	printf(
 		"Room point (%.2f, %.2f, %.2f) -> app (%.2f, %.2f, %.2f), %s the "
 		"volume\n",
@@ -295,9 +277,7 @@ main(int argc, char** argv)
 	{
 		runtime_dir = argv[2];
 	}
-	else if(get_dir_from_path(
-				library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)
-			))
+	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
@@ -366,8 +346,7 @@ main(int argc, char** argv)
 	volume_init.size.height_meters = 1.0f;
 
 	QarAppVolumeId volume_id = qar_app_volume_id_default();
-	QarResult create_result =
-		qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
+	QarResult create_result = qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
 	log_result("qar_app_volumes_get_or_create", create_result);
 	if(qar_result_is_success(create_result))
 	{
@@ -377,18 +356,15 @@ main(int argc, char** argv)
 	}
 
 	size_t volume_count = 0;
-	QarResult count_result =
-		qar_query_app_volumes_count(session, &volume_count);
+	QarResult count_result = qar_query_app_volumes_count(session, &volume_count);
 	log_result("qar_query_app_volumes_count", count_result);
 	if(qar_result_is_success(count_result) && volume_count > 0)
 	{
-		QarAppVolume** handles =
-			(QarAppVolume**)calloc(volume_count, sizeof(QarAppVolume*));
+		QarAppVolume** handles = (QarAppVolume**)calloc(volume_count, sizeof(QarAppVolume*));
 		if(handles)
 		{
 			size_t written = 0;
-			QarResult list_result =
-				qar_query_app_volumes(session, handles, volume_count, &written);
+			QarResult list_result = qar_query_app_volumes(session, handles, volume_count, &written);
 			log_result("qar_query_app_volumes", list_result);
 			if(qar_result_is_success(list_result))
 			{
@@ -408,9 +384,7 @@ main(int argc, char** argv)
 					(void)qar_app_volume_get_id(handle, &id);
 					(void)qar_app_volume_get_size(handle, &desc);
 					(void)qar_app_volume_get_pose(handle, &pose);
-					(void)qar_app_volume_get_display_name(
-						handle, name, sizeof(name)
-					);
+					(void)qar_app_volume_get_display_name(handle, name, sizeof(name));
 
 					printf("- Volume id: ");
 					print_hex_id(id.data, QAR_MAX_ID_LENGTH);

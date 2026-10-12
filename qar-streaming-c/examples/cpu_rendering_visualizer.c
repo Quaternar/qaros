@@ -79,14 +79,12 @@ on_render_request(QarRenderStreamRequest* request, void* user_state)
 	RenderRequestState* state = (RenderRequestState*)user_state;
 
 	QarPeerId target_peer_id = qar_peer_id_default();
-	QarResult peer_result =
-		qar_render_request_get_target_peer_id(request, &target_peer_id);
+	QarResult peer_result = qar_render_request_get_target_peer_id(request, &target_peer_id);
 	log_result("qar_render_request_get_target_peer_id", peer_result);
 
 	QarStreamId stream_id = qar_stream_id_default();
 	log_result(
-		"qar_render_request_get_stream_id",
-		qar_render_request_get_stream_id(request, &stream_id)
+		"qar_render_request_get_stream_id", qar_render_request_get_stream_id(request, &stream_id)
 	);
 
 	if(qar_result_is_success(peer_result) && !state->has_request)
@@ -112,8 +110,7 @@ render_gradient(QarVideoFrameCpu* frame, size_t frame_index)
 	for(size_t tex_idx = 0; tex_idx < frame->textures_count; ++tex_idx)
 	{
 		QarVideoTextureCpu* texture = &frame->textures[tex_idx];
-		if(!texture->texture_data || texture->size.width == 0
-		   || texture->size.height == 0)
+		if(!texture->texture_data || texture->size.width == 0 || texture->size.height == 0)
 		{
 			continue;
 		}
@@ -155,9 +152,7 @@ main(int argc, char** argv)
 	{
 		runtime_dir = argv[2];
 	}
-	else if(get_dir_from_path(
-				library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)
-			))
+	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
@@ -223,8 +218,7 @@ main(int argc, char** argv)
 	volume_init.size = qar_app_volume_size_default();
 
 	QarAppVolumeId volume_id = qar_app_volume_id_default();
-	QarResult volume_result =
-		qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
+	QarResult volume_result = qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
 	if(qar_result_is_error(volume_result))
 	{
 		log_result("qar_app_volumes_get_or_create", volume_result);
@@ -238,9 +232,8 @@ main(int argc, char** argv)
 
 	//! [cpu_request]
 	RenderRequestState request_state = { false, qar_peer_id_default() };
-	QarResult subscribe_result = qar_render_sender_subscribe_requests(
-		session, on_render_request, &request_state, NULL
-	);
+	QarResult subscribe_result =
+		qar_render_sender_subscribe_requests(session, on_render_request, &request_state, NULL);
 	log_result("qar_render_sender_subscribe_requests", subscribe_result);
 
 	printf(
@@ -260,8 +253,7 @@ main(int argc, char** argv)
 	sender_init.app_volume_id = &volume_id;
 
 	QarRenderSender* sender = NULL;
-	QarResult sender_result =
-		qar_render_sender_create(session, &sender_init, NULL, &sender);
+	QarResult sender_result = qar_render_sender_create(session, &sender_init, NULL, &sender);
 	if(qar_result_is_error(sender_result) || sender == NULL)
 	{
 		log_result("qar_render_sender_create", sender_result);
@@ -281,8 +273,7 @@ main(int argc, char** argv)
 	for(size_t frame_index = 0; frame_index < frame_count; ++frame_index)
 	{
 		QarRenderFrameInfo* frame_info = NULL;
-		QarResult begin_result =
-			qar_render_sender_begin_frame(sender, NULL, &frame_info);
+		QarResult begin_result = qar_render_sender_begin_frame(sender, NULL, &frame_info);
 		log_result("qar_render_sender_begin_frame", begin_result);
 		if(qar_result_is_error(begin_result) || frame_info == NULL)
 		{
@@ -299,10 +290,7 @@ main(int argc, char** argv)
 			QarRenderFrameShow show = qar_render_frame_show_default();
 			show.rendered_near_far.near_plane = 0.1f;
 			show.rendered_near_far.far_plane = 10.0f;
-			log_result(
-				"qar_render_sender_show_frame",
-				qar_render_sender_show_frame(sender, &show)
-			);
+			log_result("qar_render_sender_show_frame", qar_render_sender_show_frame(sender, &show));
 		}
 
 		qar_render_frame_info_handle_destroy(frame_info);

@@ -43,16 +43,12 @@ AdapterIdHex(const uint8_t* bytes, size_t count)
 }
 
 bool
-MatchesAdapterId(
-	const VkPhysicalDeviceIDProperties& id, std::string_view requested
-)
+MatchesAdapterId(const VkPhysicalDeviceIDProperties& id, std::string_view requested)
 {
 	std::string lower(requested);
 	for(auto& character : lower)
 	{
-		character = static_cast<char>(
-			std::tolower(static_cast<unsigned char>(character))
-		);
+		character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
 	}
 	if(id.deviceLUIDValid && lower == AdapterIdHex(id.deviceLUID, VK_LUID_SIZE))
 	{
@@ -66,12 +62,8 @@ namespace
 VkPhysicalDeviceIDProperties
 AdapterId(VkPhysicalDevice candidate, std::string* name = nullptr)
 {
-	VkPhysicalDeviceIDProperties id{
-		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
-	};
-	VkPhysicalDeviceProperties2 properties{
-		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
-	};
+	VkPhysicalDeviceIDProperties id{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES };
+	VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
 	properties.pNext = &id;
 	vkGetPhysicalDeviceProperties2(candidate, &properties);
 	if(name != nullptr)
@@ -88,8 +80,7 @@ DescribeAdapter(VkPhysicalDevice candidate)
 	std::string name;
 	const auto id = AdapterId(candidate, &name);
 	return name + " (LUID "
-		   + (id.deviceLUIDValid ? AdapterIdHex(id.deviceLUID, VK_LUID_SIZE)
-								 : std::string("none"))
+		   + (id.deviceLUIDValid ? AdapterIdHex(id.deviceLUID, VK_LUID_SIZE) : std::string("none"))
 		   + ")";
 }
 } // namespace
@@ -102,31 +93,22 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	app.apiVersion = VK_API_VERSION_1_1;
 	VkInstanceCreateInfo init{ VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
 	init.pApplicationInfo = &app;
-	if(not CheckVk(
-		   vkCreateInstance(&init, nullptr, &instance), "vkCreateInstance"
-	   ))
+	if(not CheckVk(vkCreateInstance(&init, nullptr, &instance), "vkCreateInstance"))
 	{
 		return false;
 	}
 	uint32_t count = 0;
-	if(not CheckVk(
-		   vkEnumeratePhysicalDevices(instance, &count, nullptr),
-		   "enumerate GPUs"
-	   ))
+	if(not CheckVk(vkEnumeratePhysicalDevices(instance, &count, nullptr), "enumerate GPUs"))
 	{
 		return false;
 	}
 	std::vector<VkPhysicalDevice> devices(count);
-	if(not CheckVk(
-		   vkEnumeratePhysicalDevices(instance, &count, devices.data()),
-		   "enumerate GPUs"
-	   ))
+	if(not CheckVk(vkEnumeratePhysicalDevices(instance, &count, devices.data()), "enumerate GPUs"))
 	{
 		return false;
 	}
 	const std::array<const char*, 2> extensions = {
-		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
-		VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
+		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
 	};
 	for(auto candidate : devices)
 	{
@@ -143,9 +125,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 		}
 		uint32_t extensionCount = 0;
 		if(not CheckVk(
-			   vkEnumerateDeviceExtensionProperties(
-				   candidate, nullptr, &extensionCount, nullptr
-			   ),
+			   vkEnumerateDeviceExtensionProperties(candidate, nullptr, &extensionCount, nullptr),
 			   "enumerate extensions"
 		   ))
 		{
@@ -178,9 +158,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 		uint32_t families = 0;
 		vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, nullptr);
 		std::vector<VkQueueFamilyProperties> properties(families);
-		vkGetPhysicalDeviceQueueFamilyProperties(
-			candidate, &families, properties.data()
-		);
+		vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, properties.data());
 		for(uint32_t index = 0; index < families; ++index)
 		{
 			if(not(properties[index].queueFlags & VK_QUEUE_GRAPHICS_BIT))
@@ -198,8 +176,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	}
 	if(not physical && not requestedAdapter.empty())
 	{
-		std::cerr << "The GPU the launch invite names (" << requestedAdapter
-				  << ")"
+		std::cerr << "The GPU the launch invite names (" << requestedAdapter << ")"
 				  << " names no NVIDIA graphics GPU with external "
 					 "memory/semaphore support\n";
 		return false;
@@ -213,9 +190,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 			  << (requestedAdapter.empty() ? ", the first supported GPU\n"
 										   : ", named by the launch invite\n");
 	const float priority = 1;
-	VkDeviceQueueCreateInfo queueInfo{
-		VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
-	};
+	VkDeviceQueueCreateInfo queueInfo{ VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 	queueInfo.queueFamilyIndex = family;
 	queueInfo.queueCount = 1;
 	queueInfo.pQueuePriorities = &priority;
@@ -224,10 +199,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	deviceInfo.pQueueCreateInfos = &queueInfo;
 	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	deviceInfo.ppEnabledExtensionNames = extensions.data();
-	if(not CheckVk(
-		   vkCreateDevice(physical, &deviceInfo, nullptr, &device),
-		   "vkCreateDevice"
-	   ))
+	if(not CheckVk(vkCreateDevice(physical, &deviceInfo, nullptr, &device), "vkCreateDevice"))
 	{
 		return false;
 	}
@@ -247,9 +219,7 @@ VulkanDevice::~VulkanDevice()
 }
 
 bool
-VulkanDevice::Submit(
-	const VkSubmitInfo& submit, VkFence fence, const char* what
-)
+VulkanDevice::Submit(const VkSubmitInfo& submit, VkFence fence, const char* what)
 {
 	const std::lock_guard<std::mutex> guard(m_queueLock);
 	return CheckVk(vkQueueSubmit(queue, 1, &submit, fence), what);
@@ -264,17 +234,14 @@ CubeCamera::Create()
 	pool.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	pool.queueFamilyIndex = m_gpu->family;
 	if(not CheckVk(
-		   vkCreateCommandPool(m_gpu->device, &pool, nullptr, &m_pool),
-		   "create camera pool"
+		   vkCreateCommandPool(m_gpu->device, &pool, nullptr, &m_pool), "create camera pool"
 	   ))
 	{
 		return false;
 	}
 	for(Slot& slot : m_slots)
 	{
-		VkCommandBufferAllocateInfo allocation{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-		};
+		VkCommandBufferAllocateInfo allocation{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 		allocation.commandPool = m_pool;
 		allocation.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocation.commandBufferCount = 1;
@@ -282,14 +249,11 @@ CubeCamera::Create()
 		VkFenceCreateInfo fence{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 		fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 		if(not CheckVk(
-			   vkAllocateCommandBuffers(
-				   m_gpu->device, &allocation, &slot.commands
-			   ),
+			   vkAllocateCommandBuffers(m_gpu->device, &allocation, &slot.commands),
 			   "allocate camera commands"
 		   )
 		   || not CheckVk(
-			   vkCreateFence(m_gpu->device, &fence, nullptr, &slot.fence),
-			   "create camera fence"
+			   vkCreateFence(m_gpu->device, &fence, nullptr, &slot.fence), "create camera fence"
 		   ))
 		{
 			return false;
@@ -312,17 +276,12 @@ CubeCamera::CreatePipeline()
 		a.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		a.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		a.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		a.initialLayout =
-			i == 0 ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-				   : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		a.initialLayout = i == 0 ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+								 : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		a.finalLayout = a.initialLayout;
 	}
-	const VkAttachmentReference color{
-		0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	};
-	const VkAttachmentReference depth{
-		1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	};
+	const VkAttachmentReference color{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+	const VkAttachmentReference depth{ 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 	VkSubpassDescription subpass{};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
@@ -334,43 +293,32 @@ CubeCamera::CreatePipeline()
 	pass.subpassCount = 1;
 	pass.pSubpasses = &subpass;
 	if(not CheckVk(
-		   vkCreateRenderPass(m_gpu->device, &pass, nullptr, &m_pass),
-		   "create cube render pass"
+		   vkCreateRenderPass(m_gpu->device, &pass, nullptr, &m_pass), "create cube render pass"
 	   ))
 	{
 		return false;
 	}
-	const VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT,
-									0,
-									sizeof(glm::mat4) };
-	VkPipelineLayoutCreateInfo layout{
-		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
-	};
+	const VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) };
+	VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 	layout.pushConstantRangeCount = 1;
 	layout.pPushConstantRanges = &push;
 	if(not CheckVk(
-		   vkCreatePipelineLayout(m_gpu->device, &layout, nullptr, &m_layout),
-		   "create cube layout"
+		   vkCreatePipelineLayout(m_gpu->device, &layout, nullptr, &m_layout), "create cube layout"
 	   ))
 	{
 		return false;
 	}
 	std::array<VkShaderModule, 2> modules{};
 	bool loaded = true;
-	const std::array<std::span<const uint32_t>, 2> shaders{
-		cube_shaders::vert, cube_shaders::frag
-	};
+	const std::array<std::span<const uint32_t>, 2> shaders{ cube_shaders::vert,
+															cube_shaders::frag };
 	for(size_t i = 0; i < 2; ++i)
 	{
-		VkShaderModuleCreateInfo shader{
-			VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
-		};
+		VkShaderModuleCreateInfo shader{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 		shader.codeSize = shaders[i].size_bytes();
 		shader.pCode = shaders[i].data();
 		if(not CheckVk(
-			   vkCreateShaderModule(
-				   m_gpu->device, &shader, nullptr, &modules[i]
-			   ),
+			   vkCreateShaderModule(m_gpu->device, &shader, nullptr, &modules[i]),
 			   "create cube shader"
 		   ))
 		{
@@ -382,8 +330,7 @@ CubeCamera::CreatePipeline()
 	for(size_t i = 0; i < 2; ++i)
 	{
 		stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		stages[i].stage =
-			i == 0 ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT;
+		stages[i].stage = i == 0 ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT;
 		stages[i].module = modules[i];
 		stages[i].pName = "main";
 	}
@@ -427,9 +374,7 @@ CubeCamera::CreatePipeline()
 	};
 	dynamics.dynamicStateCount = 2;
 	dynamics.pDynamicStates = dynamic.data();
-	VkGraphicsPipelineCreateInfo pipeline{
-		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
-	};
+	VkGraphicsPipelineCreateInfo pipeline{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 	pipeline.stageCount = 2;
 	pipeline.pStages = stages.data();
 	pipeline.pVertexInputState = &vertex;
@@ -445,12 +390,7 @@ CubeCamera::CreatePipeline()
 	const bool success = loaded
 						 && CheckVk(
 							 vkCreateGraphicsPipelines(
-								 m_gpu->device,
-								 VK_NULL_HANDLE,
-								 1,
-								 &pipeline,
-								 nullptr,
-								 &m_pipeline
+								 m_gpu->device, VK_NULL_HANDLE, 1, &pipeline, nullptr, &m_pipeline
 							 ),
 							 "create cube pipeline"
 						 );
@@ -473,8 +413,7 @@ FindFrameView(
 {
 	for(size_t i = 0; i < frame.texture_views_count; ++i)
 	{
-		if(frame.texture_views[i].eye == eye
-		   && frame.texture_views[i].data_type == type)
+		if(frame.texture_views[i].eye == eye && frame.texture_views[i].data_type == type)
 		{
 			return static_cast<int>(i);
 		}
@@ -517,26 +456,21 @@ CubeCamera::TargetFor(
 		view.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		view.format = i == 0 ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_D32_SFLOAT;
 		view.subresourceRange = { static_cast<VkImageAspectFlags>(
-									  i == 0 ? VK_IMAGE_ASPECT_COLOR_BIT
-											 : VK_IMAGE_ASPECT_DEPTH_BIT
+									  i == 0 ? VK_IMAGE_ASPECT_COLOR_BIT : VK_IMAGE_ASPECT_DEPTH_BIT
 								  ),
 								  0,
 								  1,
 								  0,
 								  1 };
 		if(not CheckVk(
-			   vkCreateImageView(
-				   m_gpu->device, &view, nullptr, &target.views[i]
-			   ),
+			   vkCreateImageView(m_gpu->device, &view, nullptr, &target.views[i]),
 			   "create camera image view"
 		   ))
 		{
 			return nullptr;
 		}
 	}
-	VkFramebufferCreateInfo framebuffer{
-		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO
-	};
+	VkFramebufferCreateInfo framebuffer{ VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
 	framebuffer.renderPass = m_pass;
 	framebuffer.attachmentCount = 2;
 	framebuffer.pAttachments = target.views.data();
@@ -544,9 +478,7 @@ CubeCamera::TargetFor(
 	framebuffer.height = height;
 	framebuffer.layers = 1;
 	if(not CheckVk(
-		   vkCreateFramebuffer(
-			   m_gpu->device, &framebuffer, nullptr, &target.framebuffer
-		   ),
+		   vkCreateFramebuffer(m_gpu->device, &framebuffer, nullptr, &target.framebuffer),
 		   "create camera framebuffer"
 	   ))
 	{
@@ -564,15 +496,10 @@ CubeCamera::NextSlot(Slot*& slot)
 	slot = &m_slots[m_nextSlot];
 	m_nextSlot = (m_nextSlot + 1) % m_slots.size();
 	return CheckVk(
-			   vkWaitForFences(
-				   m_gpu->device, 1, &slot->fence, VK_TRUE, UINT64_MAX
-			   ),
+			   vkWaitForFences(m_gpu->device, 1, &slot->fence, VK_TRUE, UINT64_MAX),
 			   "wait for camera slot"
 		   )
-		   && CheckVk(
-			   vkResetFences(m_gpu->device, 1, &slot->fence),
-			   "reset camera slot"
-		   );
+		   && CheckVk(vkResetFences(m_gpu->device, 1, &slot->fence), "reset camera slot");
 }
 
 // OpenXR signs, forward Vulkan Z [0,1]. View poses are already in app content
@@ -593,19 +520,14 @@ ViewProjection(const QarPose& pose, const QarFov& fov)
 	projection[3][2] = -f * n / (f - n);
 	const auto& q = pose.orientation;
 	const glm::mat4 camera =
-		glm::translate(
-			glm::mat4(1),
-			glm::vec3(pose.position.x, pose.position.y, pose.position.z)
-		)
+		glm::translate(glm::mat4(1), glm::vec3(pose.position.x, pose.position.y, pose.position.z))
 		* glm::mat4_cast(glm::quat(q.w, q.x, q.y, q.z));
 	return projection * glm::inverse(camera);
 }
 
 bool
 CubeCamera::Render(
-	QarVideoFrameVulkan& frame,
-	const std::array<CameraView, 2>& cameras,
-	float seconds
+	QarVideoFrameVulkan& frame, const std::array<CameraView, 2>& cameras, float seconds
 )
 {
 	// Separated textures: one color and one depth texture per eye.
@@ -616,19 +538,13 @@ CubeCamera::Render(
 	}
 	Slot* slot = nullptr;
 	if(not NextSlot(slot)
-	   || not CheckVk(
-		   vkResetCommandBuffer(slot->commands, 0), "reset camera commands"
-	   ))
+	   || not CheckVk(vkResetCommandBuffer(slot->commands, 0), "reset camera commands"))
 	{
 		return false;
 	}
-	VkCommandBufferBeginInfo begin{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-	};
+	VkCommandBufferBeginInfo begin{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	if(not CheckVk(
-		   vkBeginCommandBuffer(slot->commands, &begin), "begin cube commands"
-	   ))
+	if(not CheckVk(vkBeginCommandBuffer(slot->commands, &begin), "begin cube commands"))
 	{
 		return false;
 	}
@@ -639,20 +555,17 @@ CubeCamera::Render(
 		const bool depth = texture.size.format == QAR_PIXEL_FORMAT_D32_FLOAT;
 		VkImageMemoryBarrier barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 		barrier.oldLayout = texture.layout;
-		barrier.newLayout =
-			depth ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-				  : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		barrier.newLayout = depth ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+								  : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		barrier.srcQueueFamilyIndex = texture.queue_family_index;
 		barrier.dstQueueFamilyIndex = m_gpu->family;
 		if(texture.queue_family_index == VK_QUEUE_FAMILY_IGNORED
 		   || texture.queue_family_index == m_gpu->family)
 		{
-			barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex =
-				VK_QUEUE_FAMILY_IGNORED;
+			barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		}
-		barrier.dstAccessMask =
-			depth ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-				  : VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		barrier.dstAccessMask = depth ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+									  : VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		barrier.image = texture.image;
 		barrier.subresourceRange = { static_cast<VkImageAspectFlags>(
 										 depth ? VK_IMAGE_ASPECT_DEPTH_BIT
@@ -674,8 +587,7 @@ CubeCamera::Render(
 	vkCmdPipelineBarrier(
 		slot->commands,
 		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 		0,
 		0,
 		nullptr,
@@ -685,20 +597,14 @@ CubeCamera::Render(
 		acquire.data()
 	);
 	const glm::mat4 model = glm::scale(
-		glm::rotate(
-			glm::mat4(1), seconds * .8f, glm::normalize(glm::vec3(1, 1, 0))
-		),
-		glm::vec3(.3f)
+		glm::rotate(glm::mat4(1), seconds * .8f, glm::normalize(glm::vec3(1, 1, 0))), glm::vec3(.3f)
 	);
 	for(size_t eye = 0; eye < 2; ++eye)
 	{
 		const QarVideoFrameViewEye viewEye =
-			eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
-					 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
-		const int colorIndex =
-			FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_COLOR);
-		const int depthIndex =
-			FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH);
+			eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
+		const int colorIndex = FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_COLOR);
+		const int depthIndex = FindFrameView(frame, viewEye, QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH);
 		if(colorIndex < 0 || depthIndex < 0)
 		{
 			std::cerr << "Frame lacks a color or depth view for an eye\n";
@@ -718,18 +624,16 @@ CubeCamera::Render(
 		{
 			return false;
 		}
-		const std::array<VkClearValue, 2> clears{
-			VkClearValue{ .color = { { .08f, .08f, .1f, 1 } } },
-			VkClearValue{ .depthStencil = { 1, 0 } }
-		};
+		const std::array<VkClearValue, 2> clears{ VkClearValue{
+													  .color = { { .08f, .08f, .1f, 1 } } },
+												  VkClearValue{ .depthStencil = { 1, 0 } } };
 		VkRenderPassBeginInfo pass{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 		pass.renderPass = m_pass;
 		pass.framebuffer = target->framebuffer;
 		pass.renderArea.extent = { width, height };
 		pass.clearValueCount = 2;
 		pass.pClearValues = clears.data();
-		const glm::mat4 mvp =
-			ViewProjection(cameras[eye].pose, cameras[eye].fov) * model;
+		const glm::mat4 mvp = ViewProjection(cameras[eye].pose, cameras[eye].fov) * model;
 		const VkViewport viewport{ 0,
 								   static_cast<float>(height),
 								   static_cast<float>(width),
@@ -740,24 +644,16 @@ CubeCamera::Render(
 		vkCmdBeginRenderPass(slot->commands, &pass, VK_SUBPASS_CONTENTS_INLINE);
 		vkCmdSetViewport(slot->commands, 0, 1, &viewport);
 		vkCmdSetScissor(slot->commands, 0, 1, &scissor);
-		vkCmdBindPipeline(
-			slot->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline
-		);
+		vkCmdBindPipeline(slot->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 		vkCmdPushConstants(
-			slot->commands,
-			m_layout,
-			VK_SHADER_STAGE_VERTEX_BIT,
-			0,
-			sizeof(mvp),
-			&mvp
+			slot->commands, m_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp
 		);
 		vkCmdDraw(slot->commands, 36, 1, 0, 0);
 		vkCmdEndRenderPass(slot->commands);
 	}
 	vkCmdPipelineBarrier(
 		slot->commands,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-			| VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
 			| VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
 		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 		0,
@@ -822,9 +718,7 @@ CubeCamera::Drain()
 	{
 		if(slot.fence != VK_NULL_HANDLE
 		   && not CheckVk(
-			   vkWaitForFences(
-				   m_gpu->device, 1, &slot.fence, VK_TRUE, UINT64_MAX
-			   ),
+			   vkWaitForFences(m_gpu->device, 1, &slot.fence, VK_TRUE, UINT64_MAX),
 			   "drain camera submission"
 		   ))
 		{
