@@ -114,7 +114,6 @@
 
 #endif
 
-
 /**
  * @file types.h
  * @brief Public C API data types for qar-streaming-c.
@@ -170,12 +169,11 @@
  *
  * @section qar_text_encoding Text encoding
  *
- * Every `const char*` the API takes or hands back is UTF-8, paths included,
- * whatever the host process's ANSI code page. A path under a user profile
- * named with a non-ASCII character must be passed as UTF-8, not in the code
- * page: on Windows convert from UTF-16 with
- * `WideCharToMultiByte(CP_UTF8, ...)` (C# and Unity strings marshal as UTF-8
- * with `UnmanagedType.LPUTF8Str`).
+ * Any `const char*` may hold any Unicode text - display names, paths, GUI panel
+ * URLs, hostnames, codes, connection strings, app version and peer info -
+ * except a common name: it is an identity key and must be ASCII, and
+ * qar_app_volumes_get_or_create() / qar_gui_panels_get_or_create() reject
+ * any other. Put non-ASCII text in the display name.
  */
 #ifndef QAR_TYPES_H
 #define QAR_TYPES_H
@@ -188,7 +186,6 @@
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
-
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -2026,7 +2023,6 @@ typedef struct QarRenderFrameShowViewOverridesExt
 
 #endif // QAR_TYPES_H
 
-
 /**
  * @defgroup qar_c_api QAR Streaming C API
  * @brief Public C API for Quaternar streaming and runtime services.
@@ -3293,9 +3289,11 @@ static inline QarResult qar_gui_panels_set_stream(
  *
  * @param session Session that owns the panel.
  * @param id Panel to change.
- * @param peer_ids_additions Peers to add; may be NULL when additions_count is 0.
+ * @param peer_ids_additions Peers to add; may be NULL when additions_count is
+ * 0.
  * @param additions_count Number of entries in @p peer_ids_additions.
- * @param peer_ids_removals Peers to remove; may be NULL when removals_count is 0.
+ * @param peer_ids_removals Peers to remove; may be NULL when removals_count is
+ * 0.
  * @param removals_count Number of entries in @p peer_ids_removals.
  * @return Success, or the panel error (e.g. QAR_STATUS_GUI_PANEL_INVALID_ID).
  */
@@ -4515,7 +4513,6 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 
 #pragma once
 
-
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -4625,7 +4622,6 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 
 #define QAR_DECLARE_MODULE_IMPL_EXTERNS(FUNC_LIST)                             \
 	FUNC_LIST(QAR_DECLARE_IMPL_EXTERN_EX)
-
 
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
@@ -5015,7 +5011,6 @@ QAR_APP_VOLUMES_FUNCTION_LIST(QAR_APP_VOLUMES_DECLARE_WRAPPER)
 #ifndef QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 #define QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 
-
 #define QAR_TYPES_FUNCTION_LIST(X)                                             \
 	X(ACTIVE, QarPeerId, peer_id_unique, (void), ())                           \
 	X(ACTIVE, QarSessionId, session_id_unique, (void), ())                     \
@@ -5123,7 +5118,6 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
 #define QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
-
 
 #define QAR_CANCELATION_TOKEN_FUNCTION_LIST(X)                                 \
 	X(ACTIVE,                                                                  \
@@ -5952,7 +5946,6 @@ qar_stream_params_vulkan_default(void)
 #ifndef QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 #define QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 
-
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
 );
@@ -6192,7 +6185,6 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 #ifndef QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
 #define QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
 
-
 #define QAR_ONBOARDING_FUNCTION_LIST(X)                                        \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
@@ -6382,7 +6374,6 @@ qar_onboarding_id_is_zero(const QarOnboardingId* id)
 #ifndef QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 #define QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 
-
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
 );
@@ -6497,7 +6488,6 @@ QAR_PEER_MANAGEMENT_FUNCTION_LIST(QAR_PEER_MANAGEMENT_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
 #define QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
-
 
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
@@ -6706,7 +6696,6 @@ qar_render_request_handle_is_valid(QarRenderStreamRequest* handle)
 #ifndef QAR_STREAMING_C_V0_DETAIL_RESULT_H
 #define QAR_STREAMING_C_V0_DETAIL_RESULT_H
 
-
 #define QAR_RESULT_FUNCTION_LIST(X)                                            \
 	X(ACTIVE, QarResult, result_success, (void), ())                           \
 	X(ACTIVE,                                                                  \
@@ -6752,7 +6741,6 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 #ifndef QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 #define QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 
-
 #define QAR_RUNTIME_FUNCTION_LIST(X)                                           \
 	X(ACTIVE, void, runtime_handle_destroy, (QarRuntime * handle), (handle))   \
 	X(ACTIVE,                                                                  \
@@ -6780,7 +6768,6 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_SESSION_H
 #define QAR_STREAMING_C_V0_DETAIL_SESSION_H
-
 
 #define QAR_SESSION_FUNCTION_LIST(X)                                           \
 	X(ACTIVE, void, session_handle_destroy, (QarSession * handle), (handle))   \
@@ -6820,7 +6807,6 @@ QAR_SESSION_FUNCTION_LIST(QAR_SESSION_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
 #define QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
-
 
 #define QAR_TARGET_APPS_FUNCTION_LIST(X)                                       \
 	X(ACTIVE,                                                                  \
@@ -6901,7 +6887,6 @@ QAR_TARGET_APPS_FUNCTION_LIST(QAR_TARGET_APPS_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
 #define QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
-
 
 #define QAR_VIDEO_SENDER_FUNCTION_LIST_BASE(X)                                 \
 	X(ACTIVE,                                                                  \
@@ -7013,11 +6998,9 @@ QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
 
 #endif // QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
 
-
 #ifdef QAR_ENABLE_DYNAMIC_LOADING
 #ifndef QAR_DYNAMIC_LOADING_H
 #define QAR_DYNAMIC_LOADING_H
-
 
 #include <stdbool.h>
 #include <stdio.h>

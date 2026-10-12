@@ -4,7 +4,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(FATAL_ERROR "In-source builds are not supported. Please configure an out-of-source build.")
 endif()
 
-project(Qaros VERSION 0.1.0 LANGUAGES C CXX)
+# VERSION holds the QAROS product version (X.Y.Z); the Quaternar build reads the same file.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" QAROS_VERSION LIMIT_COUNT 1)
+string(STRIP "${QAROS_VERSION}" QAROS_VERSION)
+project(Qaros VERSION ${QAROS_VERSION} LANGUAGES C CXX)
 
 if(NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Supported build configurations" FORCE)
