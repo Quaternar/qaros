@@ -404,11 +404,15 @@ typedef enum QarAppState
 	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
 
-/** @brief Time point with variable precision. */
+/**
+ * @brief Wall-clock instant: nanoseconds since the Unix epoch (UTC).
+ *
+ * Instants stamped on different hosts are only as comparable as those hosts'
+ * clocks are synchronized.
+ */
 typedef struct QarTimePoint
 {
-	uint64_t count;
-	uint8_t precision; // 0 = milliseconds, 1 = nanoseconds
+	int64_t unix_ns;
 } QarTimePoint;
 
 // ============================================================================
@@ -5243,7 +5247,7 @@ QAR_CANCELATION_TOKEN_FUNCTION_LIST(QAR_CANCELATION_TOKEN_DECLARE_WRAPPER)
 static inline QarTimePoint
 qar_time_point_default(void)
 {
-	QarTimePoint tp = { 0, 0 };
+	QarTimePoint tp = { 0 };
 	return tp;
 }
 
@@ -5353,7 +5357,7 @@ qar_device_hand_with_joints_default(void)
 {
 	QarDeviceHandsWithJoints hands = {
 		{ 0 },					   // device_id
-		{ 0, 0 },				   // device_timestamp
+		{ 0 },					   // device_timestamp
 		qar_hand_joints_default(), // left_hand
 		qar_hand_joints_default()  // right_hand
 	};

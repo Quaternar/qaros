@@ -1,10 +1,11 @@
 using System;
 using System.Linq;
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     [Collection("QAR Native")]
     public sealed class QueryAndMutationTests : IClassFixture<QarNativeFixture>

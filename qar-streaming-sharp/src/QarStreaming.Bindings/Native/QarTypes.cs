@@ -88,8 +88,7 @@ namespace Quaternar.Qaros.Interop
     [StructLayout(LayoutKind.Sequential)]
     internal struct TimePointNative
     {
-        public ulong Count;
-        public byte Precision;
+        public long UnixNs;
     }
 
     [StructLayout(LayoutKind.Sequential)]

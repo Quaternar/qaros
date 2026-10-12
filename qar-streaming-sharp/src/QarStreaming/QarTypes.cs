@@ -404,22 +404,76 @@ namespace Quaternar.Qaros
         }
     }
 
-    public readonly struct TimePoint
+    /// <summary>
+    /// Wall-clock instant: nanoseconds since the Unix epoch (UTC). Instants stamped on
+    /// different hosts are only as comparable as those hosts' clocks are synchronized.
+    /// Converts to a UTC <see cref="DateTime"/> implicitly or with <see cref="ToDateTime"/>,
+    /// truncated to its 100 ns tick.
+    /// </summary>
+    public readonly struct TimePoint : IEquatable<TimePoint>, IComparable<TimePoint>
     {
-        public TimePoint(ulong count, byte precision)
+        private const long NanosecondsPerTick = 100;
+        private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        public TimePoint(long unixNanoseconds)
         {
-            Count = count;
-            Precision = precision;
+            UnixNanoseconds = unixNanoseconds;
         }
 
-        /// <summary>Ticks in the unit <see cref="Precision"/> names.</summary>
-        public ulong Count { get; }
-        /// <summary>Unit of <see cref="Count"/>: 0 is milliseconds, 1 is nanoseconds.</summary>
-        public byte Precision { get; }
+        /// <summary>Nanoseconds since 1970-01-01T00:00:00Z.</summary>
+        public long UnixNanoseconds { get; }
+
+        /// <summary>The instant as a UTC <see cref="DateTime"/>, truncated to its 100 ns tick.</summary>
+        public DateTime ToDateTime()
+        {
+            return UnixEpoch.AddTicks(UnixNanoseconds / NanosecondsPerTick);
+        }
+
+        /// <summary>The instant as a <see cref="DateTimeOffset"/> at UTC, truncated to its 100 ns tick.</summary>
+        public DateTimeOffset ToDateTimeOffset()
+        {
+            return new DateTimeOffset(ToDateTime());
+        }
+
+        /// <summary>From a <see cref="DateTime"/>; a local or unspecified kind is converted to UTC first.</summary>
+        public static TimePoint FromDateTime(DateTime value)
+        {
+            return new TimePoint((value.ToUniversalTime() - UnixEpoch).Ticks * NanosecondsPerTick);
+        }
+
+        public static TimePoint FromDateTimeOffset(DateTimeOffset value)
+        {
+            return FromDateTime(value.UtcDateTime);
+        }
+
+        public static implicit operator DateTime(TimePoint value) { return value.ToDateTime(); }
+
+        public static TimeSpan operator -(TimePoint left, TimePoint right)
+        {
+            return TimeSpan.FromTicks((left.UnixNanoseconds - right.UnixNanoseconds) / NanosecondsPerTick);
+        }
+
+        public static TimePoint operator +(TimePoint value, TimeSpan offset)
+        {
+            return new TimePoint(value.UnixNanoseconds + offset.Ticks * NanosecondsPerTick);
+        }
+
+        public static bool operator ==(TimePoint left, TimePoint right) { return left.Equals(right); }
+        public static bool operator !=(TimePoint left, TimePoint right) { return !left.Equals(right); }
+        public static bool operator <(TimePoint left, TimePoint right) { return left.UnixNanoseconds < right.UnixNanoseconds; }
+        public static bool operator >(TimePoint left, TimePoint right) { return left.UnixNanoseconds > right.UnixNanoseconds; }
+        public static bool operator <=(TimePoint left, TimePoint right) { return left.UnixNanoseconds <= right.UnixNanoseconds; }
+        public static bool operator >=(TimePoint left, TimePoint right) { return left.UnixNanoseconds >= right.UnixNanoseconds; }
+
+        public bool Equals(TimePoint other) { return UnixNanoseconds == other.UnixNanoseconds; }
+        public override bool Equals(object? obj) { return obj is TimePoint other && Equals(other); }
+        public override int GetHashCode() { return UnixNanoseconds.GetHashCode(); }
+        public int CompareTo(TimePoint other) { return UnixNanoseconds.CompareTo(other.UnixNanoseconds); }
+        public override string ToString() { return ToDateTime().ToString("O"); }
 
         internal static TimePoint FromNative(TimePointNative value)
         {
-            return new TimePoint(value.Count, value.Precision);
+            return new TimePoint(value.UnixNs);
         }
     }
 
@@ -1762,7 +1816,7 @@ namespace Quaternar.Qaros
         public GestureKind GestureKind { get; }
         /// <summary>Where in its lifecycle the gesture sits.</summary>
         public GesturePhase State { get; }
-        /// <summary>When the recogniser emitted it, on its own clock; comparable only within one source peer.</summary>
+        /// <summary>When the recogniser emitted it, as UTC wall-clock time on its host; comparable only within one source peer.</summary>
         public TimePoint Timestamp { get; }
         public bool HasStartPoint { get; }
         /// <summary>Where the hand was when the gesture began, in app content space, in app units. Zero when <see cref="HasStartPoint"/> is false.</summary>
@@ -1875,7 +1929,7 @@ namespace Quaternar.Qaros
         public GuiPanelPoint Position { get; }
         /// <summary>Where this lifecycle began, in panel-content-space pixels; equals <see cref="Position"/> for instant kinds.</summary>
         public GuiPanelPoint StartPosition { get; }
-        /// <summary>When the recogniser emitted it, on its own clock; comparable only within one source peer.</summary>
+        /// <summary>When the recogniser emitted it, as UTC wall-clock time on its host; comparable only within one source peer.</summary>
         public TimePoint Timestamp { get; }
         /// <summary>The hand that made the contact; <see cref="Handedness.Unspecified"/> when the recogniser did not tell.</summary>
         public Handedness Handedness { get; }
@@ -2324,6 +2378,7 @@ namespace Quaternar.Qaros
         }
         /// <summary>The peer whose device sent the sample.</summary>
         public PeerId DeviceId { get; }
+        /// <summary>When the device sampled the hands, as UTC wall-clock time on the device's host.</summary>
         public TimePoint DeviceTimestamp { get; }
         public HandJoints LeftHand { get; }
         public HandJoints RightHand { get; }
