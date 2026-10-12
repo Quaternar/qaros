@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <LangVersion>8.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <Target Name="BuildNetStandard21QarStreaming" BeforeTargets="ResolveReferences">
+    <MSBuild
+      Projects="..\..\QarStreamingSharp.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration);TargetFramework=netstandard2.1" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <!-- Orders the build: the binding for netstandard2.1 is built before this project
+       resolves the assembly below, also in a parallel solution build. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\QarStreamingSharp.csproj"
+      ReferenceOutputAssembly="false"
+      SetTargetFramework="TargetFramework=netstandard2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="QarStreamingSharp">
+      <HintPath>..\..\bin\$(Configuration)\netstandard2.1\QarStreamingSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

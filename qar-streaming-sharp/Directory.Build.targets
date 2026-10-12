@@ -1,0 +1,25 @@
+<Project>
+  <!--
+    Test projects copy the native SDK binaries next to themselves, from
+    QarStreamingNativeBinDir (Directory.Build.props). Nothing native is built here:
+    build the SDK first, then point this folder at its binaries.
+  -->
+  <Target Name="CopyQarStreamingNativeBinaries"
+    AfterTargets="Build"
+    Condition="'$(IsTestProject)' == 'true' and '$(TargetFramework)' != '' and '$(OS)' == 'Windows_NT'">
+    <ItemGroup>
+      <QarStreamingNativeBinary
+        Include="$(QarStreamingNativeBinDir)\**\*.*"
+        Condition="Exists('$(QarStreamingNativeBinDir)')" />
+    </ItemGroup>
+
+    <Error Condition="!Exists('$(QarStreamingNativeBinDir)\qar-streaming-c.dll')"
+      Text="qar-streaming-c.dll was not found in '$(QarStreamingNativeBinDir)'. Put a Debug or RelWithDebInfo QAROS SDK build there (its bin folder), or pass -p:QarStreamingNativeBinDir=&lt;folder&gt;. Inside the Quaternar repository build the qar-streaming-c-ext_gtests target first." />
+    <Error Condition="!Exists('$(QarStreamingNativeBinDir)\qar-streaming-c-ext.dll')"
+      Text="qar-streaming-c-ext.dll was not found in '$(QarStreamingNativeBinDir)'. The integration tests drive the C API against it; it exists only in Debug and RelWithDebInfo builds, never in a release package." />
+
+    <Copy SourceFiles="@(QarStreamingNativeBinary)"
+      DestinationFiles="@(QarStreamingNativeBinary->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+</Project>
