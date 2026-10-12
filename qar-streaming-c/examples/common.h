@@ -108,18 +108,15 @@ example_obtain_session(
 		rejoin_init.onboarding_id = saved_id;
 		rejoin_init.presentation = presentation;
 
-		QarResult rejoin_result = qar_runtime_rejoin(
-			runtime, &rejoin_init, NULL, NULL, NULL, out_session
-		);
+		QarResult rejoin_result =
+			qar_runtime_rejoin(runtime, &rejoin_init, NULL, NULL, NULL, out_session);
 		log_result("qar_runtime_rejoin", rejoin_result);
 		if(qar_result_is_success(rejoin_result))
 		{
 			*out_onboarding_id = saved_id;
 			return 0;
 		}
-		if(!qar_result_has_code(
-			   rejoin_result, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND
-		   ))
+		if(!qar_result_has_code(rejoin_result, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
 		{
 			return 1; /* real error (hub unreachable, ...) */
 		}
@@ -144,9 +141,8 @@ example_obtain_session(
 	onboard_init.header.next = &onboard_code.header;
 
 	QarOnboardingId new_id = qar_onboarding_id_default();
-	QarResult onboard_result = qar_runtime_onboard(
-		runtime, &onboard_init, NULL, NULL, NULL, &new_id, out_session
-	);
+	QarResult onboard_result =
+		qar_runtime_onboard(runtime, &onboard_init, NULL, NULL, NULL, &new_id, out_session);
 	log_result("qar_runtime_onboard", onboard_result);
 	if(qar_result_is_error(onboard_result))
 	{

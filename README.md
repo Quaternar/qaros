@@ -46,6 +46,7 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 - `docs/website/` - Documentation site source, authored with Docusaurus.
 - `package/` - Drop-in location for proprietary QarOS binary distributions.
 - `qar-streaming-c/` - C API headers, the generated single header, and compiled usage examples.
+- `qar-streaming-sharp/` - the C# binding (`Quaternar.Qaros`: assembly, namespace and NuGet) and its xUnit suites.
 - `build/` - Generated build artifacts (created by CMake; not committed).
 - `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` - Top-level project configuration and dependency manifest.
 
@@ -55,6 +56,27 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 2. Configure the project with CMake presets: `cmake --preset x64-windows`.
 3. Build the desired configuration, for example Debug: `cmake --build --preset x64-windows-debug` (use `x64-windows-release` for Release binaries).
 4. Run the provided samples from the generated binaries under `build/x64-windows/<Config>/`. For example: `./build/x64-windows/Debug/dynamic_loading.exe` or `./build/x64-windows/Debug/cpu_rendering_visualizer.exe`.
+
+## C# binding
+
+`qar-streaming-sharp/` holds the C# API and its tests. Build and test with the .NET 8 SDK:
+
+```
+cd qar-streaming-sharp
+dotnet build Quaternar.Qaros.sln
+dotnet test Quaternar.Qaros.sln --no-build
+```
+
+The integration tests drive the C API against `qar-streaming-c-ext`, a test-only DLL with the
+counterparts an application talks to (an in-process hub, peers, receivers), so no running QAROS
+is needed. It is built only in Debug and RelWithDebInfo SDK builds and never ships in a release
+package. The tests copy the native binaries from `QarStreamingNativeBinDir`:
+
+- default `package/bin`: put a Debug or RelWithDebInfo SDK build there, including
+  `qar-streaming-c-ext.dll`;
+- inside the Quaternar repository, its `qaros-native.props` points at that repository's own build
+  (build the `qar-streaming-c-ext_gtests` target first);
+- `-p:QarStreamingNativeBinDir=<folder>` overrides both.
 
 The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) demonstrates dynamic DLL loading, terminal onboarding, and a separate stereo camera and sender for each rendering target discovered through render requests.
 

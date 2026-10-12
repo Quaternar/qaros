@@ -18,8 +18,11 @@
     "docs:xml:qar-streaming": "node scripts/run-doxygen.js",
     "docs:xml": "npm run docs:xml:qar-streaming",
     "docs:convert": "npx doxygen2docusaurus --id qar-streaming-c",
+    "docs:csharp": "node scripts/run-docfx.js",
     "docs:diagrams": "node scripts/render-svg-diagrams.js",
-    "docs:generate": "npm run docs:xml && npm run docs:convert && npm run docs:diagrams",
+    "docs:generate": "npm run docs:xml && npm run docs:convert && npm run docs:csharp && npm run docs:diagrams",
+    "docs:version": "node scripts/version-docs.js",
+    "docs:prune-assets": "node scripts/version-docs.js --prune-assets",
     "docs:watch": "nodemon --config nodemon-doxygen.json",
     "dev": "npm run docs:generate && concurrently -n docusaurus,doxygen -c blue,yellow \"docusaurus start\" \"npm run docs:watch\""
   },
@@ -42,6 +45,7 @@
     "@xpack/doxygen2docusaurus": "^2.2.1",
     "concurrently": "^9.2.3",
     "graceful-fs": "^4.2.11",
+    "js-yaml": "4.3.0",
     "nodemon": "^3.1.14",
     "sharp": "^0.35.3",
     "typescript": "~5.6.2"

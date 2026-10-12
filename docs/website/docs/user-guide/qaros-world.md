@@ -8,7 +8,7 @@ description: A high-level picture of the Hub, devices, the Shared Space, app vol
 
 This page is the non-technical view of QAROS: what is in the Shared Space, who participates, and how it behaves for everyday users.
 
-![QAROS world overview](/img/diagrams/qaros-world-overview.png)
+![QAROS world overview](../img/diagrams/qaros-world-overview.png)
 
 ## The Hub
 
