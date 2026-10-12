@@ -257,8 +257,8 @@ main(int argc, char** argv)
 					sibling_mode.invite = sibling_invite;
 					sibling_init.header.next = &sibling_mode.header;
 
-					QarOnboardingId sibling_onboarding_id =
-						qar_onboarding_id_default();
+					/* Fills the outer sibling_onboarding_id: the forget at the
+					 * end of the example needs it. */
 					QarSession* sibling_session = NULL;
 					QarResult sibling_result = qar_runtime_onboard(
 						sibling_runtime,

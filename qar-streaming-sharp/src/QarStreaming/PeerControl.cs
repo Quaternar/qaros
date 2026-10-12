@@ -4,9 +4,9 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 #endif
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// The peers of a session: every participant, devices and applications alike, this process

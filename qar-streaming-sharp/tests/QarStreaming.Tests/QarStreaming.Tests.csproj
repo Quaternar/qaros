@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\QarStreamingSharp.csproj" />
+    <ProjectReference Include="..\..\Quaternar.Qaros.csproj" />
   </ItemGroup>
 
 </Project>

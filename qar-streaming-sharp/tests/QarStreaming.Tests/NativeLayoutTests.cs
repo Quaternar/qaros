@@ -1,10 +1,11 @@
 using System;
 using System.Runtime.InteropServices;
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
 using Xunit;
+using Quaternar.Qaros.Mathematics;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     public sealed class NativeLayoutTests
     {
@@ -254,7 +255,9 @@ namespace QarStreaming.Tests
         {
             Assert.Equal(6, (int)GraphicsAPI.Vulkan);
             Assert.Equal(7, (int)GraphicsAPI.OpenGL);
-            Assert.Equal(1, (int)Hand.Right);
+            Assert.Equal(0, (int)Handedness.Unspecified);
+            Assert.Equal(1, (int)Handedness.Left);
+            Assert.Equal(2, (int)Handedness.Right);
             Assert.Equal(3, (int)GuiPanelGestureKind.Drag);
             Assert.Equal(1, (int)GpuDeviceIdType.Uuid);
             Assert.Equal(56, (int)PixelFormat.B8G8R8X8);

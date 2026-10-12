@@ -77,4 +77,4 @@ foreach ($File in $Files)
 	)
 }
 
-dotnet format (Join-Path $ProjectRoot "QarStreamingSharp.csproj") --include src tests
+dotnet format (Join-Path $ProjectRoot "Quaternar.Qaros.csproj") --include src tests

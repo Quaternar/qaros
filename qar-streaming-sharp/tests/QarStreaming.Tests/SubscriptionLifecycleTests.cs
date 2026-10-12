@@ -1,11 +1,11 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar;
-using QarStreaming.Tests.Ext;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Tests.Ext;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     [Collection("QAR Native")]
     public sealed class SubscriptionLifecycleTests : IClassFixture<QarNativeFixture>

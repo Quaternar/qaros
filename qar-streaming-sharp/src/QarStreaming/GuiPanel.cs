@@ -4,9 +4,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// An immutable snapshot of one GUI panel, safe to keep. Get a newer one from

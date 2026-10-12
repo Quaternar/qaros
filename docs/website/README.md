@@ -50,7 +50,7 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
   values are one table with an anchor per value. Crefs become relative `.md` links,
   BCL types link to learn.microsoft.com, source links go to GitHub (`main`, or the
   commit a release snapshot was taken from via `QAROS_SOURCE_REF`).
-- Only the public `Qar` namespace is documented; `Qar.Native` is internal.
+- Only the public `Quaternar.Qaros` and `Quaternar.Qaros.Mathematics` namespaces are documented; `Quaternar.Qaros.Interop` is internal.
 - Generated from the `net8.0` target, so APIs that exist only on .NET 8 are listed too.
 - Page content comes from the `///` XML doc comments. A public type or member without
   one has an empty description.

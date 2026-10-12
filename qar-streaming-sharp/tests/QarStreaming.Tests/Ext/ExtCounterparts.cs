@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 
-namespace QarStreaming.Tests.Ext
+namespace Quaternar.Qaros.Tests.Ext
 {
     // Managed counterparts of the C API for tests: an in-process hub to onboard
     // into, peers to stream to, receivers that check pixels. Each wraps one
@@ -237,7 +238,7 @@ namespace QarStreaming.Tests.Ext
                 Panel = panel.ToNative(),
                 Kind = (int)GuiPanelGestureKind.Tap,
                 Phase = (int)GesturePhase.Instant,
-                Hand = (int)Hand.Right,
+                Handedness = (int)Handedness.Right,
                 X = x,
                 Y = y,
                 StartX = x,

@@ -4,9 +4,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>Per-frame information from a successful begin-frame. Everything it hands out is in the bound app volume's app content space.</summary>
     /// <remarks>

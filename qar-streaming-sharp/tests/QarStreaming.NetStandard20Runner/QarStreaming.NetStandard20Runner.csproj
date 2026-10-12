@@ -10,7 +10,7 @@
 
   <Target Name="BuildNetStandard20QarStreaming" BeforeTargets="ResolveReferences">
     <MSBuild
-      Projects="..\..\QarStreamingSharp.csproj"
+      Projects="..\..\Quaternar.Qaros.csproj"
       Targets="Build"
       Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
   </Target>
@@ -24,14 +24,14 @@
   <!-- Orders the build: the binding for netstandard2.0 is built before this project
        resolves the assembly below, also in a parallel solution build. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\QarStreamingSharp.csproj"
+    <ProjectReference Include="..\..\Quaternar.Qaros.csproj"
       ReferenceOutputAssembly="false"
       SetTargetFramework="TargetFramework=netstandard2.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="QarStreamingSharp">
-      <HintPath>..\..\bin\$(Configuration)\netstandard2.0\QarStreamingSharp.dll</HintPath>
+    <Reference Include="Quaternar.Qaros">
+      <HintPath>..\..\bin\$(Configuration)\netstandard2.0\Quaternar.Qaros.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

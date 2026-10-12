@@ -52,7 +52,7 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
     references).
   - Add a `Tutorials > C#` subfolder (`developer-guide/tutorials/csharp/*.mdx`)
     mirroring the 5 C tutorials 1:1.
-  - The NuGet ids are `Quaternar.Qaros.Streaming[.Demo]` (now in
+  - The NuGet ids are `Quaternar.Qaros[.Demo]` (now in
     `developer-guide/getting-started`); publish them where integrators can reach them.
   - C# members the docs use are confirmed against the binding: `session.AppVolumes.GetOrCreate`
     / `session.GuiPanels.GetOrCreate` (options take the required common name in their

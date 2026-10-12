@@ -46,7 +46,7 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 - `docs/website/` - Documentation site source, authored with Docusaurus.
 - `package/` - Drop-in location for proprietary QarOS binary distributions.
 - `qar-streaming-c/` - C API headers, the generated single header, and compiled usage examples.
-- `qar-streaming-sharp/` - the C# binding (`QarStreamingSharp`, namespace `Qar`) and its xUnit suites.
+- `qar-streaming-sharp/` - the C# binding (`Quaternar.Qaros`: assembly, namespace and NuGet) and its xUnit suites.
 - `build/` - Generated build artifacts (created by CMake; not committed).
 - `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` - Top-level project configuration and dependency manifest.
 
@@ -63,8 +63,8 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 
 ```
 cd qar-streaming-sharp
-dotnet build QarStreamingSharp.sln
-dotnet test QarStreamingSharp.sln --no-build
+dotnet build Quaternar.Qaros.sln
+dotnet test Quaternar.Qaros.sln --no-build
 ```
 
 The integration tests drive the C API against `qar-streaming-c-ext`, a test-only DLL with the

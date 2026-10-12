@@ -4,7 +4,7 @@ using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using static Vortice.Direct3D11.D3D11;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     internal sealed class D3D11TestDevice : IDisposable
     {

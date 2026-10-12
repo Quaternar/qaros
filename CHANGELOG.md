@@ -50,6 +50,31 @@ First versioned release. Everything below is the baseline later entries are meas
 - **Unity:** each endpoint's app volume is kept by its new `AppVolumeCommonName` (default
   `<product name>/<endpoint name>`): reconnecting gets the same volume and placement back, and a
   disconnect no longer removes it.
+- **C API:** `QarHand` is gone; `QarHandedness` names both the hand of a gesture and the axis
+  handedness of a `QarGeoAnchorFrame`, renumbered `QAR_HANDEDNESS_UNSPECIFIED = 0`,
+  `QAR_HANDEDNESS_LEFT = 1`, `QAR_HANDEDNESS_RIGHT = 2` (`RIGHT` was 0).
+  `qar_gui_panel_gesture_get_hand` is now `qar_gui_panel_gesture_get_handedness`, and
+  `qar_app_volume_gesture_get_hand(gesture, out_hand, out_has_hand)` is now
+  `qar_app_volume_gesture_get_handedness(gesture, out_handedness)`: a two-hand gesture reports
+  `UNSPECIFIED` instead of a `has_hand` flag. `qar_app_volumes_get_or_create` (with
+  `has_app_world_anchor`) and `qar_app_volumes_change_app_world_anchor` reject an `UNSPECIFIED`
+  frame with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`; a zero-initialized frame used to mean
+  right-handed, so set `handedness` explicitly. An app volume without an anchor reads back
+  `UNSPECIFIED`.
+- **SDK:** app world anchors are stored in a new schema version. A peer of an earlier build reads
+  the handedness of an anchor written by this version swapped; run every peer of a session on
+  the same version.
+- **C#:** the API is `Quaternar.Qaros`: namespace (was `Qar`), assembly `Quaternar.Qaros.dll` (was
+  `QarStreamingSharp.dll`) and NuGet. `Vector3`, `Vector3d`, `Quaternion` and `Pose` moved to
+  `Quaternar.Qaros.Mathematics`, so they no longer clash with `UnityEngine` or `System.Numerics`.
+  Replace `using Qar;` with `using Quaternar.Qaros;` and add `using Quaternar.Qaros.Mathematics;`
+  where you use poses or vectors.
+- **C#:** `Hand` is gone; `Handedness` (`Unspecified = 0`, `Left = 1`, `Right = 2`) names both the
+  hand of a gesture and the axis handedness of a `GeoAnchorFrame`. `AppVolumeGestureEvent.Hand` and
+  `GuiPanelGestureEvent.Hand` are now `.Handedness`; `AppVolumeGestureEvent.HasHand` is removed, a
+  two-hand gesture reports `Handedness.Unspecified`. `Handedness.Right` was 0: a default
+  `GeoAnchorFrame` is now `Unspecified` and rejected with `ArgumentNotSupported`; set it
+  explicitly.
 - **C API:** ending a subscription now waits for its callbacks. When `qar_cancel_token_cancel`,
   `qar_cancel_token_handle_destroy`, `qar_session_handle_destroy` or `qar_library_destroy`
   returns, a callback of the subscriptions it ends that was running on another thread has
@@ -146,7 +171,7 @@ First versioned release. Everything below is the baseline later entries are meas
 - **Packaging:** Windows x64 runtime as `QAROS <version>.zip` (release) and
   `QAROS Demo <version>.zip` (demo): `qar-runtime-launcher`, the device applications and the C API
   under `bin/`, the C API header under `include/`.
-- **Packaging:** C# NuGet packages `Quaternar.Qaros.Streaming` and `Quaternar.Qaros.Streaming.Demo`; they copy
+- **Packaging:** C# NuGet packages `Quaternar.Qaros` and `Quaternar.Qaros.Demo`; they copy
   the native runtime next to the application on build and publish.
 - **Unity:** packages `com.quaternar.streaming` and `com.quaternar.streaming.mrtk` as
   `QAROS Unity <version>.zip` and `QAROS Unity Demo <version>.zip`, installed with "Add package
@@ -195,9 +220,9 @@ First versioned release. Everything below is the baseline later entries are meas
   transparent-black clear, as the Unity package's cameras are) and its alpha channel kept correct
   through post-processing. Transparent materials that write no depth still do not appear. Off by
   default, because an application whose alpha channel is undefined would turn invisible.
-- **C#:** XML documentation for the public `Qar` API: units, coordinate spaces, threading and
+- **C#:** XML documentation for the public `Quaternar.Qaros` API: units, coordinate spaces, threading and
   lifetime rules, and the status codes to handle. Shows in IntelliSense (the NuGet ships
-  `QarStreamingSharp.xml`) and in the C# API reference on the documentation site.
+  `Quaternar.Qaros.xml`) and in the C# API reference on the documentation site.
 - **C API:** `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` (C#
   `QarStatusCode.MediaStreamingStreamIsPaused`): a frame call on a stream its receiver paused,
   for example because its display is not visible. Keep the sender; it resumes when the receiver
@@ -223,8 +248,8 @@ First versioned release. Everything below is the baseline later entries are meas
 - **C#:** `Session.RequestOnboardingCodes(RequestOnboardingCodesOptions)` and
   `OnboardingInvite.GetCode()`, the same as the C API calls.
 - **C API:** `qar-streaming-c` version `v0` (`qar_streaming_c/v0/api.h`), loaded at run time.
-- **C#:** `QarStreamingSharp` for `netstandard2.0`, `netstandard2.1` and `net8.0`, the C API as
-  managed types in the `Qar` namespace, returning `Result` instead of throwing.
+- **C#:** `Quaternar.Qaros` for `netstandard2.0`, `netstandard2.1` and `net8.0`, the C API as
+  managed types in the `Quaternar.Qaros` namespace, returning `Result` instead of throwing.
 - **C#:** wrappers for the rest of the v0 C API: OpenGL and Vulkan render-sender frames
   (`GetOpenGlFrame`, `GetVulkanFrame`), `RenderSender.TryBeginFrame`, app volume gesture modes, GUI
   panel gesture events, target-app invite/kill, `OnboardOptions.WithPeerId` / `WithGraphicsDevice`
@@ -243,7 +268,7 @@ First versioned release. Everything below is the baseline later entries are meas
   acquire to return of a frame) about every 0.5 s, and a rendering sender also
   `SenderRenderRequestWait` (the acquired frame's wait for the receiver's render request). Read
   them from `MediaStreamMetrics::SenderFrameHold` / `SenderRenderRequestWait`.
-- **Docs:** C# API reference (`Qar` namespace of `QarStreamingSharp`) under **C# API** on the
+- **Docs:** C# API reference (the `Quaternar.Qaros` namespaces) under **C# API** on the
   documentation site, generated from the binding's XML doc comments next to the C API reference.
   The landing page groups the types by area, with the entry points first.
 - **Docs:** the documentation is versioned: each release keeps its own guides, diagrams and API reference,
@@ -357,6 +382,10 @@ First versioned release. Everything below is the baseline later entries are meas
 - **Visualizer:** a visualizer without saved settings starts in Basic mode. Importing the old
   `streaming_viz_settings.json` no longer carries its Debug unlock over, so Debug always needs its
   password; panel visibility is still imported.
+- **C API:** `qar_streaming.h` compiles without warnings at `/W4` (MSVC C4098): the generated
+  wrappers of `void` functions (`qar_runtime_destroy`, the `*_handle_destroy` family,
+  `qar_result_log_if_error`, ...) no longer `return` a `void` expression, which strict C11 also
+  rejects.
 - **SDK:** destroying a session (`qar_session_handle_destroy`) could crash the process shortly
   afterwards with an access violation on a library thread, when a video or render sender was
   finishing a stream-state update at that moment. A sender destroyed after its session no longer
@@ -412,6 +441,8 @@ First versioned release. Everything below is the baseline later entries are meas
   different live sender peer already owns this media stream's video state".
 - **SDK:** a new render sender no longer holds up the session's other senders for 2 s when it first
   publishes, which made a lock-step target drop the source as stalled right after it connected.
+- **Docs:** the `onboarding_and_rejoin.c` example forgets the sibling peer it onboarded when run
+  with forget: it kept a shadowed, empty onboarding id and could not remove the pairing.
 
 ### Security
 

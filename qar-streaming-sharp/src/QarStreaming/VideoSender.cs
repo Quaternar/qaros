@@ -1,7 +1,7 @@
 using System;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// Creates <see cref="PrimarylessVideoSender"/>s for a session; reached through

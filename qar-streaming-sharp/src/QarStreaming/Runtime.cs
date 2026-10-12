@@ -1,9 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// Hosts the identity slots a process onboards with and produces its sessions. Create it after

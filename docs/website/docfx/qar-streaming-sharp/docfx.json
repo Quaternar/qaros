@@ -4,7 +4,7 @@
       "src": [
         {
           "src": "../../../../qar-streaming-sharp",
-          "files": ["QarStreamingSharp.csproj"]
+          "files": ["Quaternar.Qaros.csproj"]
         }
       ],
       "properties": {

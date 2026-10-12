@@ -1,7 +1,7 @@
-using Qar;
+using Quaternar.Qaros;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     public sealed class CallbackTests
     {

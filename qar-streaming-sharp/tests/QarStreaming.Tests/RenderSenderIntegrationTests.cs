@@ -2,10 +2,10 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar;
+using Quaternar.Qaros;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     [Collection("QAR Native")]
     public sealed class RenderSenderIntegrationTests : IClassFixture<QarNativeFixture>

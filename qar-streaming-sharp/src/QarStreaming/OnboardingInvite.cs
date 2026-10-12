@@ -1,7 +1,7 @@
 using System;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// A one-time onboarding invite minted by the hub: everything another instance needs to

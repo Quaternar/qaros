@@ -1,7 +1,8 @@
-using Qar;
+using Quaternar.Qaros;
 using Xunit;
+using Quaternar.Qaros.Mathematics;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     public sealed class SubscriptionTests
     {

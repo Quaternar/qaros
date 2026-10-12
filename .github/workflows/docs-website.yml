@@ -8,7 +8,7 @@ on:
       - "qar-streaming-c/include/**"
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
-      - "qar-streaming-sharp/QarStreamingSharp.csproj"
+      - "qar-streaming-sharp/Quaternar.Qaros.csproj"
       - ".github/workflows/docs-website.yml"
   pull_request:
     paths:
@@ -16,7 +16,7 @@ on:
       - "qar-streaming-c/include/**"
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
-      - "qar-streaming-sharp/QarStreamingSharp.csproj"
+      - "qar-streaming-sharp/Quaternar.Qaros.csproj"
       - ".github/workflows/docs-website.yml"
   workflow_dispatch:
 

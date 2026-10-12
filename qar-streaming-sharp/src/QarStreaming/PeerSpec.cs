@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// An immutable snapshot of one peer, taken when it was read or delivered; safe to keep. It does

@@ -18,39 +18,27 @@ Keep `netstandard2.0` as the compatibility baseline. Add efficient APIs for `net
 
 ## Namespace and naming rules
 
-Use namespaces instead of prefixing every public C# class and type with `Qar`.
+Follow the .NET naming guidelines: `<Company>.<Product>[.<Feature>]`, and the namespace, the
+assembly (`Quaternar.Qaros.dll`, project `Quaternar.Qaros.csproj`) and the NuGet package
+(`Quaternar.Qaros`, `Quaternar.Qaros.Demo`) share one name. The namespace carries the product,
+so public types do not repeat a `Qar` prefix.
 
-Default public wrapper namespace:
-
-```csharp
-namespace Qar
-{
-    public sealed class Runtime : IDisposable { }
-    public sealed class Session : IDisposable { }
-    public readonly struct PeerId { }
-    public readonly struct Result<T> { }
-}
-```
-
-Default internal binding namespace:
-
-```csharp
-namespace Qar.Native
-{
-    internal static class NativeMethods { }
-    internal struct ResultNative { }
-    internal struct RuntimeInitNative { }
-}
-```
+| Namespace | Visibility | Holds |
+|---|---|---|
+| `Quaternar.Qaros` | public | the managed API: `Runtime`, `Session`, `RenderSender`, `PeerId`, `Result<T>`, ... |
+| `Quaternar.Qaros.Mathematics` | public | `Vector3`, `Vector3d`, `Quaternion`, `Pose`: kept apart so `using Quaternar.Qaros;` beside `UnityEngine` or `System.Numerics` does not make those names ambiguous |
+| `Quaternar.Qaros.Interop` | internal | P/Invoke (`NativeMethods`), native structs, marshalling helpers |
+| `Quaternar.Qaros.Tests[.Ext]` | tests | xUnit suites and the ext counterparts |
 
 Naming rules:
 
-- Public high-level managed types must not use a redundant `Qar` prefix when they are already in the `Qar` namespace. Use `Runtime`, `Session`, `RenderSender`, `RenderFrameInfo`, `PeerSpec`, `GuiPanel`, `AppVolume`, `Result<T>`, `ResultInfo`, `PeerId`, `Structure`, and `StructureType`.
+- Public high-level managed types must not use a redundant `Qar` prefix. Use `Runtime`, `Session`, `RenderSender`, `RenderFrameInfo`, `PeerSpec`, `GuiPanel`, `AppVolume`, `Result<T>`, `ResultInfo`, `PeerId`, `Structure`, and `StructureType`.
+- A new value type that shares its name with a common `UnityEngine` or `System.Numerics` type goes in `Quaternar.Qaros.Mathematics` (or another sub-namespace), never in `Quaternar.Qaros`.
 - Internal native binding types may preserve the C concept name but should use a `Native` suffix when that avoids collisions, for example `RuntimeInitNative`, `SessionIdNative`, `StructureHeaderNative`, and `ResultNative`.
-- The internal P/Invoke container should be `NativeMethods` in `Qar.Native`, not `QarNative`.
+- The internal P/Invoke container is `NativeMethods` in `Quaternar.Qaros.Interop`.
 - Preserve exact native symbol names in `[DllImport]` declarations, such as `qar_impl_runtime_create`.
-- Use a `Qar` prefix only when a type is intentionally usable outside the namespace or when avoiding a real collision is clearer than relying on namespace qualification.
-- In examples and generated code, prefer `Qar.Runtime` over `QarRuntime`, `Qar.Result<T>` over `Result<T>`, and `Qar.Native.ResultNative` over public exposure of the native C result shape.
+- Strings go to the C API as UTF-8 through `NativeMemoryScope.AllocUtf8` / `NativeUtf8String.FromUtf8`, never the ANSI code page. Only a common name must be ASCII, and the C API checks it.
+- In examples, write `using Quaternar.Qaros;` (plus `using Quaternar.Qaros.Mathematics;` when poses or vectors appear) and the unprefixed names.
 
 ## Required workflow
 
@@ -106,8 +94,8 @@ Do not fork behavior between targets. Newer target APIs must be convenience or e
 
 Use standard C# cancellation at the high-level wrapper boundary.
 
-- Public high-level wrapper methods must expose `System.Threading.CancellationToken`, not `Qar.CancelToken`.
-- Keep `Qar.CancelToken` internal. It is native interop plumbing only, used to pass a `QarCancelToken*` to the C API.
+- Public high-level wrapper methods must expose `System.Threading.CancellationToken`, not the internal `CancelToken`.
+- Keep `CancelToken` internal. It is native interop plumbing only, used to pass a `QarCancelToken*` to the C API.
 - When the native C API accepts `QarCancelToken*` or an equivalent cancellation handle, map that parameter to a C# `CancellationToken` in the managed wrapper.
 - Do not add a C# `CancellationToken` parameter when the native operation has no cancellation path. Call out the missing C API support instead of pretending the managed token cancels native work.
 - For `CancellationToken.None` or any uncancelable token on one-shot/synchronous operations, pass `IntPtr.Zero` and do not allocate a native token.
@@ -453,9 +441,9 @@ public Task<Result<RenderSender>> CreateRenderSenderAsync(RenderSenderOptions op
 
 The `System.Threading.CancellationToken` parameter must be a bridge over the native cancellation path:
 
-- Do not expose `Qar.CancelToken` parameters from high-level public wrapper methods. Keep `Qar.CancelToken` as internal/native plumbing unless a low-level binding layer explicitly needs it.
+- Do not expose `CancelToken` parameters from high-level public wrapper methods. Keep `CancelToken` as internal/native plumbing unless a low-level binding layer explicitly needs it.
 - For `CancellationToken.None` or an uncancelable token, pass `IntPtr.Zero` and do not allocate a native token.
-- For a cancelable C# token, create an owned `Qar.CancelToken`, register the C# token, and call native `Cancel()` when the C# token is canceled.
+- For a cancelable C# token, create an owned `CancelToken`, register the C# token, and call native `Cancel()` when the C# token is canceled.
 - Store the owned native token and `CancellationTokenRegistration` in the rooted async state so they remain alive until the native callback completes, managed cancellation completes the task, startup fails, or the state is otherwise cleaned up.
 - Dispose the registration and owned native token exactly once during async-state cleanup.
 - If the C# token cancels, signal the native token and complete the managed task as canceled (`TrySetCanceled`). Native QAR failures still complete successfully with `Result<T>.Failure`; only managed cancellation should produce a canceled task.

@@ -114,6 +114,7 @@
 
 #endif
 
+
 /**
  * @file types.h
  * @brief Public C API data types for qar-streaming-c.
@@ -169,7 +170,14 @@
  *
  * @section qar_text_encoding Text encoding
  *
- * Any `const char*` may hold any Unicode text - display names, paths, GUI panel
+ * Every `const char*` the API takes or hands back is UTF-8, paths included,
+ * whatever the host process's ANSI code page. A path under a user profile
+ * named with a non-ASCII character must be passed as UTF-8, not in the code
+ * page: on Windows convert from UTF-16 with
+ * `WideCharToMultiByte(CP_UTF8, ...)`. The C# binding converts its UTF-16
+ * strings to UTF-8 itself.
+ *
+ * Any string may hold any Unicode text - display names, paths, GUI panel
  * URLs, hostnames, codes, connection strings, app version and peer info -
  * except a common name: it is an identity key and must be ASCII, and
  * qar_app_volumes_get_or_create() / qar_gui_panels_get_or_create() reject
@@ -186,6 +194,7 @@
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
+
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -471,12 +480,24 @@ typedef struct QarNearFar
 #define QAR_ORIENTATION_TRACKED_BIT 0x00000004ULL
 #define QAR_POSITION_TRACKED_BIT 0x00000008ULL
 
-/** @brief Which of a peer's two hands something came from. */
-typedef enum QarHand
+/**
+ * @brief Left or right.
+ *
+ * Says which of a peer's two hands a gesture came from, and the handedness of a
+ * geo anchor frame's axes (right-handed: axis_x_world x axis_y_world =
+ * axis_z_world).
+ *
+ * QAR_HANDEDNESS_UNSPECIFIED is the zero value, so a zero-initialized struct
+ * never claims a side by accident. A gesture made with both hands together
+ * reports it; a QarGeoAnchorFrame carrying it is rejected with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ */
+typedef enum QarHandedness
 {
-	QAR_HAND_LEFT = 0,
-	QAR_HAND_RIGHT = 1
-} QarHand;
+	QAR_HANDEDNESS_UNSPECIFIED = 0,
+	QAR_HANDEDNESS_LEFT = 1,
+	QAR_HANDEDNESS_RIGHT = 2
+} QarHandedness;
 
 typedef enum QarHandJoint
 {
@@ -900,13 +921,6 @@ typedef enum QarWorldReferenceSystem
 		0 // Earth-Centered, Earth-Fixed WGS84 in meters
 } QarWorldReferenceSystem;
 
-/** @brief Coordinate system handedness. */
-typedef enum QarHandedness
-{
-	QAR_HANDEDNESS_RIGHT = 0,
-	QAR_HANDEDNESS_LEFT = 1
-} QarHandedness;
-
 /**
  * @brief Fully defined anchor frame in world coordinates.
  *
@@ -920,6 +934,8 @@ typedef struct QarGeoAnchorFrame
 	QarVector3d axis_x_world; // Local +X axis (unit vector)
 	QarVector3d axis_y_world; // Local +Y axis (unit vector)
 	QarVector3d axis_z_world; // Local +Z axis (unit vector)
+	// Declared axis handedness, QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT.
+	// QAR_HANDEDNESS_UNSPECIFIED is rejected.
 	QarHandedness handedness;
 } QarGeoAnchorFrame;
 
@@ -1718,6 +1734,8 @@ typedef struct QarAppVolumeInit
 	/// bigger. App pose remains in app-volume meters and is not scaled.
 	float app_scale;
 	bool has_app_world_anchor;
+	/// Read only when has_app_world_anchor is set. Its handedness must then be
+	/// QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT.
 	QarGeoAnchorFrame app_world_anchor;
 	/// Optional gesture configuration
 	const QarAppVolumeGestureConfiguration* gesture_configuration;
@@ -2022,6 +2040,7 @@ typedef struct QarRenderFrameShowViewOverridesExt
 #endif
 
 #endif // QAR_TYPES_H
+
 
 /**
  * @defgroup qar_c_api QAR Streaming C API
@@ -3544,9 +3563,15 @@ static inline QarResult qar_gui_panel_gesture_get_timestamp(
  *
  * Diagnostic: only one hand of a peer is active at a time, so a consumer does
  * not need this to arbitrate.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_handedness Receives QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT;
+ *                       must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
  */
-static inline QarResult
-qar_gui_panel_gesture_get_hand(QarGuiPanelGesture* gesture, QarHand* out_hand);
+static inline QarResult qar_gui_panel_gesture_get_handedness(
+	QarGuiPanelGesture* gesture, QarHandedness* out_handedness
+);
 
 /**
  * @brief How many taps in this run, for QAR_GUI_PANEL_GESTURE_KIND_TAP.
@@ -3631,7 +3656,11 @@ static inline QarResult qar_gui_panel_get_visible_to_peers(
  * @{ */
 // Forward declarations
 /** @brief Get the app volume identified by init->common_name, creating it
- * (via init) if it does not exist yet. */
+ * (via init) if it does not exist yet.
+ *
+ * Fails with QAR_STATUS_ARGUMENT_NOT_SUPPORTED when init->has_app_world_anchor
+ * is set and init->app_world_anchor.handedness is QAR_HANDEDNESS_UNSPECIFIED.
+ */
 static inline QarResult qar_app_volumes_get_or_create(
 	QarSession* session,
 	const QarAppVolumeInit* init,
@@ -3680,7 +3709,12 @@ static inline QarResult qar_app_volumes_change_app_pose(
 static inline QarResult qar_app_volumes_change_app_scale(
 	QarSession* session, const QarAppVolumeId* volume_id, float scale
 );
-/** @brief Set app world anchor metadata. */
+/**
+ * @brief Set app world anchor metadata.
+ *
+ * @return QAR_STATUS_ARGUMENT_NOT_SUPPORTED when @p anchor's handedness is
+ *         QAR_HANDEDNESS_UNSPECIFIED.
+ */
 static inline QarResult qar_app_volumes_change_app_world_anchor(
 	QarSession* session,
 	const QarAppVolumeId* volume_id,
@@ -3937,20 +3971,20 @@ static inline QarResult qar_app_volume_gesture_get_timestamp(
 /**
  * @brief Which hand the gesture came from.
  *
- * A gesture of one hand -- hover, click, single-pointer 6DoF -- names it. A
- * gesture of both hands together, QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE
- * and QAR_GESTURE_DUAL_POINTER_ROTATE, has none, and @p out_has_hand is false.
- * Two hovers that arrive together are the user's two rays, told apart by this.
+ * A gesture of one hand -- hover, click, single-pointer 6DoF -- names it:
+ * QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT. A gesture of both hands
+ * together, QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE and
+ * QAR_GESTURE_DUAL_POINTER_ROTATE, has none and reports
+ * QAR_HANDEDNESS_UNSPECIFIED. Two hovers that arrive together are the user's
+ * two rays, told apart by this.
  *
  * @param gesture Gesture handed to the callback; must not be NULL.
- * @param out_hand Receives the hand; set to QAR_HAND_LEFT when there is none,
- *                 never left stale. Must not be NULL.
- * @param out_has_hand Receives whether the gesture came from one hand; must not
- *                     be NULL.
+ * @param out_handedness Receives the hand, or QAR_HANDEDNESS_UNSPECIFIED for a
+ *                       two-hand gesture; never left stale. Must not be NULL.
  * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
  */
-static inline QarResult qar_app_volume_gesture_get_hand(
-	QarAppVolumeGesture* gesture, QarHand* out_hand, bool* out_has_hand
+static inline QarResult qar_app_volume_gesture_get_handedness(
+	QarAppVolumeGesture* gesture, QarHandedness* out_handedness
 );
 
 /**
@@ -4513,6 +4547,7 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 
 #pragma once
 
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -4560,6 +4595,22 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 		"error code."                                                          \
 	)
 
+/* QAR_RETURN_KEYWORD(RET): `return` in a value-returning wrapper, nothing in a
+ * void one, so a void wrapper never returns an expression (a C11 constraint
+ * violation, MSVC C4098). Detects void by RET's first token; QAR_PP_EXPAND
+ * keeps MSVC's traditional preprocessor splitting __VA_ARGS__. */
+#define QAR_PP_EXPAND(x) x
+#define QAR_PP_CAT_IMPL(a, b) a##b
+#define QAR_PP_CAT(a, b) QAR_PP_CAT_IMPL(a, b)
+#define QAR_PP_SECOND_IMPL(a, b, ...) b
+#define QAR_PP_SECOND(...) QAR_PP_EXPAND(QAR_PP_SECOND_IMPL(__VA_ARGS__))
+#define QAR_PP_VOID_PROBE_void ~, 1
+#define QAR_PP_IS_VOID(RET) QAR_PP_SECOND(QAR_PP_VOID_PROBE_##RET, 0, ~)
+#define QAR_RETURN_KEYWORD_0 return
+#define QAR_RETURN_KEYWORD_1
+#define QAR_RETURN_KEYWORD(RET)                                                \
+	QAR_PP_CAT(QAR_RETURN_KEYWORD_, QAR_PP_IS_VOID(RET))
+
 #ifdef QAR_ENABLE_DYNAMIC_LOADING
 
 #define QAR_DECLARE_MODULE_COMMON(                                             \
@@ -4598,7 +4649,7 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 			QAR_API_MISSING_ERR_PRINT("qar_" #NAME, MODULE_STR);               \
 			abort();                                                           \
 		}                                                                      \
-		return (MODULE_API_VAR).NAME ARGS;                                     \
+		QAR_RETURN_KEYWORD(RET)(MODULE_API_VAR).NAME ARGS;                     \
 	}
 
 #else
@@ -4615,13 +4666,14 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 )                                                                              \
 	QAR_WRAPPER_ATTR_##STATUS static inline RET qar_##NAME PARAMS              \
 	{                                                                          \
-		return qar_impl_##NAME ARGS;                                           \
+		QAR_RETURN_KEYWORD(RET) qar_impl_##NAME ARGS;                          \
 	}
 
 #endif
 
 #define QAR_DECLARE_MODULE_IMPL_EXTERNS(FUNC_LIST)                             \
 	FUNC_LIST(QAR_DECLARE_IMPL_EXTERN_EX)
+
 
 typedef void (*qar_app_volume_update_callback_t)(
 	QarAppVolume* handle, void* user_state
@@ -4907,9 +4959,9 @@ typedef void (*qar_app_volume_gesture_event_callback_t)(
 	  (gesture, out_timestamp))                                                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  app_volume_gesture_get_hand,                                             \
-	  (QarAppVolumeGesture * gesture, QarHand * out_hand, bool* out_has_hand), \
-	  (gesture, out_hand, out_has_hand))                                       \
+	  app_volume_gesture_get_handedness,                                       \
+	  (QarAppVolumeGesture * gesture, QarHandedness * out_handedness),         \
+	  (gesture, out_handedness))                                               \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  app_volume_gesture_get_gesture_id,                                       \
@@ -5010,6 +5062,7 @@ QAR_APP_VOLUMES_FUNCTION_LIST(QAR_APP_VOLUMES_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
 #define QAR_STREAMING_C_V0_DETAIL_BASIC_TYPES_H
+
 
 #define QAR_TYPES_FUNCTION_LIST(X)                                             \
 	X(ACTIVE, QarPeerId, peer_id_unique, (void), ())                           \
@@ -5118,6 +5171,7 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
 #define QAR_STREAMING_C_V0_DETAIL_CANCELATION_TOKEN_H
+
 
 #define QAR_CANCELATION_TOKEN_FUNCTION_LIST(X)                                 \
 	X(ACTIVE,                                                                  \
@@ -5946,6 +6000,7 @@ qar_stream_params_vulkan_default(void)
 #ifndef QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 #define QAR_STREAMING_C_V0_DETAIL_GUI_PANELS_H
 
+
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
 );
@@ -6157,9 +6212,9 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
 	  (gesture, out_timestamp))                                                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  gui_panel_gesture_get_hand,                                              \
-	  (QarGuiPanelGesture * gesture, QarHand * out_hand),                      \
-	  (gesture, out_hand))                                                     \
+	  gui_panel_gesture_get_handedness,                                        \
+	  (QarGuiPanelGesture * gesture, QarHandedness * out_handedness),          \
+	  (gesture, out_handedness))                                               \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  gui_panel_gesture_get_tap_count,                                         \
@@ -6184,6 +6239,7 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
 #define QAR_STREAMING_C_V0_DETAIL_ONBOARDING_H
+
 
 #define QAR_ONBOARDING_FUNCTION_LIST(X)                                        \
 	X(ACTIVE,                                                                  \
@@ -6374,6 +6430,7 @@ qar_onboarding_id_is_zero(const QarOnboardingId* id)
 #ifndef QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 #define QAR_STREAMING_C_V0_DETAIL_PEER_MANAGEMENT_H
 
+
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
 );
@@ -6488,6 +6545,7 @@ QAR_PEER_MANAGEMENT_FUNCTION_LIST(QAR_PEER_MANAGEMENT_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
 #define QAR_STREAMING_C_V0_DETAIL_RENDER_STREAM_H
+
 
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
@@ -6696,6 +6754,7 @@ qar_render_request_handle_is_valid(QarRenderStreamRequest* handle)
 #ifndef QAR_STREAMING_C_V0_DETAIL_RESULT_H
 #define QAR_STREAMING_C_V0_DETAIL_RESULT_H
 
+
 #define QAR_RESULT_FUNCTION_LIST(X)                                            \
 	X(ACTIVE, QarResult, result_success, (void), ())                           \
 	X(ACTIVE,                                                                  \
@@ -6741,6 +6800,7 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 #ifndef QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 #define QAR_STREAMING_C_V0_DETAIL_RUNTIME_H
 
+
 #define QAR_RUNTIME_FUNCTION_LIST(X)                                           \
 	X(ACTIVE, void, runtime_handle_destroy, (QarRuntime * handle), (handle))   \
 	X(ACTIVE,                                                                  \
@@ -6768,6 +6828,7 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_SESSION_H
 #define QAR_STREAMING_C_V0_DETAIL_SESSION_H
+
 
 #define QAR_SESSION_FUNCTION_LIST(X)                                           \
 	X(ACTIVE, void, session_handle_destroy, (QarSession * handle), (handle))   \
@@ -6807,6 +6868,7 @@ QAR_SESSION_FUNCTION_LIST(QAR_SESSION_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
 #define QAR_STREAMING_C_V0_DETAIL_TARGET_APPS_H
+
 
 #define QAR_TARGET_APPS_FUNCTION_LIST(X)                                       \
 	X(ACTIVE,                                                                  \
@@ -6887,6 +6949,7 @@ QAR_TARGET_APPS_FUNCTION_LIST(QAR_TARGET_APPS_DECLARE_WRAPPER)
 
 #ifndef QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
 #define QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
+
 
 #define QAR_VIDEO_SENDER_FUNCTION_LIST_BASE(X)                                 \
 	X(ACTIVE,                                                                  \
@@ -6998,9 +7061,11 @@ QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
 
 #endif // QAR_STREAMING_C_V0_DETAIL_VIDEO_SENDER_H
 
+
 #ifdef QAR_ENABLE_DYNAMIC_LOADING
 #ifndef QAR_DYNAMIC_LOADING_H
 #define QAR_DYNAMIC_LOADING_H
+
 
 #include <stdbool.h>
 #include <stdio.h>

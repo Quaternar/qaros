@@ -15,7 +15,7 @@
     {
       "label": "Peers and hands",
       "description": "The peers in a session, their presentation and the hand-tracking data devices send.",
-      "types": ["AppState", "DeviceHandsWithJoints", "Hand", "Handedness"],
+      "types": ["AppState", "DeviceHandsWithJoints", "Handedness"],
       "prefixes": ["Peer", "HandJoint"]
     },
     {

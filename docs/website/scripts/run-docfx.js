@@ -29,7 +29,8 @@ const AREAS_JSON = path.join(CONFIG_DIR, "areas.json");
 const OVERVIEW_MD = path.join(CONFIG_DIR, "overview.md");
 const OUT_DIR = path.join(WEBSITE_DIR, "api", API_ID);
 const SIDEBAR_JSON = path.join(WEBSITE_DIR, `sidebar-category-docfx-${API_ID}.json`);
-const ASSEMBLY = "QarStreamingSharp.dll";
+const ASSEMBLY = "Quaternar.Qaros.dll";
+const ROOT_NAMESPACE = "Quaternar.Qaros";
 // `npm run docs:version` pins source links to the commit a release snapshot was taken from.
 const SOURCE_URL = `https://github.com/Quaternar/qaros/blob/${process.env.QAROS_SOURCE_REF || "main"}/`;
 
@@ -356,7 +357,7 @@ function renderType(model, type) {
 		"",
 	];
 	if (summary) out.push(summary, "");
-	const meta = [`**Namespace:** ${link("Qar", "index.md")}`, `**Assembly:** ${ASSEMBLY}`];
+	const meta = [`**Namespace:** ${link(item.namespace ?? ROOT_NAMESPACE, "index.md")}`, `**Assembly:** ${ASSEMBLY}`];
 	const source = sourceLink(item);
 	if (source) meta.push(`**Source:** ${source}`);
 	out.push(meta.join(" · "), "");
@@ -422,7 +423,7 @@ function renderLanding(model, groups) {
 			title: "QAR Streaming C# API",
 			sidebar_label: "Overview",
 			slug: `/${API_ID}/`,
-			description: "Reference of the QAROS .NET binding: the public types of the Qar namespace, grouped by area.",
+			description: "Reference of the QAROS .NET binding: the public types of the Quaternar.Qaros namespaces, grouped by area.",
 		}),
 		"# QAR Streaming C# API",
 		"",

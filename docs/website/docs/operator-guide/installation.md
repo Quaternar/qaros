@@ -13,7 +13,7 @@ QAROS ships each release in two flavors (release and demo) as these artifacts:
 | **Runtime ZIP** (`QAROS <version>.zip`, `QAROS Demo <version>.zip`) | Running QAROS with no install and no admin rights: a lab PC, a CI box, a shared folder | `bin/` with the Hub processes (`qaros-hub-service`, `qar-runtime-launcher`, `qar-streaming-viz`), the C API library and every runtime DLL, the CA tooling, assets and the `qar-vulkan-source` example app; `include/` with the C API header; `devices/` with the device player apps |
 | **System installer** (`QAROS Hub <version>.msixbundle`, `QAROS Hub Demo <version>.msixbundle`) | Machines that should have one runtime installed and shared by all their source apps | The same Hub processes and runtime, installed once per system |
 | **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | The Unity packages (runtime included) and `devices/` |
-| **C# NuGet** (`Quaternar.Qaros.Streaming`, `Quaternar.Qaros.Streaming.Demo`) | .NET developers | The C# binding; copies the native runtime next to the application on build and publish |
+| **C# NuGet** (`Quaternar.Qaros`, `Quaternar.Qaros.Demo`) | .NET developers | The C# binding; copies the native runtime next to the application on build and publish |
 
 Every ZIP has one top-level folder and carries `CHANGELOG.md`, `third_party_licenses.md` and `README-Licensing.md`. Installer and runtime ZIP are both fully supported; pick the ZIP when you cannot or do not want to install.
 

@@ -4,9 +4,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// A peer's lifecycle state. A target app is ready to be rendered for only while it is
@@ -38,11 +39,20 @@ namespace Qar
         OpenGL = 7
     }
 
-    /// <summary>Which of a peer's two hands something came from.</summary>
-    public enum Hand
+    /// <summary>
+    /// Left or right: which hand made a gesture, and the handedness of the axes of a
+    /// <see cref="GeoAnchorFrame"/>.
+    /// </summary>
+    public enum Handedness
     {
-        Left = 0,
-        Right = 1
+        /// <summary>
+        /// None given: a gesture no single hand made (two-hand gestures), or a default-initialized
+        /// value. A <see cref="GeoAnchorFrame"/> with it is rejected with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>.
+        /// </summary>
+        Unspecified = 0,
+        Left = 1,
+        Right = 2
     }
 
     /// <summary>XR_EXT_hand_tracking joint indices; <see cref="HandJointLocation.JointId"/> carries one.</summary>
@@ -159,13 +169,6 @@ namespace Qar
     {
         /// <summary>Earth-centred, Earth-fixed WGS84, in metres.</summary>
         EcefWgs84Meters = 0
-    }
-
-    /// <summary>Handedness of the axes of a <see cref="GeoAnchorFrame"/>.</summary>
-    public enum Handedness
-    {
-        Right = 0,
-        Left = 1
     }
 
     public enum AppVolumeLifetimeStatus
@@ -342,132 +345,6 @@ namespace Qar
         WebsiteUri = 0,
         /// <summary>The video of a <see cref="PrimarylessVideoSender"/> owned by the same session.</summary>
         StreamId = 1
-    }
-
-    /// <summary>
-    /// A 3D vector. It carries no space of its own; the member holding it names the space (see
-    /// <see cref="Pose"/>).
-    /// </summary>
-    public readonly struct Vector3
-    {
-        public Vector3(float x, float y, float z)
-        {
-            X = x;
-            Y = y;
-            Z = z;
-        }
-
-        public float X { get; }
-        public float Y { get; }
-        public float Z { get; }
-
-        internal Vector3Native ToNative()
-        {
-            return new Vector3Native { X = X, Y = Y, Z = Z };
-        }
-
-        internal static Vector3 FromNative(Vector3Native value)
-        {
-            return new Vector3(value.X, value.Y, value.Z);
-        }
-    }
-
-    /// <summary>Double-precision 3D vector, used for Earth-fixed world coordinates in <see cref="GeoAnchorFrame"/>.</summary>
-    public readonly struct Vector3d
-    {
-        public Vector3d(double x, double y, double z)
-        {
-            X = x;
-            Y = y;
-            Z = z;
-        }
-
-        public double X { get; }
-        public double Y { get; }
-        public double Z { get; }
-
-        internal Vector3dNative ToNative()
-        {
-            return new Vector3dNative { X = X, Y = Y, Z = Z };
-        }
-
-        internal static Vector3d FromNative(Vector3dNative value)
-        {
-            return new Vector3d(value.X, value.Y, value.Z);
-        }
-    }
-
-    /// <summary>
-    /// Rotation quaternion, Hamilton convention, stored and constructed in x, y, z, w order (w
-    /// last). <c>default(Quaternion)</c> is all zeros, not a rotation; use <see cref="Identity"/>.
-    /// </summary>
-    public readonly struct Quaternion
-    {
-        public Quaternion(float x, float y, float z, float w)
-        {
-            X = x;
-            Y = y;
-            Z = z;
-            W = w;
-        }
-
-        public float X { get; }
-        public float Y { get; }
-        public float Z { get; }
-        public float W { get; }
-
-        public static Quaternion Identity { get { return new Quaternion(0.0f, 0.0f, 0.0f, 1.0f); } }
-
-        internal QuaternionNative ToNative()
-        {
-            return new QuaternionNative { X = X, Y = Y, Z = Z, W = W };
-        }
-
-        internal static Quaternion FromNative(QuaternionNative value)
-        {
-            return new Quaternion(value.X, value.Y, value.Z, value.W);
-        }
-    }
-
-    /// <summary>
-    /// Position plus orientation (x, y, z, w). A pose carries no space of its
-    /// own: every member that holds one names the space it is in. The bindings
-    /// convert no coordinates; each value is exactly what the native library
-    /// produced.
-    /// </summary>
-    /// <remarks>
-    /// Every 3D space follows OpenXR: right-handed, +Y up, -Z forward, so a view
-    /// looks along -Z. The spaces, as in the C header (types.h, "Coordinate
-    /// systems") and https://docs.quaternar.com/docs/developer-guide/coordinate-systems/:
-    /// <list type="bullet">
-    /// <item><description><b>Room space</b>: the frame every peer in a session places things in, in metres. Whatever arrives through data streams and shared objects is in the publishing peer's room space: app volume poses, GUI panel poses, peer data.</description></item>
-    /// <item><description><b>App volume space</b>: one app volume's local frame, origin at the cuboid centre, +X along width, +Y up along height, +Z along length, in metres. The app pose and the deltas of a mapped app volume gesture are in it.</description></item>
-    /// <item><description><b>App content space</b>: the application's own world inside the volume, the space it renders in: app volume space taken into the app pose, positions divided by the app scale, so in app metres. Everything a render sender hands the source application is in the bound volume's app content space: view poses, the rendered pose of a view override, hand aim poses, joint poses, joint radii and joint velocities.</description></item>
-    /// <item><description><b>View space</b>: one render view's camera frame, looking along -Z. <see cref="Fov"/> angles are in it.</description></item>
-    /// </list>
-    /// </remarks>
-    public readonly struct Pose
-    {
-        public Pose(Quaternion orientation, Vector3 position)
-        {
-            Orientation = orientation;
-            Position = position;
-        }
-
-        public Quaternion Orientation { get; }
-        public Vector3 Position { get; }
-
-        public static Pose Identity { get { return new Pose(Quaternion.Identity, new Vector3(0, 0, 0)); } }
-
-        internal PoseNative ToNative()
-        {
-            return new PoseNative { Orientation = Orientation.ToNative(), Position = Position.ToNative() };
-        }
-
-        internal static Pose FromNative(PoseNative value)
-        {
-            return new Pose(Quaternion.FromNative(value.Orientation), Vector3.FromNative(value.Position));
-        }
     }
 
     /// <summary>
@@ -1860,7 +1737,7 @@ namespace Qar
     /// <summary>One mapped gesture on an app volume, copied out of the native callback.</summary>
     public readonly struct AppVolumeGestureEvent
     {
-        public AppVolumeGestureEvent(PeerId sourcePeerId, AppVolumeId targetAppVolumeId, GestureKind gestureKind, GesturePhase state, TimePoint timestamp, bool hasStartPoint, Vector3 startPoint, bool hasActionPoint, Vector3 actionPoint, Vector3 translationDelta, Quaternion rotationDelta, bool wasMappedToAppTransform, bool hasHand, Hand hand, ulong gestureId, uint modeId)
+        public AppVolumeGestureEvent(PeerId sourcePeerId, AppVolumeId targetAppVolumeId, GestureKind gestureKind, GesturePhase state, TimePoint timestamp, bool hasStartPoint, Vector3 startPoint, bool hasActionPoint, Vector3 actionPoint, Vector3 translationDelta, Quaternion rotationDelta, bool wasMappedToAppTransform, Handedness handedness, ulong gestureId, uint modeId)
         {
             SourcePeerId = sourcePeerId;
             TargetAppVolumeId = targetAppVolumeId;
@@ -1874,8 +1751,7 @@ namespace Qar
             TranslationDelta = translationDelta;
             RotationDelta = rotationDelta;
             WasMappedToAppTransform = wasMappedToAppTransform;
-            HasHand = hasHand;
-            Hand = hand;
+            Handedness = handedness;
             GestureId = gestureId;
             ModeId = modeId;
         }
@@ -1900,10 +1776,8 @@ namespace Qar
         public Quaternion RotationDelta { get; }
         /// <summary>True when the library already folded the delta into the volume's app pose or app scale; applying it again moves the content twice.</summary>
         public bool WasMappedToAppTransform { get; }
-        /// <summary>False for two-hand gestures, which have no single hand.</summary>
-        public bool HasHand { get; }
-        /// <summary>Meaningful only when <see cref="HasHand"/> is true.</summary>
-        public Hand Hand { get; }
+        /// <summary>The hand that made the gesture; <see cref="Handedness.Unspecified"/> for two-hand gestures, which have no single hand.</summary>
+        public Handedness Handedness { get; }
         /// <summary>Lifecycle id, unique within the source peer; 0 for an instant gesture.</summary>
         public ulong GestureId { get; }
         /// <summary>The gesture mode whose rule mapped the gesture, fixed for the gesture's whole lifecycle.</summary>
@@ -1926,7 +1800,7 @@ namespace Qar
             NativeMethods.qar_impl_app_volume_gesture_get_points(gesture, out var actionPoint, out var hasActionPoint, out var startPoint, out var hasStartPoint);
             NativeMethods.qar_impl_app_volume_gesture_get_deltas(gesture, out var translationDelta, out var rotationDelta, out var wasMappedToAppTransform);
             NativeMethods.qar_impl_app_volume_gesture_get_timestamp(gesture, out var timestamp);
-            NativeMethods.qar_impl_app_volume_gesture_get_hand(gesture, out var hand, out var hasHand);
+            NativeMethods.qar_impl_app_volume_gesture_get_handedness(gesture, out var handedness);
             NativeMethods.qar_impl_app_volume_gesture_get_gesture_id(gesture, out var gestureId);
             NativeMethods.qar_impl_app_volume_gesture_get_mode(gesture, out var modeId);
             return new AppVolumeGestureEvent(
@@ -1942,8 +1816,7 @@ namespace Qar
                 Vector3.FromNative(translationDelta),
                 Quaternion.FromNative(rotationDelta),
                 wasMappedToAppTransform,
-                hasHand,
-                hand,
+                handedness,
                 gestureId,
                 modeId);
         }
@@ -1977,7 +1850,7 @@ namespace Qar
     /// </remarks>
     public readonly struct GuiPanelGestureEvent
     {
-        public GuiPanelGestureEvent(PeerId sourcePeerId, ulong gestureId, GuiPanelId panelId, GuiPanelGestureKind kind, GesturePhase phase, GuiPanelPoint position, GuiPanelPoint startPosition, TimePoint timestamp, Hand hand, byte tapCount)
+        public GuiPanelGestureEvent(PeerId sourcePeerId, ulong gestureId, GuiPanelId panelId, GuiPanelGestureKind kind, GesturePhase phase, GuiPanelPoint position, GuiPanelPoint startPosition, TimePoint timestamp, Handedness handedness, byte tapCount)
         {
             SourcePeerId = sourcePeerId;
             GestureId = gestureId;
@@ -1987,7 +1860,7 @@ namespace Qar
             Position = position;
             StartPosition = startPosition;
             Timestamp = timestamp;
-            Hand = hand;
+            Handedness = handedness;
             TapCount = tapCount;
         }
 
@@ -2004,7 +1877,8 @@ namespace Qar
         public GuiPanelPoint StartPosition { get; }
         /// <summary>When the recogniser emitted it, on its own clock; comparable only within one source peer.</summary>
         public TimePoint Timestamp { get; }
-        public Hand Hand { get; }
+        /// <summary>The hand that made the contact; <see cref="Handedness.Unspecified"/> when the recogniser did not tell.</summary>
+        public Handedness Handedness { get; }
         /// <summary>Taps in this run for <see cref="GuiPanelGestureKind.Tap"/>; 0 for every other kind.</summary>
         public byte TapCount { get; }
 
@@ -2018,7 +1892,7 @@ namespace Qar
             NativeMethods.qar_impl_gui_panel_gesture_get_positions(gesture, out var position, out var startPosition);
             NativeMethods.qar_impl_gui_panel_gesture_get_panel_id(gesture, ref panelId);
             NativeMethods.qar_impl_gui_panel_gesture_get_timestamp(gesture, out var timestamp);
-            NativeMethods.qar_impl_gui_panel_gesture_get_hand(gesture, out var hand);
+            NativeMethods.qar_impl_gui_panel_gesture_get_handedness(gesture, out var handedness);
             NativeMethods.qar_impl_gui_panel_gesture_get_tap_count(gesture, out var tapCount);
             return new GuiPanelGestureEvent(
                 PeerId.FromNative(sourcePeerId),
@@ -2029,7 +1903,7 @@ namespace Qar
                 GuiPanelPoint.FromNative(position),
                 GuiPanelPoint.FromNative(startPosition),
                 TimePoint.FromNative(timestamp),
-                hand,
+                handedness,
                 tapCount);
         }
     }

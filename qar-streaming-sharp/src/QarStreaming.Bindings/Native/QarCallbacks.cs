@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Qar.Native
+namespace Quaternar.Qaros.Interop
 {
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void ProgressCallback(ActionSeverity severity, float percent, IntPtr message, IntPtr userState);

@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar;
+using Quaternar.Qaros;
 
-namespace Qar.Native
+namespace Quaternar.Qaros.Interop
 {
     internal static class NativeString
     {

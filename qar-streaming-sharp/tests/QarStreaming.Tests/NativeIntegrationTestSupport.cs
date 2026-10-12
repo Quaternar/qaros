@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Qar;
-using Qar.Native;
-using QarStreaming.Tests.Ext;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Tests.Ext;
 using Xunit;
+using Quaternar.Qaros.Mathematics;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     [CollectionDefinition("QAR Native", DisableParallelization = true)]
     public sealed class QarNativeCollection

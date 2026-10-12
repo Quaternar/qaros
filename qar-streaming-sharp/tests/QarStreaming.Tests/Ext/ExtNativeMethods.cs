@@ -1,9 +1,9 @@
 using System;
 using System.Runtime.InteropServices;
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
 
-namespace QarStreaming.Tests.Ext
+namespace Quaternar.Qaros.Tests.Ext
 {
     // P/Invoke layer of qar-streaming-c-ext, the never-shipped DLL of the C
     // API's counterparts (hub, peers, receivers). It lives in the tests only:
@@ -139,7 +139,7 @@ namespace QarStreaming.Tests.Ext
         public int Kind;
         public int Phase;
         public ulong GestureId;
-        public int Hand;
+        public int Handedness;
         public int X;
         public int Y;
         public int StartX;

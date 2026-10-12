@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Qar.Native
+namespace Quaternar.Qaros.Interop
 {
     internal static class NativeMethods
     {
@@ -474,7 +474,7 @@ namespace Qar.Native
         internal static extern ResultNative qar_impl_app_volumes_subscribe_all_gesture_events(IntPtr session, ref AppVolumeIdNative volumeId, AppVolumeGestureEventCallback callback, IntPtr userState, IntPtr token);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_app_volume_gesture_get_hand(IntPtr gesture, out Hand outHand, [MarshalAs(UnmanagedType.I1)] out bool outHasHand);
+        internal static extern ResultNative qar_impl_app_volume_gesture_get_handedness(IntPtr gesture, out Handedness outHandedness);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_app_volume_gesture_get_gesture_id(IntPtr gesture, out ulong outGestureId);
@@ -538,7 +538,7 @@ namespace Qar.Native
         internal static extern ResultNative qar_impl_gui_panel_gesture_get_timestamp(IntPtr gesture, out TimePointNative outTimestamp);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_gui_panel_gesture_get_hand(IntPtr gesture, out Hand outHand);
+        internal static extern ResultNative qar_impl_gui_panel_gesture_get_handedness(IntPtr gesture, out Handedness outHandedness);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_gui_panel_gesture_get_tap_count(IntPtr gesture, out byte outTapCount);

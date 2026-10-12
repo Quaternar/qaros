@@ -1,11 +1,11 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     // Every char* of the C API is UTF-8: the binding converts its UTF-16 strings itself, never
     // through the ANSI code page. Only a common name must be ASCII, and the C API checks that.

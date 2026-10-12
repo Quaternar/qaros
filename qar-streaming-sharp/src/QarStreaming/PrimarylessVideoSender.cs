@@ -1,7 +1,7 @@
 using System;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// Application-owned video stream, such as GUI panel content, that exists before any receiver

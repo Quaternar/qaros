@@ -1,8 +1,8 @@
-using Qar;
-using Qar.Native;
+using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
 using Xunit;
 
-namespace QarStreaming.Tests
+namespace Quaternar.Qaros.Tests
 {
     public sealed class LifetimeTests
     {

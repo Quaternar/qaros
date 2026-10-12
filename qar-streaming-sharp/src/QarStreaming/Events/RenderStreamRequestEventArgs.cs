@@ -1,6 +1,6 @@
 using System;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     public sealed class RenderStreamRequestEventArgs : EventArgs
     {

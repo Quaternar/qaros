@@ -3,7 +3,7 @@
     "../../qar-streaming-c/include",
     "../../qar-streaming-c/examples",
     "../../qar-streaming-sharp/src",
-    "../../qar-streaming-sharp/QarStreamingSharp.csproj",
+    "../../qar-streaming-sharp/Quaternar.Qaros.csproj",
     "docfx/qar-streaming-sharp",
     "doxygen/qar-streaming-c/Doxyfile",
     "doxygen2docusaurus.json",

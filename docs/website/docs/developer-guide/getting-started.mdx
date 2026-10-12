@@ -102,7 +102,7 @@ cmake --build --preset x64-windows-debug
 </Lang>
 <Lang value="csharp">
 
-The C# binding wraps the native C API in the `Qar` namespace with `SafeHandle`s,
+The C# binding wraps the native C API in the `Quaternar.Qaros` namespace with `SafeHandle`s,
 `IDisposable`, and a `Result<T>` return type — no manual pointers, no exceptions
 for expected native failures.
 
@@ -117,8 +117,8 @@ for expected native failures.
 ```xml
 <!-- your .csproj -->
 <ItemGroup>
-  <PackageReference Include="Quaternar.Qaros.Streaming" Version="0.*" />
-  <!-- demo runtime: Quaternar.Qaros.Streaming.Demo -->
+  <PackageReference Include="Quaternar.Qaros" Version="0.*" />
+  <!-- demo runtime: Quaternar.Qaros.Demo -->
 </ItemGroup>
 ```
 
@@ -132,7 +132,7 @@ gospel. See [Language Bindings](/docs/developer-guide/language-bindings).
 Your first runtime and session, with `Result<T>` and `using` for disposal:
 
 ```csharp
-using Qar;
+using Quaternar.Qaros;
 
 Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
 
@@ -190,7 +190,7 @@ int main(void)
 <Lang value="csharp">
 
 ```csharp
-using Qar;
+using Quaternar.Qaros;
 
 Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
 

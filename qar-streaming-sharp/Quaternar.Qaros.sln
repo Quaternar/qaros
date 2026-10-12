@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QarStreamingSharp", "QarStreamingSharp.csproj", "{70877458-6D45-4E50-AE5A-757366A65DB6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quaternar.Qaros", "Quaternar.Qaros.csproj", "{70877458-6D45-4E50-AE5A-757366A65DB6}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QarStreaming.Tests", "tests\QarStreaming.Tests\QarStreaming.Tests.csproj", "{0C2BA6E7-0B70-4E73-9286-470C856C383D}"
 EndProject

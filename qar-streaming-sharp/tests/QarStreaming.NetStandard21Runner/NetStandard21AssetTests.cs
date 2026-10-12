@@ -1,9 +1,9 @@
 using System;
 using System.Runtime.InteropServices;
-using Qar;
+using Quaternar.Qaros;
 using Xunit;
 
-namespace QarStreaming.NetStandard21Runner
+namespace Quaternar.Qaros.Tests.NetStandard21Runner
 {
     public sealed class NetStandard21AssetTests
     {

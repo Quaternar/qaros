@@ -4,9 +4,10 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 #endif
-using Qar.Native;
+using Quaternar.Qaros.Interop;
+using Quaternar.Qaros.Mathematics;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// The session's GUI panels: shared 2D surfaces in the room showing a web page or a video

@@ -1,7 +1,7 @@
-using Qar;
+using Quaternar.Qaros;
 using Xunit;
 
-namespace QarStreaming.NetStandard20Runner
+namespace Quaternar.Qaros.Tests.NetStandard20Runner
 {
     public sealed class NetStandard20AssetTests
     {

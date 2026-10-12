@@ -1,7 +1,7 @@
 using System;
-using Qar.Native;
+using Quaternar.Qaros.Interop;
 
-namespace Qar
+namespace Quaternar.Qaros
 {
     /// <summary>
     /// The key of an identity slot, minted by the first <see cref="Runtime.Onboard"/>. It is the one
