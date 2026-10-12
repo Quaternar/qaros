@@ -1,0 +1,1324 @@
+{
+  "doxygenSidebar": [
+    {
+      "type": "category",
+      "label": "QAR Streaming C API",
+      "link": {
+        "type": "doc",
+        "id": "qar-streaming-c/index"
+      },
+      "collapsed": false,
+      "items": [
+        {
+          "type": "category",
+          "label": "QAR Streaming C API",
+          "link": {
+            "type": "doc",
+            "id": "qar-streaming-c/groups/qar-c-api"
+          },
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "label": "Dynamic Loading",
+              "id": "qar-streaming-c/groups/qar-c-dynamic-loading"
+            },
+            {
+              "type": "doc",
+              "label": "Library Initialization",
+              "id": "qar-streaming-c/groups/qar-c-library"
+            },
+            {
+              "type": "doc",
+              "label": "Error Handling",
+              "id": "qar-streaming-c/groups/qar-c-error"
+            },
+            {
+              "type": "doc",
+              "label": "Cancellation",
+              "id": "qar-streaming-c/groups/qar-c-cancel"
+            },
+            {
+              "type": "doc",
+              "label": "Runtime",
+              "id": "qar-streaming-c/groups/qar-c-runtime"
+            },
+            {
+              "type": "doc",
+              "label": "Onboarding",
+              "id": "qar-streaming-c/groups/qar-c-onboarding"
+            },
+            {
+              "type": "doc",
+              "label": "Session",
+              "id": "qar-streaming-c/groups/qar-c-session"
+            },
+            {
+              "type": "doc",
+              "label": "Target Apps",
+              "id": "qar-streaming-c/groups/qar-c-target-apps"
+            },
+            {
+              "type": "doc",
+              "label": "Peer Management",
+              "id": "qar-streaming-c/groups/qar-c-peer"
+            },
+            {
+              "type": "doc",
+              "label": "Render Sender",
+              "id": "qar-streaming-c/groups/qar-c-render-sender"
+            },
+            {
+              "type": "doc",
+              "label": "Video Sender",
+              "id": "qar-streaming-c/groups/qar-c-video-sender"
+            },
+            {
+              "type": "doc",
+              "label": "GUI Panels",
+              "id": "qar-streaming-c/groups/qar-c-gui"
+            },
+            {
+              "type": "doc",
+              "label": "App Volumes",
+              "id": "qar-streaming-c/groups/qar-c-app-volumes"
+            },
+            {
+              "type": "doc",
+              "label": "Default Inits & Utilities",
+              "id": "qar-streaming-c/groups/qar-c-defaults"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Classes",
+          "link": {
+            "type": "doc",
+            "id": "qar-streaming-c/indices/classes/index"
+          },
+          "collapsed": true,
+          "items": [
+            {
+              "type": "category",
+              "label": "Hierarchy",
+              "link": {
+                "type": "doc",
+                "id": "qar-streaming-c/indices/classes/index"
+              },
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "doc",
+                  "label": "D3D11Objects",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/d3d11objects"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeControllerRayStyle",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumecontrollerraystyle"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeEditingStatus",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumeeditingstatus"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeGestureAllowedPeersExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumegestureallowedpeersext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeGestureConfiguration",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumegestureconfiguration"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeGestureMappingRule",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumegesturemappingrule"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumeid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumeinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppVolumeSize",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappvolumesize"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarAppWorldAnchor",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarappworldanchor"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarColor",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarcolor"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarDeviceHandsWithJoints",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qardevicehandswithjoints"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarDXGIKeyedMutexSync",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qardxgikeyedmutexsync"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarForgetInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarforgetinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarFov",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarfov"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGeoAnchorFrame",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qargeoanchorframe"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGraphicsDeviceId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qargraphicsdeviceid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelPoint",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelpoint"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelSize",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelsize"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelStreamIdExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelstreamidext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarGuiPanelUrlExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarguipanelurlext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarHandJointLocation",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarhandjointlocation"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarHandJoints",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarhandjoints"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarHandJointVelocity",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarhandjointvelocity"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarImageSize",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarimagesize"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarLibraryInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarlibraryinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarLuid",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarluid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarNearFar",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarnearfar"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardCodeExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardcodeext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardHostExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardhostext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardingId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardingid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardInviteExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardinviteext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarOnboardPeerIdExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qaronboardpeeridext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarPeerId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarpeerid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarPeerPresentation",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarpeerpresentation"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarPose",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarpose"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarQuaternion",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarquaternion"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRejoinInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrejoininit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRenderFrameShow",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrenderframeshow"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRenderFrameShowViewOverridesExt",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrenderframeshowviewoverridesext"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRenderFrameView",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrenderframeview"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRenderFrameViewOverride",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrenderframeviewoverride"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRenderSenderInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrendersenderinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRequestInviteInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrequestinviteinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRequestOnboardingCodesInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarrequestonboardingcodesinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarResult",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarresult"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarRuntimeInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarruntimeinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarSessionId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarsessionid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarSessionInviteTargetAppInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarsessioninvitetargetappinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarStreamId",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarstreamid"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarStreamParamsD3D11",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarstreamparamsd3d11"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarStructureHeader",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarstructureheader"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarSyncFrameD3D11",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarsyncframed3d11"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarTextureSize",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qartexturesize"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarTimePoint",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qartimepoint"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVector3",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvector3"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVector3d",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvector3d"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoFrameCpu",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideoframecpu"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoFrameD3D11",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideoframed3d11"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoFrameLayout",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideoframelayout"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoFrameView",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideoframeview"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoSenderInit",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideosenderinit"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoTextureCpu",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideotexturecpu"
+                },
+                {
+                  "type": "doc",
+                  "label": "QarVideoTextureD3D11",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/qarvideotextured3d11"
+                },
+                {
+                  "type": "doc",
+                  "label": "RenderRequestState",
+                  "className": "doxyEllipsis",
+                  "id": "qar-streaming-c/structs/renderrequeststate"
+                }
+              ]
+            },
+            {
+              "type": "doc",
+              "label": "All",
+              "id": "qar-streaming-c/indices/classes/all"
+            },
+            {
+              "type": "doc",
+              "label": "Classes",
+              "id": "qar-streaming-c/indices/classes/classes"
+            },
+            {
+              "type": "doc",
+              "label": "Variables",
+              "id": "qar-streaming-c/indices/classes/variables"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Files",
+          "link": {
+            "type": "doc",
+            "id": "qar-streaming-c/indices/files/index"
+          },
+          "collapsed": true,
+          "items": [
+            {
+              "type": "category",
+              "label": "qar-streaming-c",
+              "collapsed": true,
+              "items": [
+                {
+                  "type": "category",
+                  "label": "examples",
+                  "collapsed": true,
+                  "items": [
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-app-volume-management-c",
+                      "label": "app_volume_management.c"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-common-h",
+                      "label": "common.h"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-cpu-rendering-visualizer-c",
+                      "label": "cpu_rendering_visualizer.c"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-d3d11-render-sender-c",
+                      "label": "d3d11_render_sender.c"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-dynamic-loading-c",
+                      "label": "dynamic_loading.c"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-gui-panel-operations-c",
+                      "label": "gui_panel_operations.c"
+                    },
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-examples-onboarding-and-rejoin-c",
+                      "label": "onboarding_and_rejoin.c"
+                    }
+                  ]
+                },
+                {
+                  "type": "category",
+                  "label": "include",
+                  "collapsed": true,
+                  "items": [
+                    {
+                      "type": "doc",
+                      "id": "qar-streaming-c/files/qar-streaming-c-include-qar-streaming-h",
+                      "label": "qar_streaming.h"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "csharpSidebar": [
+    {
+      "type": "category",
+      "label": "QAR Streaming C# API",
+      "link": {
+        "type": "doc",
+        "id": "qar-streaming-sharp/index"
+      },
+      "collapsed": false,
+      "items": [
+        {
+          "type": "category",
+          "label": "Library and runtime",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Library",
+              "label": "Library"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.LibraryOptions",
+              "label": "LibraryOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.LogSeverity",
+              "label": "LogSeverity"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Runtime",
+              "label": "Runtime"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RuntimeOptions",
+              "label": "RuntimeOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Structure",
+              "label": "Structure"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StructureType",
+              "label": "StructureType"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Onboarding and sessions",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.ActionProgress",
+              "label": "ActionProgress"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.ActionSeverity",
+              "label": "ActionSeverity"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.ForgetOptions",
+              "label": "ForgetOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GpuDeviceIdType",
+              "label": "GpuDeviceIdType"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GraphicsDeviceId",
+              "label": "GraphicsDeviceId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardCode",
+              "label": "OnboardCode"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardHost",
+              "label": "OnboardHost"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardingId",
+              "label": "OnboardingId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardingInvite",
+              "label": "OnboardingInvite"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardingMethod",
+              "label": "OnboardingMethod"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardInvite",
+              "label": "OnboardInvite"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardOptions",
+              "label": "OnboardOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardPeerId",
+              "label": "OnboardPeerId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OnboardSession",
+              "label": "OnboardSession"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RejoinOptions",
+              "label": "RejoinOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RequestOnboardingCodesOptions",
+              "label": "RequestOnboardingCodesOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RequestOnboardingInviteOptions",
+              "label": "RequestOnboardingInviteOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Session",
+              "label": "Session"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.SessionId",
+              "label": "SessionId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.TargetAppConnectionString",
+              "label": "TargetAppConnectionString"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Peers and hands",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppState",
+              "label": "AppState"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.DeviceHandsWithJoints",
+              "label": "DeviceHandsWithJoints"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Handedness",
+              "label": "Handedness"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.HandJoint",
+              "label": "HandJoint"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.HandJointLocation",
+              "label": "HandJointLocation"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.HandJointLocationFlags",
+              "label": "HandJointLocationFlags"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.HandJoints",
+              "label": "HandJoints"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.HandJointVelocity",
+              "label": "HandJointVelocity"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PeerControl",
+              "label": "PeerControl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PeerId",
+              "label": "PeerId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PeerPresentationOptions",
+              "label": "PeerPresentationOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PeerSpec",
+              "label": "PeerSpec"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PeerSpecUpdatedEventArgs",
+              "label": "PeerSpecUpdatedEventArgs"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "App volumes",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppScaleSensitivityMode",
+              "label": "AppScaleSensitivityMode"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolume",
+              "label": "AppVolume"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeAxisFlags",
+              "label": "AppVolumeAxisFlags"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeControl",
+              "label": "AppVolumeControl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeControllerRayLineStyle",
+              "label": "AppVolumeControllerRayLineStyle"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeControllerRayStyle",
+              "label": "AppVolumeControllerRayStyle"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeEditingStatus",
+              "label": "AppVolumeEditingStatus"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeGestureConfiguration",
+              "label": "AppVolumeGestureConfiguration"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeGestureEvent",
+              "label": "AppVolumeGestureEvent"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeGestureEventArgs",
+              "label": "AppVolumeGestureEventArgs"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeGestureMappingRule",
+              "label": "AppVolumeGestureMappingRule"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeGestureState",
+              "label": "AppVolumeGestureState"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeId",
+              "label": "AppVolumeId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeLifetimeStatus",
+              "label": "AppVolumeLifetimeStatus"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeOptions",
+              "label": "AppVolumeOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeSize",
+              "label": "AppVolumeSize"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppVolumeUpdatedEventArgs",
+              "label": "AppVolumeUpdatedEventArgs"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.AppWorldAnchor",
+              "label": "AppWorldAnchor"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GeoAnchorFrame",
+              "label": "GeoAnchorFrame"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GestureAppTransformMapping",
+              "label": "GestureAppTransformMapping"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GestureKind",
+              "label": "GestureKind"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GesturePhase",
+              "label": "GesturePhase"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.WorldReferenceSystem",
+              "label": "WorldReferenceSystem"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "GUI panels",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanel",
+              "label": "GuiPanel"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelContentType",
+              "label": "GuiPanelContentType"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelControl",
+              "label": "GuiPanelControl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelGestureEvent",
+              "label": "GuiPanelGestureEvent"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelGestureEventArgs",
+              "label": "GuiPanelGestureEventArgs"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelGestureKind",
+              "label": "GuiPanelGestureKind"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelId",
+              "label": "GuiPanelId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelOptions",
+              "label": "GuiPanelOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelPoint",
+              "label": "GuiPanelPoint"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelSize",
+              "label": "GuiPanelSize"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelState",
+              "label": "GuiPanelState"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GuiPanelUpdatedEventArgs",
+              "label": "GuiPanelUpdatedEventArgs"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Rendering",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.DXGIKeyedMutexSync",
+              "label": "DXGIKeyedMutexSync"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Fov",
+              "label": "Fov"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.FrameLayout",
+              "label": "FrameLayout"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.GraphicsAPI",
+              "label": "GraphicsAPI"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.ImageSize",
+              "label": "ImageSize"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.NearFar",
+              "label": "NearFar"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.OpenGlContextCallbacks",
+              "label": "OpenGlContextCallbacks"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PixelFormat",
+              "label": "PixelFormat"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderFrameInfo",
+              "label": "RenderFrameInfo"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderFrameShow",
+              "label": "RenderFrameShow"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderFrameShowViewOverrides",
+              "label": "RenderFrameShowViewOverrides"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderFrameView",
+              "label": "RenderFrameView"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderFrameViewOverride",
+              "label": "RenderFrameViewOverride"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderSender",
+              "label": "RenderSender"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderSenderControl",
+              "label": "RenderSenderControl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderSenderOptions",
+              "label": "RenderSenderOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderStreamRequest",
+              "label": "RenderStreamRequest"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.RenderStreamRequestEventArgs",
+              "label": "RenderStreamRequestEventArgs"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamId",
+              "label": "StreamId"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsD3D11",
+              "label": "StreamParamsD3D11"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsOpenGl",
+              "label": "StreamParamsOpenGl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsOpenGlEgl",
+              "label": "StreamParamsOpenGlEgl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsOpenGlGlx",
+              "label": "StreamParamsOpenGlGlx"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsOpenGlWgl",
+              "label": "StreamParamsOpenGlWgl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StreamParamsVulkan",
+              "label": "StreamParamsVulkan"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.SyncFrameD3D11",
+              "label": "SyncFrameD3D11"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.TextureSize",
+              "label": "TextureSize"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Video senders and frames",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PrimarylessVideoSender",
+              "label": "PrimarylessVideoSender"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PrimarylessVideoSenderControl",
+              "label": "PrimarylessVideoSenderControl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.PrimarylessVideoSenderOptions",
+              "label": "PrimarylessVideoSenderOptions"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameCpu",
+              "label": "VideoFrameCpu"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameD3D11",
+              "label": "VideoFrameD3D11"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameLayout",
+              "label": "VideoFrameLayout"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameOpenGl",
+              "label": "VideoFrameOpenGl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameView",
+              "label": "VideoFrameView"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameViewEye",
+              "label": "VideoFrameViewEye"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameViewType",
+              "label": "VideoFrameViewType"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoFrameVulkan",
+              "label": "VideoFrameVulkan"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoTextureCpu",
+              "label": "VideoTextureCpu"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoTextureD3D11",
+              "label": "VideoTextureD3D11"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoTextureOpenGl",
+              "label": "VideoTextureOpenGl"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.VideoTextureVulkan",
+              "label": "VideoTextureVulkan"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Results and errors",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.NativeCallException",
+              "label": "NativeCallException"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Result-1",
+              "label": "Result<T>"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.ResultInfo",
+              "label": "ResultInfo"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.StatusCode",
+              "label": "StatusCode"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Unit",
+              "label": "Unit"
+            }
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Math and time",
+          "collapsed": true,
+          "items": [
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Mathematics.Pose",
+              "label": "Pose"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Mathematics.Quaternion",
+              "label": "Quaternion"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.TimePoint",
+              "label": "TimePoint"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Mathematics.Vector3",
+              "label": "Vector3"
+            },
+            {
+              "type": "doc",
+              "id": "qar-streaming-sharp/Quaternar.Qaros.Mathematics.Vector3d",
+              "label": "Vector3d"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -174,8 +174,14 @@
  * whatever the host process's ANSI code page. A path under a user profile
  * named with a non-ASCII character must be passed as UTF-8, not in the code
  * page: on Windows convert from UTF-16 with
- * `WideCharToMultiByte(CP_UTF8, ...)` (C# and Unity strings marshal as UTF-8
- * with `UnmanagedType.LPUTF8Str`).
+ * `WideCharToMultiByte(CP_UTF8, ...)`. The C# binding converts its UTF-16
+ * strings to UTF-8 itself.
+ *
+ * Any string may hold any Unicode text - display names, paths, GUI panel
+ * URLs, hostnames, codes, connection strings, app version and peer info -
+ * except a common name: it is an identity key and must be ASCII, and
+ * qar_app_volumes_get_or_create() / qar_gui_panels_get_or_create() reject
+ * any other. Put non-ASCII text in the display name.
  */
 #ifndef QAR_TYPES_H
 #define QAR_TYPES_H
@@ -398,11 +404,15 @@ typedef enum QarAppState
 	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
 
-/** @brief Time point with variable precision. */
+/**
+ * @brief Wall-clock instant: nanoseconds since the Unix epoch (UTC).
+ *
+ * Instants stamped on different hosts are only as comparable as those hosts'
+ * clocks are synchronized.
+ */
 typedef struct QarTimePoint
 {
-	uint64_t count;
-	uint8_t precision; // 0 = milliseconds, 1 = nanoseconds
+	int64_t unix_ns;
 } QarTimePoint;
 
 // ============================================================================
@@ -474,12 +484,24 @@ typedef struct QarNearFar
 #define QAR_ORIENTATION_TRACKED_BIT 0x00000004ULL
 #define QAR_POSITION_TRACKED_BIT 0x00000008ULL
 
-/** @brief Which of a peer's two hands something came from. */
-typedef enum QarHand
+/**
+ * @brief Left or right.
+ *
+ * Says which of a peer's two hands a gesture came from, and the handedness of a
+ * geo anchor frame's axes (right-handed: axis_x_world x axis_y_world =
+ * axis_z_world).
+ *
+ * QAR_HANDEDNESS_UNSPECIFIED is the zero value, so a zero-initialized struct
+ * never claims a side by accident. A gesture made with both hands together
+ * reports it; a QarGeoAnchorFrame carrying it is rejected with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ */
+typedef enum QarHandedness
 {
-	QAR_HAND_LEFT = 0,
-	QAR_HAND_RIGHT = 1
-} QarHand;
+	QAR_HANDEDNESS_UNSPECIFIED = 0,
+	QAR_HANDEDNESS_LEFT = 1,
+	QAR_HANDEDNESS_RIGHT = 2
+} QarHandedness;
 
 typedef enum QarHandJoint
 {
@@ -903,13 +925,6 @@ typedef enum QarWorldReferenceSystem
 		0 // Earth-Centered, Earth-Fixed WGS84 in meters
 } QarWorldReferenceSystem;
 
-/** @brief Coordinate system handedness. */
-typedef enum QarHandedness
-{
-	QAR_HANDEDNESS_RIGHT = 0,
-	QAR_HANDEDNESS_LEFT = 1
-} QarHandedness;
-
 /**
  * @brief Fully defined anchor frame in world coordinates.
  *
@@ -923,6 +938,8 @@ typedef struct QarGeoAnchorFrame
 	QarVector3d axis_x_world; // Local +X axis (unit vector)
 	QarVector3d axis_y_world; // Local +Y axis (unit vector)
 	QarVector3d axis_z_world; // Local +Z axis (unit vector)
+	// Declared axis handedness, QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT.
+	// QAR_HANDEDNESS_UNSPECIFIED is rejected.
 	QarHandedness handedness;
 } QarGeoAnchorFrame;
 
@@ -1650,11 +1667,17 @@ typedef struct QarGuiPanelInit
 	 */
 	QarStructureHeader header;
 	/// Required stable identity key used by gui_panels_get_or_create()
-	/// to derive the panel's id. Must not be NULL.
+	/// to derive the panel's id. Must not be NULL or empty, and must be
+	/// ASCII.
 	const char* common_name;
+	/// UTF-8 label shown to users; any characters, emoji included.
 	const char* display_name;
 	QarPose pose;
 	QarGuiPanelSize size;
+	/// Peers the new panel is shown to, copied during the call. Empty (count
+	/// 0, the default) means visible to every peer. A panel meant only for
+	/// some peers is created with them here rather than narrowed afterwards
+	/// with qar_gui_panels_update_visible_to().
 	const QarPeerId* visible_to_peers;
 	size_t visible_to_peer_count;
 } QarGuiPanelInit;
@@ -1691,8 +1714,9 @@ typedef struct QarAppVolumeInit
 	QarStructureHeader header;
 	/// Required stable identity key used by
 	/// app_volumes_get_or_create() to derive the volume's id. Must not
-	/// be NULL.
+	/// be NULL or empty, and must be ASCII.
 	const char* common_name;
+	/// UTF-8 label shown to users; any characters, emoji included.
 	const char* display_name;
 	/// Placement of the cuboid's centre in room space, and the rotation taking
 	/// app volume space into room space. See the QarAppVolumeSize
@@ -1714,6 +1738,8 @@ typedef struct QarAppVolumeInit
 	/// bigger. App pose remains in app-volume meters and is not scaled.
 	float app_scale;
 	bool has_app_world_anchor;
+	/// Read only when has_app_world_anchor is set. Its handedness must then be
+	/// QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT.
 	QarGeoAnchorFrame app_world_anchor;
 	/// Optional gesture configuration
 	const QarAppVolumeGestureConfiguration* gesture_configuration;
@@ -2139,6 +2165,37 @@ static inline void qar_result_log_if_error(QarResult result);
 /**
  * @defgroup qar_c_cancel Cancellation
  * @ingroup qar_c_api
+ *
+ * @anchor qar_c_subscription_end
+ * **Ending a subscription.** Every `qar_*_subscribe_*` function hands its
+ * subscription to the cancel token passed to it (where a NULL token is
+ * allowed, the subscription is the session's alone). These calls end it:
+ * qar_cancel_token_cancel() and qar_cancel_token_handle_destroy() on that
+ * token, qar_session_handle_destroy() on its session, qar_library_destroy().
+ * When one of them returns:
+ * - a callback of the subscription that was running on another thread has
+ *   returned: the call waited for it,
+ * - no callback of the subscription starts afterwards.
+ *
+ * So `user_state` only has to stay valid until that call returns, and may be
+ * freed right after it.
+ *
+ * **From inside the subscription's own callback** a call cannot wait for the
+ * callback it is made from. qar_cancel_token_cancel() and
+ * qar_cancel_token_handle_destroy() are allowed there: they return without
+ * waiting for that callback, which then finishes normally, and no further
+ * callback of the subscription starts. Keep `user_state` valid until that
+ * callback returns. Do not destroy the session or the library from a
+ * callback.
+ *
+ * Waiting for a callback means: do not end a subscription while holding a
+ * lock its callback takes, and do not end subscription A from a callback of
+ * subscription B while a callback of B can be ending A.
+ *
+ * A token's timeout (qar_cancel_token_create_with_timeout(),
+ * qar_cancel_token_cancel_after()) stops its subscriptions shortly after it
+ * expires but does not wait for a running callback. Cancel or destroy the
+ * token before freeing `user_state`.
  * @{ */
 // Forward declarations
 /** @brief Create a new cancellation token (non-signaled). */
@@ -2147,9 +2204,21 @@ static inline QarResult qar_cancel_token_create(QarCancelToken** out_token);
 static inline QarResult qar_cancel_token_create_with_timeout(
 	QarCancelToken** out_token, uint32_t timeout_ms
 );
-/** @brief Destroy a token handle without canceling. */
+/**
+ * @brief Destroy a token handle, cancelling what it owns.
+ *
+ * Ends every subscription started with it, waiting for a running callback;
+ * see @ref qar_c_subscription_end "Ending a subscription".
+ */
 static inline void qar_cancel_token_handle_destroy(QarCancelToken* handle);
-/** @brief Signal cancellation on a token. */
+/**
+ * @brief Signal cancellation on a token.
+ *
+ * Ends every subscription started with it: returns once no callback of
+ * those subscriptions is running on another thread, and none starts
+ * afterwards. Called from inside one of their callbacks it does not wait for
+ * that callback; see @ref qar_c_subscription_end "Ending a subscription".
+ */
 static inline QarResult qar_cancel_token_cancel(QarCancelToken* token);
 /** @brief Schedule cancellation after timeout_ms. */
 static inline QarResult
@@ -2802,6 +2871,10 @@ typedef void (*qar_peer_update_callback_t)(
  * The push form of qar_query_peer_specs(), and the way to learn that a peer
  * invited with qar_session_invite_target_app() has joined and reached
  * QAR_APP_STATE_RUNNING.
+ *
+ * @param token Required; cancelling or destroying it ends the subscription
+ *              and waits for a running callback, see
+ *              @ref qar_c_subscription_end "Ending a subscription".
  */
 static inline QarResult qar_peer_subscribe_updates(
 	QarSession* session,
@@ -2837,13 +2910,14 @@ static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
  *
  * Callbacks run asynchronously, so synchronize handoff to the render thread.
  * Release each delivered request with qar_render_request_handle_destroy().
- * Keep user_state alive until subscription teardown has completed.
+ * Keep user_state alive until the call ending the subscription has returned,
+ * see @ref qar_c_subscription_end "Ending a subscription".
  *
  * @param session Active session.
  * @param callback Required callback for each pending request.
  * @param user_state Application state passed unchanged to the callback.
- * @param token Optional cancellation token; otherwise subscription lasts until
- * session teardown.
+ * @param token Required cancellation token owning the subscription;
+ * cancelling or destroying it, or destroying the session, ends it.
  * @return Success when subscribed, or a subscription setup error.
  */
 static inline QarResult qar_render_sender_subscribe_requests(
@@ -3228,7 +3302,24 @@ static inline QarResult qar_gui_panels_set_stream(
 	QarSession* session, const QarGuiPanelId* id, const QarStreamId* stream_id
 );
 
-/** @brief Update which peers can see the panel. */
+/**
+ * @brief Update which peers can see the panel.
+ *
+ * The visible-to list narrows who sees the panel. **An empty list means the
+ * panel is visible to every peer**: a new panel starts empty, and removing the
+ * last peer from the list makes the panel visible to everyone again, never to
+ * no one. To hide a panel from everyone, change its state instead.
+ *
+ * @param session Session that owns the panel.
+ * @param id Panel to change.
+ * @param peer_ids_additions Peers to add; may be NULL when additions_count is
+ * 0.
+ * @param additions_count Number of entries in @p peer_ids_additions.
+ * @param peer_ids_removals Peers to remove; may be NULL when removals_count is
+ * 0.
+ * @param removals_count Number of entries in @p peer_ids_removals.
+ * @return Success, or the panel error (e.g. QAR_STATUS_GUI_PANEL_INVALID_ID).
+ */
 static inline QarResult qar_gui_panels_update_visible_to(
 	QarSession* session,
 	const QarGuiPanelId* id,
@@ -3240,14 +3331,24 @@ static inline QarResult qar_gui_panels_update_visible_to(
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
 );
-/** @brief Subscribe to updates for all panels. */
+/**
+ * @brief Subscribe to updates for all panels.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_gui_panels_subscribe_updates(
 	QarSession* session,
 	qar_gui_panel_update_callback_t callback,
 	void* user_state,
 	QarCancelToken* token
 );
-/** @brief Subscribe to updates for a specific panel. */
+/**
+ * @brief Subscribe to updates for a specific panel.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_gui_panels_subscribe_panel_updates(
 	QarSession* session,
 	const QarGuiPanelId* id,
@@ -3328,7 +3429,8 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
  * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ *              until the session is destroyed. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_gui_panels_subscribe_gesture_events(
@@ -3362,7 +3464,8 @@ static inline QarResult qar_gui_panels_subscribe_gesture_events(
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
  * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ *              until the session is destroyed. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_gui_panels_subscribe_all_gesture_events(
@@ -3464,9 +3567,15 @@ static inline QarResult qar_gui_panel_gesture_get_timestamp(
  *
  * Diagnostic: only one hand of a peer is active at a time, so a consumer does
  * not need this to arbitrate.
+ *
+ * @param gesture Gesture handed to the callback; must not be NULL.
+ * @param out_handedness Receives QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT;
+ *                       must not be NULL.
+ * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
  */
-static inline QarResult
-qar_gui_panel_gesture_get_hand(QarGuiPanelGesture* gesture, QarHand* out_hand);
+static inline QarResult qar_gui_panel_gesture_get_handedness(
+	QarGuiPanelGesture* gesture, QarHandedness* out_handedness
+);
 
 /**
  * @brief How many taps in this run, for QAR_GUI_PANEL_GESTURE_KIND_TAP.
@@ -3520,10 +3629,18 @@ static inline QarResult qar_gui_panel_get_content_stream_id(
 static inline QarResult
 qar_gui_panel_get_state(QarGuiPanel* handle, QarGuiPanelState* out_state);
 
+/**
+ * @brief Number of peers in the panel's visible-to list. 0 means the panel is
+ * visible to every peer (see qar_gui_panels_update_visible_to()).
+ */
 static inline QarResult qar_gui_panel_get_visible_to_peers_count(
 	QarGuiPanel* handle, size_t* out_count
 );
 
+/**
+ * @brief The peers the panel is narrowed to. An empty list means the panel is
+ * visible to every peer, not to none.
+ */
 static inline QarResult qar_gui_panel_get_visible_to_peers(
 	QarGuiPanel* handle,
 	QarPeerId* out_peers,
@@ -3543,7 +3660,11 @@ static inline QarResult qar_gui_panel_get_visible_to_peers(
  * @{ */
 // Forward declarations
 /** @brief Get the app volume identified by init->common_name, creating it
- * (via init) if it does not exist yet. */
+ * (via init) if it does not exist yet.
+ *
+ * Fails with QAR_STATUS_ARGUMENT_NOT_SUPPORTED when init->has_app_world_anchor
+ * is set and init->app_world_anchor.handedness is QAR_HANDEDNESS_UNSPECIFIED.
+ */
 static inline QarResult qar_app_volumes_get_or_create(
 	QarSession* session,
 	const QarAppVolumeInit* init,
@@ -3592,7 +3713,12 @@ static inline QarResult qar_app_volumes_change_app_pose(
 static inline QarResult qar_app_volumes_change_app_scale(
 	QarSession* session, const QarAppVolumeId* volume_id, float scale
 );
-/** @brief Set app world anchor metadata. */
+/**
+ * @brief Set app world anchor metadata.
+ *
+ * @return QAR_STATUS_ARGUMENT_NOT_SUPPORTED when @p anchor's handedness is
+ *         QAR_HANDEDNESS_UNSPECIFIED.
+ */
 static inline QarResult qar_app_volumes_change_app_world_anchor(
 	QarSession* session,
 	const QarAppVolumeId* volume_id,
@@ -3628,7 +3754,12 @@ typedef void (*qar_app_volume_update_callback_t)(
 typedef void (*qar_app_volume_gesture_event_callback_t)(
 	QarAppVolumeGesture* gesture, void* user_state
 );
-/** @brief Subscribe to updates for app volumes. */
+/**
+ * @brief Subscribe to updates for app volumes.
+ *
+ * @p token is required; see @ref qar_c_subscription_end "Ending a
+ * subscription" for when callbacks stop and how long @p user_state must live.
+ */
 static inline QarResult qar_app_volumes_subscribe_updates(
 	QarSession* session,
 	qar_app_volume_update_callback_t callback,
@@ -3659,8 +3790,8 @@ static inline QarResult qar_app_volumes_subscribe_updates(
  * @param gesture_kind The single gesture kind this subscription delivers.
  * @param callback Invoked for every matching gesture event; must not be NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
- * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ * @param token Cancel token owning the subscription; must not be NULL. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_app_volumes_subscribe_gesture_events(
@@ -3697,8 +3828,8 @@ static inline QarResult qar_app_volumes_subscribe_gesture_events(
  * @param callback Invoked for every gesture event of every kind; must not be
  *                 NULL.
  * @param user_state Opaque pointer passed back to @p callback; may be NULL.
- * @param token Cancel token ending the subscription, or NULL to keep it alive
- *              until the session is destroyed.
+ * @param token Cancel token owning the subscription; must not be NULL. See
+ *              @ref qar_c_subscription_end "Ending a subscription".
  * @return QarResult Success once the subscription is running.
  */
 static inline QarResult qar_app_volumes_subscribe_all_gesture_events(
@@ -3844,20 +3975,20 @@ static inline QarResult qar_app_volume_gesture_get_timestamp(
 /**
  * @brief Which hand the gesture came from.
  *
- * A gesture of one hand -- hover, click, single-pointer 6DoF -- names it. A
- * gesture of both hands together, QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE
- * and QAR_GESTURE_DUAL_POINTER_ROTATE, has none, and @p out_has_hand is false.
- * Two hovers that arrive together are the user's two rays, told apart by this.
+ * A gesture of one hand -- hover, click, single-pointer 6DoF -- names it:
+ * QAR_HANDEDNESS_LEFT or QAR_HANDEDNESS_RIGHT. A gesture of both hands
+ * together, QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE and
+ * QAR_GESTURE_DUAL_POINTER_ROTATE, has none and reports
+ * QAR_HANDEDNESS_UNSPECIFIED. Two hovers that arrive together are the user's
+ * two rays, told apart by this.
  *
  * @param gesture Gesture handed to the callback; must not be NULL.
- * @param out_hand Receives the hand; set to QAR_HAND_LEFT when there is none,
- *                 never left stale. Must not be NULL.
- * @param out_has_hand Receives whether the gesture came from one hand; must not
- *                     be NULL.
+ * @param out_handedness Receives the hand, or QAR_HANDEDNESS_UNSPECIFIED for a
+ *                       two-hand gesture; never left stale. Must not be NULL.
  * @return QAR_STATUS_SUCCESS, or QAR_STATUS_LOGIC_ERROR for a NULL argument.
  */
-static inline QarResult qar_app_volume_gesture_get_hand(
-	QarAppVolumeGesture* gesture, QarHand* out_hand, bool* out_has_hand
+static inline QarResult qar_app_volume_gesture_get_handedness(
+	QarAppVolumeGesture* gesture, QarHandedness* out_handedness
 );
 
 /**
@@ -4468,6 +4599,22 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 		"error code."                                                          \
 	)
 
+/* QAR_RETURN_KEYWORD(RET): `return` in a value-returning wrapper, nothing in a
+ * void one, so a void wrapper never returns an expression (a C11 constraint
+ * violation, MSVC C4098). Detects void by RET's first token; QAR_PP_EXPAND
+ * keeps MSVC's traditional preprocessor splitting __VA_ARGS__. */
+#define QAR_PP_EXPAND(x) x
+#define QAR_PP_CAT_IMPL(a, b) a##b
+#define QAR_PP_CAT(a, b) QAR_PP_CAT_IMPL(a, b)
+#define QAR_PP_SECOND_IMPL(a, b, ...) b
+#define QAR_PP_SECOND(...) QAR_PP_EXPAND(QAR_PP_SECOND_IMPL(__VA_ARGS__))
+#define QAR_PP_VOID_PROBE_void ~, 1
+#define QAR_PP_IS_VOID(RET) QAR_PP_SECOND(QAR_PP_VOID_PROBE_##RET, 0, ~)
+#define QAR_RETURN_KEYWORD_0 return
+#define QAR_RETURN_KEYWORD_1
+#define QAR_RETURN_KEYWORD(RET)                                                \
+	QAR_PP_CAT(QAR_RETURN_KEYWORD_, QAR_PP_IS_VOID(RET))
+
 #ifdef QAR_ENABLE_DYNAMIC_LOADING
 
 #define QAR_DECLARE_MODULE_COMMON(                                             \
@@ -4506,7 +4653,7 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 			QAR_API_MISSING_ERR_PRINT("qar_" #NAME, MODULE_STR);               \
 			abort();                                                           \
 		}                                                                      \
-		return (MODULE_API_VAR).NAME ARGS;                                     \
+		QAR_RETURN_KEYWORD(RET)(MODULE_API_VAR).NAME ARGS;                     \
 	}
 
 #else
@@ -4523,7 +4670,7 @@ qar_gui_panel_id_equals(const QarGuiPanelId* id1, const QarGuiPanelId* id2);
 )                                                                              \
 	QAR_WRAPPER_ATTR_##STATUS static inline RET qar_##NAME PARAMS              \
 	{                                                                          \
-		return qar_impl_##NAME ARGS;                                           \
+		QAR_RETURN_KEYWORD(RET) qar_impl_##NAME ARGS;                          \
 	}
 
 #endif
@@ -4816,9 +4963,9 @@ typedef void (*qar_app_volume_gesture_event_callback_t)(
 	  (gesture, out_timestamp))                                                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  app_volume_gesture_get_hand,                                             \
-	  (QarAppVolumeGesture * gesture, QarHand * out_hand, bool* out_has_hand), \
-	  (gesture, out_hand, out_has_hand))                                       \
+	  app_volume_gesture_get_handedness,                                       \
+	  (QarAppVolumeGesture * gesture, QarHandedness * out_handedness),         \
+	  (gesture, out_handedness))                                               \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  app_volume_gesture_get_gesture_id,                                       \
@@ -5100,7 +5247,7 @@ QAR_CANCELATION_TOKEN_FUNCTION_LIST(QAR_CANCELATION_TOKEN_DECLARE_WRAPPER)
 static inline QarTimePoint
 qar_time_point_default(void)
 {
-	QarTimePoint tp = { 0, 0 };
+	QarTimePoint tp = { 0 };
 	return tp;
 }
 
@@ -5210,7 +5357,7 @@ qar_device_hand_with_joints_default(void)
 {
 	QarDeviceHandsWithJoints hands = {
 		{ 0 },					   // device_id
-		{ 0, 0 },				   // device_timestamp
+		{ 0 },					   // device_timestamp
 		qar_hand_joints_default(), // left_hand
 		qar_hand_joints_default()  // right_hand
 	};
@@ -6069,9 +6216,9 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
 	  (gesture, out_timestamp))                                                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  gui_panel_gesture_get_hand,                                              \
-	  (QarGuiPanelGesture * gesture, QarHand * out_hand),                      \
-	  (gesture, out_hand))                                                     \
+	  gui_panel_gesture_get_handedness,                                        \
+	  (QarGuiPanelGesture * gesture, QarHandedness * out_handedness),          \
+	  (gesture, out_handedness))                                               \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  gui_panel_gesture_get_tap_count,                                         \

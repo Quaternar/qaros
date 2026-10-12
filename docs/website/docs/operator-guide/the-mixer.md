@@ -8,7 +8,7 @@ description: How QAROS composites multiple application streams into one personal
 
 The mixer is the component that makes several independent applications look like *one world*. Each source application renders its own frames, at its own frame rate, with no knowledge of the others. The mixer takes all of those streams and produces, **for each user**, a single coherent stereo image that matches that user's own head pose at display time.
 
-![Mixer data flow](/img/diagrams/mixer-flow.png)
+![Mixer data flow](../img/diagrams/mixer-flow.png)
 
 ## What problem it solves
 

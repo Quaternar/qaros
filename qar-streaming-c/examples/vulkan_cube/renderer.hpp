@@ -46,18 +46,14 @@ private:
 // The sender lays the frame out itself, so its views need not follow the order
 // QarRenderSenderInit::frame_views asked for: find views by what they show.
 int FindFrameView(
-	const QarVideoFrameVulkan& frame,
-	QarVideoFrameViewEye eye,
-	QarVideoFrameViewType type
+	const QarVideoFrameVulkan& frame, QarVideoFrameViewEye eye, QarVideoFrameViewType type
 );
 
 // Lowercase hex of `bytes`, the format Create() takes.
 std::string AdapterIdHex(const uint8_t* bytes, size_t count);
 
 // Whether `requested` (lowercase hex) names this GPU's LUID or UUID.
-bool MatchesAdapterId(
-	const VkPhysicalDeviceIDProperties& id, std::string_view requested
-);
+bool MatchesAdapterId(const VkPhysicalDeviceIDProperties& id, std::string_view requested);
 
 // One target's camera. It keeps up to kFramesInFlight frames on the GPU and
 // waits for the GPU only when it reuses the oldest of them - never for the
@@ -79,11 +75,7 @@ public:
 	bool Create();
 	// Records and submits one stereo frame into the sender's images and
 	// signals frame.synchronization.semaphore when the GPU is done with it.
-	bool Render(
-		QarVideoFrameVulkan& frame,
-		const std::array<CameraView, 2>& views,
-		float seconds
-	);
+	bool Render(QarVideoFrameVulkan& frame, const std::array<CameraView, 2>& views, float seconds);
 	// Signals the semaphore of a begun frame that could not be rendered, so
 	// the sender can still consume it.
 	bool Discard(QarVideoFrameVulkan& frame);

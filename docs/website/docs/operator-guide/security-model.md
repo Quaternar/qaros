@@ -10,7 +10,7 @@ QAROS deployments often run on factory floors, in hospitals, and on corporate ne
 
 ## The four layers
 
-![Security layers](/img/diagrams/security-layers.png)
+![Security layers](../img/diagrams/security-layers.png)
 
 ### Layer 0 — Discovery (open by design)
 

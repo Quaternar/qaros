@@ -8,7 +8,7 @@ description: How world (geo), room, app-volume, and app-content spaces relate, a
 
 Everything in QAROS is placed somewhere, and "somewhere" always means *a pose in a specific space*. There are four nested spaces you need to know. Getting them straight makes the whole API — app volumes, panels, gestures, streaming poses — fall into place.
 
-![Coordinate spaces](/img/diagrams/coordinate-spaces.png)
+![Coordinate spaces](../img/diagrams/coordinate-spaces.png)
 
 ## The space hierarchy
 
@@ -43,7 +43,7 @@ The room origin itself is established by the underlying XR runtime and the platf
 
 - `origin_world` — the anchor's origin as an ECEF position (double precision, meters),
 - `axis_x/y/z_world` — the anchor's local axes as unit vectors in the ECEF frame,
-- `handedness` — right- or left-handed (right-handed means `X × Y = Z`).
+- `handedness` — `QAR_HANDEDNESS_RIGHT` or `QAR_HANDEDNESS_LEFT` (right-handed means `X × Y = Z`). `QAR_HANDEDNESS_UNSPECIFIED` is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
 
 World anchors let outdoor and large-scale deployments place content at real geographic locations, and let two deployments agree on absolute placement. If you never set a world anchor, world space simply does not participate — the room is your outermost frame.
 
