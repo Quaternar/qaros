@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Where the native SDK binaries the tests load live: qar-streaming-c, qar-streaming-c-ext
+    and their dependencies. A repository that embeds qaros (the Quaternar monorepo) injects
+    its own build output through a qaros-native.props found above this folder; otherwise the
+    QAROS package drop folder is used. An explicit -p:QarStreamingNativeBinDir=... wins over both.
+  -->
+  <PropertyGroup>
+    <_QarosNativeProps>$([MSBuild]::GetPathOfFileAbove('qaros-native.props', '$(MSBuildThisFileDirectory)..\..'))</_QarosNativeProps>
+  </PropertyGroup>
+
+  <Import Project="$(_QarosNativeProps)" Condition="'$(_QarosNativeProps)' != ''" />
+
+  <PropertyGroup>
+    <QarStreamingNativeBinDir Condition="'$(QarStreamingNativeBinDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\package\bin'))</QarStreamingNativeBinDir>
+  </PropertyGroup>
+</Project>

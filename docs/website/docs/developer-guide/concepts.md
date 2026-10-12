@@ -65,12 +65,12 @@ important concrete rules are:
 
 ## C <-> C# object map
 
-The C# binding lives in the `Qar` namespace and drops the `Qar` prefix from type
+The C# binding lives in the `Quaternar.Qaros` namespace and drops the `Qar` prefix from type
 names. Operations on the things inside a session (peers, panels, volumes,
 senders) are reached through properties on the session object rather than free
 functions.
 
-| Concept | C | C# (`Qar` namespace) | Covered in |
+| Concept | C | C# (`Quaternar.Qaros`) | Covered in |
 |---|---|---|---|
 | Library init/logging | `qar_library_*` | `Library` (static) | [Getting Started](/docs/developer-guide/getting-started) |
 | Process context | `QarRuntime*` | `Runtime : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions) |

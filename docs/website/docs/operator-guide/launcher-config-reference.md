@@ -52,14 +52,14 @@ Migrations applied on load:
 
 ## Paths
 
-All paths default to subfolders of the per-user application-data root (see [Installation](/docs/operator-guide/installation)).
+Paths default to the data root or the log root ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)).
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `caDir` | path | `<app-data>/hub-ca` | Hub certificate authority directory. |
-| `runtimeStorageRoot` | path | `<app-data>` | Root of identity store, trust store and launcher session state. |
-| `logFolder` | path | `<app-data>/qar-launcher-default/<session-id>` | Log folder. The default folder is emptied on every start; a configured one is not. |
-| `startupTargetPath` | path | - | File the launcher writes the Hub-interconnect target to after connecting to another Hub. Without it the interconnect is not restored on the next start. Set by the tray to `startup-target.json` next to its config file. |
+| `caDir` | path | `<data root>/hub-ca` | Hub certificate authority directory. |
+| `runtimeStorageRoot` | path | `<data root>` | Root of identity store, trust store and launcher session state. |
+| `logFolder` | path | `<log root>/qar-launcher-default/<session-id>` | Log folder. The default folder is emptied on every start; a configured one is not. |
+| `startupTargetPath` | path | - | File the launcher writes the Hub-interconnect target to after connecting to another Hub. Without it the interconnect is not restored on the next start. Set by the tray to `startup-target.json`: next to the config file passed as the tray's first argument, otherwise in the tray's log folder (`<log root>/qaros-hub-service`). |
 
 ```json
 { "caDir": "C:/ProgramData/Quaternar/hub-ca", "logFolder": "C:/ProgramData/Quaternar/logs/runtime-launcher" }
@@ -70,11 +70,11 @@ All paths default to subfolders of the per-user application-data root (see [Inst
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `routerPort` | integer | - | Fixed message-router port. Omit it: the Hub takes the first port in the range below free on both TCP and UDP, so several local Hubs coexist. Pin it only for a firewalled deployment. |
-| `routerPortRangeStart` | integer | `19120` | First port searched when `routerPort` is unset. |
-| `routerPortRangeEnd` | integer | `19199` | Last port searched when `routerPort` is unset. |
+| `routerPortRangeStart` | integer | `19120` | First port searched when `routerPort` is unset. The onboarding listener (discovery, pairing, shared-password onboarding) takes its port from the same range, skipping the router port, unless `discoveryPort` / `onboardingPakePort` pins it. |
+| `routerPortRangeEnd` | integer | `19199` | Last port searched when `routerPort` is unset, and for the onboarding listener. |
 | `sessionEndpoints` | array of locator strings or address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Must be an array (a bare string is rejected). Each entry is either a locator string `"<protocol>/<host>:<port>"` (IPv6 host in brackets) or `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <1-65535>}` with all three fields; both forms may be mixed. A malformed entry stops the launcher with an error message. |
 | `discoveryHost` | string | `""` | Host name or IP advertised in the discovery beacon as the discovery server address. |
-| `discoveryPort` | integer | `7445` | Discovery port. |
+| `discoveryPort` | integer | `0` | TCP port of the onboarding listener (discovery requests, pairing, shared-password onboarding). `0` takes the first free port of the router range. Nonzero pins it: that port, or the Hub does not start. Same listener as `onboardingPakePort`; if both are set they must match. The UDP multicast beacon stays on `7445`. |
 | `discoveryDisplayName` | string | - | Overrides the Hub name shown in discovery. Omit it: the Hub keeps its persisted name (initially "QAROS Hub"). |
 | `hubRoomName` | string | - | Overrides the Hub's room name. Omit it: the Hub keeps its persisted room. |
 
@@ -91,7 +91,7 @@ See [Networking & Federation](/docs/operator-guide/networking-and-federation) fo
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `onboardingPakePort` | integer | `0` | Port of the pairing-code (PAKE) onboarding listener. `0` picks a free port. |
+| `onboardingPakePort` | integer | `0` | Same listener as `discoveryPort`, kept for older configs. `0` takes the first free port of the router range; nonzero pins it, or the Hub does not start. |
 | `codeRotationSec` | integer | `8` | Seconds between freshly minted pairing codes. A code lives at least 10 s, or longer if this is larger. |
 | `pakeCodeLength` | integer | `8` | Characters in the human-entered pairing code. |
 | `certLifetimeHours` | integer | CA default | Lifetime of certificates issued to onboarded devices. |

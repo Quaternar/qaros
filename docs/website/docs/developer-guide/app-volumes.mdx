@@ -73,7 +73,7 @@ AppVolumeId volumeId = created.ValueOrThrow();
 </CodeTabs>
 
 :::info
-The C# snippet above is illustrative — it tracks the `Qar` binding surface but
+The C# snippet above is illustrative — it tracks the `Quaternar.Qaros` binding surface but
 is not yet compiled from a published sample project.
 :::
 
@@ -93,7 +93,7 @@ To pin a volume to a geographic pose (ECEF WGS84 — see [Coordinate Systems](/d
 ```c
 QarGeoAnchorFrame frame;
 frame.world_ref_system = QAR_WORLD_REF_SYSTEM_ECEF_WGS84_METERS;
-frame.handedness = QAR_HANDEDNESS_RIGHT;
+frame.handedness = QAR_HANDEDNESS_RIGHT; /* required: UNSPECIFIED is rejected */
 /* fill origin_world (meters, ECEF) and the axis_x/y/z_world unit vectors */
 qar_app_volumes_change_app_world_anchor(session, &volume_id, &frame);
 /* ... */

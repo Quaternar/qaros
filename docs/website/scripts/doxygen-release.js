@@ -1,8 +1,10 @@
 // Pinned, hash-verified Doxygen release metadata per host platform.
-// URLs point at doxygen.nl directly (same source used by the Quaternar
-// monorepo's HostToolsWindows.cmake for its own bundled Doxygen), not the
+// URLs point at Doxygen's GitHub release first and doxygen.nl second, not the
 // sourceforge-mirror-based npm "doxygen" wrapper package, which has been
 // unreliable (redirect chains that hang) for this project in the past.
+// doxygen.nl only keeps recent releases under /files/ (1.9.8 now returns 404);
+// the GitHub release assets are byte-identical and stay. The sha256 pins the
+// bytes whichever source served them.
 const path = require("path");
 
 const VERSION = require("./doxygen-version");
@@ -28,7 +30,10 @@ function getRelease() {
 	}
 	return {
 		version: VERSION,
-		url: `https://www.doxygen.nl/files/${release.archiveName}`,
+		urls: [
+			`https://github.com/doxygen/doxygen/releases/download/Release_${VERSION.replaceAll(".", "_")}/${release.archiveName}`,
+			`https://www.doxygen.nl/files/${release.archiveName}`,
+		],
 		archiveName: release.archiveName,
 		sha256: release.sha256,
 		binaryRelPath: release.binaryRelPath,
