@@ -5,6 +5,6 @@
 	"link": {
 		"type": "generated-index",
 		"title": "QAROS Developer Guide",
-		"description": "How to integrate the QAROS C API into your application: SDK setup, API conventions, onboarding and sessions, rendering streams, GUI panels, and app volumes — with tutorials backed by compiled example code."
+		"description": "How to integrate the QAROS C API into your application: SDK setup, API conventions, onboarding and sessions, rendering streams, GUI panels, app volumes, and the Unity packages — with tutorials backed by compiled example code."
 	}
 }
