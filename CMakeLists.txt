@@ -32,4 +32,5 @@ if(BUILD_VULKAN_EXAMPLE_TESTS)
 endif()
 
 add_subdirectory(qar-streaming-c)
+add_subdirectory(qar-streaming-cpp)
 
