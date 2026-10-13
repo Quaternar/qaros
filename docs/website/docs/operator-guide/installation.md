@@ -13,8 +13,8 @@ QAROS is installed on Windows by one signed installer, **per machine**: it needs
 | Artifact | For whom | Contents |
 |---|---|---|
 | **Installer** (`QAROS-Setup-<version>.exe`) | every QAROS PC | the Hub (tray, launcher, Visualizer), the runtime and C API library, the `qar-vulkan-source` example app, the C API header, the device player apps |
-| **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | the Unity packages and `devices/` |
-| **C# NuGet** (`Quaternar.Qaros.Streaming`, `Quaternar.Qaros.Streaming.Demo`) | .NET developers | the C# binding |
+| **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | the [Unity packages](/docs/developer-guide/unity) and `devices/` |
+| **C# NuGet** (`Quaternar.Qaros`, `Quaternar.Qaros.Demo`) | .NET developers | the C# binding |
 
 Each release comes in two flavors, release and demo. One PC holds one QAROS installation in one flavor.
 
@@ -59,13 +59,13 @@ The Hub processes (tray, launcher, Visualizer) run in the signed-in user's sessi
 
 | Ports | Use |
 |---|---|
-| 7445 TCP + UDP multicast `239.77.77.77` | discovery and code pairing |
+| UDP multicast `239.77.77.77:7445` | discovery |
 | 7447 TCP | session traffic, mutual TLS |
-| 7440-7460, 19120-19199 TCP + UDP | QAROS port ranges (session router and peers) |
+| 7440-7460, 19120-19199 TCP + UDP | QAROS port ranges (session router, peers, and code pairing: a Hub claims its onboarding port from its range, so a rule for TCP 7445 alone does not let a device pair) |
 
 Details: [Networking and Federation](/docs/operator-guide/networking-and-federation). If the firewall step fails, the setup warns that LAN devices cannot connect; local source apps still work.
 
-## Data
+## Where data and logs live
 
 Program files and data are kept apart. Data survives upgrades and uninstall.
 
@@ -74,6 +74,18 @@ Program files and data are kept apart. Data survives upgrades and uninstall.
 | `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA, Hub and session state, device identities, approved local apps, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc` |
 | `%ProgramData%\Quaternar\Qaros` | per machine: service state |
 | `QAR_APP_DATA_ROOT` environment variable | overrides the per-user folder |
+
+Logs are kept apart from the data, under the **log root** `%TEMP%\quaternar\logs` (with `QAR_APP_DATA_ROOT` set: that folder).
+
+| Logs of | Folder |
+|---|---|
+| Tray (`qaros-hub-service`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
+| Launcher and every process it starts (Visualizer, source apps, mixer) | `<log root>\qar-launcher-default\<session-id>`, emptied when the Hub starts |
+
+- Deleting the per-user data folder resets the Hub: devices must onboard again and local apps must be approved again.
+- The Visualizer keeps its settings and window layout (`imgui.ini`) under `<data folder>\streaming-viz`.
+- Copy the log folder **before** restarting the Hub if you need it.
+- `logFolder` in the [launcher configuration](/docs/operator-guide/launcher-config-reference#paths) moves the launcher logs.
 
 ## Upgrade
 

@@ -5,6 +5,7 @@ This website is built using [Docusaurus](https://docusaurus.io/), a modern stati
 ## Prerequisites
 
 - Node.js >= 18 (see `engines` in `package.json`).
+- .NET SDK >= 8 (C# API reference, see below).
 - A `tar` binary on `PATH` that can extract `.zip` (Windows 10/11 ships one
   at `%SystemRoot%\System32\tar.exe`) and `.tar.gz` (any Linux/macOS system
   `tar`). Used only to unpack the Doxygen archive below.
@@ -28,21 +29,76 @@ harmless.
 To point at a different Doxygen binary (e.g. on an unsupported platform),
 set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
 
+### C# API reference
+
+- Needs the .NET SDK 8+ on `PATH`. Nothing native is built.
+- `npm run docs:csharp` (part of `docs:generate`) runs `scripts/run-docfx.js`:
+  `dotnet tool restore` installs the DocFX pinned in `dotnet-tools.json`, `docfx metadata`
+  (`docfx/qar-streaming-sharp/docfx.json`) reads `qar-streaming-sharp` through Roslyn into
+  YAML (gitignored `docfx/qar-streaming-sharp/_yaml/`), and the script renders that model into
+  the gitignored `api/qar-streaming-sharp/`.
+- Rendered by our script, not DocFX's Markdown template or DocFxMarkdownGen: DocFX's
+  YAML model is its stable input format, so layout, anchors and links are ours to control;
+  DocFxMarkdownGen (pre-1.0) drops generic arguments (`Result<T>` for `Result<PeerId>`)
+  and has no summaries on namespace pages.
+- Landing page `/api/qar-streaming-sharp/`: hand-written intro
+  `docfx/qar-streaming-sharp/overview.md`, then one table of types per area. Areas and
+  their order: `docfx/qar-streaming-sharp/areas.json`. A type no area claims lands
+  under "Other" with a build warning. The sidebar uses the same grouping.
+- Type pages: summary, declaration, inheritance, then a section per member kind
+  (overview table from 3 members), each member a heading with an explicit id; enum
+  values are one table with an anchor per value. Crefs become relative `.md` links,
+  BCL types link to learn.microsoft.com, source links go to GitHub (`main`, or the
+  commit a release snapshot was taken from via `QAROS_SOURCE_REF`).
+- Only the public `Quaternar.Qaros` and `Quaternar.Qaros.Mathematics` namespaces are documented; `Quaternar.Qaros.Interop` is internal.
+- Generated from the `net8.0` target, so APIs that exist only on .NET 8 are listed too.
+- Page content comes from the `///` XML doc comments. A public type or member without
+  one has an empty description.
+
+### Versioned docs
+
+- Both docs instances are versioned in lockstep: guides (`docs/` ->
+  `versioned_docs/`, `versions.json`) and the generated C and C# references (`api/` ->
+  `api_versioned_docs/`, `api_versions.json`). The two lists must match, the config
+  refuses to load otherwise (`scripts/docs-versions.js`).
+- No version is released yet: the site has only the working copy ("current"),
+  labelled `<qaros/VERSION> (next)` (`Next` if `VERSION` is missing).
+- After a release: newest release at `/docs/`, `/api/`; the working copy at
+  `/docs/next/`, `/api/next/`; older releases at `/docs/X.Y.Z/`, `/api/X.Y.Z/`.
+- Release step, from `docs/website`, before bumping `qaros/VERSION`:
+  `npm run docs:version -- X.Y.Z` (version defaults to `qaros/VERSION`). It
+  regenerates both API references with C# source links pinned to the current qaros
+  commit, snapshots both instances, points the snapshot's `@site/api/...` imports
+  (C tutorials) at the frozen reference and clears the Docusaurus cache. Commit
+  `versioned_docs/`, `versioned_sidebars/`, `versions.json` and their `api_*` twins
+  (~6 MB per release, mostly the C reference).
+- Absolute `/docs/...` and `/api/...` links in pages are rewritten at build time to the
+  page's own version (`rehypeVersionedLinks`), so a release's guides link its own API
+  reference. Relative `.md` links are resolved per version by Docusaurus already.
+- Navbar: one version dropdown (`custom-docsVersionDropdown`,
+  `src/components/DocsVersionDropdown`) switches whichever instance the page belongs
+  to and makes that version preferred in the other one. Navbar links are `doc` /
+  `docSidebar` items so they follow the browsed version; a plain `to:` (dropdown
+  headers, redirects) always opens the newest release.
+- Page images are versioned with their pages: they live inside `docs/` and are referenced by
+  relative path, so `docs:version` copies them into the snapshot. An absolute `/img/...` image in
+  a page fails the build (`remarkVersionedImages`): `static/` is not versioned, so a release would
+  show the newest image. `static/` holds only site chrome (logos, favicons, homepage art).
+- Remove a version: delete its folders and its entry in both `versions.json` files.
+
 ### Diagrams (SVG source, PNG on the site)
 
-The hand-drawn diagrams live as SVG under `assets/diagrams/` — deliberately
-*outside* `static/`, which Docusaurus copies into the built site verbatim, so
-the editable source is never itself shipped to the browser. Doc pages embed
-the `.png` rasterized from each SVG instead, since Docusaurus-hosted static
-sites don't reliably serve/display raw SVGs everywhere they're linked.
-`npm run docs:diagrams` (via `sharp`, a dependency already declared in
-`package.json`) renders every `assets/diagrams/*.svg` into a same-named
-`.png` under `static/img/diagrams/`; that output directory is gitignored in
-full and regenerated on every build — never edit or commit a `.png` there
-directly. It runs automatically as part of `npm run docs:generate`, so
-`npm run start` / `npm run build` / `npm run dev` all keep the PNGs in sync
-with their SVG sources — edit the `.svg` under `assets/diagrams/` and rerun
-one of those (or just `npm run docs:diagrams` directly).
+- Source: SVG under `assets/diagrams/`, outside `docs/` and `static/`, so it never ships.
+- Pages embed a PNG instead (raw SVG does not display reliably everywhere).
+- `npm run docs:diagrams` (part of `docs:generate`, so `start`, `build` and `dev` run it) renders
+  each SVG to `docs/img/diagrams/<name>.png`. Gitignored and regenerated: edit the SVG, never the PNG.
+- Reference it relative to the page: `![Mixer data flow](../img/diagrams/mixer-flow.png)`.
+- `docs:version` renders first, snapshots `docs/`, then moves every image of the snapshot into
+  `versioned_assets/<name>-<content hash>.<ext>` (committed) and points its pages there. An
+  image whose content an earlier version already has is not copied again; only changed images
+  add a file. A release therefore keeps its diagrams without duplicating unchanged ones.
+- After removing a version, `npm run docs:prune-assets` deletes stored images no frozen page
+  uses any more (`docs:version` prunes too).
 
 The SVGs are tracked in Git LFS, via the repo-wide `*.svg`/`*.png` rule in
 the top-level `.gitattributes` (see `qaros/.gitattributes`).
@@ -70,7 +126,7 @@ hand-written `.md`/`.mdx` page under `docs/` hot-reloads, but editing
 `qar-streaming-c/include/qar_streaming.h`, `qar-streaming-c/examples/*.c`,
 the Doxyfile, `doxygen2docusaurus.json`, or a diagram `.svg` under
 `assets/diagrams/` does not, since those only feed the generated `api/` tree
-and `static/img/diagrams/*.png` through `npm run docs:generate`.
+and `docs/img/diagrams/*.png` through `npm run docs:generate`.
 
 For that, use:
 

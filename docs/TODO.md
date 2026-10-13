@@ -38,10 +38,9 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
 
 ## Blocked on the C# binding not being published in `qaros`
 
-- **Compiled C# examples project** — BLOCKED(binding not in qaros) / R12 / old T8.
-  The `qar-streaming-sharp` binding lives only in the Quaternar monorepo
-  (`qar-streaming/libs/qar-streaming-sharp/`); the `qaros` submodule ships only
-  `qar-streaming-c`. There is no C# examples project and no NuGet packaging metadata
+- **Compiled C# examples project** — R12 / old T8.
+  The `qar-streaming-sharp` binding and its tests now live in `qaros/qar-streaming-sharp/`.
+  There is still no C# examples project and no NuGet packaging metadata
   (`PackageId`/`Version`) in the csproj. Until it is published into
   `qaros/qar-streaming-sharp/` with a compiled `QarStreaming.Examples` project:
   - The C# code tabs across the Developer Guide are **illustrative** — accurate to
@@ -51,7 +50,7 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
     references).
   - Add a `Tutorials > C#` subfolder (`developer-guide/tutorials/csharp/*.mdx`)
     mirroring the 5 C tutorials 1:1.
-  - The NuGet ids are `Quaternar.Qaros.Streaming[.Demo]` (now in
+  - The NuGet ids are `Quaternar.Qaros[.Demo]` (now in
     `developer-guide/getting-started`); publish them where integrators can reach them.
   - C# members the docs use are confirmed against the binding: `session.AppVolumes.GetOrCreate`
     / `session.GuiPanels.GetOrCreate` (options take the required common name in their

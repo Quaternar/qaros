@@ -1,5 +1,6 @@
 ---
 BasedOnStyle: Mozilla
+ColumnLimit: 100
 AccessModifierOffset: -4
 AlignAfterOpenBracket: BlockIndent
 AlignOperands: Align
@@ -46,4 +47,3 @@ TabWidth: 4
 FixNamespaceComments: true
 ShortNamespaceLines: 0
 UseTab: Always
-ColumnLimit: 80

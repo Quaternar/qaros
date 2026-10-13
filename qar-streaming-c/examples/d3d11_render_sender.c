@@ -100,8 +100,7 @@ on_render_request(QarRenderStreamRequest* request, void* user_state)
 	RenderRequestState* state = (RenderRequestState*)user_state;
 
 	QarPeerId target_peer_id = qar_peer_id_default();
-	QarResult peer_result =
-		qar_render_request_get_target_peer_id(request, &target_peer_id);
+	QarResult peer_result = qar_render_request_get_target_peer_id(request, &target_peer_id);
 	log_result("qar_render_request_get_target_peer_id", peer_result);
 	if(qar_result_is_success(peer_result) && !state->has_request)
 	{
@@ -154,17 +153,14 @@ create_d3d11(D3D11Objects* out_d3d)
 	);
 	if(FAILED(hr))
 	{
-		fprintf(
-			stderr, "D3D11CreateDevice failed (0x%08lX)\n", (unsigned long)hr
-		);
+		fprintf(stderr, "D3D11CreateDevice failed (0x%08lX)\n", (unsigned long)hr);
 		return false;
 	}
 
 	out_d3d->device = NULL;
 	out_d3d->context = NULL;
-	HRESULT device_hr = ID3D11Device_QueryInterface(
-		device, &IID_ID3D11Device1, (void**)&out_d3d->device
-	);
+	HRESULT device_hr =
+		ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&out_d3d->device);
 	HRESULT context_hr = ID3D11DeviceContext_QueryInterface(
 		context, &IID_ID3D11DeviceContext1, (void**)&out_d3d->context
 	);
@@ -202,31 +198,21 @@ clear_color_views(
 
 		ID3D11Texture2D* texture = frame->textures[view->texture_index].texture;
 		ID3D11RenderTargetView* rtv = NULL;
-		HRESULT hr = ID3D11Device1_CreateRenderTargetView(
-			device, (ID3D11Resource*)texture, NULL, &rtv
-		);
+		HRESULT hr =
+			ID3D11Device1_CreateRenderTargetView(device, (ID3D11Resource*)texture, NULL, &rtv);
 		if(FAILED(hr))
 		{
-			fprintf(
-				stderr,
-				"CreateRenderTargetView failed (0x%08lX)\n",
-				(unsigned long)hr
-			);
+			fprintf(stderr, "CreateRenderTargetView failed (0x%08lX)\n", (unsigned long)hr);
 			continue;
 		}
 
 		/* Left eye red-ish, right eye blue-ish, both pulsing. */
 		const bool right = view->eye == QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
-		const float color[4] = {
-			right ? 0.1f : t, 0.2f, right ? t : 0.1f, 1.f
+		const float color[4] = { right ? 0.1f : t, 0.2f, right ? t : 0.1f, 1.f };
+		const D3D11_RECT rect = {
+			(LONG)view->start_x, (LONG)view->start_y, (LONG)view->end_x, (LONG)view->end_y
 		};
-		const D3D11_RECT rect = { (LONG)view->start_x,
-								  (LONG)view->start_y,
-								  (LONG)view->end_x,
-								  (LONG)view->end_y };
-		ID3D11DeviceContext1_ClearView(
-			context, (ID3D11View*)rtv, color, &rect, 1
-		);
+		ID3D11DeviceContext1_ClearView(context, (ID3D11View*)rtv, color, &rect, 1);
 		ID3D11RenderTargetView_Release(rtv);
 	}
 }
@@ -261,9 +247,7 @@ main(int argc, char** argv)
 	{
 		runtime_dir = argv[2];
 	}
-	else if(get_dir_from_path(
-				library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)
-			))
+	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
@@ -322,8 +306,7 @@ main(int argc, char** argv)
 	volume_init.size = qar_app_volume_size_default();
 
 	QarAppVolumeId volume_id = qar_app_volume_id_default();
-	QarResult volume_result =
-		qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
+	QarResult volume_result = qar_app_volumes_get_or_create(session, &volume_init, &volume_id);
 	log_result("qar_app_volumes_get_or_create", volume_result);
 	if(qar_result_is_error(volume_result))
 	{
@@ -333,9 +316,8 @@ main(int argc, char** argv)
 	//! [d3d11_volume]
 
 	RenderRequestState request_state = { false, qar_peer_id_default() };
-	QarResult subscribe_result = qar_render_sender_subscribe_requests(
-		session, on_render_request, &request_state, NULL
-	);
+	QarResult subscribe_result =
+		qar_render_sender_subscribe_requests(session, on_render_request, &request_state, NULL);
 	log_result("qar_render_sender_subscribe_requests", subscribe_result);
 	if(qar_result_is_error(subscribe_result))
 	{
@@ -359,10 +341,8 @@ main(int argc, char** argv)
 	QarStreamParamsD3D11 d3d11_params = qar_stream_params_d3d11_default();
 	d3d11_params.d3d11_device = d3d.device;
 	d3d11_params.d3d11_context = d3d.context;
-	d3d11_params.color_bind_flags =
-		D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	d3d11_params.depth_bind_flags =
-		D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+	d3d11_params.color_bind_flags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	d3d11_params.depth_bind_flags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 	d3d11_params.acquire_keyed_mutex_sync = true;
 
 	QarRenderSenderInit sender_init = qar_render_sender_init_default();
@@ -372,8 +352,7 @@ main(int argc, char** argv)
 	sender_init.header.next = &d3d11_params.header;
 
 	QarRenderSender* sender = NULL;
-	QarResult sender_result =
-		qar_render_sender_create(session, &sender_init, NULL, &sender);
+	QarResult sender_result = qar_render_sender_create(session, &sender_init, NULL, &sender);
 	log_result("qar_render_sender_create", sender_result);
 	if(qar_result_is_error(sender_result) || sender == NULL)
 	{
@@ -388,8 +367,7 @@ main(int argc, char** argv)
 	for(size_t frame_index = 0; frame_index < frame_count; ++frame_index)
 	{
 		QarRenderFrameInfo* frame_info = NULL;
-		QarResult begin_result =
-			qar_render_sender_begin_frame(sender, NULL, &frame_info);
+		QarResult begin_result = qar_render_sender_begin_frame(sender, NULL, &frame_info);
 		if(qar_result_is_error(begin_result) || frame_info == NULL)
 		{
 			log_result("qar_render_sender_begin_frame", begin_result);

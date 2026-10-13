@@ -13,15 +13,16 @@ A **source application** renders content into an app volume and streams it to th
 | Section | Shows |
 |---|---|
 | **Apps** | A tile grid: built-in apps, then detected apps, then your presets, then **+ Add source app**. The refresh icon looks for installed apps again. |
-| **Running** | One row per running app, with its status, **Streams to**, **Stop** and, where supported, **Live settings**. |
+| **Running** | One row per running app, with its status, **Streams to**, **Stop** and, where supported, **Live settings**. Web apps have their own buttons: see [Web apps](#web-apps). |
 
 Tile tags:
 
 | Tag | Meaning |
 |---|---|
-| **Built-in** | Ships with QAROS: StereoKit, CPU Renderer, Test OpenXR. |
+| **Built-in** | Ships with QAROS: StereoKit, CPU Renderer, Test OpenXR, Web app. |
 | **Detected** | Found on this PC (see [Detected apps](#detected-apps)). |
 | *(none)* | A preset you saved. |
+| **Developer** | Visible from the Developer UI mode up. |
 | **Debug** | Visible only in the Debug UI mode. |
 | **N on** | N copies of this app are running. |
 
@@ -40,18 +41,21 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 ## Adding your own app
 
 1. Click **+ Add source app**.
-2. In the Debug UI mode, pick the type first: **OpenXR app** or **QAROS API app**. In the other modes only OpenXR apps can be added.
-3. Set **Executable** (type a path or **Browse**). **Name** defaults to the executable name.
+2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**.
+3. Set **Executable** (type a path or **Browse**), or for a web app its **Address**. **Name** defaults to the executable name or the address's host.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
 
 | App type | Settings | Processes |
 |---|---|---|
 | OpenXR app | Executable, Arguments (one per line) | One process per target app |
 | QAROS API app | Executable, Arguments (one per line) | One process for all targets |
+| Web app | Address, adaptation (see [Web apps](#web-apps)) | Runs inside this visualizer, one page for all targets |
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it and tells it its GPU; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
+To test your own QAROS API app: switch to Developer mode (Settings, no password), add it as above with type **QAROS API app**, then launch its tile. Check **Running** for its status and the Hub's log folder for its stdout/stderr.
+
+A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
 
 ## Approved local apps
 
@@ -85,6 +89,64 @@ An OpenXR app runs unchanged on the QAROS OpenXR runtime, which the Hub starts o
 - The app's `LOCAL` reference space has its origin at the **centre of the app volume**. Place content relative to `LOCAL` and it appears inside the volume.
 - **Test OpenXR** (built-in, Debug mode) draws a test scene filling its app volume, with a blue box at the centre. Use it to check the OpenXR path end to end.
 
+## Web apps
+
+A **web app** streams an existing website (for example a three.js viewer or configurator) without changing it. The visualizer that launches it loads the page in a built-in browser and renders each target's view from it. Unlike the other types, it runs in that visualizer, not on the Hub's launcher: close the visualizer and the web app stops.
+
+### Launching
+
+1. Click the built-in **Web app** tile or a web app preset.
+2. Set **Address**, and optionally the adaptation:
+
+   | Field | Meaning |
+   |---|---|
+   | **Stored profile** | An adaptation profile by name. Empty: the profile that best matches the address. |
+   | **Page region** | The top-left rectangle, in pixels, the page keeps for its own view and interface. |
+   | **App scale** | Room metres per unit of the page's scene. Off: the profile's. |
+   | **Scripts** | Inline scripts injected into the page, each **Before page scripts** (can take over the canvas) or **After load**. They replace the stored profile's scripts. |
+
+   Leave all of it empty to use the stored profile that matches the address.
+3. Press **Launch**. The page loads; the app starts streaming by itself as soon as the visualizer finds the page's renderer.
+
+### Logging in
+
+When the address opens on a login page, there is no renderer yet and the row shows **Waiting for a renderer - log in on Page, then Probe**:
+
+1. Press **Page**. The **Web App Source Page** panel opens with the website.
+2. Log in there with mouse and keyboard as in a normal browser.
+3. Press **Probe** on the row. Streaming starts once the renderer is found.
+
+The login is kept: all web apps in a visualizer share one browser profile, cookies included.
+
+### Running row
+
+| Button | Shown | Does |
+|---|---|---|
+| **Page** | always | Shows the page in the **Web App Source Page** panel. |
+| **Details** | always | Opens the details below. |
+| **Probe** | waiting for a renderer | Looks for the page's renderer again. |
+| **Stop** | streaming or starting | Stops streaming. The page stays loaded. |
+| **Start** | stopped | Streams again. After a failure or a visualizer restart, reloads the page first. |
+| **Remove** | always | Closes the page and removes the app from the list. |
+
+**Details** shows the address, what the probe found (engine, canvases, depth), the adaptation profile in use, active targets, frame counters, the last error and the event log (**Clear**, **Copy**). **Probe again** probes now; **Reload** loads the page again without streaming. In the Developer and Debug UI modes, **Profile** switches the live app to another stored profile and reloads the page.
+
+A red warning above the Running list means the web apps together are close to the GPU's memory limit: remove one before starting another.
+
+### Web App Source Page panel
+
+Shows the page of the app last selected with **Page**, and passes mouse, wheel and keyboard input to it.
+
+| Control | Does |
+|---|---|
+| **Page Size** | **Page Width** and height, then **Apply Size**, resize the page itself. Resizing the panel only rescales the picture. |
+| **Mode** | **Stream** (default) streams to targets. **Local Grid** renders simulated users in this visualizer instead, to check an adaptation without headsets; it needs a found renderer and Stream stopped. |
+| **Grid Users** | Local Grid only: number of users, **Colour**, **Depth** or **Colour + Depth**, and each user's camera position. Each user is its own dockable tab. |
+
+### After a restart
+
+Web apps the visualizer was running come back after a restart as **Stopped**, with their address and adaptation. Press **Start** to load and stream them again.
+
 ## Streams to
 
 Selects which target applications receive the app's stream:
@@ -111,14 +173,22 @@ On start, and when you press refresh, the visualizer looks in its own folder for
 
 | File | Tile |
 |---|---|
-| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Debug mode only) |
+| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Developer mode and up) |
 
-## UI modes and debug-only apps
+## UI modes and mode-gated apps
 
-The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug needs the debug password in Settings). CPU Renderer, Test OpenXR and every QAROS API app are debug-only: outside Debug mode their tiles and running rows are hidden, but apps already running keep running.
+The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug needs the debug password in Settings).
+
+| Apps | Shown from |
+|---|---|
+| StereoKit, your OpenXR presets | Basic |
+| QAROS API apps (yours and the Vulkan cube) | Developer |
+| CPU Renderer, Test OpenXR | Debug |
+
+In a lower mode their tiles and running rows are hidden, but apps already running keep running.
 
 ## Persistence
 
-Presets and the list of running apps are kept by the Hub on this PC, not by the visualizer. They survive visualizer and Hub restarts; when the Hub starts, it relaunches the apps that were running. Model and executable paths must stay reachable.
+Presets and the list of running apps are kept by the Hub on this PC, not by the visualizer. They survive visualizer and Hub restarts; when the Hub starts, it relaunches the apps that were running. Model and executable paths must stay reachable. Web apps are the exception: the Hub keeps their presets, but the visualizer that launched them keeps the running ones and restores them stopped (see [After a restart](#after-a-restart)).
 
 If a source app is killed and relaunched with the same identity, the new instance takes over its streams within about 2-3 s; see [Running the Hub](/docs/operator-guide/running-the-hub#when-an-app-restarts).

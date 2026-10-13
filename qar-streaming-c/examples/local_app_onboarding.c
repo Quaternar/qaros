@@ -28,10 +28,10 @@
  * | 1 | other error |
  * | 2 | QAROS is not installed (runtime not loaded) |
  * | 3 | no QAROS hub running on this PC (1802) |
- * | 4 | approval denied or revoked (1804) |
- * | 5 | nobody answered the approval in time (1805) |
- * | 6 | the hub is not the installed QAROS (1806) |
- * | 7 | the app no longer matches its approval (1807) |
+ * | 4 | approval denied or revoked (1805) |
+ * | 5 | nobody answered the approval in time (1806) |
+ * | 6 | the hub is not the installed QAROS (1807) |
+ * | 7 | the app no longer matches its approval (1808) |
  *
  * \section local_app_onboard Join as a Local App
  * \snippet local_app_onboarding.c local_app_onboard
@@ -49,9 +49,7 @@
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 static void
-on_progress(
-	QarActionSeverity severity, float percent, const char* message, void* state
-)
+on_progress(QarActionSeverity severity, float percent, const char* message, void* state)
 {
 	(void)severity;
 	(void)percent;
@@ -123,8 +121,7 @@ explain_result(QarResult result)
 int
 main(int argc, char** argv)
 {
-	const uint32_t approval_timeout_ms =
-		argc >= 2 ? (uint32_t)strtoul(argv[1], NULL, 10) : 0;
+	const uint32_t approval_timeout_ms = argc >= 2 ? (uint32_t)strtoul(argv[1], NULL, 10) : 0;
 
 	if(!qar_library_load(NULL))
 	{
@@ -160,9 +157,8 @@ main(int argc, char** argv)
 		QarOnboardingId onboarding_id;
 		memset(&onboarding_id, 0, sizeof(onboarding_id));
 		QarSession* session = NULL;
-		QarResult joined = qar_runtime_onboard(
-			runtime, &init, on_progress, NULL, NULL, &onboarding_id, &session
-		);
+		QarResult joined =
+			qar_runtime_onboard(runtime, &init, on_progress, NULL, NULL, &onboarding_id, &session);
 		//! [local_app_onboard]
 		exit_code = explain_result(joined);
 		if(session != NULL)

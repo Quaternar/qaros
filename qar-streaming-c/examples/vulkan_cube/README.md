@@ -40,43 +40,59 @@ cmake --build --preset x64-windows-release --target qar-vulkan-source
 |---|---|---|
 | `Could not load QAROS. Install QAROS on this PC...` | library load failed | install QAROS |
 | `QAROS is not running on this PC...` | 1802 | start QAROS from the Start menu, run again |
-| `QAROS did not allow this app to join...` | 1804 | someone clicked Deny or revoked it: run again to be asked again |
-| `Nobody answered the approval prompt in QAROS in time...` | 1805 | press Enter to ask again |
-| `The program answering on this PC is not the installed QAROS...` | 1806 | reinstall QAROS; the app does not retry |
-| `This app no longer matches what QAROS approved...` | 1807 | revoke it in the Visualizer (Connection panel, Approved apps), run again |
+| `QAROS did not allow this app to join...` | 1805 | someone clicked Deny or revoked it: run again to be asked again |
+| `Nobody answered the approval prompt in QAROS in time...` | 1806 | press Enter to ask again |
+| `The program answering on this PC is not the installed QAROS...` | 1807 | reinstall QAROS; the app does not retry |
+| `This app no longer matches what QAROS approved...` | 1808 | revoke it in the Visualizer (Connection panel, Approved apps), run again |
 
 ## Run with an onboarding code (hub on another PC)
 
 ```powershell
-.\qar-vulkan-source.exe --code --host hub-pc.example.local   # asks: Hub onboarding code:
-.\qar-vulkan-source.exe --code 12345678 --host 192.168.1.20
+.\qar-vulkan-source.exe --code --host 192.168.1.20:19121   # asks: Hub onboarding code:
+.\qar-vulkan-source.exe --code 12345678 --host 192.168.1.20:19121
 ```
 
-- `--code` without a value asks for the code on stdin. `--host` defaults to this PC.
+- `--code` without a value reads the code from the first stdin line. A line starting with `{` is a full onboarding invite (one line of JSON with the hub's address, onboarding port and a one-time code, passed to `qar_onboarding_invite_deserialize`); it needs no `--host`.
+- Without `--host`, a typed code finds your own hub: first through the `hub-endpoint.json` file the hub writes to the QAROS data folder, then through a discovery beacon from your user account (up to 6 s).
+- `--host` is `host:port`; the port is shown with the hub's code, and there is no default port.
 - QAROS must still be installed on this PC: the app loads its runtime.
 - A code is single-use. Every start needs a new one; nothing is persisted.
 
 ## Options
 
-| Option / variable | Effect |
+| Option | Effect |
 |---|---|
-| `--code [<code>]` | join with an onboarding code instead of as a local app |
-| `--host <hub-host>` | hub host name or IP for `--code` |
+| `--code [<code>]` | join with an onboarding code or full invite instead of as a local app |
+| `--host <host:port>` | hub a typed code joins |
 | `--runtime <path>` | load this `qar-streaming-c.dll` instead of the installed one (QAROS development builds) |
-| `QAR_GPU_ADAPTER_ID` | lowercase hex LUID (16 digits) or UUID (32 digits) of the GPU. Absent or empty: first supported NVIDIA GPU. No match: the app stops with an error. The console names the GPU used. |
 
-```powershell
-$env:QAR_GPU_ADAPTER_ID = "a1b2000000000000"; .\qar-vulkan-source.exe
-```
+- GPU: the app joins first and then creates its Vulkan device on the session's GPU (`qar_session_get_graphics_device_id`). Joined with a launch invite, that is the target's GPU, which QAROS selects from the invite; otherwise the GPU the library picks. A session GPU that matches no supported Vulkan device stops the app with an error. The console names the GPU it renders on. The app reads no environment variable.
 
 ## Started by QAROS
 
-- QAROS ships this app next to the Visualizer, which lists it as the **Vulkan cube** tile in Source Applications (Debug UI mode). Started there it runs with no arguments, joins as a local app under the peer id the hub planned for it, and gets `QAR_GPU_ADAPTER_ID` set to the target's GPU.
+- QAROS ships this app next to the Visualizer, which lists it as the **Vulkan cube** tile in Source Applications (Developer UI mode and up). Started there it runs with no arguments and joins as a local app under the peer id the hub planned for it.
 - **Stop** closes the app's stdin pipe. The app treats a closed stdin pipe as a stop request and shuts down cleanly. Started from a console, only Ctrl+C stops it.
-- A hub configured to hand API apps a code on stdin needs the argument `--code`: the app then reads the code from the first stdin line.
+- A hub configured to hand API apps an invite on stdin needs the argument `--code`: the app then reads the invite from the first stdin line, and its session is created on the target's GPU.
 - Contract: Developer Guide, *Onboarding and Sessions*, "Launched by QAROS".
+
+## Test your own app in the visualizer
+
+Any executable built on the QAROS C or C# API can be launched from the visualizer the same way as this cube, once it follows the launch contract (joins as a local app, own app volume, targets from the peer list, stop on end of stdin; Developer Guide, *Onboarding and Sessions*, "Launched by QAROS").
+
+1. Start QAROS (Start menu, or `bin\qaros-hub-service.exe`); it opens the visualizer.
+2. Settings → **UI mode** → **Developer** (no password). QAROS API apps show from Developer mode up.
+3. Source Applications → **+ Add source app** → **QAROS API app**.
+4. **Executable**: path to your `.exe` (type or **Browse**). **Arguments**: one per line, optional. **Name** defaults to the executable name.
+5. **Add app** saves a preset tile; it does not launch. Click the tile → **Launch**.
+6. Your app appears under **Running**; open its content on a target viewer. **Stop** closes its stdin.
+
+- Preset is kept by the Hub on this PC and survives restarts; the executable path must stay reachable.
+- An app exiting within 10 s is restarted with backoff and reported as an error notification; its stdout/stderr are in the Hub's log folder.
+- Without registering: run the app from a console, as in [Run](#run-local-app-the-default).
+
+Details: Operator Guide, *Source Applications*, "Adding your own app".
 
 ## Notes
 
-- Target discovery uses `qar_render_sender_subscribe_requests()`. Each requesting target gets an independent sender and stereo camera, including viewers arriving after rendering starts.
+- The cube renders for every running target app in the peer list (`qar_peer_subscribe_updates()` plus `qar_peer_spec_is_target_app()`): which targets to serve is a source app's own choice, and the cube serves them all. Each target gets an independent sender and stereo camera, including viewers arriving after rendering starts. The sender attaches its target to the cube's app volume, which is what makes the target ask for the content.
 - Known gaps: [01-improvements.md](01-improvements.md).

@@ -1,51 +1,38 @@
 #include "renderer.hpp"
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
+#include <csignal>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
+#include <vector>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 using Clock = std::chrono::steady_clock;
 using PeerKey = std::array<uint8_t, QAR_MAX_ID_LENGTH>;
 
-std::wstring
-StopEventName()
-{
-	return L"Local\\QarosVulkanCubeStop-"
-		   + std::to_wstring(GetCurrentProcessId());
-}
+// Set by Ctrl+C (SIGINT), SIGTERM or a closed stdin pipe. A signal handler can reach nothing but a
+// global, and a lock-free atomic is the one thing it may safely write; all SDK
+// and GPU cleanup stays on main.
+std::atomic<bool> g_stopRequested = false;
 
-// Stop requests only signal an event; all SDK and GPU cleanup stays on main.
-void
-SignalStop()
+extern "C" void
+OnStopSignal(int)
 {
-	auto stop = OpenEventW(EVENT_MODIFY_STATE, FALSE, StopEventName().c_str());
-	if(stop)
-	{
-		SetEvent(stop);
-		CloseHandle(stop);
-	}
-}
-
-BOOL WINAPI
-OnConsoleEvent(DWORD event)
-{
-	if(event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT)
-	{
-		return FALSE;
-	}
-	SignalStop();
-	return TRUE;
+	g_stopRequested.store(true);
 }
 
 bool
@@ -69,71 +56,110 @@ StopWhenStdinCloses(HANDLE input)
 {
 	std::array<char, 256> buffer{};
 	DWORD read = 0;
-	while(ReadFile(
-			  input,
-			  buffer.data(),
-			  static_cast<DWORD>(buffer.size()),
-			  &read,
-			  nullptr
-		  )
+	while(ReadFile(input, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)
 		  && read > 0)
 	{
 	}
-	SignalStop();
+	g_stopRequested.store(true);
 }
 
-struct Target
+// A stream that is paused (its receiver's display is not visible), reconnecting
+// or has no transfer yet is not broken: keep the sender and try the next frame.
+// Recreating it would only start the negotiation over. qar_result_has_code
+// also matches a wrapped cause: begin-frame reports these inside
+// QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME.
+bool
+IsWaiting(QarResult result)
 {
-	QarPeerId peer{};
-	QarRenderSenderInit init{};
-	QarStreamParamsVulkan vulkan{};
-	QarCancelToken* cancel = nullptr;
-	QarRenderSender* sender = nullptr;
-	QarResult result{};
-	QarResult frameResult{};
-	std::atomic<bool> created = false;
-	bool showing = false;
-	std::optional<CubeCamera> camera;
-	explicit Target(QarPeerId id)
-		: peer(id)
+	return qar_result_has_code(result, QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED)
+		   || qar_result_has_code(result, QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING)
+		   || qar_result_has_code(result, QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS);
+}
+
+// What every target renders: one animated scene, seen through each target's
+// own cameras.
+struct Scene
+{
+	VulkanDevice* gpu;
+	QarSession* session;
+	QarAppVolumeId volume;
+	Clock::time_point started;
+	float Seconds() const { return std::chrono::duration<float>(Clock::now() - started).count(); }
+};
+
+// One target app the cube renders for, on a thread of its own. The blocking
+// qar_render_sender_begin_frame() paces it: it returns when this target wants
+// its next frame, so each target runs at its own display rate and a slow or
+// paused one never delays another. Nothing on the frame path sleeps or polls.
+class Target
+{
+public:
+	Target(QarPeerId peer, const Scene& scene)
+		: m_peer(peer)
+		, m_scene(scene)
+		, m_camera(scene.gpu)
 	{
+		m_ready = Check(qar_cancel_token_create(&m_cancel));
+		if(m_ready)
+		{
+			m_thread = std::thread(&Target::Serve, this);
+		}
 	}
+	Target(const Target&) = delete;
+	Target& operator=(const Target&) = delete;
 	~Target()
 	{
-		// Camera drains its own work before framebuffer attachments disappear.
-		camera.reset();
-		if(sender)
+		RequestStop();
+		if(m_thread.joinable())
 		{
-			qar_render_stream_handle_destroy(sender);
+			m_thread.join();
 		}
-		if(cancel)
+		// The camera drains its own GPU work before the sender's images go.
+		m_camera.reset();
+		if(m_sender)
 		{
-			qar_cancel_token_handle_destroy(cancel);
+			qar_render_stream_handle_destroy(m_sender);
+		}
+		if(m_cancel)
+		{
+			qar_cancel_token_handle_destroy(m_cancel);
 		}
 	}
-	static void
-	OnCreated(QarResult status, QarRenderSender* stream, void* context)
+	// Ends a pending sender creation or begin-frame wait at once.
+	void RequestStop()
 	{
-		auto& target = *static_cast<Target*>(context);
-		target.result = status;
-		target.sender = stream;
-		target.created.store(true, std::memory_order_release);
-	}
-	bool
-	Start(QarSession* session, VulkanDevice& gpu, const QarAppVolumeId& volume)
-	{
-		if(not Check(qar_cancel_token_create(&cancel)))
+		m_stop.store(true);
+		if(m_cancel)
 		{
-			return false;
+			Check(qar_cancel_token_cancel(m_cancel));
 		}
-		init = qar_render_sender_init_default();
-		vulkan = qar_stream_params_vulkan_default();
-		vulkan.physical_device = gpu.physical;
-		vulkan.device = gpu.device;
+	}
+	bool Finished() const { return not m_ready || m_finished.load(); }
+	// The target is gone for good, not just failing for now.
+	bool StreamClosed() const { return m_closed.load(); }
+
+private:
+	void Serve()
+	{
+		if(CreateSender() && CreateCamera())
+		{
+			while(not m_stop.load() && RenderNext())
+			{
+			}
+		}
+		m_finished.store(true);
+	}
+
+	bool CreateSender()
+	{
+		auto vulkan = qar_stream_params_vulkan_default();
+		vulkan.physical_device = m_scene.gpu->physical;
+		vulkan.device = m_scene.gpu->device;
+		auto init = qar_render_sender_init_default();
 		init.header.next = &vulkan.header;
 		init.graphics_api = QAR_GRAPHICS_API_VULKAN;
-		init.peer_id = peer;
-		init.app_volume_id = &volume;
+		init.peer_id = m_peer;
+		init.app_volume_id = &m_scene.volume;
 		init.color_format = QAR_PIXEL_FORMAT_R8G8B8A8;
 		init.depth_format = QAR_PIXEL_FORMAT_D32_FLOAT;
 		init.texture_layout = QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;
@@ -145,293 +171,348 @@ struct Target
 				const size_t index = eye * 2 + type;
 				init.frame_views[index] = qar_render_frame_view_default();
 				init.frame_views[index].eye =
-					eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
-							 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
+					eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
 				init.frame_views[index].data_type =
-					type == 0 ? QAR_VIDEO_FRAME_VIEW_TYPE_COLOR
-							  : QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH;
-				init.frame_views[index].texture_index =
-					static_cast<uint32_t>(index);
+					type == 0 ? QAR_VIDEO_FRAME_VIEW_TYPE_COLOR : QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH;
+				init.frame_views[index].texture_index = static_cast<uint32_t>(index);
 			}
 		}
-		return Check(qar_render_sender_create_async(
-			session, &init, OnCreated, this, cancel
-		));
+		// Blocks until the target asks for the stream; this thread has
+		// nothing else to do meanwhile, and RequestStop() cancels it.
+		const QarResult created =
+			qar_render_sender_create(m_scene.session, &init, m_cancel, &m_sender);
+		if(not m_stop.load())
+		{
+			NoteClosed(created);
+			return Check(created);
+		}
+		return false;
 	}
-	bool Step(VulkanDevice& gpu, float seconds)
+
+	bool CreateCamera()
 	{
-		if(not created.load(std::memory_order_acquire))
-		{
-			return true;
-		}
-		if(not Check(result))
+		if(not m_camera->Create())
 		{
 			return false;
 		}
-		if(not camera.has_value())
+		char id[64]{};
+		if(Check(qar_uuid_to_string(m_peer.data, id, sizeof(id))))
 		{
-			camera.emplace(&gpu);
-			if(not camera->Create())
-			{
-				return false;
-			}
-			char id[64]{};
-			if(not Check(qar_uuid_to_string(peer.data, id, sizeof(id))))
-			{
-				return false;
-			}
-			std::cout << "Camera and Vulkan render sender ready for " << id
-					  << '\n';
+			std::cout << "Rendering for target " << id << '\n';
 		}
-		if(showing)
-		{
-			bool ready = false;
-			if(not camera->Complete(ready))
-			{
-				return false;
-			}
-			if(not ready)
-			{
-				return true;
-			}
-			showing = false;
-			auto show = qar_render_frame_show_default();
-			show.rendered_near_far = { .1f, 10.f };
-			frameResult = qar_render_sender_show_frame(sender, &show);
-			return Check(frameResult);
-		}
+		return true;
+	}
+
+	// One frame: begin (paced by the target), render, show. Returns false when
+	// this target cannot go on.
+	bool RenderNext()
+	{
 		QarRenderFrameInfo* info = nullptr;
-		bool ready = false;
-		frameResult = qar_render_sender_try_begin_frame(sender, &info, &ready);
-		if(qar_result_has_code(
-			   frameResult, QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING
-		   )
-		   || qar_result_has_code(
-			   frameResult, QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS
-		   ))
+		const QarResult begun = qar_render_sender_begin_frame(m_sender, m_cancel, &info);
+		if(m_stop.load())
 		{
-			return true;
-		}
-		if(not Check(frameResult))
-		{
+			qar_render_frame_info_handle_destroy(info);
 			return false;
 		}
-		if(not ready)
+		if(IsWaiting(begun))
 		{
+			// The receiver is not taking frames right now. No sleep needed:
+			// begin-frame waits through a pause and holds a reconnecting or
+			// transfer-less stream ~16 ms before reporting it.
 			return true;
+		}
+		if(not Check(begun))
+		{
+			NoteClosed(begun);
+			return false;
 		}
 		QarVideoFrameVulkan* frame = nullptr;
-		bool success = Check(qar_render_sender_frame_vulkan(sender, &frame));
+		bool rendered =
+			Check(qar_render_sender_frame_vulkan(m_sender, &frame)) && RenderInto(*frame, info);
+		qar_render_frame_info_handle_destroy(info);
+		if(not rendered)
+		{
+			if(frame != nullptr && not m_camera->Discard(*frame))
+			{
+				std::cerr << "Failed to discard camera frame\n";
+			}
+			return false;
+		}
+		auto show = qar_render_frame_show_default();
+		show.rendered_near_far = { .1f, 10.f };
+		const QarResult shown = qar_render_sender_show_frame(m_sender, &show);
+		if(IsWaiting(shown))
+		{
+			return true;
+		}
+		NoteClosed(shown);
+		return Check(shown);
+	}
+
+	bool RenderInto(QarVideoFrameVulkan& frame, QarRenderFrameInfo* info)
+	{
 		std::array<CameraView, 2> cameras{};
-		for(size_t eye = 0; success && eye < 2; ++eye)
+		for(size_t eye = 0; eye < 2; ++eye)
 		{
 			// The eye's color view: the sender orders the frame's views.
 			const int view = FindFrameView(
-				*frame,
-				eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT
-						 : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT,
+				frame,
+				eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT,
 				QAR_VIDEO_FRAME_VIEW_TYPE_COLOR
 			);
-			success = view >= 0
-					  && Check(qar_render_frame_info_get_view_pose(
-						  info, static_cast<size_t>(view), &cameras[eye].pose
-					  ))
-					  && Check(qar_render_frame_info_get_view_fov(
-						  info, static_cast<size_t>(view), &cameras[eye].fov
-					  ));
+			if(view < 0
+			   || not Check(qar_render_frame_info_get_view_pose(
+				   info, static_cast<size_t>(view), &cameras[eye].pose
+			   ))
+			   || not Check(qar_render_frame_info_get_view_fov(
+				   info, static_cast<size_t>(view), &cameras[eye].fov
+			   )))
+			{
+				return false;
+			}
 		}
-		if(success)
-		{
-			success = camera->Submit(*frame, cameras, seconds);
-		}
-		if(not success && frame && not camera->Discard(*frame))
-		{
-			std::cerr << "Failed to discard camera frame\n";
-		}
-		qar_render_frame_info_handle_destroy(info);
-		showing = success;
-		return success;
+		return m_camera->Render(frame, cameras, m_scene.Seconds());
 	}
+
+	void NoteClosed(QarResult result)
+	{
+		if(qar_result_has_code(result, QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED))
+		{
+			m_closed.store(true);
+		}
+	}
+
+	QarPeerId m_peer{};
+	Scene m_scene;
+	std::optional<CubeCamera> m_camera;
+	QarCancelToken* m_cancel = nullptr;
+	QarRenderSender* m_sender = nullptr;
+	bool m_ready = false;
+	std::atomic<bool> m_stop = false;
+	std::atomic<bool> m_finished = false;
+	std::atomic<bool> m_closed = false;
+	std::thread m_thread;
 };
 
-// The callback hands over IDs only. Sender creation and GPU work stay on main.
-// SRWLOCK is used because this standalone SDK example cannot depend on
-// qar::Synchronized.
-struct Requests
+// The cube renders for every running target app in the session: which targets
+// to serve is the source app's own choice, and this one serves them all. Each
+// sender attaches its target to the cube's app volume, which is what makes the
+// target ask for the content.
+//
+// The peer callback hands over IDs only; main starts the targets. A plain
+// std::mutex, because this standalone SDK example cannot depend on
+// qar::Synchronized and must stay portable to Linux.
+struct Targets
 {
-	SRWLOCK lock = SRWLOCK_INIT;
+	std::mutex lock;
 	std::map<PeerKey, QarPeerId> pending;
-	static void OnRequest(QarRenderStreamRequest* request, void* context)
+	// Queues the peer when it is a running target app.
+	void Offer(QarPeerSpec* spec)
 	{
-		QarPeerId id{};
-		const bool valid =
-			Check(qar_render_request_get_target_peer_id(request, &id));
-		qar_render_request_handle_destroy(request);
-		if(not valid)
+		bool isTargetApp = false;
+		if(not Check(qar_peer_spec_is_target_app(spec, &isTargetApp)) || not isTargetApp)
 		{
 			return;
 		}
-		auto& requests = *static_cast<Requests*>(context);
+		QarAppState state = QAR_APP_STATE_UNKNOWN;
+		QarPeerId id{};
+		if(not Check(qar_peer_spec_get_app_state(spec, &state)) || state != QAR_APP_STATE_RUNNING
+		   || not Check(qar_peer_spec_get_id(spec, &id)))
+		{
+			return;
+		}
 		PeerKey key{};
 		std::memcpy(key.data(), id.data, key.size());
-		AcquireSRWLockExclusive(&requests.lock);
-		requests.pending.insert_or_assign(key, id);
-		ReleaseSRWLockExclusive(&requests.lock);
+		const std::lock_guard<std::mutex> guard(lock);
+		pending.insert_or_assign(key, id);
+	}
+	static void OnPeerUpdate(QarPeerSpec* spec, void* context)
+	{
+		static_cast<Targets*>(context)->Offer(spec);
+	}
+	// The peers already in the session when the cube starts.
+	bool OfferCurrentPeers(QarSession* session)
+	{
+		size_t count = 0;
+		if(not Check(qar_query_peer_specs_count(session, &count)))
+		{
+			return false;
+		}
+		// Right after onboarding the session may know no peer yet; the
+		// subscription reports them as they arrive.
+		if(count == 0)
+		{
+			return true;
+		}
+		std::vector<QarPeerSpec*> specs(count, nullptr);
+		size_t written = 0;
+		if(not Check(qar_query_peer_specs(session, specs.data(), specs.size(), &written)))
+		{
+			return false;
+		}
+		for(size_t index = 0; index < written; ++index)
+		{
+			Offer(specs[index]);
+			qar_peer_spec_handle_destroy(specs[index]);
+		}
+		return true;
 	}
 	std::map<PeerKey, QarPeerId> Take()
 	{
 		std::map<PeerKey, QarPeerId> taken;
-		AcquireSRWLockExclusive(&lock);
+		const std::lock_guard<std::mutex> guard(lock);
 		taken.swap(pending);
-		ReleaseSRWLockExclusive(&lock);
 		return taken;
 	}
 };
 
+// Main only manages targets: starts one for each new target app, restarts one
+// that failed after a pause, forgets one whose stream closed for good. The
+// frames themselves run on the targets' threads.
 bool
-Run(QarSession* session, VulkanDevice& gpu, HANDLE stop, Requests& requests)
+Run(QarSession* session, VulkanDevice& gpu, Targets& found)
 {
 	auto volumeInit = qar_app_volume_init_default();
 	volumeInit.common_name = "vulkan-cube";
 	volumeInit.display_name = "Vulkan Cube";
 	volumeInit.pose.position.z = -1.5f;
 	volumeInit.size = { 1.2f, 1.2f, 1.2f };
-	QarAppVolumeId volume{};
-	if(not Check(qar_app_volumes_get_or_create(session, &volumeInit, &volume)))
+	Scene scene{ .gpu = &gpu, .session = session, .started = Clock::now() };
+	if(not Check(qar_app_volumes_get_or_create(session, &volumeInit, &scene.volume)))
 	{
 		return false;
 	}
-	// The SDK requires a token for a subscription. Requests outlives the
-	// session, so cancelling at the end of Run is enough.
+	// The SDK requires a token for a subscription. Targets outlives the
+	// session, so cancelling at the end of Run is enough. Subscribing before
+	// listing the current peers leaves no gap for a target joining in between.
 	QarCancelToken* subscription = nullptr;
 	if(not Check(qar_cancel_token_create(&subscription)))
 	{
 		return false;
 	}
-	if(not Check(qar_render_sender_subscribe_requests(
-		   session, Requests::OnRequest, &requests, subscription
-	   )))
+	if(not Check(qar_peer_subscribe_updates(session, Targets::OnPeerUpdate, &found, subscription))
+	   || not found.OfferCurrentPeers(session))
 	{
+		Check(qar_cancel_token_cancel(subscription));
 		qar_cancel_token_handle_destroy(subscription);
 		return false;
 	}
 	std::map<PeerKey, QarPeerId> wanted;
 	std::map<PeerKey, std::unique_ptr<Target>> targets;
 	std::map<PeerKey, Clock::time_point> retries;
-	const auto started = Clock::now();
-	bool success = true;
-	while(WaitForSingleObject(stop, 0) == WAIT_TIMEOUT)
+	while(not g_stopRequested.load())
 	{
 		const auto now = Clock::now();
-		for(const auto& [key, id] : requests.Take())
+		for(const auto& [key, id] : found.Take())
 		{
 			wanted.insert_or_assign(key, id);
 		}
 		for(const auto& [key, id] : wanted)
 		{
-			if(targets.contains(key) || now < retries[key])
+			if(not targets.contains(key) && now >= retries[key])
 			{
-				continue;
+				targets.emplace(key, std::make_unique<Target>(id, scene));
 			}
-			auto target = std::make_unique<Target>(id);
-			if(not target->Start(session, gpu, volume))
-			{
-				success = false;
-				break;
-			}
-			targets.emplace(key, std::move(target));
 		}
-		const float seconds =
-			std::chrono::duration<float>(now - started).count();
 		for(auto it = targets.begin(); it != targets.end();)
 		{
-			auto& target = *it->second;
-			if(not target.created.load(std::memory_order_acquire))
+			if(not it->second->Finished())
 			{
 				++it;
 				continue;
 			}
-			const bool healthy = target.Step(gpu, seconds);
-			if(healthy)
-			{
-				++it;
-				continue;
-			}
-			if(qar_result_has_code(
-				   target.result, QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED
-			   )
-			   || qar_result_has_code(
-				   target.frameResult,
-				   QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED
-			   ))
+			if(it->second->StreamClosed())
 			{
 				wanted.erase(it->first);
 			}
 			retries[it->first] = now + std::chrono::seconds(3);
 			it = targets.erase(it);
 		}
-		if(not success)
-		{
-			break;
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		// Control plane only: how soon a new or failed target is noticed.
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
-	// Cancellation completion owns Target's callback state until its last
-	// callback.
+	// Stop every target first so their waits end together, then join them.
 	for(auto& [key, target] : targets)
 	{
-		if(not Check(qar_cancel_token_cancel(target->cancel)))
-		{
-			success = false;
-		}
-	}
-	for(auto& [key, target] : targets)
-	{
-		while(not target->created.load(std::memory_order_acquire))
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		}
+		target->RequestStop();
 	}
 	targets.clear();
-	if(not Check(qar_cancel_token_cancel(subscription)))
-	{
-		success = false;
-	}
+	bool success = Check(qar_cancel_token_cancel(subscription));
 	qar_cancel_token_handle_destroy(subscription);
 	return success;
 }
 
-// The GPU QAROS asks this app to render on, set when QAROS launches it. Empty
-// when the variable is absent or empty.
+// The GPU the session renders on, as the hex VulkanDevice::Create matches. The
+// session is on the GPU of the target QAROS launched this app for, or one the
+// library picked; the cube creates its device on the same one so frames stay
+// in GPU memory. Empty when the session reports none.
 std::string
-RequestedAdapter()
+SessionAdapter(const QarSession* session)
 {
-	char* value = nullptr;
-	size_t length = 0;
-	if(_dupenv_s(&value, &length, "QAR_GPU_ADAPTER_ID") != 0
-	   || value == nullptr)
+	auto id = qar_graphics_device_id_default();
+	bool present = false;
+	if(not Check(qar_session_get_graphics_device_id(session, &id, &present)) || not present)
 	{
 		return {};
 	}
-	std::string adapter(value);
-	free(value);
-	return adapter;
+	std::array<uint8_t, 16> bytes{};
+	if(id.id_type == QAR_GPU_DEVICE_ID_TYPE_LUID)
+	{
+		std::memcpy(bytes.data(), &id.luid, sizeof(id.luid));
+		return AdapterIdHex(bytes.data(), sizeof(id.luid));
+	}
+	std::memcpy(bytes.data(), id.uuid, sizeof(id.uuid));
+	return AdapterIdHex(bytes.data(), sizeof(id.uuid));
+}
+
+// A path as UTF-8, which is what every QAROS C API path is. string() would give
+// the ANSI code page instead.
+std::string
+Utf8(const std::filesystem::path& path)
+{
+	const std::u8string text = path.u8string();
+	return std::string(text.begin(), text.end());
+}
+
+// A hub address as host:port. There is no default port: a hub claims its
+// onboarding port from a range, so the port must be given.
+bool
+ParseHubAddress(const std::string& address, std::string& host, uint16_t& port)
+{
+	const auto colon = address.rfind(':');
+	if(colon == std::string::npos || colon == 0)
+	{
+		return false;
+	}
+	const std::string portText = address.substr(colon + 1);
+	unsigned long value = 0;
+	const auto [end, error] =
+		std::from_chars(portText.data(), portText.data() + portText.size(), value);
+	if(error != std::errc{} || end != portText.data() + portText.size() || value == 0
+	   || value > 65535)
+	{
+		return false;
+	}
+	host = address.substr(0, colon);
+	port = static_cast<uint16_t>(value);
+	return true;
 }
 
 constexpr const char* kUsage =
-	"Usage: qar-vulkan-source [--code [<code>]] [--host <hub-host>]\n"
+	"Usage: qar-vulkan-source [--code [<code>]] [--host <hub-host:port>]\n"
 	"                         [--runtime <qar-streaming-c.dll>]\n"
 	"\n"
 	"Without arguments the app loads the QAROS installed on this PC and joins\n"
 	"it as a local app. The first run waits until you click Allow in QAROS.\n"
 	"\n"
-	"  --code [<code>]    Join with an onboarding code instead, for a hub on\n"
-	"                     another PC. Without a value, the app asks for it.\n"
-	"  --host <hub-host>  Host name or IP of that hub. Default: this PC.\n"
+	"  --code [<code>]    Join with an onboarding code or a full invite (one\n"
+	"                     line of JSON) instead, for a hub on another PC.\n"
+	"                     Without a value, the app reads it from stdin.\n"
+	"  --host <host:port> Hub a typed code joins. Default: this user's hub.\n"
 	"  --runtime <path>   Load this qar-streaming-c.dll instead of the\n"
 	"                     installed one (development builds of QAROS).\n"
 	"\n"
-	"QAR_GPU_ADAPTER_ID=<LUID or UUID hex> selects the GPU.\n"
+	"The cube renders on the GPU its session was created on.\n"
 	"Stop with Ctrl+C, or by closing stdin when it is a pipe.\n";
 
 struct Options
@@ -447,8 +528,7 @@ struct Options
 bool
 HasValue(int argc, char** argv, int index)
 {
-	return index + 1 < argc
-		   && std::string_view(argv[index + 1]).rfind("--", 0) != 0;
+	return index + 1 < argc && std::string_view(argv[index + 1]).rfind("--", 0) != 0;
 }
 
 std::optional<Options>
@@ -480,14 +560,12 @@ ParseOptions(int argc, char** argv)
 			options.runtime = argv[++index];
 			continue;
 		}
-		std::cerr << "Unknown or incomplete argument: " << argument << "\n\n"
-				  << kUsage;
+		std::cerr << "Unknown or incomplete argument: " << argument << "\n\n" << kUsage;
 		return std::nullopt;
 	}
 	if(not options.host.empty() && not options.useCode)
 	{
-		std::cerr << "--host needs --code: a local app joins the QAROS on "
-					 "this PC.\n";
+		std::cerr << "--host needs --code: a local app joins the QAROS on this PC.\n";
 		return std::nullopt;
 	}
 	return options;
@@ -504,8 +582,7 @@ LoadRuntime(const Options& options, std::string& binaries)
 		{
 			return true;
 		}
-		std::cerr << "Could not load QAROS. Install QAROS on this PC, then "
-					 "start this app again.\n";
+		std::cerr << "Could not load QAROS. Install QAROS on this PC, then start this app again.\n";
 		return false;
 	}
 	std::error_code error;
@@ -515,86 +592,91 @@ LoadRuntime(const Options& options, std::string& binaries)
 		std::cerr << "Invalid runtime path: " << error.message() << '\n';
 		return false;
 	}
-	binaries = library.parent_path().string();
-	if(qar_library_load(library.string().c_str()))
+	binaries = Utf8(library.parent_path());
+	if(qar_library_load(Utf8(library).c_str()))
 	{
 		return true;
 	}
-	std::cerr << "Could not load the QAROS runtime " << library.string()
-			  << '\n';
+	std::cerr << "Could not load the QAROS runtime " << Utf8(library) << '\n';
 	return false;
 }
 
-// Reads one line the user typed, false when stdin ended or Ctrl+C was
-// pressed.
+// Reads one line the user typed, false when stdin ended or a stop was
+// requested.
 bool
-AskLine(const char* question, HANDLE stop, std::string& answer)
+AskLine(const char* question, std::string& answer)
 {
 	std::cout << question << std::flush;
 	const bool read = static_cast<bool>(std::getline(std::cin, answer));
-	return read && WaitForSingleObject(stop, 0) == WAIT_TIMEOUT;
-}
-
-std::optional<LUID>
-DeviceLuid(const VulkanDevice& gpu)
-{
-	VkPhysicalDeviceIDProperties id{
-		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
-	};
-	VkPhysicalDeviceProperties2 properties{
-		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
-	};
-	properties.pNext = &id;
-	vkGetPhysicalDeviceProperties2(gpu.physical, &properties);
-	if(not id.deviceLUIDValid)
-	{
-		return std::nullopt;
-	}
-	LUID luid{};
-	std::memcpy(&luid, id.deviceLUID, VK_LUID_SIZE);
-	return luid;
+	return read && not g_stopRequested.load();
 }
 
 // The extension chain of one onboarding call. Members point at each other, so
-// it is filled in place and never copied.
+// it is filled in place and never copied. No QarGraphicsDeviceId is chained:
+// the session decides the GPU, and the cube creates its device on it.
 struct OnboardRequest
 {
 	QarOnboardInit init = qar_onboard_init_default();
 	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
 	QarOnboardCodeExt code = qar_onboard_code_ext_default();
+	QarOnboardInviteExt invite = qar_onboard_invite_ext_default();
 	QarOnboardHostExt host = qar_onboard_host_ext_default();
-	QarGraphicsDeviceId adapter = qar_graphics_device_id_default();
+	QarOnboardingInvite* inviteHandle = nullptr;
+	std::string hostname;
 	OnboardRequest() = default;
 	OnboardRequest(const OnboardRequest&) = delete;
 	OnboardRequest& operator=(const OnboardRequest&) = delete;
+	~OnboardRequest()
+	{
+		if(inviteHandle != nullptr)
+		{
+			qar_onboarding_invite_handle_destroy(inviteHandle);
+		}
+	}
 };
 
 // Local app by default: no code, the user approves the app once in QAROS. With
-// --code: the onboarding code, and the hub's host when one is given.
-void
-ChainRequest(
-	OnboardRequest& request,
-	const Options& options,
-	const std::string& code,
-	const LUID& luid
-)
+// --code: a full invite, one line of JSON with the hub's address, port and a
+// one-time code, what QAROS hands an app it launches with a code (the session
+// is then created on the GPU QAROS chose for the app). Anything else is a code
+// typed by hand, which finds this user's hub on its own unless --host names
+// one.
+bool
+ChainRequest(OnboardRequest& request, const Options& options)
 {
 	request.init.presentation.display_name = "Vulkan Cube Source";
-	request.adapter.id_type = QAR_GPU_DEVICE_ID_TYPE_LUID;
-	request.adapter.luid = luid;
-	QarStructureHeader* mode = &request.local.header;
-	if(options.useCode)
+	if(not options.useCode)
 	{
-		request.code.code = code.c_str();
-		mode = &request.code.header;
+		request.init.header.next = &request.local.header;
+		return true;
 	}
-	request.init.header.next = mode;
-	mode->next = &request.adapter.header;
-	if(options.useCode && not options.host.empty())
+	const std::string& line = options.code;
+	if(line.front() == '{')
 	{
-		request.host.hostname = options.host.c_str();
-		request.adapter.header.next = &request.host.header;
+		if(not Check(qar_onboarding_invite_deserialize(
+			   reinterpret_cast<const uint8_t*>(line.data()), line.size(), &request.inviteHandle
+		   )))
+		{
+			return false;
+		}
+		request.invite.invite = request.inviteHandle;
+		request.init.header.next = &request.invite.header;
+		return true;
 	}
+	request.code.code = line.c_str();
+	request.init.header.next = &request.code.header;
+	if(options.host.empty())
+	{
+		return true;
+	}
+	if(not ParseHubAddress(options.host, request.hostname, request.host.port))
+	{
+		std::cerr << "--host must be host:port, for example 192.168.1.20:19121\n";
+		return false;
+	}
+	request.host.hostname = request.hostname.c_str();
+	request.code.header.next = &request.host.header;
+	return true;
 }
 
 void
@@ -606,15 +688,16 @@ OnProgress(QarActionSeverity, float, const char* message, void*)
 	}
 }
 
-// Cancels the onboarding call when a stop arrives before it finished.
+// Cancels the onboarding call when a stop arrives before it finished. Polls
+// the stop flag, the one thing a signal handler can set.
 void
-CancelOnStop(HANDLE stop, HANDLE finished, QarCancelToken* cancel)
+CancelOnStop(const std::atomic<bool>* finished, QarCancelToken* cancel)
 {
-	const std::array<HANDLE, 2> events{ stop, finished };
-	const DWORD signaled = WaitForMultipleObjects(
-		static_cast<DWORD>(events.size()), events.data(), FALSE, INFINITE
-	);
-	if(signaled == WAIT_OBJECT_0 && not Check(qar_cancel_token_cancel(cancel)))
+	while(not finished->load() && not g_stopRequested.load())
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	if(not finished->load() && not Check(qar_cancel_token_cancel(cancel)))
 	{
 		std::cerr << "Failed to cancel joining QAROS\n";
 	}
@@ -623,12 +706,7 @@ CancelOnStop(HANDLE stop, HANDLE finished, QarCancelToken* cancel)
 // One onboarding call that Ctrl+C or a closed stdin can cancel. The approval
 // prompt can keep it waiting for minutes.
 QarResult
-Onboard(
-	QarRuntime* runtime,
-	const OnboardRequest& request,
-	HANDLE stop,
-	QarSession** session
-)
+Onboard(QarRuntime* runtime, const OnboardRequest& request, QarSession** session)
 {
 	QarCancelToken* cancel = nullptr;
 	const QarResult created = qar_cancel_token_create(&cancel);
@@ -636,27 +714,14 @@ Onboard(
 	{
 		return created;
 	}
-	HANDLE finished = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-	std::thread canceller(CancelOnStop, stop, finished, cancel);
+	std::atomic<bool> finished = false;
+	std::thread canceller(CancelOnStop, &finished, cancel);
 	QarOnboardingId onboarding{};
 	const QarResult result = qar_runtime_onboard(
-		runtime,
-		&request.init,
-		OnProgress,
-		nullptr,
-		cancel,
-		&onboarding,
-		session
+		runtime, &request.init, OnProgress, nullptr, cancel, &onboarding, session
 	);
-	if(finished)
-	{
-		SetEvent(finished);
-	}
+	finished.store(true);
 	canceller.join();
-	if(finished)
-	{
-		CloseHandle(finished);
-	}
 	qar_cancel_token_handle_destroy(cancel);
 	return result;
 }
@@ -669,48 +734,38 @@ ExplainOnboardingFailure(QarResult result, bool usesCode)
 	bool retry = false;
 	if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_DENIED))
 	{
-		std::cerr << "QAROS did not allow this app to join: the approval was "
-					 "denied, or revoked. Start the app again to be asked "
-					 "again.\n";
+		std::cerr << "QAROS did not allow this app to join: the approval was denied, or revoked. "
+					 "Start the app again to be asked again.\n";
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT))
 	{
-		std::cerr << "Nobody answered the approval prompt in QAROS in time. "
-					 "It opens in the QAROS Visualizer, or as a QAROS tray "
-					 "window.\n";
+		std::cerr << "Nobody answered the approval prompt in QAROS in time. It opens in the QAROS "
+					 "Visualizer, or as a QAROS tray window.\n";
 		retry = true;
 	}
-	else if(qar_result_has_code(
-				result, QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC
-			))
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC))
 	{
-		std::cerr << "The program answering on this PC is not the installed "
-					 "QAROS, so this app does not trust it and stops. "
-					 "Reinstall QAROS or ask your administrator.\n";
+		std::cerr << "The program answering on this PC is not the installed QAROS, so this app "
+					 "does not trust it and stops. Reinstall QAROS or ask your administrator.\n";
 	}
-	else if(qar_result_has_code(
-				result, QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH
-			))
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH))
 	{
-		std::cerr << "This app no longer matches what QAROS approved: it was "
-					 "moved, copied or re-signed. In the QAROS Visualizer, "
-					 "revoke it under Connection > Approved apps, then start "
-					 "it again to approve it anew.\n";
+		std::cerr << "This app no longer matches what QAROS approved: it was moved, copied or "
+					 "re-signed. In the QAROS Visualizer, revoke it under Connection > Approved "
+					 "apps, then start it again to approve it anew.\n";
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
 	{
 		std::cerr
-			<< (usesCode ? "Could not reach the QAROS hub. Check that "
-						   "it runs, and the host name given with "
-						   "--host.\n"
-						 : "QAROS is not running on this PC. Start "
-						   "QAROS from the Start menu, then start this "
-						   "app again.\n");
+			<< (usesCode ? "Could not reach the QAROS hub. Check that it runs, and the "
+						   "host:port given with --host.\n"
+						 : "QAROS is not running on this PC. Start QAROS from the Start "
+						   "menu, then start this app again.\n");
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_PAKE_ERROR))
 	{
-		std::cerr << "The hub rejected the onboarding code. Check the code "
-					 "on the hub, or get a new one, and try again.\n";
+		std::cerr << "The hub rejected the onboarding code. Check the code on the hub, or get a "
+					 "new one, and try again.\n";
 	}
 	else
 	{
@@ -733,22 +788,18 @@ enum class JoinOutcome
 // console.
 JoinOutcome
 Join(
-	QarRuntime* runtime,
-	const OnboardRequest& request,
-	const Options& options,
-	HANDLE stop,
-	QarSession** session
+	QarRuntime* runtime, const OnboardRequest& request, const Options& options, QarSession** session
 )
 {
 	while(true)
 	{
 		if(not options.useCode)
 		{
-			std::cout << "Joining the QAROS on this PC. On the first run, "
-						 "click Allow in the QAROS approval prompt.\n";
+			std::cout << "Joining the QAROS on this PC. On the first run, click Allow in the QAROS "
+						 "approval prompt.\n";
 		}
-		const QarResult result = Onboard(runtime, request, stop, session);
-		if(WaitForSingleObject(stop, 0) != WAIT_TIMEOUT)
+		const QarResult result = Onboard(runtime, request, session);
+		if(g_stopRequested.load())
 		{
 			return JoinOutcome::Stopped;
 		}
@@ -759,25 +810,23 @@ Join(
 		const bool retry = ExplainOnboardingFailure(result, options.useCode);
 		std::string answer;
 		if(not retry || not StdinIsConsole()
-		   || not AskLine(
-			   "Press Enter to ask again, Ctrl+C to quit: ", stop, answer
-		   ))
+		   || not AskLine("Press Enter to ask again, Ctrl+C to quit: ", answer))
 		{
 			return JoinOutcome::Failed;
 		}
 	}
 }
 
-// The onboarding code from --code, or asked for when --code has no value.
+// The onboarding code or invite from --code, or read from stdin when --code
+// has no value.
 bool
-ReadCode(Options& options, HANDLE stop)
+ReadCode(Options& options)
 {
 	if(not options.useCode || not options.code.empty())
 	{
 		return true;
 	}
-	if(AskLine("Hub onboarding code: ", stop, options.code)
-	   && not options.code.empty())
+	if(AskLine("Hub onboarding code: ", options.code) && not options.code.empty())
 	{
 		return true;
 	}
@@ -788,35 +837,30 @@ ReadCode(Options& options, HANDLE stop)
 // Everything between loading the library and unloading it. False on failure;
 // a stop request is not a failure.
 bool
-RunApp(const Options& options, const std::string& binaries, HANDLE stop)
+RunApp(const Options& options, const std::string& binaries)
 {
-	VulkanDevice gpu;
-	Requests requests; // Outlives session subscription teardown.
+	VulkanDevice gpu; // Outlives every sender and camera.
+	Targets found;	  // Outlives session subscription teardown.
+	OnboardRequest request;
 	QarRuntime* runtime = nullptr;
 	QarSession* session = nullptr;
 	auto runtimeInit = qar_runtime_init_default();
 	runtimeInit.runtime_binaries_folder_path = binaries.c_str();
-	bool success = gpu.Create(RequestedAdapter())
-				   && Check(qar_runtime_create(&runtimeInit, &runtime));
-	const auto luid = success ? DeviceLuid(gpu) : std::nullopt;
-	if(success && not luid.has_value())
+	bool success =
+		ChainRequest(request, options) && Check(qar_runtime_create(&runtimeInit, &runtime));
+	const JoinOutcome joined =
+		success ? Join(runtime, request, options, &session) : JoinOutcome::Failed;
+	success = joined != JoinOutcome::Failed;
+	// Onboard first: the session decides the GPU, and the cube creates its own
+	// device on the same one.
+	if(joined == JoinOutcome::Joined)
 	{
-		std::cerr << "GPU has no valid Windows LUID\n";
-		success = false;
+		success = gpu.Create(SessionAdapter(session));
 	}
-	if(success)
+	if(joined == JoinOutcome::Joined && success)
 	{
-		OnboardRequest request;
-		ChainRequest(request, options, options.code, luid.value());
-		const JoinOutcome joined =
-			Join(runtime, request, options, stop, &session);
-		success = joined != JoinOutcome::Failed;
-		if(joined == JoinOutcome::Joined)
-		{
-			std::cout << "Connected. Waiting for rendering targets. Ctrl+C to "
-						 "quit.\n";
-			success = Run(session, gpu, stop, requests);
-		}
+		std::cout << "Connected. Waiting for rendering targets. Ctrl+C to quit.\n";
+		success = Run(session, gpu, found);
 	}
 	if(session)
 	{
@@ -843,21 +887,16 @@ main(int argc, char** argv)
 		std::cout << kUsage;
 		return 0;
 	}
-	auto stop = CreateEventW(nullptr, TRUE, FALSE, StopEventName().c_str());
-	if(not stop || not SetConsoleCtrlHandler(OnConsoleEvent, TRUE))
-	{
-		std::cerr << "Failed to set up the stop handling\n";
-		return 1;
-	}
+	std::signal(SIGINT, OnStopSignal);
+	std::signal(SIGTERM, OnStopSignal);
 	// Read before the stdin watcher starts, which takes over the pipe.
-	if(not ReadCode(options, stop))
+	if(not ReadCode(options))
 	{
 		return 1;
 	}
 	if(StdinIsPipe())
 	{
-		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE))
-			.detach();
+		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE)).detach();
 	}
 	std::string binaries;
 	if(not LoadRuntime(options, binaries))
@@ -871,13 +910,13 @@ main(int argc, char** argv)
 		qar_library_unload();
 		return 3;
 	}
-	bool success = RunApp(options, binaries, stop);
+	bool success = RunApp(options, binaries);
 	if(not Check(qar_library_destroy()))
 	{
 		success = false;
 	}
 	qar_library_unload();
-	SetConsoleCtrlHandler(OnConsoleEvent, FALSE);
-	CloseHandle(stop);
+	std::signal(SIGINT, SIG_DFL);
+	std::signal(SIGTERM, SIG_DFL);
 	return success ? 0 : 4;
 }

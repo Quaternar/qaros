@@ -82,9 +82,7 @@ main(int argc, char** argv)
 	{
 		runtime_dir = argv[2];
 	}
-	else if(get_dir_from_path(
-				library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)
-			))
+	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
@@ -153,8 +151,7 @@ main(int argc, char** argv)
 	panel_init.size.height_meters = 0.7f;
 
 	QarGuiPanelId panel_id = qar_gui_panel_id_default();
-	QarResult create_result =
-		qar_gui_panels_get_or_create(session, &panel_init, &panel_id);
+	QarResult create_result = qar_gui_panels_get_or_create(session, &panel_init, &panel_id);
 	log_result("qar_gui_panels_get_or_create", create_result);
 	if(qar_result_is_success(create_result))
 	{
@@ -168,25 +165,21 @@ main(int argc, char** argv)
 	new_pose.position.y = 1.6f;
 	new_pose.position.z = -1.0f;
 	log_result(
-		"qar_gui_panels_update_pose",
-		qar_gui_panels_update_pose(session, &panel_id, &new_pose)
+		"qar_gui_panels_update_pose", qar_gui_panels_update_pose(session, &panel_id, &new_pose)
 	);
 
 	QarGuiPanelSize new_size = qar_gui_panel_size_default();
 	new_size.width_meters = 1.0f;
 	new_size.height_meters = 0.6f;
 	log_result(
-		"qar_gui_panels_change_size",
-		qar_gui_panels_change_size(session, &panel_id, &new_size)
+		"qar_gui_panels_change_size", qar_gui_panels_change_size(session, &panel_id, &new_size)
 	);
 
-	QAR_ASSUME_SUCCESS(qar_gui_panels_set_state(
-		session, &panel_id, QAR_GUI_PANEL_STATE_MINIMIZED
-	));
+	QAR_ASSUME_SUCCESS(qar_gui_panels_set_state(session, &panel_id, QAR_GUI_PANEL_STATE_MINIMIZED));
 
-	QAR_ASSUME_SUCCESS(qar_gui_panels_navigate_to_uri(
-		session, &panel_id, "https://example.com/tutorial"
-	));
+	QAR_ASSUME_SUCCESS(
+		qar_gui_panels_navigate_to_uri(session, &panel_id, "https://example.com/tutorial")
+	);
 	//! [gui_create]
 
 	//! [gui_list]
@@ -195,13 +188,11 @@ main(int argc, char** argv)
 	log_result("qar_query_gui_panels_count", count_result);
 	if(qar_result_is_success(count_result) && panel_count > 0)
 	{
-		QarGuiPanel** handles =
-			(QarGuiPanel**)calloc(panel_count, sizeof(QarGuiPanel*));
+		QarGuiPanel** handles = (QarGuiPanel**)calloc(panel_count, sizeof(QarGuiPanel*));
 		if(handles)
 		{
 			size_t written = 0;
-			QarResult list_result =
-				qar_query_gui_panels(session, handles, panel_count, &written);
+			QarResult list_result = qar_query_gui_panels(session, handles, panel_count, &written);
 			log_result("qar_query_gui_panels", list_result);
 			if(qar_result_is_success(list_result))
 			{
@@ -220,9 +211,7 @@ main(int argc, char** argv)
 					char name[QAR_MAX_STRING_LENGTH] = { 0 };
 
 					(void)qar_gui_panel_get_id(handle, &id);
-					(void)qar_gui_panel_get_display_name(
-						handle, name, sizeof(name)
-					);
+					(void)qar_gui_panel_get_display_name(handle, name, sizeof(name));
 					(void)qar_gui_panel_get_size(handle, &size);
 					(void)qar_gui_panel_get_pose(handle, &pose);
 					(void)qar_gui_panel_get_state(handle, &state);
@@ -249,10 +238,7 @@ main(int argc, char** argv)
 		}
 	}
 
-	log_result(
-		"qar_gui_panels_close_panel",
-		qar_gui_panels_close_panel(session, &panel_id)
-	);
+	log_result("qar_gui_panels_close_panel", qar_gui_panels_close_panel(session, &panel_id));
 	//! [gui_list]
 
 	qar_session_handle_destroy(session);

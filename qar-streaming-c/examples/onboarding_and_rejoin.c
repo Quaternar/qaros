@@ -125,9 +125,7 @@ main(int argc, char** argv)
 	{
 		runtime_dir = argv[2];
 	}
-	else if(get_dir_from_path(
-				library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)
-			))
+	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
 	{
 		runtime_dir = runtime_dir_buffer;
 	}
@@ -161,9 +159,8 @@ main(int argc, char** argv)
 		return 3;
 	}
 
-	QarRuntime* primary_runtime = create_runtime_or_null(
-		runtime_dir, "onboarding_and_rejoin.primary-state"
-	);
+	QarRuntime* primary_runtime =
+		create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.primary-state");
 	if(primary_runtime == NULL)
 	{
 		qar_library_destroy();
@@ -193,13 +190,11 @@ main(int argc, char** argv)
 	}
 
 	char primary_id_text[64] = { 0 };
-	if(qar_result_is_success(qar_uuid_to_string(
-		   primary_onboarding_id.data, primary_id_text, sizeof(primary_id_text)
-	   )))
+	if(qar_result_is_success(
+		   qar_uuid_to_string(primary_onboarding_id.data, primary_id_text, sizeof(primary_id_text))
+	   ))
 	{
-		printf(
-			"Primary session obtained with onboarding id %s\n", primary_id_text
-		);
+		printf("Primary session obtained with onboarding id %s\n", primary_id_text);
 	}
 	//! [onboarding_obtain]
 
@@ -213,9 +208,7 @@ main(int argc, char** argv)
 	if(qar_result_is_success(invite_result) && primary_invite != NULL)
 	{
 		size_t serialized_size = 0;
-		QAR_ASSUME_SUCCESS(qar_onboarding_invite_serialized_size(
-			primary_invite, &serialized_size
-		));
+		QAR_ASSUME_SUCCESS(qar_onboarding_invite_serialized_size(primary_invite, &serialized_size));
 
 		uint8_t* blob = (uint8_t*)calloc(1, serialized_size);
 		if(blob != NULL)
@@ -226,41 +219,33 @@ main(int argc, char** argv)
 			));
 
 			int64_t expires_unix = 0;
-			QAR_ASSUME_SUCCESS(qar_onboarding_invite_get_expires_unix(
-				primary_invite, &expires_unix
-			));
+			QAR_ASSUME_SUCCESS(
+				qar_onboarding_invite_get_expires_unix(primary_invite, &expires_unix)
+			);
 			printf(
 				"Minted sibling invite (%zu bytes, expires at unix %lld).\n",
 				bytes_written,
 				(long long)expires_unix
 			);
 
-			QarRuntime* sibling_runtime = create_runtime_or_null(
-				runtime_dir, "onboarding_and_rejoin.sibling-state"
-			);
+			QarRuntime* sibling_runtime =
+				create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.sibling-state");
 			if(sibling_runtime != NULL)
 			{
 				QarOnboardingInvite* sibling_invite = NULL;
 				QarResult deserialize_result =
-					qar_onboarding_invite_deserialize(
-						blob, bytes_written, &sibling_invite
-					);
-				log_result(
-					"qar_onboarding_invite_deserialize", deserialize_result
-				);
-				if(qar_result_is_success(deserialize_result)
-				   && sibling_invite != NULL)
+					qar_onboarding_invite_deserialize(blob, bytes_written, &sibling_invite);
+				log_result("qar_onboarding_invite_deserialize", deserialize_result);
+				if(qar_result_is_success(deserialize_result) && sibling_invite != NULL)
 				{
 					QarOnboardInit sibling_init = qar_onboard_init_default();
-					QarOnboardInviteExt sibling_mode =
-						qar_onboard_invite_ext_default();
-					sibling_init.presentation.display_name =
-						"Sibling Tutorial Peer";
+					QarOnboardInviteExt sibling_mode = qar_onboard_invite_ext_default();
+					sibling_init.presentation.display_name = "Sibling Tutorial Peer";
 					sibling_mode.invite = sibling_invite;
 					sibling_init.header.next = &sibling_mode.header;
 
-					QarOnboardingId sibling_onboarding_id =
-						qar_onboarding_id_default();
+					/* Fills the outer sibling_onboarding_id: the forget at the
+					 * end of the example needs it. */
 					QarSession* sibling_session = NULL;
 					QarResult sibling_result = qar_runtime_onboard(
 						sibling_runtime,
@@ -272,14 +257,11 @@ main(int argc, char** argv)
 						&sibling_session
 					);
 					log_result("qar_runtime_onboard", sibling_result);
-					if(qar_result_is_success(sibling_result)
-					   && sibling_session != NULL)
+					if(qar_result_is_success(sibling_result) && sibling_session != NULL)
 					{
 						char sibling_id_text[64] = { 0 };
 						if(qar_result_is_success(qar_uuid_to_string(
-							   sibling_onboarding_id.data,
-							   sibling_id_text,
-							   sizeof(sibling_id_text)
+							   sibling_onboarding_id.data, sibling_id_text, sizeof(sibling_id_text)
 						   )))
 						{
 							printf(
@@ -329,9 +311,8 @@ main(int argc, char** argv)
 		 * pairing code. Must happen after the session was left. */
 		if(sibling_onboarded)
 		{
-			QarRuntime* sibling_runtime = create_runtime_or_null(
-				runtime_dir, "onboarding_and_rejoin.sibling-state"
-			);
+			QarRuntime* sibling_runtime =
+				create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.sibling-state");
 			if(sibling_runtime != NULL)
 			{
 				QarForgetInit sibling_forget_init = qar_forget_init_default();
@@ -348,8 +329,7 @@ main(int argc, char** argv)
 		QarForgetInit forget_init = qar_forget_init_default();
 		forget_init.onboarding_id = primary_onboarding_id;
 		log_result(
-			"qar_runtime_forget(primary)",
-			qar_runtime_forget(primary_runtime, &forget_init)
+			"qar_runtime_forget(primary)", qar_runtime_forget(primary_runtime, &forget_init)
 		);
 		remove("onboarding_and_rejoin.primary-onboarding-id.txt");
 	}

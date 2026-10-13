@@ -108,6 +108,8 @@ The cube is not code-signed, so QAROS approves this exact file. After every rebu
 
 QAROS ships a native **C API** and a **C#/.NET binding** over it. Pick your language above; the selection follows you across the whole Developer Guide. Every app has the same shape: initialize the library, create a runtime, obtain a session, do work, tear down in reverse. For the mental model read [Concepts](/docs/developer-guide/concepts).
 
+Your application joins the QAROS running on this PC, or a hub on another PC with a code. If QAROS is not running, start **QAROS** from the Start menu; see [Installation](/docs/operator-guide/installation).
+
 <CodeTabs>
 <Lang value="c">
 
@@ -154,7 +156,7 @@ cmake --build --preset x64-windows-debug
 </Lang>
 <Lang value="csharp">
 
-The C# binding wraps the C API in the `Qar` namespace with `SafeHandle`s, `IDisposable` and a `Result<T>` return type: no manual pointers, no exceptions for expected native failures.
+The C# binding wraps the C API in the `Quaternar.Qaros` namespace with `SafeHandle`s, `IDisposable` and a `Result<T>` return type: no manual pointers, no exceptions for expected native failures.
 
 - **NuGet package**: multi-targets `netstandard2.0`, `netstandard2.1` and `net8.0`, so it works in Unity and modern .NET alike.
 - **Native library**: the managed assembly calls into `qar-streaming-c`. The NuGet package carries the native runtime and copies it next to your application on build and publish.
@@ -162,14 +164,17 @@ The C# binding wraps the C API in the `Qar` namespace with `SafeHandle`s, `IDisp
 ```xml
 <!-- your .csproj -->
 <ItemGroup>
-  <PackageReference Include="Quaternar.Qaros.Streaming" Version="0.*" />
-  <!-- demo runtime: Quaternar.Qaros.Streaming.Demo -->
+  <PackageReference Include="Quaternar.Qaros" Version="0.*" />
+  <!-- demo runtime: Quaternar.Qaros.Demo -->
 </ItemGroup>
 ```
 
 :::info
 The C# snippets in this guide follow the shipping binding but are illustrative: no compiled C# example project is published in this repository yet. See [Language Bindings](/docs/developer-guide/language-bindings).
 :::
+
+Unity projects get this binding, with the runtime, from the QAROS Unity packages instead; see
+[Unity](/docs/developer-guide/unity).
 
 </Lang>
 </CodeTabs>
@@ -212,7 +217,7 @@ int main(void)
 <Lang value="csharp">
 
 ```csharp
-using Qar;
+using Quaternar.Qaros;
 
 Library.Init(new LibraryOptions { EnableConsoleLogging = true }).EnsureSuccess();
 
