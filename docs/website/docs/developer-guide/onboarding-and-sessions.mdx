@@ -84,7 +84,7 @@ app ──onboard──> QAROS identifies the process from Windows (path, file h
 - The prompt shows only what Windows says about your app: publisher, product, executable, path, signature. Your `display_name` appears separately, labelled "App says:".
 - **Deny** is the default button; Enter or Space never approve. Closing the prompt counts as Deny.
 - The prompt waits `approval_timeout_ms`; 0 means the hub default of **120 s**. The hub caps longer waits at 10 minutes.
-- While it waits, the progress callback reports `Waiting for approval in QAROS hub`. Tell your user to switch to QAROS.
+- While it waits, the progress callback reports `Waiting for approval in QAROS hub`. The prompt opens in front of every window, your app's included, so the user sees it even with the Visualizer closed.
 - A second start of the same app while the prompt is open waits for the same prompt.
 
 ### The trust record

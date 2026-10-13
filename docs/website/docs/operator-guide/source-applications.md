@@ -61,7 +61,7 @@ A **QAROS API app** is an application built on the QAROS C or C# API (for exampl
 
 A source app running on this PC joins QAROS without a code, after someone allowed it once. Whoever starts it, a user or QAROS, the first start asks:
 
-1. **"Allow &lt;app&gt; to join QAROS?"** opens in the Visualizer, or as a window of the QAROS tray when no Visualizer is open.
+1. **"Allow &lt;app&gt; to join QAROS?"** opens as a window of the QAROS tray, in front of every other window, whether or not the Visualizer is open. An open Visualizer shows the same question.
 2. Check what Windows reports about the app: publisher, product, executable, path and signature. Text the app supplies about itself is shown separately as "App says:"; do not rely on it.
 3. Click **Allow** to admit it, or **Deny**. Deny is the default; Enter and Space never approve. Closing the window denies. Unanswered, the prompt expires after 120 s (the app can ask for longer) and the app is told nobody answered.
 
