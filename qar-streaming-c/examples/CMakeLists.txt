@@ -4,7 +4,8 @@ if(BUILD_CORE_EXAMPLES)
       onboarding_and_rejoin
       app_volume_management
       gui_panel_operations
-      cpu_rendering_visualizer)
+      cpu_rendering_visualizer
+      local_app_onboarding)
 
   foreach(sample ${QAR_DYNAMIC_EXAMPLES})
     add_executable(${sample} ${sample}.c)

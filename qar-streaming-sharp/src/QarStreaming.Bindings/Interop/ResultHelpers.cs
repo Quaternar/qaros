@@ -349,6 +349,12 @@ namespace Quaternar.Qaros.Interop
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardPeerIdExt),
                         PeerId = onboardPeerId.PeerId.ToNative()
                     });
+                case OnboardLocalApp onboardLocalApp:
+                    return scope.AllocStruct(new OnboardLocalAppExtNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppExt),
+                        ApprovalTimeoutMs = (uint)Math.Min(Math.Max(onboardLocalApp.ApprovalTimeout.TotalMilliseconds, 0.0), uint.MaxValue)
+                    });
                 case GraphicsDeviceId graphicsDeviceId:
                     return scope.AllocStruct(graphicsDeviceId.ToNative());
                 default:

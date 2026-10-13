@@ -16,11 +16,16 @@ namespace Quaternar.Qaros
     public static class Library
     {
         /// <summary>
-        /// Initializes the library once per process, from a single thread. Calling it again without
-        /// a <see cref="Destroy"/> in between may fail.
+        /// Loads the QAROS runtime installed on this PC (<see cref="InstalledRuntime"/>) and
+        /// initializes the library once per process, from a single thread. Calling it again without
+        /// a <see cref="Destroy"/> in between may fail. Fails with a "QAROS is not installed"
+        /// result when there is no installation, instead of a <see cref="DllNotFoundException"/>.
         /// </summary>
         public static Result<Unit> Init(LibraryOptions? options = null)
         {
+            var loaded = InstalledRuntime.EnsureLoaded();
+            if (!loaded.IsSuccess)
+                return Result<Unit>.Failure(loaded.Info);
             options = options ?? new LibraryOptions();
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
@@ -50,5 +55,23 @@ namespace Quaternar.Qaros
             return Results.FromNative(NativeMethods.qar_impl_library_destroy());
         }
 
+        /// <summary>
+        /// Version, flavor and C API generation of the loaded runtime. Loads the installed
+        /// runtime first if needed; works before <see cref="Init"/>.
+        /// </summary>
+        public static Result<RuntimeInfo> GetRuntimeInfo()
+        {
+            var loaded = InstalledRuntime.EnsureLoaded();
+            if (!loaded.IsSuccess)
+                return Result<RuntimeInfo>.Failure(loaded.Info);
+            RuntimeInfoNative native;
+            var info = Results.ToInfo(NativeMethods.qar_impl_runtime_info(out native));
+            if (!info.IsSuccess)
+                return Result<RuntimeInfo>.Failure(info);
+            return Result<RuntimeInfo>.Success(info, new RuntimeInfo(
+                NativeString.DecodeNullTerminated(native.Version) ?? string.Empty,
+                NativeString.DecodeNullTerminated(native.Flavor) ?? string.Empty,
+                NativeString.DecodeNullTerminated(native.CApi) ?? string.Empty));
+        }
     }
 }

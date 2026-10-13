@@ -103,8 +103,8 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Options of <see cref="Runtime.Onboard"/>. Choose exactly one mode: <see cref="UseCode"/> or
-    /// <see cref="UseInvite"/>; the last call wins.
+    /// Options of <see cref="Runtime.Onboard"/>. Choose exactly one mode: <see cref="UseLocalApp"/>,
+    /// <see cref="UseCode"/> or <see cref="UseInvite"/>; the last call wins.
     /// </summary>
     public sealed class OnboardOptions
     {
@@ -150,6 +150,17 @@ namespace Quaternar.Qaros
         public OnboardOptions UseInvite(OnboardingInvite invite)
         {
             Mode = new OnboardInvite(invite ?? throw new ArgumentNullException(nameof(invite)));
+            return this;
+        }
+
+        /// <summary>
+        /// Join the QAROS hub on this PC as a local source app: no code, nothing
+        /// persisted. The default for a source app running next to the hub. Replaces an earlier
+        /// mode.
+        /// </summary>
+        public OnboardOptions UseLocalApp(OnboardLocalApp? localApp = null)
+        {
+            Mode = localApp ?? new OnboardLocalApp();
             return this;
         }
 

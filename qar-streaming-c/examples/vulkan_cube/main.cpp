@@ -14,6 +14,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -23,7 +24,7 @@ QAR_IMPLEMENT_DYNAMIC_LOADING()
 using Clock = std::chrono::steady_clock;
 using PeerKey = std::array<uint8_t, QAR_MAX_ID_LENGTH>;
 
-// Set by Ctrl+C (SIGINT) or SIGTERM. A signal handler can reach nothing but a
+// Set by Ctrl+C (SIGINT), SIGTERM or a closed stdin pipe. A signal handler can reach nothing but a
 // global, and a lock-free atomic is the one thing it may safely write; all SDK
 // and GPU cleanup stays on main.
 std::atomic<bool> g_stopRequested = false;
@@ -31,6 +32,34 @@ std::atomic<bool> g_stopRequested = false;
 extern "C" void
 OnStopSignal(int)
 {
+	g_stopRequested.store(true);
+}
+
+bool
+StdinIsPipe()
+{
+	return GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_PIPE;
+}
+
+// Whether a person can answer a question on stdin.
+bool
+StdinIsConsole()
+{
+	DWORD mode = 0;
+	return GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode) != 0;
+}
+
+// QAROS stops an app it started by closing the app's stdin pipe. Whatever
+// arrives on the pipe is ignored; its end is the stop request.
+void
+StopWhenStdinCloses(HANDLE input)
+{
+	std::array<char, 256> buffer{};
+	DWORD read = 0;
+	while(ReadFile(input, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)
+		  && read > 0)
+	{
+	}
 	g_stopRequested.store(true);
 }
 
@@ -469,91 +498,409 @@ ParseHubAddress(const std::string& address, std::string& host, uint16_t& port)
 	return true;
 }
 
-// Onboards with the first stdin line. QAROS writes a full invite there, one
-// line of JSON with the hub's address, port and a one-time code; the session
-// is then created on the GPU QAROS chose for this app. Anything else is a code
-// typed by hand, which finds this user's hub on its own unless a hub-host:port
-// argument names one.
-bool
-Onboard(QarRuntime* runtime, const std::string& line, const char* hubAddress, QarSession** session)
+constexpr const char* kUsage =
+	"Usage: qar-vulkan-source [--code [<code>]] [--host <hub-host:port>]\n"
+	"                         [--runtime <qar-streaming-c.dll>]\n"
+	"\n"
+	"Without arguments the app loads the QAROS installed on this PC and joins\n"
+	"it as a local app. The first run waits until you click Allow in QAROS.\n"
+	"\n"
+	"  --code [<code>]    Join with an onboarding code or a full invite (one\n"
+	"                     line of JSON) instead, for a hub on another PC.\n"
+	"                     Without a value, the app reads it from stdin.\n"
+	"  --host <host:port> Hub a typed code joins. Default: this user's hub.\n"
+	"  --runtime <path>   Load this qar-streaming-c.dll instead of the\n"
+	"                     installed one (development builds of QAROS).\n"
+	"\n"
+	"The cube renders on the GPU its session was created on.\n"
+	"Stop with Ctrl+C, or by closing stdin when it is a pipe.\n";
+
+struct Options
 {
-	auto init = qar_onboard_init_default();
-	init.presentation.display_name = "Vulkan Cube Source";
-	QarOnboardingId onboarding{};
+	bool help = false;
+	bool useCode = false;
+	std::string code;
+	std::string host;
+	std::string runtime;
+};
+
+// The value following argv[index], when there is one that is not an option.
+bool
+HasValue(int argc, char** argv, int index)
+{
+	return index + 1 < argc && std::string_view(argv[index + 1]).rfind("--", 0) != 0;
+}
+
+std::optional<Options>
+ParseOptions(int argc, char** argv)
+{
+	Options options;
+	for(int index = 1; index < argc; ++index)
+	{
+		const std::string_view argument = argv[index];
+		const bool hasValue = HasValue(argc, argv, index);
+		if(argument == "--help" || argument == "-h")
+		{
+			options.help = true;
+			continue;
+		}
+		if(argument == "--code")
+		{
+			options.useCode = true;
+			options.code = hasValue ? argv[++index] : "";
+			continue;
+		}
+		if(argument == "--host" && hasValue)
+		{
+			options.host = argv[++index];
+			continue;
+		}
+		if(argument == "--runtime" && hasValue)
+		{
+			options.runtime = argv[++index];
+			continue;
+		}
+		std::cerr << "Unknown or incomplete argument: " << argument << "\n\n" << kUsage;
+		return std::nullopt;
+	}
+	if(not options.host.empty() && not options.useCode)
+	{
+		std::cerr << "--host needs --code: a local app joins the QAROS on this PC.\n";
+		return std::nullopt;
+	}
+	return options;
+}
+
+// Loads the installed QAROS runtime, or the library --runtime names.
+// `binaries` stays empty for the installed runtime, which finds its own bin/.
+bool
+LoadRuntime(const Options& options, std::string& binaries)
+{
+	if(options.runtime.empty())
+	{
+		if(qar_library_load(nullptr))
+		{
+			return true;
+		}
+		std::cerr << "Could not load QAROS. Install QAROS on this PC, then start this app again.\n";
+		return false;
+	}
+	std::error_code error;
+	const auto library = std::filesystem::absolute(options.runtime, error);
+	if(error)
+	{
+		std::cerr << "Invalid runtime path: " << error.message() << '\n';
+		return false;
+	}
+	binaries = Utf8(library.parent_path());
+	if(qar_library_load(Utf8(library).c_str()))
+	{
+		return true;
+	}
+	std::cerr << "Could not load the QAROS runtime " << Utf8(library) << '\n';
+	return false;
+}
+
+// Reads one line the user typed, false when stdin ended or a stop was
+// requested.
+bool
+AskLine(const char* question, std::string& answer)
+{
+	std::cout << question << std::flush;
+	const bool read = static_cast<bool>(std::getline(std::cin, answer));
+	return read && not g_stopRequested.load();
+}
+
+// The extension chain of one onboarding call. Members point at each other, so
+// it is filled in place and never copied. No QarGraphicsDeviceId is chained:
+// the session decides the GPU, and the cube creates its device on it.
+struct OnboardRequest
+{
+	QarOnboardInit init = qar_onboard_init_default();
+	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+	QarOnboardCodeExt code = qar_onboard_code_ext_default();
+	QarOnboardInviteExt invite = qar_onboard_invite_ext_default();
+	QarOnboardHostExt host = qar_onboard_host_ext_default();
+	QarOnboardingInvite* inviteHandle = nullptr;
+	std::string hostname;
+	OnboardRequest() = default;
+	OnboardRequest(const OnboardRequest&) = delete;
+	OnboardRequest& operator=(const OnboardRequest&) = delete;
+	~OnboardRequest()
+	{
+		if(inviteHandle != nullptr)
+		{
+			qar_onboarding_invite_handle_destroy(inviteHandle);
+		}
+	}
+};
+
+// Local app by default: no code, the user approves the app once in QAROS. With
+// --code: a full invite, one line of JSON with the hub's address, port and a
+// one-time code, what QAROS hands an app it launches with a code (the session
+// is then created on the GPU QAROS chose for the app). Anything else is a code
+// typed by hand, which finds this user's hub on its own unless --host names
+// one.
+bool
+ChainRequest(OnboardRequest& request, const Options& options)
+{
+	request.init.presentation.display_name = "Vulkan Cube Source";
+	if(not options.useCode)
+	{
+		request.init.header.next = &request.local.header;
+		return true;
+	}
+	const std::string& line = options.code;
 	if(line.front() == '{')
 	{
-		QarOnboardingInvite* invite = nullptr;
 		if(not Check(qar_onboarding_invite_deserialize(
-			   reinterpret_cast<const uint8_t*>(line.data()), line.size(), &invite
+			   reinterpret_cast<const uint8_t*>(line.data()), line.size(), &request.inviteHandle
 		   )))
 		{
 			return false;
 		}
-		auto inviteExt = qar_onboard_invite_ext_default();
-		inviteExt.invite = invite;
-		init.header.next = &inviteExt.header;
-		const bool onboarded = Check(
-			qar_runtime_onboard(runtime, &init, nullptr, nullptr, nullptr, &onboarding, session)
-		);
-		qar_onboarding_invite_handle_destroy(invite);
-		return onboarded;
+		request.invite.invite = request.inviteHandle;
+		request.init.header.next = &request.invite.header;
+		return true;
 	}
-	auto codeExt = qar_onboard_code_ext_default();
-	auto host = qar_onboard_host_ext_default();
-	codeExt.code = line.c_str();
-	init.header.next = &codeExt.header;
-	std::string hostname;
-	if(hubAddress != nullptr)
+	request.code.code = line.c_str();
+	request.init.header.next = &request.code.header;
+	if(options.host.empty())
 	{
-		if(not ParseHubAddress(hubAddress, hostname, host.port))
-		{
-			std::cerr << "hub-host must be host:port, for example "
-						 "192.168.1.20:19121\n";
-			return false;
-		}
-		host.hostname = hostname.c_str();
-		codeExt.header.next = &host.header;
+		return true;
 	}
-	return Check(
-		qar_runtime_onboard(runtime, &init, nullptr, nullptr, nullptr, &onboarding, session)
+	if(not ParseHubAddress(options.host, request.hostname, request.host.port))
+	{
+		std::cerr << "--host must be host:port, for example 192.168.1.20:19121\n";
+		return false;
+	}
+	request.host.hostname = request.hostname.c_str();
+	request.code.header.next = &request.host.header;
+	return true;
+}
+
+void
+OnProgress(QarActionSeverity, float, const char* message, void*)
+{
+	if(message != nullptr && message[0] != '\0')
+	{
+		std::cout << message << '\n';
+	}
+}
+
+// Cancels the onboarding call when a stop arrives before it finished. Polls
+// the stop flag, the one thing a signal handler can set.
+void
+CancelOnStop(const std::atomic<bool>* finished, QarCancelToken* cancel)
+{
+	while(not finished->load() && not g_stopRequested.load())
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	if(not finished->load() && not Check(qar_cancel_token_cancel(cancel)))
+	{
+		std::cerr << "Failed to cancel joining QAROS\n";
+	}
+}
+
+// One onboarding call that Ctrl+C or a closed stdin can cancel. The approval
+// prompt can keep it waiting for minutes.
+QarResult
+Onboard(QarRuntime* runtime, const OnboardRequest& request, QarSession** session)
+{
+	QarCancelToken* cancel = nullptr;
+	const QarResult created = qar_cancel_token_create(&cancel);
+	if(not qar_result_is_success(created))
+	{
+		return created;
+	}
+	std::atomic<bool> finished = false;
+	std::thread canceller(CancelOnStop, &finished, cancel);
+	QarOnboardingId onboarding{};
+	const QarResult result = qar_runtime_onboard(
+		runtime, &request.init, OnProgress, nullptr, cancel, &onboarding, session
 	);
+	finished.store(true);
+	canceller.join();
+	qar_cancel_token_handle_destroy(cancel);
+	return result;
+}
+
+// Tells the user, in plain words, why joining failed and what to do. Returns
+// whether asking again right away can succeed.
+bool
+ExplainOnboardingFailure(QarResult result, bool usesCode)
+{
+	bool retry = false;
+	if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_DENIED))
+	{
+		std::cerr << "QAROS did not allow this app to join: the approval was denied, or revoked. "
+					 "Start the app again to be asked again.\n";
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT))
+	{
+		std::cerr << "Nobody answered the approval prompt in QAROS in time. It opens in the QAROS "
+					 "Visualizer, or as a QAROS tray window.\n";
+		retry = true;
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC))
+	{
+		std::cerr << "The program answering on this PC is not the installed QAROS, so this app "
+					 "does not trust it and stops. Reinstall QAROS or ask your administrator.\n";
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH))
+	{
+		std::cerr << "This app no longer matches what QAROS approved: it was moved, copied or "
+					 "re-signed. In the QAROS Visualizer, revoke it under Connection > Approved "
+					 "apps, then start it again to approve it anew.\n";
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
+	{
+		std::cerr
+			<< (usesCode ? "Could not reach the QAROS hub. Check that it runs, and the "
+						   "host:port given with --host.\n"
+						 : "QAROS is not running on this PC. Start QAROS from the Start "
+						   "menu, then start this app again.\n");
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_PAKE_ERROR))
+	{
+		std::cerr << "The hub rejected the onboarding code. Check the code on the hub, or get a "
+					 "new one, and try again.\n";
+	}
+	else
+	{
+		std::cerr << "Could not join QAROS.\n";
+	}
+	std::array<char, 512> detail{};
+	qar_result_message(result, detail.data(), detail.size());
+	std::cerr << "Details: " << detail.data() << '\n';
+	return retry;
+}
+
+enum class JoinOutcome
+{
+	Joined,
+	Stopped,
+	Failed
+};
+
+// Joins QAROS, asking again after an approval timeout while a person is at the
+// console.
+JoinOutcome
+Join(
+	QarRuntime* runtime, const OnboardRequest& request, const Options& options, QarSession** session
+)
+{
+	while(true)
+	{
+		if(not options.useCode)
+		{
+			std::cout << "Joining the QAROS on this PC. On the first run, click Allow in the QAROS "
+						 "approval prompt.\n";
+		}
+		const QarResult result = Onboard(runtime, request, session);
+		if(g_stopRequested.load())
+		{
+			return JoinOutcome::Stopped;
+		}
+		if(qar_result_is_success(result))
+		{
+			return JoinOutcome::Joined;
+		}
+		const bool retry = ExplainOnboardingFailure(result, options.useCode);
+		std::string answer;
+		if(not retry || not StdinIsConsole()
+		   || not AskLine("Press Enter to ask again, Ctrl+C to quit: ", answer))
+		{
+			return JoinOutcome::Failed;
+		}
+	}
+}
+
+// The onboarding code or invite from --code, or read from stdin when --code
+// has no value.
+bool
+ReadCode(Options& options)
+{
+	if(not options.useCode || not options.code.empty())
+	{
+		return true;
+	}
+	if(AskLine("Hub onboarding code: ", options.code) && not options.code.empty())
+	{
+		return true;
+	}
+	std::cerr << "No onboarding code given.\n";
+	return false;
+}
+
+// Everything between loading the library and unloading it. False on failure;
+// a stop request is not a failure.
+bool
+RunApp(const Options& options, const std::string& binaries)
+{
+	VulkanDevice gpu; // Outlives every sender and camera.
+	Targets found;	  // Outlives session subscription teardown.
+	OnboardRequest request;
+	QarRuntime* runtime = nullptr;
+	QarSession* session = nullptr;
+	auto runtimeInit = qar_runtime_init_default();
+	runtimeInit.runtime_binaries_folder_path = binaries.c_str();
+	bool success =
+		ChainRequest(request, options) && Check(qar_runtime_create(&runtimeInit, &runtime));
+	const JoinOutcome joined =
+		success ? Join(runtime, request, options, &session) : JoinOutcome::Failed;
+	success = joined != JoinOutcome::Failed;
+	// Onboard first: the session decides the GPU, and the cube creates its own
+	// device on the same one.
+	if(joined == JoinOutcome::Joined)
+	{
+		success = gpu.Create(SessionAdapter(session));
+	}
+	if(joined == JoinOutcome::Joined && success)
+	{
+		std::cout << "Connected. Waiting for rendering targets. Ctrl+C to quit.\n";
+		success = Run(session, gpu, found);
+	}
+	if(session)
+	{
+		qar_session_handle_destroy(session);
+	}
+	if(runtime)
+	{
+		qar_runtime_destroy(runtime);
+	}
+	return success;
 }
 
 int
 main(int argc, char** argv)
 {
-	if(argc > 1 && std::string(argv[1]) == "--help")
+	auto parsed = ParseOptions(argc, argv);
+	if(not parsed.has_value())
 	{
-		std::cout << "Usage: qar-vulkan-source [qar-streaming-c.dll] "
-					 "[hub-host:port]\n"
-					 "Defaults to the SDK beside this executable. The first stdin "
-					 "line is the onboarding invite QAROS writes there, or a code "
-					 "typed by hand. A typed code finds this user's hub unless "
-					 "hub-host:port names one. The cube renders on the GPU its "
-					 "session was created on.\n";
+		return 1;
+	}
+	Options options = parsed.value();
+	if(options.help)
+	{
+		std::cout << kUsage;
 		return 0;
 	}
-	std::array<wchar_t, 32768> executable{};
-	const auto length =
-		GetModuleFileNameW(nullptr, executable.data(), static_cast<DWORD>(executable.size()));
-	if(length == 0 || length >= executable.size())
+	std::signal(SIGINT, OnStopSignal);
+	std::signal(SIGTERM, OnStopSignal);
+	// Read before the stdin watcher starts, which takes over the pipe.
+	if(not ReadCode(options))
 	{
-		std::cerr << "Cannot locate executable directory\n";
 		return 1;
 	}
-	const auto directory = std::filesystem::path(executable.data()).parent_path();
-	std::error_code error;
-	const auto library =
-		argc > 1 ? std::filesystem::absolute(argv[1], error) : directory / "qar-streaming-c.dll";
-	if(error)
+	if(StdinIsPipe())
 	{
-		std::cerr << "Invalid SDK path: " << error.message() << '\n';
-		return 1;
+		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE)).detach();
 	}
-	const auto binaries = Utf8(library.parent_path());
-	if(not qar_library_load(Utf8(library).c_str()))
+	std::string binaries;
+	if(not LoadRuntime(options, binaries))
 	{
-		std::cerr << "Failed to load SDK DLL (check header/runtime versions)\n";
 		return 2;
 	}
 	auto libraryInit = qar_library_init_default();
@@ -563,46 +910,13 @@ main(int argc, char** argv)
 		qar_library_unload();
 		return 3;
 	}
-	bool success = false;
-	{
-		VulkanDevice gpu; // Outlives every sender and camera.
-		Targets found;	  // Outlives session subscription teardown.
-		QarRuntime* runtime = nullptr;
-		QarSession* session = nullptr;
-		auto runtimeInit = qar_runtime_init_default();
-		runtimeInit.runtime_binaries_folder_path = binaries.c_str();
-		std::string line;
-		if(Check(qar_runtime_create(&runtimeInit, &runtime)))
-		{
-			std::cout << "Hub onboarding code: " << std::flush;
-			// Onboard first: the session decides the GPU, and the cube
-			// creates its own device on the same one.
-			if(std::getline(std::cin, line) && not line.empty()
-			   && Onboard(runtime, line, argc > 2 ? argv[2] : nullptr, &session)
-			   && gpu.Create(SessionAdapter(session)))
-			{
-				std::signal(SIGINT, OnStopSignal);
-				std::signal(SIGTERM, OnStopSignal);
-				std::cout << "Connected. Waiting for rendering targets. "
-							 "Ctrl+C to quit.\n";
-				success = Run(session, gpu, found);
-				std::signal(SIGINT, SIG_DFL);
-				std::signal(SIGTERM, SIG_DFL);
-			}
-		}
-		if(session)
-		{
-			qar_session_handle_destroy(session);
-		}
-		if(runtime)
-		{
-			qar_runtime_destroy(runtime);
-		}
-	}
+	bool success = RunApp(options, binaries);
 	if(not Check(qar_library_destroy()))
 	{
 		success = false;
 	}
 	qar_library_unload();
+	std::signal(SIGINT, SIG_DFL);
+	std::signal(SIGTERM, SIG_DFL);
 	return success ? 0 : 4;
 }

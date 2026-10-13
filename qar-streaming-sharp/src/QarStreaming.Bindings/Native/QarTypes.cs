@@ -518,6 +518,21 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct OnboardLocalAppExtNative
+    {
+        public StructureHeaderNative Header;
+        public uint ApprovalTimeoutMs;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RuntimeInfoNative
+    {
+        public IntPtr Version;
+        public IntPtr Flavor;
+        public IntPtr CApi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct RequestInviteInitNative
     {
         public StructureHeaderNative Header;

@@ -301,6 +301,7 @@ namespace Quaternar.Qaros
         RuntimeOnboardCodeExt = 0x1007,
         RuntimeOnboardInviteExt = 0x1008,
         RuntimeOnboardPeerIdExt = 0x1009,
+        RuntimeOnboardLocalAppExt = 0x100A,
         SessionGraphicsDeviceId = 0x2004,
         SessionRequestInviteInit = 0x2005,
         PeerPresentation = 0x2006,
@@ -715,6 +716,25 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// Onboarding mode: join the QAROS hub installed on this PC as a local source
+    /// app, with no code. Select with <see cref="OnboardOptions.UseLocalApp"/>.
+    /// The hub asks the user once; later starts join silently while the app still
+    /// matches. Stateless: the returned onboarding id is the zero id, so rejoin and
+    /// forget do not apply. Not combinable with a host or peer id extension.
+    /// Windows only.
+    /// </summary>
+    public sealed class OnboardLocalApp : Structure
+    {
+        public OnboardLocalApp()
+            : base(StructureType.RuntimeOnboardLocalAppExt)
+        {
+        }
+
+        /// <summary>Max wait for the user's first-time approval; zero takes the hub default (120 s).</summary>
+        public TimeSpan ApprovalTimeout { get; set; } = TimeSpan.Zero;
+    }
+
+    /// <summary>
     /// Extension: selects the graphics adapter the session's Vulkan and D3D11
     /// devices, and with them every render sender's frame textures, are created
     /// on. Chain on <see cref="OnboardOptions"/> or <see cref="RejoinOptions"/>;
@@ -989,10 +1009,10 @@ namespace Quaternar.Qaros
     public sealed class RuntimeOptions
     {
         /// <summary>
-        /// The SDK <c>bin</c> folder: the one the native library was loaded from, not the
-        /// application folder. The runtime starts <c>qar-runtime-launcher</c> from it; left null
-        /// or empty, no launcher starts and peer invites never complete.
-        /// A relative path resolves against the current working directory.
+        /// Runtime <c>bin</c> folder holding <c>qar-runtime-launcher</c>. Leave null: the runtime
+        /// uses the folder its loaded <c>qar-streaming-c.dll</c> came from, which is the installed
+        /// QAROS <c>bin</c> (<see cref="InstalledRuntime.TryGetBinFolder"/>). Set it only for our
+        /// own development builds. A relative path resolves against the current working directory.
         /// </summary>
         public string? RuntimeBinariesFolderPath { get; set; }
         /// <summary>

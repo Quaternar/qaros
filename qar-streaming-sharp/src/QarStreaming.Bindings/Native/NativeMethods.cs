@@ -5,13 +5,24 @@ namespace Quaternar.Qaros.Interop
 {
     internal static class NativeMethods
     {
-        private const string LibraryName = "qar-streaming-c";
+        internal const string LibraryName = "qar-streaming-c";
+
+        // Runs before the first P/Invoke below (explicit static constructor, so the type is
+        // not beforefieldinit): binds every import to the installed runtime. A failure is
+        // left for Library.Init to report as "QAROS is not installed".
+        static NativeMethods()
+        {
+            InstalledRuntime.EnsureLoaded();
+        }
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_library_init(ref LibraryInitNative init);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_library_destroy();
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_runtime_info(out RuntimeInfoNative info);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_result_success();

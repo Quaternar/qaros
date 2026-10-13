@@ -62,7 +62,15 @@ namespace Quaternar.Qaros
         /// <summary>Discovery could not reach a hub; verify the hub is running (and the host/port) and retry.</summary>
         OnboardingHubUnreachable = 1802,
         /// <summary>Forget was called while the slot still has an active session; dispose the session first.</summary>
-        OnboardingSessionStillActive = 1803
+        OnboardingSessionStillActive = 1803,
+        /// <summary>Local app onboarding: the user denied the app in the QAROS hub, or revoked its approval. Stop and tell the user.</summary>
+        OnboardingApprovalDenied = 1805,
+        /// <summary>Local app onboarding: nobody answered the approval prompt in time. Offer a retry.</summary>
+        OnboardingApprovalTimeout = 1806,
+        /// <summary>Local app onboarding: the process serving the enrollment pipe is not the installed QAROS hub. Stop; do not retry silently.</summary>
+        OnboardingHubNotAuthentic = 1807,
+        /// <summary>Local app onboarding: the app no longer matches what the user approved (moved, re-signed, tampered). Ask the user to re-approve it.</summary>
+        OnboardingAppIdentityMismatch = 1808
     }
 
     /// <summary>

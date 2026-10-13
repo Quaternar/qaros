@@ -14,20 +14,11 @@ winget install --id OpenJS.NodeJS.LTS ---exact
 winget install --id LLVM.LLVM ---exact
 ```
 
-## Obtain QarOS packages
+## Install QAROS
 
-1. Request the latest QAROS runtime ZIP (`QAROS <version>.zip`) from https://www.quaternar.com/.
-2. Unzip the archive and move the contents of its top-level folder into the repository's `package/` directory.
-3. The package folder should have this form
+Install QAROS on the PC with `QAROS-Setup-<version>.exe` (per machine, one administrator prompt). The examples load its runtime at run time (`qar_library_load(NULL)`); this repository needs no runtime download. Step by step: Developer Guide, *Getting Started* (`docs/website/docs/developer-guide/getting-started.mdx`).
 
-```
-package
-    |- bin       # qar-streaming-c.dll, qar-runtime-launcher, runtime DLLs
-    |- include   # qar_streaming.h matching the binaries
-    |- devices   # device player apps
-```
-
-The runtime ZIP has no import library: the examples load `package/bin/qar-streaming-c.dll` at run time.
+The core examples take `installed` as their first argument to load the installed QAROS, or the path of a `qar-streaming-c.dll`. The Vulkan cube loads the installed QAROS by default.
 
 ## Documentation
 
@@ -44,7 +35,7 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 
 - `cmake/` - CMake helper files, including the vcpkg toolchain integration.
 - `docs/website/` - Documentation site source, authored with Docusaurus.
-- `package/` - Drop-in location for proprietary QarOS binary distributions.
+- `package/` - Drop-in location for an SDK build the C# tests run against (`package/bin`, see C# binding).
 - `qar-streaming-c/` - C API headers, the generated single header, and compiled usage examples.
 - `qar-streaming-sharp/` - the C# binding (`Quaternar.Qaros`: assembly, namespace and NuGet) and its xUnit suites.
 - `build/` - Generated build artifacts (created by CMake; not committed).
@@ -55,7 +46,7 @@ The runtime ZIP has no import library: the examples load `package/bin/qar-stream
 1. Launch a Developer PowerShell or command prompt configured for MSVC (the Visual Studio Build Tools installer provides shortcuts).
 2. Configure the project with CMake presets: `cmake --preset x64-windows`.
 3. Build the desired configuration, for example Debug: `cmake --build --preset x64-windows-debug` (use `x64-windows-release` for Release binaries).
-4. Run the provided samples from the generated binaries under `build/x64-windows/<Config>/`. For example: `./build/x64-windows/Debug/dynamic_loading.exe` or `./build/x64-windows/Debug/cpu_rendering_visualizer.exe`.
+4. Run the samples from `build/x64-windows/qar-streaming-c/examples/<Config>/`, for example `./build/x64-windows/qar-streaming-c/examples/Debug/dynamic_loading.exe installed`.
 
 ## C# binding
 
@@ -78,7 +69,7 @@ package. The tests copy the native binaries from `QarStreamingNativeBinDir`:
   (build the `qar-streaming-c-ext_gtests` target first);
 - `-p:QarStreamingNativeBinDir=<folder>` overrides both.
 
-The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) demonstrates dynamic DLL loading, terminal onboarding, and a separate stereo camera and sender for each rendering target discovered through render requests.
+The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) loads the installed QAROS, joins as a local app with one approval in QAROS (no code), and runs a separate stereo camera and sender for each target app in the session's peer list.
 
 ## Support channels
 
