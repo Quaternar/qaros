@@ -16,8 +16,17 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Added
+
+- **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
+  packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
+  and MRTK 3.
+
 ### Fixed
 
+- **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
+  current pairing code, instead of describing no such screen and the code only in the Hub log, and
+  covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
 

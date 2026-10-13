@@ -12,18 +12,20 @@ This page is the operator's side of onboarding. The device owner's side - the st
 
 The Hub continuously mints short-lived pairing codes:
 
-- A **fresh code snapshot** is minted roughly every 8 seconds.
+- A **fresh code** is minted every 8 seconds by default (`codeRotationSec` in the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference)). This is the code the Visualizer shows.
 - Each code is **single-use** - it is consumed on success *and* on failure.
 - Each code has a **short time-to-live of about 10 seconds**.
 - **One failed attempt invalidates the code** - there is no retry against a spent or failed code.
 
 Security comes from this handling - single-use, short TTL, one-failure-max - not from the length of the code. The code never crosses any transport; it is only ever read by a human and typed into a device.
 
+**Requested codes.** An onboarded application can also ask the Hub for one-time codes of its own, to onboard several devices at once (see [One-time codes](/docs/developer-guide/onboarding-and-sessions#onboarding-several-devices-at-once-one-time-codes)). Each is single-use like the shown code, lives 120 seconds by default and at most 600, and never replaces the code the Visualizer shows. They are never shown in the Visualizer: the application hands them to its devices.
+
 ## The two onboarding paths
 
 **Push (operator-configured).** You add a device through the Hub UI, and the Hub sends it an onboarding invite automatically at startup. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
 
-**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. It requires that someone can read the Hub's current code (see the gap note below).
+**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. It requires that someone can read the Hub's current code (see [Reading this Hub's code](#reading-this-hubs-code)).
 
 ## Listing connected peers
 
@@ -51,8 +53,10 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 - **Worst case: up to 24 hours.** That is the longest a certificate lives. When it expires, every peer drops the connection and the device cannot renew.
 - A peer that refuses the device stops serving it (no pipeline, no video), but the network connection itself is not closed.
 
-## A current gap: reading this Hub's code
+## Reading this Hub's code
 
-Be aware of a product gap today. The visualizer has a screen for connecting *this* Hub to a **remote** Hub (the hub-connect screen), but a dedicated screen that simply **displays this Hub's own current pairing code** was not found in the current build. The code-minting backend runs as described above (a new code roughly every 8 seconds, about 10 second TTL), and the current code is written to the **Hub log**.
+The Visualizer shows this Hub's current code: in the **Connection** panel, use **Onboard a Device** (steps in [Connection Panel](/docs/user-guide/connection-panel#onboard-a-device)). It shows the code together with this Hub's hostname, and as a QR code for a device that can scan one. The display follows the Hub's rotation, so read out the code shown at that moment.
 
-So, in practice today: for push onboarding you do not need the code at all; for pull onboarding, read the current pairing code from the Hub log and relay it to the device owner within its short lifetime. An in-visualizer "show this Hub's code" screen is the natural next step here.
+- **Push onboarding** needs no code at all.
+- **Pull onboarding:** relay the shown code to the device owner within its short lifetime. A failed attempt uses it up; take the next one.
+- **Several devices at once:** have an onboarded application request one-time codes (see [Requested codes](#how-pairing-codes-are-minted)) instead of racing the rotation.
