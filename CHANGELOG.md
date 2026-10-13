@@ -16,6 +16,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
+  onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+
 ## [0.9.0] - 2026-10-12
 
 First versioned release. Everything below is the baseline later entries are measured against.
