@@ -6,10 +6,10 @@ description: Where the C API of release 0.9.0 offers no call or leaves a questio
 
 # Limits and behaviours to design around
 
-This page collects points where the C API offers no call or leaves a question open, so that you design around them from the start. Each item rests on the header `qar_streaming.h` of release 0.9.0 and, where it says so, on the documentation comments of the C# binding, and it says what these state and what they do not. The last section reports observations that were made with an earlier SDK drop.
+This page collects points where the C API offers no call or leaves a question open, so that you design around them from the start. Each item rests on the header `qar_streaming.h` of release 0.9.0 and, where it says so, on the documentation comments of the C# binding, and it says what these state and what they do not. The last section reports observations that were made with earlier SDK drops.
 
 :::info Which SDK generation
-All sections except the last describe the header and the C# binding of release 0.9.0. The last section reports what the maintainers of the [Ogre, Qt and RViz2 libraries](/docs/developer-guide/ogre-qt-rviz) observed with the QAROS SDK drop of 2026-09-28, the drop those libraries were built and verified against. The C API of 0.9.0 is a later generation, and this page does not claim that the observations hold with it. The document `docs/SDK_COMPATIBILITY.md` of each of those repositories lists what differs between the generations.
+All sections except the last describe the header and the C# binding of release 0.9.0. The last section reports what the authors of the [Ogre, Qt and RViz2 libraries](/docs/developer-guide/ogre-qt-rviz) observed in live sessions with earlier SDK drops, which they have not repeated on every drop. The C API of 0.9.0 is a later generation, and this page does not claim that the observations hold with it. The document `docs/SDK_COMPATIBILITY.md` of each of those repositories lists what differs between the generations.
 :::
 
 ## Ending a video stream
@@ -75,9 +75,9 @@ The header says that `qar_app_volume_gesture_configuration_default` mirrors the 
 
 Two hands change the scale of the app, one hand moves it, and hover and click are only reported, each with its own ray.
 
-## Observed with the SDK drop of 2026-09-28
+## Observed in live sessions with earlier SDK drops
 
-These two observations come from live sessions with the SDK drop of 2026-09-28. The header of release 0.9.0 describes neither of them, and this page does not claim that they hold with 0.9.0.
+These two observations come from live sessions with earlier SDK drops and have not been repeated on every drop. The header of release 0.9.0 describes neither of them, and this page does not claim that they hold with 0.9.0.
 
 - **Receivers keep retrying a stream whose sender was destroyed.** A receiver that was attached to such a stream was not told that the stream was gone. It entered a reconnecting state and retried about every ten seconds, each retry failed with the status 507, and this went on until the peer of the receiver went away.
 - **The viewport of a URL panel is fixed.** The page of a URL panel saw a viewport of 500 by 500 CSS pixels at a device pixel ratio of 2.0, whatever the size of the panel. The header documents the page zoom (`content_scale`) but no way to configure a viewport: `QarGuiPanelUrlExt` carries only the URL. Measure the viewport in your page instead of assuming it from the size of the panel.

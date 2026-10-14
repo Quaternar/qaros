@@ -43,7 +43,7 @@ All three libraries need:
 - Windows 11, 64-bit; Linux is not built or tested,
 - the Microsoft C++ toolset v142 (Visual Studio 2019 Build Tools),
 - CMake 3.22 or newer, Git and PowerShell 7,
-- Python 3.10 for the tooling: the Qt installer and colcon run from a virtual environment, and the tests include a layering guard.
+- Python 3.10 for the tooling: the tests include a layering guard, and where a library needs the Qt installer or colcon, they run from a virtual environment.
 
 Beyond that, each library needs what the table above names. Ogre 1.12.1 comes from the binary distribution of ROS 2 Humble for Windows, and the RViz2 plugin needs the same distribution with the repairs that the scripts of its repository apply.
 
@@ -56,12 +56,12 @@ The libraries do not contain the QAROS runtime. They load `qar-streaming-c.dll` 
 - **A stereo stream for every peer.** It renders an Ogre scene into a colour and a depth render texture for each eye, takes the pose and the field of view of each eye from QAROS and renders all peers that are due in one batch under a render budget.
 - **The adapter of the C API.** Five components (`capi`, `render`, `panels`, `url` and `gestures`) hold the loader of the SDK library, the senders, the panels, the URL panels and the gestures. The other two libraries build on them.
 - **Geo anchor.** A WGS84 fix or an ECEF frame can georeference the app volume.
-- **A headless sample and a live example.** The sample renders the scene for synthetic peers, needs no SDK and writes stereo image pairs. The live example streams the scene to a Visualizer, a mode that the maintainers have not run.
+- **A headless sample and a live example.** The sample renders the scene for synthetic peers, needs no SDK and writes stereo image pairs. The live example streams the scene to a Visualizer, a mode that the authors of `qar_ogre_adapter` have not run.
 
 ### Qt: `qar_qt_streaming`
 
 - **Any `QWidget` as a GUI panel.** The library draws the widget with `QWidget::render()` off screen and sends a frame only when the picture changed.
-- **Panels sized for reading in AR.** A panel hangs in the room at 1.2 mm for each logical pixel of the widget, whatever the pixel density of the display.
+- **Panels sized for reading in AR.** By default a panel hangs in the room at 1.2 mm for each logical pixel of the widget, whatever the pixel density of the display.
 - **AR input as Qt events.** A tap, a drag or a hover on a panel reaches the widget as touch events, or as mouse events for a widget that does not take touch.
 - **Popups, dialogs and video.** The popups of a panel are drawn into its picture, a dialog that a panel opens becomes a GUI panel of its own, and a video widget paints the newest frame that a decoding thread delivers.
 
@@ -90,4 +90,4 @@ Each repository documents its installation from a clean Windows 11 machine, gett
 - [Custom GUI Panels](/docs/developer-guide/gui-panels) — the GUI panels that the Qt library and the RViz2 plugin create.
 - [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) — the session set-up of release 0.9.0.
 - [Video in GUI panels, and Qt widgets as AR panels](/docs/developer-guide/qt-ar-panels) — the video route that the Qt library uses, and what it does with a widget.
-- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and gestures.
+- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.

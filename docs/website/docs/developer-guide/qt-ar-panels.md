@@ -9,7 +9,7 @@ description: How a GUI panel shows a video stream, what a stream panel accepts, 
 A GUI panel can show a **video stream**, so any picture that you can draw becomes a panel: a camera image, a rendered view, a Qt widget. This page has two parts. The first describes the video route of the C API. The second describes how the library `qar_qt_streaming` uses that route to turn a `QWidget` into a panel.
 
 :::info Which SDK generation
-The first part describes the header of release 0.9.0. The second part describes the library `qar_qt_streaming`, which was built and verified against the QAROS SDK drop of 2026-09-28. The C API of 0.9.0 is a later generation: the session set-up, the way a gesture reports its hand, the time points and the init structures of volumes and panels are different, and the library has not been rebuilt against it. Read the second part for what the library does. The document `docs/SDK_COMPATIBILITY.md` of its repository lists the supported SDK drops and what differs in the later generation.
+The first part describes the header and the C# binding of release 0.9.0. The second part describes the library `qar_qt_streaming`, which was built and verified against the QAROS SDK drop of 2026-09-28. The C API of 0.9.0 is a later generation: the session set-up, the way a gesture reports its hand, the time points and the init structures of volumes and panels are different, and the library has not been rebuilt against it. Read the second part for what the library does. The document `docs/SDK_COMPATIBILITY.md` of its repository lists the supported SDK drops and what differs in the later generation.
 :::
 
 ## Show a video in a GUI panel
@@ -71,8 +71,8 @@ The library never calls the C API itself. The `panels` component of `qar_ogre_ad
 ### Capture
 
 - **Off-screen drawing.** The library draws the widget with `QWidget::render()` into an RGBA8888 buffer on the Qt GUI thread.
-- **Change detection and keepalive.** It hashes the pixels and sends a frame only when the picture changed. An unchanged picture is sent again after one second, and a panel is captured at most 15 times a second unless the host raises the limit.
-- **Size in the room.** A panel hangs in the room at 1.2 mm for each logical pixel of the widget, whatever the pixel density of the display: a denser display makes the picture sharper and not larger. The library always sends the content scale 1.0.
+- **Change detection and keepalive.** It hashes the pixels and sends a frame only when the picture changed. By default an unchanged picture is sent again after one second, and a panel is captured at most 15 times a second; the host can change both.
+- **Size in the room.** By default a panel hangs in the room at 1.2 mm for each logical pixel of the widget, whatever the pixel density of the display: a denser display makes the picture sharper and not larger. The library always sends the content scale 1.0.
 
 ### Input
 
@@ -83,11 +83,11 @@ The library never calls the C API itself. The `panels` component of `qar_ogre_ad
 ### Popups and dialogs
 
 - **Popups.** The lists of combo boxes, menus and completers that a panel opens are drawn into its picture where Qt placed them. A popup that hangs over the edge of the panel is cut at the edge and not shifted. A tooltip window is drawn only when it has the panel as its parent.
-- **Dialogs.** A dialog that a panel opens becomes a GUI panel of its own, sized from the dialog and placed 0.5 m beside the panel that opened it, and it closes when the dialog hides.
+- **Dialogs.** A dialog that a panel opens becomes a GUI panel of its own, sized from the dialog and placed beside the panel that opened it, 0.5 m away by default and a further 0.5 m for each dialog that panel already has, and it closes when the dialog hides.
 
 ### Resizing
 
-A widget of a new size needs a new video sender and a new panel. The library treats the layout of a sender as fixed when the sender is created, because the receiver of the panel is allocated from it, so it closes the old panel and sender and builds new ones. To avoid a rebuild for every pixel of a drag, it adopts a new size only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
+A widget of a new size needs a new video sender and a new panel. The library treats the layout of a sender as fixed when the sender is created, because the receiver of the panel is allocated from it, so it closes the old panel and sender and builds new ones. To avoid a rebuild for every pixel of a drag, it adopts a new size by default only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
 
 ### Closing
 
@@ -107,4 +107,4 @@ The repository [github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaro
 - [Custom GUI Panels](/docs/developer-guide/gui-panels) — creating and observing panels, with web content.
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender and the layouts that the video sender shares.
 - [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries and how they stack.
-- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and gestures.
+- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.
