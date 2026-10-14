@@ -26,6 +26,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   and rate limits, signed operator requests. The CA gateway rejection is now
   `device_revoked_operator_allow_required`: a revoked device returns only after an operator
   *Allow*.
+- **Docs:** *Onboarding and sessions* states that only the Hub's operators can mint pairing codes
+  (`qar_session_request_onboarding_codes`), and that target-app invite and kill are served only to
+  apps the Hub admitted itself: local apps onboarded without a code and apps the Hub started.
 
 ## [0.9.0] - 2026-10-12
 

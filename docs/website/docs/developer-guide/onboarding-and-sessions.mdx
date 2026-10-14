@@ -304,7 +304,7 @@ The compiled example in this repo now demonstrates the full two-instance path en
 
 ## Onboarding several devices at once: one-time codes
 
-The code on the Hub's onboarding screen is one code at a time. To onboard several devices by code at the same time, ask the Hub for codes of your own from an onboarded session:
+The code on the Hub's onboarding screen is one code at a time. Minting further codes is an operator action: the Hub mints them only for its operators (its own visualizer, and peers configured as operators), never for an application. An application's request fails, and it should ask the operator to read codes from the visualizer's onboarding screen instead. An operator tool asks for codes of its own from its onboarded session:
 
 ```c
 QarRequestOnboardingCodesInit request = qar_request_onboarding_codes_init_default();
@@ -321,7 +321,7 @@ qar_onboarding_invite_get_code(invites[0], code, sizeof(code), NULL);
 - Every call returns new codes. Codes other callers hold, and the code on the onboarding screen, stay valid; none of yours is shown on the screen.
 - Each code works once, until its lifetime ends. A failed attempt also uses it up.
 - Hand a device either the code text (`qar_onboarding_invite_get_code`, used with `QarOnboardCodeExt`) or the whole invite (`qar_onboarding_invite_serialize`, used with `QarOnboardInviteExt`).
-- Set `planned_peer_id` and a device that pairs with one of these codes can only join under that peer id ([`QarOnboardPeerIdExt`](#joining-under-a-planned-peer-id)).
+- Set `planned_peer_id` and a device that pairs with one of these codes can only join under that peer id ([`QarOnboardPeerIdExt`](#joining-under-a-planned-peer-id)). Only the Hub's own visualizer may plan a code.
 - The code text is a secret. Do not log it or put it on a command line.
 - C#: `session.RequestOnboardingCodes(new RequestOnboardingCodesOptions { Count = 3 })` and `invite.GetCode()`.
 
@@ -406,7 +406,7 @@ The code on the Hub's onboarding screen is separate and does not change when QAR
 
 Every peer reaches the session by running its own rejoin-or-onboard flow (this page) against the hub, either directly with a pairing code or via a serialized invite from an already-onboarded instance (see [Sibling onboarding](#sibling-onboarding-one-app-several-api-instances) above). Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers), and it is the peer itself that requests a render stream from your application — see [Accepting render stream requests](/docs/developer-guide/rendering-streams#accepting-render-stream-requests).
 
-To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"`, `"quest:<host>"` or `"android:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, the invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
+To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"`, `"quest:<host>"` or `"android:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
 
 ## Teardown: destroy vs. forget
 
