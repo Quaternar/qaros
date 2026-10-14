@@ -394,7 +394,12 @@ typedef enum QarStatusCode
 	QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC = 1807,
 	/// Local enrollment: the app no longer matches what the user approved
 	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
-	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808
+	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808,
+	/// The device's certificate expired, or its hub no longer renews it (it
+	/// missed more than two session rotations, or was revoked), and the
+	/// pairing credential given did not replace it. Tell the user to pair the
+	/// device again with a new code from the hub; retrying does not help.
+	QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED = 1809
 } QarStatusCode;
 
 /**

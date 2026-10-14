@@ -34,7 +34,7 @@ The runtime tracks which peers are connected. The visualizer surfaces the connec
 Two related operations remove a device:
 
 - **Forget** wipes the device's persisted identity slot (certificate and session state) so its next connection requires a fresh pairing. A device cannot be forgotten while its session is still active - have it leave first, then forget.
-- **Blacklist (revoke)** stops the Hub from renewing or re-issuing the device's certificate and tells the rest of the session about it. A blacklisted device can only return through a **fresh, human-approved pairing** - and completing that fresh pairing clears the blacklist entry for it.
+- **Blacklist (revoke)** stops the Hub from renewing or re-issuing the device's certificate and tells the rest of the session about it. A blacklisted device is refused on every channel, a new pairing code included, until you **Allow** it again (Visualizer, Connection panel, *Devices*). Revoke and Allow work only from the Hub's PC.
 
 ### What a blacklisted device can still do
 

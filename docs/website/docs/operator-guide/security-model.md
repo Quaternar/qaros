@@ -45,8 +45,8 @@ Each Hub operates its own private CA (based on `step-ca`). This means:
 
 - **No external dependency.** A deployment is self-contained; no internet, cloud, or corporate PKI is required.
 - **The Hub is the trust root.** A certificate from Hub A means "Hub A vouched for this device". The Hub machine itself is assumed trusted — protect it as you would a domain controller.
-- **Renewal** is online and CSR-based: a device with a valid certificate can refresh it without re-pairing. A certificate that expires while the device is offline requires onboarding again.
-- **Revocation** is two-layered: the CA can revoke, and the gateway keeps an encrypted blacklist. A blacklisted device can only return through a fresh, human-approved pairing. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
+- **Renewal** is online and CSR-based: a device with a valid certificate refreshes it with a new key, without a code, also across up to two session rotations. A certificate that expires while the device is offline requires pairing again.
+- **Revocation** is two-layered: the CA can revoke, and the gateway keeps an encrypted blacklist. A blacklisted device is refused on every channel, a new pairing code included, until an operator allows it again. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
 
 ### Hub-to-Hub federation
 
@@ -69,7 +69,7 @@ What this release does **not** protect against. The full, maintained threat mode
 
 - **Malware running as the same Windows user.** Hub keys, Hub state and the approved-apps list are plain files in the user's profile. Such malware can read them, approve itself, or act as the Hub's user.
 - **Code inside an approved app.** Plugins, scripts or injected code in an approved process act as that app. Approving an editor or engine admits everything it loads.
-- **Session members are trusted.** Any admitted peer, including an approved local app, can see the session's streams. Operator-only actions are not yet bound to the Visualizer's authenticated identity, so a malicious admitted peer may perform them.
+- **Session members are trusted.** Any admitted peer, including an approved local app, can see the session's streams. Operator-only actions are signed with the sender's session certificate and accepted only from the Hub's own Visualizer and configured operators, but any admitted device can claim another device's peer id in session messages.
 - **Revocation reaches peers gradually.** A peer that has not read the Hub's revocation list accepts a revoked device until its certificate expires (local apps 30 minutes, devices up to 24 hours).
 - **Offline signature checks.** Revocation of a code-signing certificate is checked against the local cache only.
 - **Firewall on every network profile.** The installer opens the QAROS ports on public networks too. Restrict the rules yourself if the PC joins untrusted networks.

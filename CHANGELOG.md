@@ -20,6 +20,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
+  hardening: session-named certificates and session access control, hub-assigned peer ids, online
+  renewal across session rotations, signed discovery replies for known hubs, gateway lifetime caps
+  and rate limits, signed operator requests. The CA gateway rejection is now
+  `device_revoked_operator_allow_required`: a revoked device returns only after an operator
+  *Allow*.
 
 ## [0.9.0] - 2026-10-12
 

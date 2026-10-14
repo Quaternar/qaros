@@ -70,7 +70,9 @@ namespace Quaternar.Qaros
         /// <summary>Local app onboarding: the process serving the enrollment pipe is not the installed QAROS hub. Stop; do not retry silently.</summary>
         OnboardingHubNotAuthentic = 1807,
         /// <summary>Local app onboarding: the app no longer matches what the user approved (moved, re-signed, tampered). Ask the user to re-approve it.</summary>
-        OnboardingAppIdentityMismatch = 1808
+        OnboardingAppIdentityMismatch = 1808,
+        /// <summary>The device's certificate expired or its hub no longer renews it, and the pairing credential did not replace it. Ask the user to pair the device again with a new code.</summary>
+        OnboardingRePairRequired = 1809
     }
 
     /// <summary>

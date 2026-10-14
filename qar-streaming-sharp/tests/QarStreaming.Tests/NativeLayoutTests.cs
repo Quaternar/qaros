@@ -241,9 +241,10 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1806, (int)StatusCode.OnboardingApprovalTimeout);
             Assert.Equal(1807, (int)StatusCode.OnboardingHubNotAuthentic);
             Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
+            Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(29, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(30, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
