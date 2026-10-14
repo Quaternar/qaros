@@ -129,7 +129,7 @@ Selects which target applications receive the app's stream:
 - **All target applications** (default), or
 - one checkbox per connected target application.
 
-Changing it re-routes a running app without a restart. A QAROS API app always streams to all target applications that request it.
+Changing it re-routes a running app without a restart. For a QAROS API app, **Streams to** shows *Chosen by the app* instead: the app decides which target applications it renders for, one, some or all of them (see [Rendering Streams](/docs/developer-guide/rendering-streams#finding-rendering-targets)).
 
 ## Live settings
 
