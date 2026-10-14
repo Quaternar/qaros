@@ -21,6 +21,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
+- **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
+  C API do, when to use which, how they stack, what they need and the SDK drop they were verified
+  against.
+- **Docs:** a Limits and Behaviours to Design Around page in the Developer Guide: retiring and
+  resizing a video stream, locating the operator, what a stream panel ignores or refuses, and the
+  gesture rules of an app volume, each as far as the C header states it, plus two observations made
+  with an earlier SDK drop.
+- **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
+  GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
+  does to show a widget in AR.
 
 ### Fixed
 
