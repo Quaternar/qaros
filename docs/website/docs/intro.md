@@ -41,4 +41,5 @@ A **Hub** (a powerful workstation) runs your 3D applications and the QAROS runti
 | Integrate the API into my app | [Developer Guide: Getting Started](/docs/developer-guide/getting-started) |
 | Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |
 | Stream a Unity scene | [Unity](/docs/developer-guide/unity) |
+| Use Ogre, Qt or RViz2 with QAROS | [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) |
 | Browse the full C API | [C API Reference](/api/qar-streaming-c/) |
