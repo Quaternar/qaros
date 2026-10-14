@@ -29,6 +29,26 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers, Rendering Streams and API
+  Conventions guides now match the current API: poses, sizes, render sender options and render frame
+  views are built with their constructors (`Pose` and `Vector3` come from
+  `Quaternar.Qaros.Mathematics`), the `Peers.Updated` event needs a running `SubscribeUpdates()`
+  subscription, and `WithHost` passes the hub's onboarding port.
+- **Docs:** the C code of the Peers, GUI Panels and API Conventions guides now passes the cancel
+  token that `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
+  `qar_gui_panels_subscribe_panel_updates` require, and sets the port of `QarOnboardHostExt`.
+- **Docs:** the GUI Panels guide and the Glossary no longer say that GUI panels show web content
+  only: a panel can also show the video stream of a video sender.
+- **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
+  convention: the C header states it.
+- **Docs:** the Rendering Streams and Onboarding and Sessions guides now say to find the render
+  targets in the peer list and create a sender for each, instead of waiting for render stream
+  requests. The Source Applications guide says that a QAROS API app chooses the target applications
+  it renders for, and The Mixer guide says that source alpha is composited only with
+  `mixerSourceAlpha`.
+- **Docs:** the Welcome page lists the C# API reference next to the C API reference, the typo in the
+  description of the Connecting to the Hub page is fixed, and the documentation site README no
+  longer says that no version is released yet.
 
 ## [0.9.0] - 2026-10-12
 
