@@ -76,12 +76,11 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
-var options = new RenderSenderOptions
+// The target peer (who receives this stream) and the graphics API are constructor arguments.
+var options = new RenderSenderOptions(targetPeerId, GraphicsAPI.Cpu)
 {
-    PeerId              = targetPeerId,   // who receives this stream
     EnableAutoReconnects = true,          // survive network hiccups
     AppVolumeId         = volumeId,       // composite into our app volume
-    GraphicsApi         = GraphicsApi.Cpu,
     ColorFormat         = PixelFormat.R8G8B8A8,
     DepthFormat         = PixelFormat.R32Float,
 
@@ -89,12 +88,7 @@ var options = new RenderSenderOptions
     TextureLayout = FrameLayout.SideBySide,
     FrameViews = new[]
     {
-        new RenderFrameView
-        {
-            DataType     = VideoFrameViewType.Color,
-            Eye          = VideoFrameViewEye.Left,
-            TextureIndex = 0,
-        },
+        new RenderFrameView(VideoFrameViewType.Color, VideoFrameViewEye.Left, 0),
         // ... one entry per view (right eye, depth views, ...) ...
     },
 };
@@ -203,7 +197,7 @@ This is how a source application implements grabbing, pointing, and touch agains
 - When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
 - If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
-- Rendering senders are per requested target. For several users viewing the same scene, create a sender and camera for each target discovered through the request subscription; use each target's poses and FOV even when the scene objects are shared.
+- Rendering senders are per target. For several users viewing the same scene, create a sender and camera for each target you find in the peer list; use each target's poses and FOV even when the scene objects are shared.
 
 ## Compiled tutorial
 
