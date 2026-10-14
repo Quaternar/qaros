@@ -61,8 +61,8 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
   `versioned_docs/`, `versions.json`) and the generated C and C# references (`api/` ->
   `api_versioned_docs/`, `api_versions.json`). The two lists must match, the config
   refuses to load otherwise (`scripts/docs-versions.js`).
-- No version is released yet: the site has only the working copy ("current"),
-  labelled `<qaros/VERSION> (next)` (`Next` if `VERSION` is missing).
+- The working copy ("current") is labelled `<qaros/VERSION> (next)` (`Next` if `VERSION` is
+  missing). The released versions are listed in `versions.json` and `api_versions.json`.
 - After a release: newest release at `/docs/`, `/api/`; the working copy at
   `/docs/next/`, `/api/next/`; older releases at `/docs/X.Y.Z/`, `/api/X.Y.Z/`.
 - Release step, from `docs/website`, before bumping `qaros/VERSION`:
