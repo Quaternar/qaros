@@ -130,12 +130,13 @@ A sender declares what its color's alpha means, and the mixer composites the str
 | `QAR_COLOR_ALPHA_MODE_UNSPECIFIED` / `Unspecified` (default) | Nothing declared | Draws the stream opaque, unless the operator turns on `mixerSourceAlpha` for undeclared streams |
 | `QAR_COLOR_ALPHA_MODE_OPAQUE` / `Opaque` | The alpha channel means nothing | Every pixel fully covers what is behind it |
 | `QAR_COLOR_ALPHA_MODE_PREMULTIPLIED` / `Premultiplied` | Color is premultiplied by alpha, and alpha is the pixel's coverage | Blends each pixel over what is behind it by its coverage |
+| `QAR_COLOR_ALPHA_MODE_STRAIGHT` / `Straight` | Color is not multiplied by alpha, and alpha is the pixel's coverage | As `Premultiplied`: QAROS premultiplies the color before the frame leaves your application |
 
 - **Premultiplied** is what a renderer produces when it clears to transparent black (0, 0, 0, 0) and draws with ordinary alpha blending. Declare it only if the alpha channel stays correct up to the frame you send: a post-processing pass that overwrites alpha makes your content disappear. Declare `Opaque` then.
 - Translucent pixels that **write depth** are blended at their depth. Pixels with coverage but **no depth** (most transparent materials) are placed at the middle of your app volume along each view ray, so they show and occlude there, without parallax.
 - Color **brighter than its alpha** — glow, bloom, additive particles, even with alpha 0 — adds light over what is behind it.
 - Alpha crosses the network for a `Premultiplied` stream, at half resolution, so hard edges are slightly softer than on one machine. Both ends must run the same QAROS version.
-- Straight (non-premultiplied) alpha is not supported yet: premultiply it before sending.
+- **Straight** costs one GPU pass per frame in your process, even when the frame would otherwise be copied unchanged. If your renderer can produce premultiplied color directly, declare `Premultiplied` instead.
 
 ## The frame loop
 

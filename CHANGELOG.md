@@ -22,7 +22,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
 - **Docs:** transparency, in the next version's docs: a sender's alpha mode in Rendering Streams
-  (C and C#), `Alpha Mode` on the Unity page, and how the mixer blends by it.
+  (C and C#), straight alpha included, `Alpha Mode` on the Unity page, and how the mixer blends by
+  it.
 
 ### Fixed
 

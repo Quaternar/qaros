@@ -228,6 +228,7 @@ in the Inspector. The mixer composites the stream by it
 | Alpha Mode | Use when |
 |---|---|
 | `Premultiplied` (default) | The cameras clear to transparent black, so translucent materials, soft edges and glow are composited over what is behind the app volume |
+| `Straight` | Your color is not multiplied by its alpha (for example a custom pass writes straight alpha). QAROS premultiplies it before sending |
 | `Opaque` | Post-processing or a custom pass overwrites the alpha channel. With `Premultiplied` such content would turn transparent |
 | `Unspecified` | Declares nothing: the mixer draws the stream opaque unless the operator enables alpha for undeclared streams |
 
