@@ -21,13 +21,13 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 ## The two onboarding paths
 
-**Push (operator-configured).** You add a device through the Hub UI, and the Hub sends it an onboarding invite automatically at startup. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+**Push (operator-configured).** You add a device in the Visualizer's [Connection panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** > **Add device**), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
 
-**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. It requires that someone can read the Hub's current code (see the gap note below).
+**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
 
 ## Listing connected peers
 
-The runtime tracks which peers are connected. The visualizer surfaces the connected peers so you can see who is currently in the session.
+The runtime tracks which peers are connected. In the Visualizer's Connection panel, **Hubs** lists every Hub of the session; expand one to see the apps and devices it serves. **Devices** lists the headsets with their streaming status.
 
 ## Forgetting and blacklisting a device
 
@@ -51,8 +51,8 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 - **Worst case: up to 24 hours.** That is the longest a certificate lives. When it expires, every peer drops the connection and the device cannot renew.
 - A peer that refuses the device stops serving it (no pipeline, no video), but the network connection itself is not closed.
 
-## A current gap: reading this Hub's code
+## Reading this Hub's code
 
-Be aware of a product gap today. The visualizer has a screen for connecting *this* Hub to a **remote** Hub (the hub-connect screen), but a dedicated screen that simply **displays this Hub's own current pairing code** was not found in the current build. The code-minting backend runs as described above (a new code roughly every 8 seconds, about 10 second TTL), and the current code is written to the **Hub log**.
+For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its short lifetime. A code is offered only while that card is open.
 
-So, in practice today: for push onboarding you do not need the code at all; for pull onboarding, read the current pairing code from the Hub log and relay it to the device owner within its short lifetime. An in-visualizer "show this Hub's code" screen is the natural next step here.
+Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Add device** > **Other devices** shows the large QR code for them.

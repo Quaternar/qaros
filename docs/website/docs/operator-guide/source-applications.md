@@ -61,11 +61,11 @@ A **QAROS API app** is an application built on the QAROS C or C# API (for exampl
 
 A source app running on this PC joins QAROS without a code, after someone allowed it once. Whoever starts it, a user or QAROS, the first start asks:
 
-1. **"Allow &lt;app&gt; to join QAROS?"** opens as a window of the QAROS tray, in front of every other window, whether or not the Visualizer is open. An open Visualizer shows the same question.
+1. **"Allow &lt;app&gt; to join QAROS?"** opens as a window of the QAROS tray, in front of every other window, whether or not the Visualizer is open. An open Visualizer shows the same question, and its **Source Applications** panel lists it under **Waiting for approval** with **Deny** / **Approve**.
 2. Check what Windows reports about the app: publisher, product, executable, path and signature. Text the app supplies about itself is shown separately as "App says:"; do not rely on it.
 3. Click **Allow** to admit it, or **Deny**. Deny is the default; Enter and Space never approve. Closing the window denies. Unanswered, the prompt expires after 120 s (the app can ask for longer) and the app is told nobody answered.
 
-The first answer, in the Visualizer or the tray, wins and closes the other. Deny remembers nothing: the next start of the app asks again.
+The first answer, in the Visualizer or the tray, wins and closes the others. Deny remembers nothing: the next start of the app asks again.
 
 | After you allow an app that is | Later starts |
 |---|---|
@@ -74,9 +74,12 @@ The first answer, in the Visualizer or the tray, wins and closes the other. Deny
 
 ### Listing and revoking
 
-The Visualizer's **Connection** panel has an **Approved apps** section: one row per approved app with its name and path, publisher, rule (signed publisher or exact file), when it was approved and when it was last seen.
+All in the Visualizer's **Source Applications** panel:
 
-- To revoke an app, click its trash icon and confirm **Revoke**. Its next start asks again.
+- Each detected app's tile shows **Approved** (green) or **Not approved** (amber). Built-in apps show neither.
+- **Approved apps**, at the bottom, has one card per approved app: name and path, publisher, rule (signed publisher or exact file), when it was approved and when it was last seen.
+
+- To revoke an app, press **Revoke** on its card and confirm. Its next start asks again.
 - A running copy is not renewed and peers that have read the Hub's revocation list refuse it at once; others accept it until its certificate expires, at most 30 minutes.
 - An app reported as "no longer matches its approval" (moved, copied, re-signed) joins again only after you revoke its old approval and allow it anew.
 

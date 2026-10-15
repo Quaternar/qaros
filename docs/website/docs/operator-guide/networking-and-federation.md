@@ -35,7 +35,7 @@ Because it is unauthenticated, **do not expose discovery to the internet.** Keep
 
 Two Hubs can be joined so that a device onboarded to one is trusted by the other:
 
-1. On the visualizer, open the **hub-connect** screen (tray menu -> *Connect to other Hub*).
+1. On the visualizer, open the Connection panel's **Hubs** > **Pair another Hub** > **Join another hub** (or the **hub-connect** screen from the tray menu -> *Connect to other Hub*). The remote Hub shows its code under **Let another hub join us**.
 2. Pick the remote Hub from the nearby list, or enter its address as **`host:port`** (the port is shown with its pairing code; there is no default port), and its **current pairing code**. Hubs run by your own user account on this PC are listed first and marked *(yours)*.
 3. On a successful connection, the two Hubs **merge their CA trust bundles** through a trust-store service. From then on, devices onboarded to either Hub are accepted by both.
 

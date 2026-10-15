@@ -18,6 +18,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the Connection panel guide describes the Hubs and Devices areas (session, pairing another
+  hub by code, inviting HoloLens, Meta Quest and Metalens by address); approving and revoking source
+  apps moved to the Source Applications guide. The player installation guides start with installing
+  from the Visualizer's Devices tab, and QAROS World explains showing or printing the scene-origin
+  marker there.
 - **Docs:** the Source Applications guide no longer describes editing a web app's scripts on its
   tile or the Local Grid mode: scripts come from registering the web app through the visualizer's
   MCP, and web apps stream to targets only.
