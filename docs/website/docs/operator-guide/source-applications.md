@@ -103,7 +103,7 @@ A **web app** streams an existing website (for example a three.js viewer or conf
    | **Stored profile** | An adaptation profile by name. Empty: the profile that best matches the address. |
    | **Page region** | The top-left rectangle, in pixels, the page keeps for its own view and interface. |
    | **App scale** | Room metres per unit of the page's scene. Off: the profile's. |
-   | **Scripts** | Inline scripts injected into the page, each **Before page scripts** (can take over the canvas) or **After load**. They replace the stored profile's scripts. |
+   | **Scripts** | Not edited here. A web app preset's scripts come from registering the web app through the visualizer's MCP (developer tooling); otherwise the stored profile's scripts are used. |
 
    Leave all of it empty to use the stored profile that matches the address.
 3. Press **Launch**. The page loads; the app starts streaming by itself as soon as the visualizer finds the page's renderer.
@@ -140,8 +140,6 @@ Shows the page of the app last selected with **Page**, and passes mouse, wheel a
 | Control | Does |
 |---|---|
 | **Page Size** | **Page Width** and height, then **Apply Size**, resize the page itself. Resizing the panel only rescales the picture. |
-| **Mode** | **Stream** (default) streams to targets. **Local Grid** renders simulated users in this visualizer instead, to check an adaptation without headsets; it needs a found renderer and Stream stopped. |
-| **Grid Users** | Local Grid only: number of users, **Colour**, **Depth** or **Colour + Depth**, and each user's camera position. Each user is its own dockable tab. |
 
 ### After a restart
 

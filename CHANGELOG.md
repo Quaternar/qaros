@@ -16,6 +16,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs:** the Source Applications guide no longer describes editing a web app's scripts on its
+  tile or the Local Grid mode: scripts come from registering the web app through the visualizer's
+  MCP, and web apps stream to targets only.
+
 ### Fixed
 
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
