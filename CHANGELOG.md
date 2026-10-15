@@ -21,6 +21,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
+- **Docs:** transparency, in the next version's docs: a sender's alpha mode in Rendering Streams
+  (C and C#), `Alpha Mode` on the Unity page, and how the mixer blends by it.
 
 ### Fixed
 
