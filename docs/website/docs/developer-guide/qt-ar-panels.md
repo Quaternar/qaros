@@ -1,10 +1,10 @@
 ---
 sidebar_position: 7.5
-title: Video in GUI panels, and Qt widgets as AR panels
+title: Video in GUI Panels, and Qt Widgets as AR Panels
 description: How a GUI panel shows a video stream, what a stream panel accepts, and what the qar_qt_streaming library does to show a Qt widget in AR.
 ---
 
-# Video in GUI panels, and Qt widgets as AR panels
+# Video in GUI Panels, and Qt Widgets as AR Panels
 
 A GUI panel can show a **video stream**, so any picture that you can draw becomes a panel: a camera image, a rendered view, a Qt widget. This page has two parts. The first describes the video route of the C API. The second describes how the library `qar_qt_streaming` uses that route to turn a `QWidget` into a panel.
 
@@ -54,7 +54,7 @@ While no receiver is connected, a frame cycle does not begin. The C# documentati
 
 ## What a stream panel accepts
 
-A stream panel differs from a web panel in these points. [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) gives the header lines and the consequences.
+A stream panel differs from a web panel in these points. [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) gives the header lines and the consequences.
 
 - **Its content type is fixed.** `qar_gui_panels_navigate_to_uri` on a stream panel returns `QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED`. To show another video, give the panel another stream with `qar_gui_panels_set_stream` (C#: `SetStream`).
 - **It ignores the content scale.** The video is always drawn at the full panel width and scrolled vertically when it is taller than the panel.
@@ -77,7 +77,7 @@ The library never calls the C API itself. The `panels` component of `qar_ogre_ad
 ### Input
 
 - **Gestures become Qt events.** A tap, a drag or a hover on the panel reaches the widget as touch events first, and as mouse events for a widget that does not take touch, so that buttons, check boxes, sliders and combo boxes work.
-- **Pointers.** The library keeps an implicit grab for each pointer, recognises double clicks, sends the enter and leave events of a hover and treats the two hands of a user as two pointers.
+- **Pointers.** The library keeps an implicit grab for each pointer, recognizes double clicks, sends the enter and leave events of a hover and treats the two hands of a user as two pointers.
 - **Status.** The unit tests of the library cover drags and two hands; no live session has exercised them yet.
 
 ### Popups and dialogs
@@ -107,4 +107,4 @@ The repository [github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaro
 - [Custom GUI Panels](/docs/developer-guide/gui-panels) — creating and observing panels, with web content.
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender and the layouts that the video sender shares.
 - [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries and how they stack.
-- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.
+- [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.

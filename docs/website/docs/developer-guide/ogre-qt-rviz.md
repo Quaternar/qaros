@@ -53,7 +53,7 @@ The libraries do not contain the QAROS runtime. They load `qar-streaming-c.dll` 
 
 ### Ogre: `qar_ogre_adapter`
 
-- **A stereo stream for every peer.** It renders an Ogre scene into a colour and a depth render texture for each eye, takes the pose and the field of view of each eye from QAROS and renders all peers that are due in one batch under a render budget.
+- **A stereo stream for every peer.** It renders an Ogre scene into a color and a depth render texture for each eye, takes the pose and the field of view of each eye from QAROS and renders all peers that are due in one batch under a render budget.
 - **The adapter of the C API.** Five components (`capi`, `render`, `panels`, `url` and `gestures`) hold the loader of the SDK library, the senders, the panels, the URL panels and the gestures. The other two libraries build on them.
 - **Geo anchor.** A WGS84 fix or an ECEF frame can georeference the app volume.
 - **A headless sample and a live example.** The sample renders the scene for synthetic peers, needs no SDK and writes stereo image pairs. The live example streams the scene to a Visualizer, a mode that the authors of `qar_ogre_adapter` have not run.
@@ -65,7 +65,7 @@ The libraries do not contain the QAROS runtime. They load `qar-streaming-c.dll` 
 - **AR input as Qt events.** A tap, a drag or a hover on a panel reaches the widget as touch events, or as mouse events for a widget that does not take touch.
 - **Popups, dialogs and video.** The popups of a panel are drawn into its picture, a dialog that a panel opens becomes a GUI panel of its own, and a video widget paints the newest frame that a decoding thread delivers.
 
-The page [Video in GUI panels, and Qt widgets as AR panels](/docs/developer-guide/qt-ar-panels) describes how a GUI panel displays a video and what the library does with a widget.
+The page [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) describes how a GUI panel displays a video and what the library does with a widget.
 
 ### RViz2: `qar_rviz_plugin`
 
@@ -89,5 +89,5 @@ Each repository documents its installation from a clean Windows 11 machine, gett
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender, the frame loop and the layouts that a stereo stream uses.
 - [Custom GUI Panels](/docs/developer-guide/gui-panels) — the GUI panels that the Qt library and the RViz2 plugin create.
 - [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) — the session set-up of release 0.9.0.
-- [Video in GUI panels, and Qt widgets as AR panels](/docs/developer-guide/qt-ar-panels) — the video route that the Qt library uses, and what it does with a widget.
-- [Limits and behaviours to design around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.
+- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — the video route that the Qt library uses, and what it does with a widget.
+- [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.

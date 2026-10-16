@@ -1,10 +1,10 @@
 ---
 sidebar_position: 11.5
-title: Limits and behaviours to design around
+title: Limits and Behaviors to Design Around
 description: Where the C API of release 0.9.0 offers no call or leaves a question open — retiring a video stream, resizing one, locating the operator — and the gesture rules to know before you build on it.
 ---
 
-# Limits and behaviours to design around
+# Limits and Behaviors to Design Around
 
 This page collects points where the C API offers no call or leaves a question open, so that you design around them from the start. Each item rests on the header `qar_streaming.h` of release 0.9.0 and, where it says so, on the documentation comments of the C# binding, and it says what these state and what they do not. The last section reports observations that were made with earlier SDK drops.
 
@@ -33,7 +33,7 @@ Plan for this:
 
 - Fix the layout of a video sender before you create the panel for it, and treat it as fixed.
 - When the size must change, create a new sender with the new layout and give the panel the new stream with `qar_gui_panels_set_stream`, or create a new panel for it. The header says that the layout of the new sender determines the receiver resolution; it does not describe how the swap looks to a viewer.
-- `qar_gui_panels_change_size` changes the size of the panel in metres and its content scale. The header takes the receiver resolution from the sender, not from the panel size.
+- `qar_gui_panels_change_size` changes the size of the panel in meters and its content scale. The header takes the receiver resolution from the sender, not from the panel size.
 
 ## Where the operator is
 
@@ -56,7 +56,7 @@ A GUI panel shows either web content or a video stream, chosen at creation with 
 
 A peer's gestures against an app volume are mapped by the `QarAppVolumeGestureConfiguration` of the volume. The kinds are `QAR_GESTURE_CLICK`, `QAR_GESTURE_HOVER`, `QAR_GESTURE_SINGLE_POINTER_6DOF`, `QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE` and `QAR_GESTURE_DUAL_POINTER_ROTATE`. [App Volumes and Gestures](/docs/developer-guide/app-volumes#gestures) shows how to configure and consume them; these are the rules to know on top of that.
 
-- **The order of the list is the priority.** `mapping_rules` is in descending priority: element 0 has the highest. When several gestures are active for the same volume and the same source peer, the runtime applies only the active rule of the highest priority and ignores the rules of lower priority until that gesture ends, is cancelled or becomes inactive. A configuration holds at most 16 rules (`QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES`).
+- **The order of the list is the priority.** `mapping_rules` is in descending priority: element 0 has the highest. When several gestures are active for the same volume and the same source peer, the runtime applies only the active rule of the highest priority and ignores the rules of lower priority until that gesture ends, is canceled or becomes inactive. A configuration holds at most 16 rules (`QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES`).
 - **One peer manipulates at a time.** Whatever the allowed peers, the first peer whose manipulation binds holds the volume until that manipulation ends. The manipulations of other peers are refused meanwhile, while their hover and click still arrive. `qar_app_volume_get_gesture_holder` tells you which peer holds the volume.
 - **You can restrict who may manipulate.** Chain `QarAppVolumeGestureAllowedPeersExt` from the configuration. Without it, or with an empty list, every peer's gestures may move and scale the app. A gesture from a peer that is not in the list still reaches your application, unmapped. A configuration is replaced whole, so chain the extension every time you change the configuration.
 - **A rule that could never work is refused.** `QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID` comes back for an enabled rule for `QAR_GESTURE_DUAL_POINTER_ROTATE` that moves the app while `rotation_axes` is `QAR_APP_VOLUME_AXIS_NONE`: it would take two-hand gestures over and turn nothing. The volume keeps its previous configuration, and adding a volume with such a configuration fails the same way. Removing the default gesture mode returns the same status.
@@ -88,4 +88,4 @@ These two observations come from live sessions with earlier SDK drops and have n
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender, its frame loop and layouts.
 - [App Volumes and Gestures](/docs/developer-guide/app-volumes#gestures) — configuring and consuming gestures.
 - [Troubleshooting](/docs/developer-guide/troubleshooting) — status codes and frequent integration mistakes.
-- [Video in GUI panels, and Qt widgets as AR panels](/docs/developer-guide/qt-ar-panels) — showing a video in a panel, and the Qt library built on it.
+- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — showing a video in a panel, and the Qt library built on it.
