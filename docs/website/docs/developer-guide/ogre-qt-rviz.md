@@ -53,10 +53,12 @@ The libraries do not contain the QAROS runtime. They load `qar-streaming-c.dll` 
 
 ### Ogre: `qar_ogre_adapter`
 
-- **A stereo stream for every peer.** It renders an Ogre scene into a color and a depth render texture for each eye, takes the pose and the field of view of each eye from QAROS and renders all peers that are due in one batch under a render budget.
+- **A stereo stream for every peer.** It renders an Ogre scene into a color and a depth render texture for each eye, takes the pose and the field of view of each eye from QAROS and renders the peers that are due in one batch under a render budget.
 - **The adapter of the C API.** Five components (`capi`, `render`, `panels`, `url` and `gestures`) hold the loader of the SDK library, the senders, the panels, the URL panels and the gestures. The other two libraries build on them.
 - **Geo anchor.** A WGS84 fix or an ECEF frame can georeference the app volume.
 - **A headless sample and a live example.** The sample renders the scene for synthetic peers, needs no SDK and writes stereo image pairs. The live example streams the scene to a Visualizer, a mode that the authors of `qar_ogre_adapter` have not run.
+
+The page [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming) describes how a frame travels, how to integrate the library and the conventions your renderer follows.
 
 ### Qt: `qar_qt_streaming`
 
@@ -75,6 +77,8 @@ The page [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guid
 - **Web libraries you can use without RViz2.** `qar_ui_model` describes a panel as data and renders it as a page, `qar_web_panels` serves the page and its WebSocket, and `qar_ros_ui` reads and writes the ROS 2 graph. The two examples of the repository use them in plain programs.
 - **Picking.** The pointer of the headset publishes a point, a goal pose, an initial pose or an area on the topics of the RViz2 tools.
 
+The page [Running the RViz2 Plugin on Windows](/docs/operator-guide/rviz2-plugin) tells an operator how to start the plugin, what to expect in AR and how to read the logs.
+
 ## Where the detail lives
 
 Each repository documents its installation from a clean Windows 11 machine, getting started, architecture, API, configuration, testing, troubleshooting and SDK compatibility:
@@ -91,3 +95,5 @@ Each repository documents its installation from a clean Windows 11 machine, gett
 - [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) — the session set-up of release 0.9.0.
 - [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — the video route that the Qt library uses, and what it does with a widget.
 - [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.
+- [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming) — how the Ogre library streams a scene, from the frame loop to the conventions your renderer follows.
+- [Running the RViz2 Plugin on Windows](/docs/operator-guide/rviz2-plugin) — starting RViz2 with the plugin, what you see and do in AR, and the logs.

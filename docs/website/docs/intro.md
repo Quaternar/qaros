@@ -42,4 +42,6 @@ A **Hub** (a powerful workstation) runs your 3D applications and the QAROS runti
 | Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |
 | Stream a Unity scene | [Unity](/docs/developer-guide/unity) |
 | Use Ogre, Qt or RViz2 with QAROS | [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) |
+| Stream an Ogre scene to QAROS | [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming) |
+| Run RViz2 with the QAROS plugin | [Running the RViz2 Plugin on Windows](/docs/operator-guide/rviz2-plugin) |
 | Browse the full C API | [C API Reference](/api/qar-streaming-c/) |

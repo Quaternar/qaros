@@ -31,6 +31,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
   GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
   does to show a widget in AR.
+- **Docs:** a Streaming an Ogre Scene to QAROS page in the Developer Guide: how the Ogre library
+  streams a scene to each peer, the three ways to use it, the conventions a scene follows and where
+  the library stops, as verified against an earlier SDK drop.
+- **Docs:** a Running the RViz2 Plugin on Windows page in the Operator Guide: starting RViz2 with
+  the plugin, connecting it, what you see and do in AR, reading the logs and the known issues, as
+  verified against an earlier SDK drop.
 
 ### Fixed
 
