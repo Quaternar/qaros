@@ -16,6 +16,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Added
+
+- **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
+  binding follows (already loaded, installed QAROS, beside the executable, `PATH`), how candidates
+  load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
+  Troubleshooting and Onboarding describe the new fallback.
+
 ### Changed
 
 - **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,

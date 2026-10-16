@@ -17,7 +17,7 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `qar_library_load(NULL)` returns `false`, "QAROS is not installed" | no QAROS installation on this PC | install QAROS ([Installation](/docs/operator-guide/installation)) |
+| `qar_library_load(NULL)` returns `false`, "QAROS is not installed" | no QAROS installation on this PC, and no `qar-streaming-c.dll` beside the executable or on `PATH` | install QAROS ([Installation](/docs/operator-guide/installation)) |
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | QAROS is installed but not running: no tray icon | start **QAROS** from the Start menu, then start the app again |
 | `QAR_STATUS_ONBOARDING_APPROVAL_DENIED` (1805) | someone clicked **Deny** or closed the prompt, or an operator revoked the app | start the app again and click **Allow**. Nothing is remembered from a Deny. |
 | `QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT` (1806) | nobody answered the prompt within 120 s | retry, and answer the prompt in the Visualizer or the QAROS tray window. Raise `approval_timeout_ms` if users need longer (at most 10 minutes). |
