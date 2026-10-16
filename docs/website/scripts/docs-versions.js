@@ -4,8 +4,8 @@
 // Both docs plugin instances (guides `docs`, references `api`) are versioned in
 // lockstep: `npm run docs:version` snapshots them together, so versions.json and
 // api_versions.json always list the same releases. The newest one is served at
-// the root (/docs/, /api/), the unreleased working copy ("current") at /next/
-// once a release exists, older releases at /<version>/.
+// the root (/docs/, /api/), the unreleased working copy ("current", built from
+// main on every push) at /dev/ once a release exists, older releases at /<version>/.
 const fs = require("fs");
 const path = require("path");
 
@@ -40,15 +40,33 @@ function releasedVersions() {
 	return docs;
 }
 
+// URL segment of the working copy once a release exists; it was /next/ before,
+// which the config redirects (docusaurus.config.ts).
+const DEV_SEGMENT = "dev";
+const LEGACY_DEV_SEGMENT = "next";
+
+// The working copy is what main holds right now, not a planned release: qaros/VERSION
+// keeps naming the last release until the bump, so it would label it as that release.
 function currentLabel() {
-	const planned = plannedVersion();
-	return planned ? `${planned} (next)` : "Next";
+	return "Dev (main)";
+}
+
+// Version options of the working copy, shared by both docs instances.
+function currentVersionOptions(released = releasedVersions()) {
+	const options = { label: currentLabel() };
+	return released.length ? { ...options, path: DEV_SEGMENT, banner: "unreleased" } : options;
 }
 
 // URL segment a version is served under ("" for the root).
 function versionSegment(version, released = releasedVersions()) {
-	if (version === "current") return released.length ? "next" : "";
+	if (version === "current") return released.length ? DEV_SEGMENT : "";
 	return version === released[0] ? "" : version;
+}
+
+// Client redirects from the working copy's old /next/ URLs to /dev/.
+function legacyDevRedirects(existingPath) {
+	const match = new RegExp(`^/(${INSTANCES.map((instance) => instance.route).join("|")})/${DEV_SEGMENT}(/.*)?$`).exec(existingPath);
+	return match ? [`/${match[1]}/${LEGACY_DEV_SEGMENT}${match[2] ?? ""}`] : undefined;
 }
 
 // Which version a content file belongs to, from its path; undefined outside docs content.
@@ -122,7 +140,9 @@ module.exports = {
 	plannedVersion,
 	releasedVersions,
 	currentLabel,
+	currentVersionOptions,
 	versionSegment,
+	legacyDevRedirects,
 	versionOfFile,
 	rehypeVersionedLinks,
 	remarkVersionedImages,
