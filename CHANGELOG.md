@@ -18,6 +18,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,
+  and says which app streams to each `deviceType`: Quest and `AndroidStreamer` through
+  `qar-android-streamer`, HoloLens through `qar-openxr-desktop`.
 - **Docs:** the Connection panel guide describes the Hubs and Devices areas (session, pairing another
   hub by code, inviting HoloLens, Meta Quest and Metalens by address); approving and revoking source
   apps moved to the Source Applications guide. The player installation guides start with installing
