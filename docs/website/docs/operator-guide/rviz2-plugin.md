@@ -132,7 +132,7 @@ The plugin renders the scene once for each peer, from the head pose that QAROS r
 
 **Resolution:** and **FPS:** start at 1280 x 720 and 60 frames per second. They apply to the streams that are created from then on and do not resize a stream that exists. The plugin renders all streams that are due in one batch, with a budget of about 16 ms, and sheds the frames of the peers beyond it, except that a peer that has not been rendered for 1/30 s is always served. Choose a lower resolution when you serve several headsets.
 
-The launcher sets `QAR_POSE_WORLD` to `zup` and `QAR_DEPTH_ENCODING` to `ndc`. Without the first the scene arrives on its side, and without the second the Visualizer shows the depth in one color. If you start RViz2 without the launcher, set both.
+The launcher sets `QAR_POSE_WORLD` to `zup` and `QAR_DEPTH_ENCODING` to `ndc`. Without the first the scene arrives on its side, and without the second the Visualizer showed the depth in one color with an SDK drop earlier than that of 2026-09-28. If you start RViz2 without the launcher, set both.
 
 The plugin also reads the fixes of a `sensor_msgs/msg/NavSatFix` topic, `/gps/fix` unless the environment names another, and tells QAROS from them where the origin of the scene lies on Earth. This path does nothing while the topic is silent.
 
