@@ -11,11 +11,16 @@ const nodeFs = require("fs");
 require("graceful-fs").gracefulify(nodeFs);
 
 // Docs versioning (see scripts/docs-versions.js and README.md): both docs
-// instances share one version list; the unreleased working copy is labelled
-// with the next planned release from qaros/VERSION.
-const { currentLabel, rehypeVersionedLinks, remarkVersionedImages } = require("./scripts/docs-versions.js");
+// instances share one version list; the newest release is the default, the
+// unreleased working copy (main) is "Dev (main)" under /dev/.
+const {
+	currentVersionOptions,
+	legacyDevRedirects,
+	rehypeVersionedLinks,
+	remarkVersionedImages,
+} = require("./scripts/docs-versions.js");
 const versionedDocsOptions = {
-	versions: { current: { label: currentLabel() } },
+	versions: { current: currentVersionOptions() },
 	beforeDefaultRemarkPlugins: [remarkVersionedImages],
 	rehypePlugins: [rehypeVersionedLinks],
 };
@@ -122,6 +127,8 @@ const config: Config = {
 					{ from: "/docs/developer-guide/examples/c/app-volume-management", to: "/docs/developer-guide/tutorials/c/app-volume-management" },
 					{ from: "/docs/developer-guide/examples/c/cpu-rendering", to: "/docs/developer-guide/tutorials/c/cpu-rendering" },
 				],
+				// The working copy moved from /next/ to /dev/.
+				createRedirects: legacyDevRedirects,
 			},
 		],
 	],

@@ -22,6 +22,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
 
+### Changed
+
+- **Docs:** the documentation site opens the newest release by default and offers **Dev (main)** in
+  the version dropdown: the unreleased docs as they are on `main` now, under `/docs/dev/` and
+  `/api/dev/`. The former `/next/` addresses redirect there.
+
 ### Fixed
 
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
