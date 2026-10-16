@@ -18,6 +18,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the Unity guide describes joining the Hub and picking from its target apps (the target
+  list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
+  targets.
 - **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
   binding follows (already loaded, installed QAROS, beside the executable, `PATH`), how candidates
   load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,

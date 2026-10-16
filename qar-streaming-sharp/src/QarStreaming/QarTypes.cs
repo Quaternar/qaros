@@ -24,6 +24,37 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// What a peer is: the device or application kind it joined the session as (C
+    /// <c>QarDeviceType</c>). Values are stable and only appended; treat an unnamed value as
+    /// "other". Kinds from 150 up are target apps (<see cref="PeerSpec.IsTargetApp"/>).
+    /// </summary>
+    public enum DeviceType
+    {
+        /// <summary>QAROS infrastructure (hub services, pipelines).</summary>
+        Internal = 0,
+        /// <summary>An application on a Windows PC, such as a source application.</summary>
+        DesktopWindows = 1,
+        DesktopLinux = 2,
+        ServerLinux = 3,
+        /// <summary>A QAROS runtime process.</summary>
+        Runtime = 4,
+        /// <summary>The operator's Visualizer control session.</summary>
+        VisualizerControl = 5,
+        /// <summary>An Android AR headset (METALENSE 2).</summary>
+        AndroidArHeadset = 150,
+        HoloLensArHeadset = 151,
+        MetaQuestHeadset = 152,
+        /// <summary>A Visualizer receiver showing streams on the PC.</summary>
+        Visualizer = 153,
+        CameraVisualizer = 154,
+        /// <summary>The Android streamer serving a Quest or Android device.</summary>
+        AndroidStreamer = 155,
+        ZedCamera = 156,
+        /// <summary>A synthetic target of QAROS's own tests.</summary>
+        TestTarget = 157
+    }
+
+    /// <summary>
     /// The graphics backend a sender's frame textures live on. Every GPU value requires exactly
     /// the matching stream-parameter extension on the options; <see cref="Cpu"/> takes none.
     /// </summary>

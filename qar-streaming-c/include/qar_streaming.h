@@ -428,6 +428,38 @@ typedef enum QarAppState
 } QarAppState;
 
 /**
+ * @brief What a peer is: the device or application kind it joined the session
+ * as (qar_peer_spec_get_device_type()). Values are stable and only appended;
+ * treat an unknown value as "other". Kinds from 150 up are target apps
+ * (qar_peer_spec_is_target_app()).
+ */
+typedef enum QarDeviceType
+{
+	/** QAROS infrastructure (hub services, pipelines). */
+	QAR_DEVICE_TYPE_INTERNAL = 0,
+	/** An application on a Windows PC, such as a source application. */
+	QAR_DEVICE_TYPE_DESKTOP_WINDOWS = 1,
+	QAR_DEVICE_TYPE_DESKTOP_LINUX = 2,
+	QAR_DEVICE_TYPE_SERVER_LINUX = 3,
+	/** A QAROS runtime process. */
+	QAR_DEVICE_TYPE_RUNTIME = 4,
+	/** The operator's Visualizer control session. */
+	QAR_DEVICE_TYPE_VISUALIZER_CONTROL = 5,
+	/** An Android AR headset (METALENSE 2). */
+	QAR_DEVICE_TYPE_ANDROID_AR_HEADSET = 150,
+	QAR_DEVICE_TYPE_HOLOLENS_AR_HEADSET = 151,
+	QAR_DEVICE_TYPE_META_QUEST_HEADSET = 152,
+	/** A Visualizer receiver showing streams on the PC. */
+	QAR_DEVICE_TYPE_VISUALIZER = 153,
+	QAR_DEVICE_TYPE_CAMERA_VISUALIZER = 154,
+	/** The Android streamer serving a Quest or Android device. */
+	QAR_DEVICE_TYPE_ANDROID_STREAMER = 155,
+	QAR_DEVICE_TYPE_ZED_CAMERA = 156,
+	/** A synthetic target of QAROS's own tests. */
+	QAR_DEVICE_TYPE_TEST_TARGET = 157
+} QarDeviceType;
+
+/**
  * @brief Wall-clock instant: nanoseconds since the Unix epoch (UTC).
  *
  * Instants stamped on different hosts are only as comparable as those hosts'
@@ -2940,6 +2972,20 @@ static inline QarResult qar_peer_spec_get_room_tag(
  */
 static inline QarResult
 qar_peer_spec_is_target_app(QarPeerSpec* handle, bool* out_is_target_app);
+/**
+ * @brief What the peer is: the device or application kind it joined as (a
+ * HoloLens, a Meta Quest, the Android streamer, a Visualizer, ...), for showing
+ * targets to a user. Whether to render for a peer is still decided by
+ * qar_peer_spec_is_target_app().
+ *
+ * @param handle Peer spec handle.
+ * @param out_type Receives the kind; a value this header does not name is a
+ * newer kind, shown as "other".
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult
+qar_peer_spec_get_device_type(QarPeerSpec* handle, QarDeviceType* out_type);
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
@@ -6633,7 +6679,12 @@ typedef void (*qar_peer_update_callback_t)(
 	  QarResult,                                                               \
 	  peer_spec_is_target_app,                                                 \
 	  (QarPeerSpec * handle, bool* out_is_target_app),                         \
-	  (handle, out_is_target_app))
+	  (handle, out_is_target_app))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_type,                                               \
+	  (QarPeerSpec * handle, QarDeviceType * out_type),                        \
+	  (handle, out_type))
 
 QAR_DECLARE_MODULE_COMMON(
 	PEER_MANAGEMENT,

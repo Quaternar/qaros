@@ -188,6 +188,9 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_peer_spec_is_target_app(IntPtr handle, [MarshalAs(UnmanagedType.U1)] out bool outIsTargetApp);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_type(IntPtr handle, out DeviceType outType);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_get_my_spec(IntPtr session, out IntPtr outHandle);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

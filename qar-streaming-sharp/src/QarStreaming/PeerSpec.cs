@@ -14,8 +14,9 @@ namespace Quaternar.Qaros
     /// </summary>
     public sealed class PeerSpec
     {
-        internal PeerSpec(PeerId id, string displayName, string appVersion, string appCustomPeerInfo, AppState appState, string versionId, string roomTag, bool isTargetApp)
+        internal PeerSpec(PeerId id, string displayName, string appVersion, string appCustomPeerInfo, AppState appState, string versionId, string roomTag, bool isTargetApp, DeviceType deviceType = DeviceType.Internal)
         {
+            DeviceType = deviceType;
             Id = id;
             DisplayName = displayName;
             AppVersion = appVersion;
@@ -52,6 +53,12 @@ namespace Quaternar.Qaros
         /// </summary>
         public bool IsTargetApp { get; }
 
+        /// <summary>
+        /// What the peer is (a HoloLens, a Meta Quest, the Android streamer, a Visualizer, ...), for
+        /// showing a target to a user. Whether to render for it is still <see cref="IsTargetApp"/>.
+        /// </summary>
+        public DeviceType DeviceType { get; }
+
         internal static Result<PeerSpec> FromHandle(IntPtr handle, bool destroyHandle)
         {
             try
@@ -82,6 +89,9 @@ namespace Quaternar.Qaros
                 var isTargetAppInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_is_target_app(handle, out var isTargetApp));
                 if (!isTargetAppInfo.IsSuccess)
                     return Result<PeerSpec>.Failure(isTargetAppInfo);
+                var deviceType = ReadDeviceType(handle);
+                if (!deviceType.IsSuccess)
+                    return Result<PeerSpec>.Failure(deviceType.Info);
                 return Result<PeerSpec>.Success(
                     idInfo,
                     new PeerSpec(
@@ -92,12 +102,28 @@ namespace Quaternar.Qaros
                         state,
                         versionId.Value,
                         roomTag.Value,
-                        isTargetApp));
+                        isTargetApp,
+                        deviceType.Value));
             }
             finally
             {
                 if (destroyHandle && handle != IntPtr.Zero)
                     NativeMethods.qar_impl_peer_spec_handle_destroy(handle);
+            }
+        }
+
+        // A runtime older than the binding has no qar_impl_peer_spec_get_device_type: its peers read as
+        // DeviceType.Internal instead of failing the whole spec.
+        private static Result<DeviceType> ReadDeviceType(IntPtr handle)
+        {
+            try
+            {
+                var info = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_device_type(handle, out var deviceType));
+                return info.IsSuccess ? Result<DeviceType>.Success(info, deviceType) : Result<DeviceType>.Failure(info);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return Result<DeviceType>.Success(new ResultInfo(StatusCode.Success, 0, string.Empty), DeviceType.Internal);
             }
         }
     }
