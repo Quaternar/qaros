@@ -140,7 +140,8 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Onboards from a full invite: one a sibling instance obtained with
         /// <see cref="Session.RequestOnboardingInvite"/>, or the launch invite QAROS writes as the
-        /// first stdin line of an API app it starts (<see cref="OnboardingInvite.Deserialize"/>).
+        /// first stdin line of an API app it starts where local enrollment is not available (not
+        /// Windows; <see cref="OnboardingInvite.Deserialize"/>).
         /// No discovery, no code.
         /// </summary>
         /// <remarks>

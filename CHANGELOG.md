@@ -42,8 +42,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
-- **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
-  onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** the Source Applications guide, Rendering Streams and the security deep dive no longer
+  say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
+  with the same one-time approval; a launch invite on stdin remains only where local enrollment is
+  not available.
 
 ## [0.9.0] - 2026-10-12
 
