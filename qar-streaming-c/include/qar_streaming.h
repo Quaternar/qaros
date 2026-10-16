@@ -16,20 +16,28 @@
  * @par Load the installed runtime
  * Every application runs against the QAROS installed on the PC. The runtime
  * (`qar-streaming-c.dll`, `qar-runtime-launcher` and every dependency) lives in
- * the installation's `bin/` folder; an application never ships its own copy.
- * The installer (per machine) records the folder under
+ * the installation's `bin/` folder; a distributed application never ships its
+ * own copy. The installer (per machine) records the folder under
  * `HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`.
  *
  * @par Prefer dynamic loading
  * Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
  * in exactly one translation unit, and call `qar_library_load(NULL)` before
- * any other API call. It loads `<InstallFolder>/bin/qar-streaming-c.dll` from
- * its absolute path and resolves the runtime's dependencies out of that folder,
- * never out of the application's. With no QAROS installed it prints
- * "QAROS is not installed" and returns false. The application carries no
- * link-time dependency on the runtime. Link-time linking also works, but then
- * the whole `bin/` content has to sit next to the executable or on the library
- * search path.
+ * any other API call. It takes the first of:
+ * 1. a `qar-streaming-c` already loaded in the process;
+ * 2. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll`; when
+ *    QAROS is installed, only this copy is used;
+ * 3. `qar-streaming-c.dll` beside the running executable (a development ZIP,
+ *    an app built into a QAROS tree);
+ * 4. `qar-streaming-c.dll` in a folder on `PATH` (Linux: the dynamic linker's
+ *    search). The current directory is never searched.
+ * Each loads from its absolute path, with the runtime's dependencies from its
+ * own folder and System32, never from the application's. With nothing found
+ * it prints why and returns false. Every QAROS binding (C#, Unity, future
+ * ones) follows the same order. The application carries no link-time
+ * dependency on the runtime. Link-time linking also works, but then the whole
+ * `bin/` content has to sit next to the executable or on the library search
+ * path.
  *
  * @par Runtime binaries folder
  * Leave QarRuntimeInit::runtime_binaries_folder_path empty: the runtime then
@@ -2128,15 +2136,16 @@ typedef struct QarRenderFrameShowViewOverridesExt
 /**
  * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
- * @param library_path NULL loads the runtime of the QAROS installed on this PC
- *        (`<InstallFolder>/bin/qar-streaming-c.dll`, Windows only); this is
- *        the normal call. A non-NULL path names the library **file** itself,
- *        absolute or relative to the current working directory, and is meant
- *        for our own development builds. The runtime's dependency libraries
- *        are resolved from the library's own folder. UTF-8, like every path in
- *        this API (see @ref qar_text_encoding).
- * @return true on success; false, with a printed reason, when QAROS is not
- *         installed or the library fails to load. Call this before
+ * @param library_path NULL is the normal call: the installed QAROS, else the
+ *        library beside the executable, else one on `PATH` (see "Prefer
+ *        dynamic loading" above for the full order). A non-NULL path names
+ *        the library **file** itself, absolute or relative to the current
+ *        working directory, and only that file is tried. The runtime's
+ *        dependency libraries are resolved from the library's own folder and
+ *        System32. UTF-8, like every path in this API (see
+ *        @ref qar_text_encoding).
+ * @return true on success; false, with a printed reason, when no runtime is
+ *         found or the library fails to load. Call this before
  *         qar_library_init().
  */
 static inline bool qar_library_load(const char* library_path);
@@ -7178,6 +7187,7 @@ QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 
@@ -7218,11 +7228,113 @@ qar_loadlib(const char* path)
 		return NULL;
 	}
 
+	/* The runtime's dependencies come from its own folder and System32 only,
+	 * never from the application's folder (docs: authoring a binding). */
 	return LoadLibraryExW(
 		abs_path,
 		NULL,
-		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
 	);
+}
+
+/// File name of the runtime library the default lookup looks for.
+#define QAR_RUNTIME_LIBRARY_FILE_NAME L"qar-streaming-c.dll"
+
+/// Loads `<folder>\qar-streaming-c.dll` when the file exists there, its
+/// dependencies from that folder and System32 only. NULL when it is not
+/// there, or (with a printed reason) when it is there but fails to load.
+static inline HMODULE
+qar_loadlib_in_folder_w(const wchar_t* folder)
+{
+	wchar_t path[MAX_PATH];
+	const size_t length = wcslen(folder);
+	if(length == 0
+	   || length + 1 + wcslen(QAR_RUNTIME_LIBRARY_FILE_NAME) >= MAX_PATH)
+	{
+		return NULL;
+	}
+	wcscpy_s(path, MAX_PATH, folder);
+	if(path[length - 1] != L'\\' && path[length - 1] != L'/')
+	{
+		wcscat_s(path, MAX_PATH, L"\\");
+	}
+	wcscat_s(path, MAX_PATH, QAR_RUNTIME_LIBRARY_FILE_NAME);
+	const DWORD attributes = GetFileAttributesW(path);
+	if(attributes == INVALID_FILE_ATTRIBUTES
+	   || (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+	{
+		return NULL;
+	}
+	HMODULE handle = LoadLibraryExW(
+		path,
+		NULL,
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
+	);
+	if(handle == NULL)
+	{
+		printf(
+			"Loading the QAROS runtime '%ls' failed: Error %lu\n",
+			path,
+			GetLastError()
+		);
+	}
+	return handle;
+}
+
+/// Step 3 of the default lookup: the folder of the running executable.
+static inline HMODULE
+qar_loadlib_beside_executable(void)
+{
+	wchar_t folder[MAX_PATH];
+	const DWORD length = GetModuleFileNameW(NULL, folder, MAX_PATH);
+	if(length == 0 || length >= MAX_PATH)
+	{
+		return NULL;
+	}
+	wchar_t* separator = wcsrchr(folder, L'\\');
+	if(separator == NULL)
+	{
+		return NULL;
+	}
+	*separator = L'\0';
+	return qar_loadlib_in_folder_w(folder);
+}
+
+/// Step 4 of the default lookup: every folder on PATH, in order. The current
+/// directory is not searched: a library planted there would be loaded.
+static inline HMODULE
+qar_loadlib_on_path(void)
+{
+	const DWORD needed = GetEnvironmentVariableW(L"PATH", NULL, 0);
+	if(needed == 0)
+	{
+		return NULL;
+	}
+	wchar_t* paths = (wchar_t*)malloc(needed * sizeof(wchar_t));
+	if(paths == NULL)
+	{
+		return NULL;
+	}
+	HMODULE handle = NULL;
+	if(GetEnvironmentVariableW(L"PATH", paths, needed) < needed)
+	{
+		wchar_t* context = NULL;
+		for(wchar_t* entry = wcstok_s(paths, L";", &context);
+			entry != NULL && handle == NULL;
+			entry = wcstok_s(NULL, L";", &context))
+		{
+			/* PATH entries may be quoted. */
+			size_t length = wcslen(entry);
+			if(length >= 2 && entry[0] == L'"' && entry[length - 1] == L'"')
+			{
+				entry[length - 1] = L'\0';
+				++entry;
+			}
+			handle = qar_loadlib_in_folder_w(entry);
+		}
+	}
+	free(paths);
+	return handle;
 }
 
 /// Key the QAROS installer writes, per machine, under HKLM. An installation is
@@ -7275,35 +7387,49 @@ qar_installed_bin_folder(char* out, size_t capacity)
 	return written > 0;
 }
 
-/// Loads the installed runtime from an absolute path, searching only its own
-/// folder and System32 for dependencies, never the application's folder.
+/// qar_library_load(NULL): the runtime lookup every QAROS binding follows
+/// (docs: authoring a binding). The first match wins:
+///   1. a qar-streaming-c.dll already loaded in this process;
+///   2. the installed QAROS, `<InstallFolder>\bin` from HKLM; when QAROS is
+///      installed only that copy is used;
+///   3. the folder of the running executable;
+///   4. every folder on PATH, in order.
+/// Each candidate loads from its absolute path, with its dependencies from its
+/// own folder and System32 only.
 static inline HMODULE
-qar_loadlib_installed(void)
+qar_loadlib_default(void)
 {
-	wchar_t path[MAX_PATH];
-	if(!qar_installed_bin_folder_w(path, MAX_PATH))
+	HMODULE handle = NULL;
+	/* Takes a reference, so qar_library_unload's FreeLibrary stays balanced. */
+	if(GetModuleHandleExW(0, QAR_RUNTIME_LIBRARY_FILE_NAME, &handle))
 	{
-		printf(
-			"QAROS is not installed: no InstallFolder under "
-			"HKLM\\SOFTWARE\\Quaternar\\QAROS.\n"
-		);
-		return NULL;
+		return handle;
 	}
-	if(wcslen(path) + 22 >= MAX_PATH)
+	wchar_t installed[MAX_PATH];
+	if(qar_installed_bin_folder_w(installed, MAX_PATH))
 	{
-		return NULL;
+		handle = qar_loadlib_in_folder_w(installed);
+		if(handle == NULL)
+		{
+			printf(
+				"The installed QAROS runtime in '%ls' could not be loaded. "
+				"Repair or reinstall QAROS.\n",
+				installed
+			);
+		}
+		return handle;
 	}
-	wcscat_s(path, MAX_PATH, L"\\qar-streaming-c.dll");
-	HMODULE handle = LoadLibraryExW(
-		path,
-		NULL,
-		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
-	);
+	handle = qar_loadlib_beside_executable();
+	if(handle == NULL)
+	{
+		handle = qar_loadlib_on_path();
+	}
 	if(handle == NULL)
 	{
 		printf(
-			"Loading the installed QAROS runtime failed: Error %lu\n",
-			GetLastError()
+			"QAROS is not installed (no InstallFolder under "
+			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and qar-streaming-c.dll is "
+			"neither beside the executable nor on PATH.\n"
 		);
 	}
 	return handle;
@@ -7330,6 +7456,7 @@ qar_load_symbol(QAR_DLL_HANDLE_TYPE handle, const char* name)
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef void* QAR_DLL_HANDLE_TYPE;
 
@@ -7353,14 +7480,62 @@ qar_loadlib(const char* path)
 	return handle;
 }
 
-/// No installed-runtime lookup on this platform yet: pass the library path.
+#define QAR_RUNTIME_LIBRARY_FILE_NAME "libqar-streaming-c.so"
+
+/// qar_library_load(NULL) on Linux: the Windows lookup without step 2 (there is
+/// no installation record yet). 1. already loaded in this process; 3. the
+/// folder of the running executable; 4. the dynamic linker's own search
+/// (LD_LIBRARY_PATH, runpath, ld.so cache), its counterpart of PATH.
 static inline void*
-qar_loadlib_installed(void)
+qar_loadlib_default(void)
 {
-	printf(
-		"qar_library_load(NULL) is supported on Windows only; pass the path.\n"
+	void* handle = dlopen(
+		QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD
 	);
-	return NULL;
+	if(handle != NULL)
+	{
+		return handle;
+	}
+	char* executable = realpath("/proc/self/exe", NULL);
+	if(executable != NULL)
+	{
+		char* separator = strrchr(executable, '/');
+		const size_t folder_length =
+			separator != NULL ? (size_t)(separator - executable) : 0;
+		const size_t size =
+			folder_length + 1 + strlen(QAR_RUNTIME_LIBRARY_FILE_NAME) + 1;
+		char* beside = (char*)malloc(size);
+		if(beside != NULL && separator != NULL)
+		{
+			snprintf(
+				beside,
+				size,
+				"%.*s/%s",
+				(int)folder_length,
+				executable,
+				QAR_RUNTIME_LIBRARY_FILE_NAME
+			);
+			handle = access(beside, F_OK) == 0
+						 ? dlopen(beside, RTLD_NOW | RTLD_LOCAL)
+						 : NULL;
+		}
+		free(beside);
+		free(executable);
+	}
+	if(handle == NULL)
+	{
+		handle = dlopen(QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL);
+	}
+	if(handle == NULL)
+	{
+		printf(
+			"%s is neither beside the executable nor on the library search "
+			"path: %s\n",
+			QAR_RUNTIME_LIBRARY_FILE_NAME,
+			dlerror()
+		);
+	}
+	return handle;
 }
 
 static inline bool
@@ -7485,10 +7660,10 @@ qar_library_load(const char* library_path)
 		return true;
 	}
 
-	// NULL: the runtime of the QAROS installed on this PC (GitHub #196).
+	// NULL: the default lookup (qar_loadlib_default), installed QAROS first.
 	g_qar_dynamic_library_handle = library_path != NULL
 									   ? qar_loadlib(library_path)
-									   : qar_loadlib_installed();
+									   : qar_loadlib_default();
 	if(g_qar_dynamic_library_handle == NULL)
 	{
 		return false;

@@ -8,8 +8,8 @@ namespace Quaternar.Qaros.Interop
         internal const string LibraryName = "qar-streaming-c";
 
         // Runs before the first P/Invoke below (explicit static constructor, so the type is
-        // not beforefieldinit): binds every import to the installed runtime. A failure is
-        // left for Library.Init to report as "QAROS is not installed".
+        // not beforefieldinit): binds every import to the runtime InstalledRuntime finds. A
+        // failure is left for Library.Init to report as "QAROS is not installed".
         static NativeMethods()
         {
             InstalledRuntime.EnsureLoaded();
