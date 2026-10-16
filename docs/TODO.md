@@ -121,8 +121,8 @@ guarantees in the meantime):
   publisher found) - the page says there is no operator withdraw action; (b) that Hub B
   also merges Hub A's root (page only describes A merging B's); (c) how a push-invited
   remote device (HoloLens/Android) receives its provisioned key - page only covers
-  Hub-launched processes; (d) whether step-ca rejects or clamps a `certLifetimeHours`
-  above the 24 h provisioner cap.
+  Hub-launched processes; (d) resolved: the gateway clamps `certLifetimeHours` to the profile maximum (24 h) and the
+  in-process CA bounds it again; step-ca is gone (#253).
 - T10 blacklist drift: resolved by ADR-0254 (hub publishes its revocation list; peers that read
   it refuse the device, others accept it until expiry); `managing-devices` and
   `security-deep-dive` rewritten to match.

@@ -16,6 +16,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs:** *Overview*, *Security model*, *Security deep dive*, *Networking & Federation* and
+  *Running the Hub* describe primary and member Hubs instead of hub-connect federation: *Join hub…*
+  by *Allow*, join code or a sponsoring app, one CA per session (the primary's), forwarding and
+  removal, *Leave and start own session*, the new tray items, and the Hub audit log. The CA is
+  described as built into the Hub (step-ca is gone), with its new storage layout and limitations.
+
 ### Fixed
 
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full

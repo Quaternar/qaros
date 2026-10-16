@@ -273,6 +273,75 @@ namespace Quaternar.Qaros
             }
         }
 
+        /// <summary>
+        /// Member join, first step on the joining PC: asks the QAROS hub on this PC for its signed
+        /// member join request, to carry to an app on the primary hub's PC that sponsors it with
+        /// <see cref="Session.SponsorMember"/>. Blocks until the hub answers. Needs no session.
+        /// </summary>
+        /// <remarks>
+        /// The hub identifies this process from Windows and answers only an app it approved
+        /// before; it never prompts. Expected failures:
+        /// <see cref="StatusCode.OnboardingHubUnreachable"/> (no hub runs on this PC for this
+        /// user), <see cref="StatusCode.OnboardingApprovalDenied"/> (the hub has not approved this
+        /// app), <see cref="StatusCode.MemberJoinRefused"/> (the hub hosts members of its own or is
+        /// already a member). The caller owns and disposes the blob. Windows only.
+        /// </remarks>
+        public Result<MemberJoinBlob> RequestMemberJoin(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            ThrowIfDisposed();
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            if (!cancellationResult.IsSuccess)
+                return Result<MemberJoinBlob>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
+            {
+                var native = new MemberJoinRequestInitNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RuntimeMemberJoinRequestInit)
+                };
+                IntPtr request;
+                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_request_member_join(_handle.DangerousGetHandle(), ref native, cancellation.Handle, out request));
+                return Results.FromHandle(info, request, MemberJoinNative.FromHandle);
+            }
+        }
+
+        /// <summary>
+        /// Member join, last step on the joining PC: hands the QAROS hub on this PC the primary
+        /// hub's reply. The hub verifies it, becomes a member of the primary's session and restarts
+        /// into it; every process it started reconnects. Blocks until the hub committed the
+        /// membership.
+        /// </summary>
+        /// <remarks>
+        /// The reply is checked before the hub is asked: it must admit the hub
+        /// (<see cref="StatusCode.MemberJoinPending"/>, <see cref="StatusCode.MemberJoinDenied"/>,
+        /// <see cref="StatusCode.MemberJoinRedirected"/> or <see cref="StatusCode.MemberJoinRefused"/>
+        /// otherwise) and, with <see cref="MemberJoinCompleteOptions.ExpectedPrimaryFingerprint"/>,
+        /// be signed by that key (<see cref="StatusCode.OnboardingHubNotAuthentic"/> otherwise).
+        /// Only an app the hub approved may call it. Windows only.
+        /// </remarks>
+        public Result<Unit> CompleteMemberJoin(MemberJoinCompleteOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            if (options.Reply == null)
+                throw new ArgumentNullException(nameof(options.Reply));
+            ThrowIfDisposed();
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            if (!cancellationResult.IsSuccess)
+                return Result<Unit>.Failure(cancellationResult.Info);
+            using (var scope = new NativeMemoryScope())
+            using (var cancellation = cancellationResult.Value)
+            using (var progressState = ProgressState.Create(progress))
+            {
+                var native = MemberJoinNative.Complete(options, scope);
+                return Results.FromNative(NativeMethods.qar_impl_runtime_complete_member_join(
+                    _handle.DangerousGetHandle(),
+                    ref native,
+                    progressState.Callback,
+                    progressState.UserState,
+                    cancellation.Handle));
+            }
+        }
+
         /// <summary>Releases the runtime. Dispose its sessions first.</summary>
         public void Dispose()
         {

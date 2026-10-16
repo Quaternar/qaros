@@ -548,6 +548,30 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct MemberJoinRequestInitNative
+    {
+        public StructureHeaderNative Header;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SponsorMemberInitNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr Request;
+        public PeerIdNative PrimaryPeerId;
+        public IntPtr ClientAddress;
+        public IntPtr ClientName;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MemberJoinCompleteInitNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr Reply;
+        public IntPtr ExpectedPrimaryFingerprint;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct SessionInviteTargetAppInitNative
     {
         public StructureHeaderNative Header;
@@ -771,6 +795,14 @@ namespace Quaternar.Qaros.Interop
         internal OnboardingInviteSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
         public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
         protected override bool ReleaseHandle() { NativeMethods.qar_impl_onboarding_invite_handle_destroy(handle); return true; }
+    }
+
+    internal sealed class MemberJoinBlobSafeHandle : SafeHandle
+    {
+        private MemberJoinBlobSafeHandle() : base(IntPtr.Zero, true) { }
+        internal MemberJoinBlobSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
+        public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
+        protected override bool ReleaseHandle() { NativeMethods.qar_impl_member_join_blob_handle_destroy(handle); return true; }
     }
 
     internal sealed class CancelTokenSafeHandle : SafeHandle

@@ -20,6 +20,9 @@ namespace Quaternar.Qaros.Tests
             { typeof(ResultNative), 8 },
             { typeof(StructureHeaderNative), 16 },
             { typeof(PeerIdNative), 16 },
+            { typeof(MemberJoinRequestInitNative), 16 },
+            { typeof(SponsorMemberInitNative), 56 },
+            { typeof(MemberJoinCompleteInitNative), 32 },
             { typeof(TimePointNative), 8 },
             { typeof(PoseNative), 28 },
             { typeof(FovNative), 16 },
@@ -206,6 +209,12 @@ namespace Quaternar.Qaros.Tests
             { typeof(RenderFrameViewOverrideNative), nameof(RenderFrameViewOverrideNative.Fov), 40 },
             { typeof(RenderFrameShowViewOverridesExtNative), nameof(RenderFrameShowViewOverridesExtNative.ViewOverrides), 16 },
             { typeof(RenderFrameShowViewOverridesExtNative), nameof(RenderFrameShowViewOverridesExtNative.ViewOverridesCount), 464 },
+            { typeof(SponsorMemberInitNative), nameof(SponsorMemberInitNative.Request), 16 },
+            { typeof(SponsorMemberInitNative), nameof(SponsorMemberInitNative.PrimaryPeerId), 24 },
+            { typeof(SponsorMemberInitNative), nameof(SponsorMemberInitNative.ClientAddress), 40 },
+            { typeof(SponsorMemberInitNative), nameof(SponsorMemberInitNative.ClientName), 48 },
+            { typeof(MemberJoinCompleteInitNative), nameof(MemberJoinCompleteInitNative.Reply), 16 },
+            { typeof(MemberJoinCompleteInitNative), nameof(MemberJoinCompleteInitNative.ExpectedPrimaryFingerprint), 24 },
         };
 
         [Theory]
@@ -243,8 +252,18 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
             Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
+            Assert.Equal(3000, (int)StatusCode.MemberJoinPending);
+            Assert.Equal(3001, (int)StatusCode.MemberJoinDenied);
+            Assert.Equal(3002, (int)StatusCode.MemberJoinRefused);
+            Assert.Equal(3003, (int)StatusCode.MemberJoinRedirected);
+            Assert.Equal(3004, (int)StatusCode.MemberRemoved);
+            Assert.Equal(3005, (int)StatusCode.PrimaryUnreachable);
+            Assert.Equal(3006, (int)StatusCode.SessionWideActionOnMember);
+            Assert.Equal(3007, (int)StatusCode.MemberSponsorNotAllowed);
+            Assert.Equal(3008, (int)StatusCode.MemberSponsorQuotaExceeded);
+            Assert.Equal(3009, (int)StatusCode.AuditLogCorrupt);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(30, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(40, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -252,6 +271,9 @@ namespace Quaternar.Qaros.Tests
         {
             Assert.Equal(0x1009, (int)StructureType.RuntimeOnboardPeerIdExt);
             Assert.Equal(0x100A, (int)StructureType.RuntimeOnboardLocalAppExt);
+            Assert.Equal(0x100B, (int)StructureType.RuntimeMemberJoinRequestInit);
+            Assert.Equal(0x100C, (int)StructureType.RuntimeMemberJoinCompleteInit);
+            Assert.Equal(0x2009, (int)StructureType.SessionSponsorMemberInit);
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);

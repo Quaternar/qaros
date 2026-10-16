@@ -72,7 +72,27 @@ namespace Quaternar.Qaros
         /// <summary>Local app onboarding: the app no longer matches what the user approved (moved, re-signed, tampered). Ask the user to re-approve it.</summary>
         OnboardingAppIdentityMismatch = 1808,
         /// <summary>The device's certificate expired or its hub no longer renews it, and the pairing credential did not replace it. Ask the user to pair the device again with a new code.</summary>
-        OnboardingRePairRequired = 1809
+        OnboardingRePairRequired = 1809,
+        /// <summary>Member join: the primary hub has the join request and waits for its operator to allow it. Not a failure; ask again later.</summary>
+        MemberJoinPending = 3000,
+        /// <summary>Member join: the primary hub's operator denied the join request.</summary>
+        MemberJoinDenied = 3001,
+        /// <summary>Member join: the primary hub refused the join request outright, for example because the joining hub hosts members of its own. The message names the reason.</summary>
+        MemberJoinRefused = 3002,
+        /// <summary>Member join: the asked hub is itself a member of another hub; ask that primary hub instead.</summary>
+        MemberJoinRedirected = 3003,
+        /// <summary>Member join: the primary hub removed this member hub; it has to join again.</summary>
+        MemberRemoved = 3004,
+        /// <summary>A member hub could not reach its primary hub.</summary>
+        PrimaryUnreachable = 3005,
+        /// <summary>A session-wide action was asked of a member hub; only the primary hub performs it.</summary>
+        SessionWideActionOnMember = 3006,
+        /// <summary>Sponsored member join: the app's approval on the primary hub does not allow it to bring in member hubs.</summary>
+        MemberSponsorNotAllowed = 3007,
+        /// <summary>Sponsored member join: the app's approval has used its quota of member hubs.</summary>
+        MemberSponsorQuotaExceeded = 3008,
+        /// <summary>A hub's audit log does not verify: a record was edited, dropped or reordered.</summary>
+        AuditLogCorrupt = 3009
     }
 
     /// <summary>

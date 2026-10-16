@@ -1,7 +1,7 @@
 ---
 sidebar_position: 7
 title: Security Model
-description: The QAROS trust model — pairing codes, password-authenticated key exchange, per-Hub certificate authority, and mTLS sessions.
+description: The QAROS trust model — pairing codes, password-authenticated key exchange, the primary Hub's certificate authority, member Hubs, and mTLS sessions.
 ---
 
 # Security and Onboarding
@@ -33,24 +33,32 @@ The shared key encrypts a private channel (AES-256-GCM, separate keys per direct
 
 1. The Hub sends an **enrollment offer**: the device's assigned name and the Hub's CA trust bundle.
 2. The device generates a **key pair locally** and sends a certificate signing request (CSR). *The private key never leaves the device.*
-3. The Hub's **CA gateway** validates the request and has the Hub's private CA sign a certificate. Crucially, the certificate's identity content (names, peer and session bindings) is derived from the authenticated channel — not from whatever the CSR claims.
+3. The Hub's **CA gateway** validates the request and has the primary Hub's private CA sign a certificate (a member Hub forwards the request to its primary, which checks it again). Crucially, the certificate's identity content (names, peer and session bindings) is derived from the authenticated channel — not from whatever the CSR claims.
 
 ### Layer 3 — Session traffic (mutual TLS)
 
 All session communication runs over the Zenoh messaging bus on TCP `19120-19200` with **mutual TLS**: both sides present their Hub-issued certificates. Hub, launched apps, and devices run as Zenoh peers, connecting to known endpoints and listening for full-mesh peer links in that bounded range. From this point on, pairing codes play no role - identity is the certificate, and rejoining after a restart is silent.
 
-## The per-Hub Certificate Authority
+## The primary Hub's Certificate Authority
 
-Each Hub operates its own private CA (based on `step-ca`). This means:
+Each primary Hub operates its own private CA, built into the Hub process. This means:
 
 - **No external dependency.** A deployment is self-contained; no internet, cloud, or corporate PKI is required.
 - **The Hub is the trust root.** A certificate from Hub A means "Hub A vouched for this device". The Hub machine itself is assumed trusted — protect it as you would a domain controller.
 - **Renewal** is online and CSR-based: a device with a valid certificate refreshes it with a new key, without a code, also across up to two session rotations. A certificate that expires while the device is offline requires pairing again.
-- **Revocation** is two-layered: the CA can revoke, and the gateway keeps an encrypted blacklist. A blacklisted device is refused on every channel, a new pairing code included, until an operator allows it again. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
+- **Revocation** is two-layered: the CA records the revoked serial, and the gateway keeps an encrypted blacklist. A blacklisted device is refused on every channel, a new pairing code included, until an operator allows it again. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
 
-### Hub-to-Hub federation
+- **An update to this release starts a fresh CA:** every device, app and member Hub pairs again once.
 
-When two Hubs connect, they exchange and merge **CA trust bundles**. Devices onboarded to Hub A are then accepted by Hub B and vice versa — federated *trust*. Signing stays local: each Hub only ever issues certificates for its own devices.
+### Primary and member Hubs
+
+Joining another Hub always makes this Hub a **member** of it. There is one CA per session, the primary's:
+
+- **A member has no CA, no session storage and no approval list.** It checks its local processes and headsets, then forwards their certificate requests to the primary, which checks them again and signs. Each certificate names the member it came through.
+- **Admission is once:** the primary's operator clicks **Allow** on a pending join (name, PC and address shown), or the member types the primary's 8-digit join code, or an app approved on both PCs that may bring in member Hubs sponsors the join. Afterwards the two Hubs know each other's keys and the member rejoins by itself, also after the primary starts a new session.
+- **Members cannot publish session-wide authority** (trust bundle, revocation, approvals, admission, new session); their certificates carry a member name that every peer's access control keeps off those topics.
+- **Remove** on the primary is final and revokes the member and everything it enrolled. **Leave** on the member revokes nothing and starts a fresh CA and session.
+- **Audit log:** every Hub keeps a tamper-evident audit log of enrolments, issued and refused certificates and operator actions; members send theirs to the primary. Operators read it in the Visualizer's *Audit log* panel.
 
 ## Local source apps (no code)
 
@@ -69,6 +77,8 @@ What this release does **not** protect against. The full, maintained threat mode
 
 - **Malware running as the same Windows user.** Hub keys, Hub state and the approved-apps list are plain files in the user's profile. Such malware can read them, approve itself, or act as the Hub's user.
 - **Code inside an approved app.** Plugins, scripts or injected code in an approved process act as that app. Approving an editor or engine admits everything it loads.
+- **Member Hubs share one name.** A compromised member Hub cannot publish session-wide authority, but it can impersonate another member Hub on the topics members may use, and it can obtain device certificates for its own PC within its quota.
+- **First join of a Hub.** *Allow* relies on you recognising the Hub's name, PC and address. A join by code or sponsor trusts the primary's key on first use unless the app passes the primary's fingerprint.
 - **Session members are trusted.** Any admitted peer, including an approved local app, can see the session's streams. Operator-only actions are signed with the sender's session certificate and accepted only from the Hub's own Visualizer and configured operators, but any admitted device can claim another device's peer id in session messages.
 - **Revocation reaches peers gradually.** A peer that has not read the Hub's revocation list accepts a revoked device until its certificate expires (local apps 30 minutes, devices up to 24 hours).
 - **Offline signature checks.** Revocation of a code-signing certificate is checked against the local cache only.

@@ -18,7 +18,7 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 1. Start **`qaros-hub-service`** (the installer makes it start at sign-in; the tray menu's "Start QAROS at login" turns that off; otherwise **QAROS** in the Start menu). Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
 2. **Left-click the tray icon** to open the visualizer window.
-3. The tray menu offers: *Open visualizer*, *Restart launcher*, *Connect to other Hub*, and *Exit*.
+3. The tray menu offers: *Open visualizer*, *Restart*, *New session…* and *Join hub…* (both greyed on a member), *Leave and start own session…* (on a member), and *Exit*. The tray tooltip shows the role: "Primary hub" or "Member of *primary*".
 
 On startup the launcher restores its previous session (or creates a fresh one), registers the configured source app volumes, starts the streaming services, begins broadcasting the discovery beacon (default display name "QAROS Hub"), and starts the onboarding services. By default it also invites a local visualizer into the session automatically.
 
@@ -109,4 +109,4 @@ You can create a crash report at any time from the tray menu: **Create crash rep
 
 ## Connecting two Hubs
 
-Connecting this Hub to another so devices trust both is covered in [Networking & Federation](/docs/operator-guide/networking-and-federation).
+Joining this Hub to another as a member is covered in [Networking & Federation](/docs/operator-guide/networking-and-federation).
