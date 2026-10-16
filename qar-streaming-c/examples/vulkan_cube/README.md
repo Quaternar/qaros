@@ -28,7 +28,7 @@ cmake --build --preset x64-windows-release --target qar-vulkan-source
 .\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
 ```
 
-1. The app loads the installed QAROS (`qar_library_load(NULL)`) and asks it to join (`QarOnboardLocalAppExt`).
+1. The app loads the installed QAROS (`qar_library_load(NULL)`; without an installation, the runtime beside the executable) and asks it to join (`QarOnboardLocalAppExt`).
 2. First run: QAROS asks **"Allow qar-vulkan-source.exe to join QAROS?"**, in the Visualizer or as a tray window. Click **Allow** within 120 s. Meanwhile the console shows `Waiting for approval in QAROS hub`.
 3. `Connected. Waiting for rendering targets.` Open the cube's app volume on a viewer (Visualizer or headset). Each additional viewer gets its own stream and camera.
 4. Later runs join without a prompt while the executable is unchanged.

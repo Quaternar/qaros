@@ -502,8 +502,9 @@ constexpr const char* kUsage =
 	"Usage: qar-vulkan-source [--code [<code>]] [--host <hub-host:port>]\n"
 	"                         [--runtime <qar-streaming-c.dll>]\n"
 	"\n"
-	"Without arguments the app loads the QAROS installed on this PC and joins\n"
-	"it as a local app. The first run waits until you click Allow in QAROS.\n"
+	"Without arguments the app loads the QAROS installed on this PC (else the\n"
+	"runtime beside this executable) and joins it as a local app. The first run\n"
+	"waits until you click Allow in QAROS.\n"
 	"\n"
 	"  --code [<code>]    Join with an onboarding code or a full invite (one\n"
 	"                     line of JSON) instead, for a hub on another PC.\n"
@@ -571,7 +572,42 @@ ParseOptions(int argc, char** argv)
 	return options;
 }
 
-// Loads the installed QAROS runtime, or the library --runtime names.
+// The qar-streaming-c.dll beside this executable: a QAROS build or staged
+// tree ships the app in its bin/ next to the runtime.
+std::optional<std::filesystem::path>
+RuntimeBesideExecutable()
+{
+	std::wstring path(32768, L'\0');
+	const DWORD size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+	if(size == 0 || size >= path.size())
+	{
+		return std::nullopt;
+	}
+	path.resize(size);
+	const auto library = std::filesystem::path(path).parent_path() / "qar-streaming-c.dll";
+	std::error_code error;
+	if(not std::filesystem::is_regular_file(library, error))
+	{
+		return std::nullopt;
+	}
+	return library;
+}
+
+// Loads the runtime at `library`; `binaries` becomes its folder.
+bool
+LoadRuntimeAt(const std::filesystem::path& library, std::string& binaries)
+{
+	binaries = Utf8(library.parent_path());
+	if(qar_library_load(Utf8(library).c_str()))
+	{
+		return true;
+	}
+	std::cerr << "Could not load the QAROS runtime " << Utf8(library) << '\n';
+	return false;
+}
+
+// Loads the installed QAROS runtime, else the one beside this executable (a
+// QAROS build that was not installed), or the library --runtime names.
 // `binaries` stays empty for the installed runtime, which finds its own bin/.
 bool
 LoadRuntime(const Options& options, std::string& binaries)
@@ -581,6 +617,11 @@ LoadRuntime(const Options& options, std::string& binaries)
 		if(qar_library_load(nullptr))
 		{
 			return true;
+		}
+		if(const auto beside = RuntimeBesideExecutable(); beside.has_value())
+		{
+			std::cout << "Using the QAROS runtime beside this app: " << Utf8(*beside) << '\n';
+			return LoadRuntimeAt(*beside, binaries);
 		}
 		std::cerr << "Could not load QAROS. Install QAROS on this PC, then start this app again.\n";
 		return false;
@@ -592,13 +633,7 @@ LoadRuntime(const Options& options, std::string& binaries)
 		std::cerr << "Invalid runtime path: " << error.message() << '\n';
 		return false;
 	}
-	binaries = Utf8(library.parent_path());
-	if(qar_library_load(Utf8(library).c_str()))
-	{
-		return true;
-	}
-	std::cerr << "Could not load the QAROS runtime " << Utf8(library) << '\n';
-	return false;
+	return LoadRuntimeAt(library, binaries);
 }
 
 // Reads one line the user typed, false when stdin ended or a stop was
