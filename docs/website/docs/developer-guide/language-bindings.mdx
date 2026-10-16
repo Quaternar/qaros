@@ -48,3 +48,5 @@ consume it directly and add your own RAII wrappers. The recommended idioms:
 - wrap each handle in a small RAII type that calls the matching `qar_*_handle_destroy`,
 - wrap `QarResult` in a checker that throws or logs via `qar_result_log_if_error`,
 - keep all calls on one thread and marshal callback data through your own queue.
+
+If you work with Ogre, Qt or RViz2, three C++ libraries build on the C API: see [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz). To stream an Ogre scene, see [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming).

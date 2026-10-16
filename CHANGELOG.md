@@ -21,6 +21,22 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
+- **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
+  C API do, when to use which, how they stack, what they need and the SDK drop they were verified
+  against.
+- **Docs:** a Limits and Behaviors to Design Around page in the Developer Guide: retiring and
+  resizing a video stream, locating the operator, what a stream panel ignores or refuses, and the
+  gesture rules of an app volume, each as far as the C header states it, plus two observations made
+  with an earlier SDK drop.
+- **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
+  GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
+  does to show a widget in AR.
+- **Docs:** a Streaming an Ogre Scene to QAROS page in the Developer Guide: how the Ogre library
+  streams a scene to each peer, the three ways to use it, the conventions a scene follows and where
+  the library stops, as verified against an earlier SDK drop.
+- **Docs:** a Running the RViz2 Plugin on Windows page in the Operator Guide: starting RViz2 with
+  the plugin, connecting it, what you see and do in AR, reading the logs and the known issues, as
+  verified against an earlier SDK drop.
 
 ### Fixed
 
@@ -29,6 +45,26 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers, Rendering Streams and API
+  Conventions guides now match the current API: poses, sizes, render sender options and render frame
+  views are built with their constructors (`Pose` and `Vector3` come from
+  `Quaternar.Qaros.Mathematics`), the `Peers.Updated` event needs a running `SubscribeUpdates()`
+  subscription, and `WithHost` passes the hub's onboarding port.
+- **Docs:** the C code of the Peers, GUI Panels and API Conventions guides now passes the cancel
+  token that `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
+  `qar_gui_panels_subscribe_panel_updates` require, and sets the port of `QarOnboardHostExt`.
+- **Docs:** the GUI Panels guide and the Glossary no longer say that GUI panels show web content
+  only: a panel can also show the video stream of a video sender.
+- **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
+  convention: the C header states it.
+- **Docs:** the Rendering Streams and Onboarding and Sessions guides now say to find the render
+  targets in the peer list and create a sender for each, instead of waiting for render stream
+  requests. The Source Applications guide says that a QAROS API app chooses the target applications
+  it renders for, and The Mixer guide says that source alpha is composited only with
+  `mixerSourceAlpha`.
+- **Docs:** the Welcome page lists the C# API reference next to the C API reference, the typo in the
+  description of the Connecting to the Hub page is fixed, and the documentation site README no
+  longer says that no version is released yet.
 
 ## [0.9.0] - 2026-10-12
 
