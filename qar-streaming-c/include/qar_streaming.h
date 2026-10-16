@@ -434,7 +434,28 @@ typedef enum QarStatusCode
 	QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED = 3008,
 	/// A hub's audit log does not verify: a record was edited, dropped or
 	/// reordered.
-	QAR_STATUS_AUDIT_LOG_CORRUPT = 3009
+	QAR_STATUS_AUDIT_LOG_CORRUPT = 3009,
+	/// Secure storage: the encrypted store holding the peer's identity and
+	/// session failed for a reason the codes below do not name (an I/O
+	/// error). qar_result_message says what failed.
+	QAR_STATUS_SECURE_STORAGE_ERROR = 3100,
+	/// Secure storage: the value asked for is not stored.
+	QAR_STATUS_SECURE_STORAGE_NOT_FOUND = 3101,
+	/// Secure storage: a stored value does not authenticate; it was edited,
+	/// moved or replaced by an older copy.
+	QAR_STATUS_SECURE_STORAGE_TAMPERED = 3102,
+	/// Secure storage: the stored data is protected by a key this machine,
+	/// user or install does not have (for example a store copied from
+	/// another PC). Onboard the peer again.
+	QAR_STATUS_SECURE_STORAGE_PROTECTOR_MISMATCH = 3103,
+	/// Secure storage: the key protecting the store exists but cannot be used
+	/// now (TPM cleared or locked out, keyring locked).
+	QAR_STATUS_SECURE_STORAGE_PROTECTOR_UNAVAILABLE = 3104,
+	/// Secure storage: an invalid storage key (an internal error).
+	QAR_STATUS_SECURE_STORAGE_INVALID_KEY = 3105,
+	/// Secure storage: another process held the store's lock too long.
+	/// Retrying may succeed.
+	QAR_STATUS_SECURE_STORAGE_LOCKED = 3106
 } QarStatusCode;
 
 /**
@@ -2310,6 +2331,28 @@ static inline QarResult qar_library_destroy(void);
  * @return QarResult Success, or QAR_STATUS_LOGIC_ERROR for a NULL out_info.
  */
 static inline QarResult qar_runtime_info(QarRuntimeInfo* out_info);
+
+/**
+ * @brief Give the library the process's Java VM (Android).
+ *
+ * The secure store protects its keys with the Android Keystore, which native
+ * code reaches through the Java VM. Pass `ANativeActivity::vm`, the `JavaVM*`
+ * of `JNI_OnLoad`, or the one Unity or your engine exposes, before the first
+ * runtime or session is created. Without it the library asks
+ * `libnativehelper.so` for the created VM (Android 12, API 31, and newer), and
+ * otherwise protects stored secrets with a file key instead of the Android
+ * Keystore. Android has one VM per process; calling again replaces the
+ * earlier pointer. Works before qar_library_init(). The library never
+ * destroys the VM, and only attaches threads it calls from that are not yet
+ * attached, detaching them again afterwards.
+ *
+ * @param java_vm The process's `JavaVM*`, passed as `void*` so this header
+ *                needs no `jni.h`; must not be NULL.
+ * @return QarResult Success; QAR_STATUS_LOGIC_ERROR for a NULL java_vm;
+ *         QAR_STATUS_ARGUMENT_NOT_SUPPORTED on every platform other than
+ *         Android.
+ */
+static inline QarResult qar_platform_set_android_java_vm(void* java_vm);
 /** @} */ /* end of qar_c_library */
 
 // ============================================================================
@@ -7369,7 +7412,16 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
 	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
 	X(ACTIVE, QarResult, library_destroy, (void), ())                          \
-	X(ACTIVE, QarResult, runtime_info, (QarRuntimeInfo * out_info), (out_info))
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_info,                                                            \
+	  (QarRuntimeInfo * out_info),                                             \
+	  (out_info))                                                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  platform_set_android_java_vm,                                            \
+	  (void* java_vm),                                                         \
+	  (java_vm))
 
 QAR_DECLARE_MODULE_COMMON(RUNTIME, Runtime, runtime, QAR_RUNTIME_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RUNTIME_FUNCTION_LIST)

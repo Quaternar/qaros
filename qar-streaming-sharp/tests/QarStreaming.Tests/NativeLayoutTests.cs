@@ -262,8 +262,15 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3007, (int)StatusCode.MemberSponsorNotAllowed);
             Assert.Equal(3008, (int)StatusCode.MemberSponsorQuotaExceeded);
             Assert.Equal(3009, (int)StatusCode.AuditLogCorrupt);
+            Assert.Equal(3100, (int)StatusCode.SecureStorageError);
+            Assert.Equal(3101, (int)StatusCode.SecureStorageNotFound);
+            Assert.Equal(3102, (int)StatusCode.SecureStorageTampered);
+            Assert.Equal(3103, (int)StatusCode.SecureStorageProtectorMismatch);
+            Assert.Equal(3104, (int)StatusCode.SecureStorageProtectorUnavailable);
+            Assert.Equal(3105, (int)StatusCode.SecureStorageInvalidKey);
+            Assert.Equal(3106, (int)StatusCode.SecureStorageLocked);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(40, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(47, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]

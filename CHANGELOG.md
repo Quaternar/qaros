@@ -23,6 +23,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   by *Allow*, join code or a sponsoring app, one CA per session (the primary's), forwarding and
   removal, *Leave and start own session*, the new tray items, and the Hub audit log. The CA is
   described as built into the Hub (step-ca is gone), with its new storage layout and limitations.
+- **Docs:** *Security deep dive*, *Security model*, *Installation* and *Maintenance & Updates*
+  describe the encrypted secret storage: every key, identity, approval and the licence in
+  `secure-store`, protected by a TPM-backed (or DPAPI) key of the signed-in user, what that does
+  and does not protect against, and that backups restore only on the same PC and user. The new
+  section *Updating to encrypted storage* lists what to do after the update: pair devices again,
+  approve local apps again, join member Hubs again and activate the licence again.
 
 ### Fixed
 

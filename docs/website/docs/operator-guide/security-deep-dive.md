@@ -9,7 +9,7 @@ description: Auditor-level reference for QAROS onboarding and certificates - lay
 This page is for security reviewers and auditors. It states what each layer does, what it assumes, and where today's implementation falls short of the design. For the operator-level summary read [Security Model](./security-model.md) first.
 
 :::caution Read the limitations
-The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enrolment) is sound. The largest open gap is **secrets at rest**; the others are listed in [Limitations](#limitations). Do not assume any guarantee this page does not state.
+The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enrolment) is sound. Secrets at rest are encrypted under a key of the signed-in user (TPM-backed where the PC has one), which stops other users and disk copies but not malware running as that user; this and the other gaps are listed in [Limitations](#limitations). Do not assume any guarantee this page does not state.
 :::
 
 ## Layers at a glance
@@ -170,22 +170,22 @@ The Hub signs its own certificate through an in-process gateway (no network hop)
 
 ## What is stored where
 
-Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root (`runtimeStorageRoot`) - see [Launcher Configuration Reference](./launcher-config-reference.md).
+Every secret is in one encrypted store, `secure-store` under the runtime storage root (`runtimeStorageRoot`, default the per-user data folder); the rest are plain files. Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root - see [Launcher Configuration Reference](./launcher-config-reference.md).
 
-| Location | Contents | Protection today |
+| Location | Contents | Protection |
 |---|---|---|
+| `<storage>/secure-store/` | Hub and member identity, CA private keys (primary only; a member deletes them on join), trust-authority key, session-store key, device blacklist, issued-certificate inventory, approved local apps, licence, launcher state; each device and app's identity (private key, certificate chain, CA bundle) and last session; trusted Hub CAs | **Encrypted** (AES-256-GCM per value, bound to its name) under a key of the signed-in user: the TPM through the Microsoft Platform Crypto Provider, or DPAPI where no TPM works |
 | `caDir/ca/certs/` | Root and intermediate CA certificates (primary only) | Public trust material |
-| `caDir/ca/secrets/` | CA private keys (primary only; a member deletes its CA on join) | **Plaintext PEM**, OS file permissions only |
 | `caDir/ca/db/revoked-serials.json` | Revoked serials, an audit artifact | Not relied on for trust |
 | `caDir/hub-state.json` | Hub name, room, remembered devices, membership (member) or members and their pinned keys (primary) | OS file permissions only |
 | `caDir/audit/` | Hash-chained audit log; on a primary also `members/<peer>/` | Checkpoints signed with the Hub key; OS file permissions |
-| `caDir/policy/device-blacklist.enc` | Device blacklist, AES-256-GCM, tamper-evident | Key stored on the same host |
-| `caDir/security-service/` | Gateway audit log, issued-certificate inventory | OS file permissions only |
-| `<storage>/identities/<process>/` | Per-process `private_key.pem`, certificate chain, CA bundle, last CSR, binding metadata | **Plaintext**, OS file permissions only |
-| `<storage>/identities/<process>/trusted-hub-ca-bundles.json` | Merged federation trust store | OS file permissions only |
-| `<storage>/zenoh-storage.key` | Key for the encrypted session store | **Plaintext hex** next to the data |
+| `caDir/security-service/` | Gateway audit log | OS file permissions only |
+| `%ProgramData%\Quaternar\Qaros\secure\` | Service storage: a machine key `QAROS-storage-kek-v1-system` on the TPM (or software) usable only by SYSTEM and the QAROS service | Not used yet by the Hub |
 
-No file is written with explicit permission hardening; each inherits its parent directory's ACL. Protect `caDir` and the storage root like a domain controller's secrets.
+- The store's key never leaves the TPM and needs no PIN; it is not bound to the boot state. Secrets are bound to **this PC and this Windows user**: a copy of the folder, a backup restored elsewhere, or another user cannot read them.
+- A store the PC can no longer read (TPM cleared, Windows reinstalled, profile moved) is reported, never silently replaced. The Hub does not start until the `secure-store` folder is deleted, which creates a new CA: every device pairs again.
+- Values that must not go backwards (blacklist, approvals, licence) carry a revision; an older one is refused while the Hub runs, not across a restart.
+- Updating from a build before this storage destroys the old plaintext key files at the first start; nothing is imported (see [Maintenance & Updates](./maintenance-and-updates.md#updating-to-encrypted-storage)).
 
 ## Renewal
 
@@ -252,7 +252,8 @@ Ranked by severity. These are current, known engineering items.
 
 | # | Severity | Limitation | Consequence |
 |---|---|---|---|
-| L5 | High | **Secrets at rest are plaintext** (device private keys, CA private keys, session-store key) and rely on OS file permissions; the blacklist key sits beside the blacklist. | File-system read access means key theft or CA takeover. |
+| L5 | High | **Secrets at rest are protected by the signed-in user's key.** They are encrypted under a TPM-backed (or DPAPI) key of that user; a program running as the same user can open them like the Hub does. | Malware in the Hub user's account can read the CA keys and approve itself; other users, disk copies and backups cannot. |
+| L20 | Low | **A rollback between two Hub runs is not detected.** Someone who can write the store's folder while the Hub is stopped can put back an older blacklist, approval list or licence. | A revoked device could be unrevoked by restoring an older copy. |
 | L7 | Medium | **Revocation reaches only peers that read the Hub's list, and is enforced by peer id, not at TLS.** | A peer that has not read it accepts a revoked certificate until expiry (≤ 24 h); one that has keeps the link open but refuses to serve the device. |
 | L14 | Medium | **The peer id is not checked per connection.** A device certificate is the same for every device of a session, so a device can claim another device's peer id in session messages. | It cannot act as the Hub: the Hub's topics accept only the Hub's certificate. |
 | L15 | Medium | **Member Hubs share one name.** One member can publish under another member's identity on the topics members may use. | It cannot publish the primary's authority topics. |
@@ -261,11 +262,11 @@ Ranked by severity. These are current, known engineering items.
 | L16 | Low | Same-machine checks (revoke, allow, rotation) trust the machine name a peer states about itself. | A remote operator peer could pass for local. |
 | L17 | Low | Zenoh keeps the TLS key in its own memory unscrubbed while the session runs. | Memory read access to a running process reveals its session key. |
 
-Closed since 0.9.0: the Windows-only CA bootstrap (L11, the CA is now in process), the merged multi-CA trust bundle (old L15, one CA per session), unsigned trust-bundle updates (L1), self-asserted peer identity and the blacklist bypass (L2, L3), no identity check at connect (L4, now the session access control), no online renewal (L6), no rate limits and no gateway lifetime cap (L8, L10), in-process admin (L9), loose discovery input (L12), non-constant-time tag compares (L13).
+Closed since 0.9.0: plaintext secrets at rest (L5 now covers only the same-user case), the Windows-only CA bootstrap (L11, the CA is now in process), the merged multi-CA trust bundle (old L15, one CA per session), unsigned trust-bundle updates (L1), self-asserted peer identity and the blacklist bypass (L2, L3), no identity check at connect (L4, now the session access control), no online renewal (L6), no rate limits and no gateway lifetime cap (L8, L10), in-process admin (L9), loose discovery input (L12), non-constant-time tag compares (L13).
 
 ## Roadmap
 
 Planned, in priority order. Nothing here is shipped.
 
-1. Encrypted storage for keys and secrets (DPAPI on Windows, Android Keystore, TPM where available), with rollback detection for policy stores - closes most of L5.
+1. Secrets held by the QAROS system service instead of the user (its TPM machine key is already provisioned), and rollback detection across restarts - closes L5 and L20.
 2. Scrubbing Zenoh's copy of the TLS key - closes L17.

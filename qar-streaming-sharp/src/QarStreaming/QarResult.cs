@@ -92,7 +92,21 @@ namespace Quaternar.Qaros
         /// <summary>Sponsored member join: the app's approval has used its quota of member hubs.</summary>
         MemberSponsorQuotaExceeded = 3008,
         /// <summary>A hub's audit log does not verify: a record was edited, dropped or reordered.</summary>
-        AuditLogCorrupt = 3009
+        AuditLogCorrupt = 3009,
+        /// <summary>Secure storage: the encrypted store failed for a reason the codes below do not name.</summary>
+        SecureStorageError = 3100,
+        /// <summary>Secure storage: the value asked for is not stored.</summary>
+        SecureStorageNotFound = 3101,
+        /// <summary>Secure storage: a stored value does not authenticate; it was edited, moved or replaced by an older copy.</summary>
+        SecureStorageTampered = 3102,
+        /// <summary>Secure storage: the data is protected by a key this machine, user or install does not have. Onboard again.</summary>
+        SecureStorageProtectorMismatch = 3103,
+        /// <summary>Secure storage: the protecting key exists but cannot be used now (TPM cleared or locked out, keyring locked).</summary>
+        SecureStorageProtectorUnavailable = 3104,
+        /// <summary>Secure storage: an invalid storage key (an internal error).</summary>
+        SecureStorageInvalidKey = 3105,
+        /// <summary>Secure storage: another process held the store's lock too long. Retrying may succeed.</summary>
+        SecureStorageLocked = 3106
     }
 
     /// <summary>
