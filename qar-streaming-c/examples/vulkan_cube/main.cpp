@@ -1,13 +1,11 @@
 #include "renderer.hpp"
 #include <array>
 #include <atomic>
-#include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -15,7 +13,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -39,14 +36,6 @@ bool
 StdinIsPipe()
 {
 	return GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_PIPE;
-}
-
-// Whether a person can answer a question on stdin.
-bool
-StdinIsConsole()
-{
-	DWORD mode = 0;
-	return GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &mode) != 0;
 }
 
 // QAROS stops an app it started by closing the app's stdin pipe. Whatever
@@ -465,254 +454,14 @@ SessionAdapter(const QarSession* session)
 	return AdapterIdHex(bytes.data(), sizeof(id.uuid));
 }
 
-// A path as UTF-8, which is what every QAROS C API path is. string() would give
-// the ANSI code page instead.
-std::string
-Utf8(const std::filesystem::path& path)
-{
-	const std::u8string text = path.u8string();
-	return std::string(text.begin(), text.end());
-}
-
-// A hub address as host:port. There is no default port: a hub claims its
-// onboarding port from a range, so the port must be given.
-bool
-ParseHubAddress(const std::string& address, std::string& host, uint16_t& port)
-{
-	const auto colon = address.rfind(':');
-	if(colon == std::string::npos || colon == 0)
-	{
-		return false;
-	}
-	const std::string portText = address.substr(colon + 1);
-	unsigned long value = 0;
-	const auto [end, error] =
-		std::from_chars(portText.data(), portText.data() + portText.size(), value);
-	if(error != std::errc{} || end != portText.data() + portText.size() || value == 0
-	   || value > 65535)
-	{
-		return false;
-	}
-	host = address.substr(0, colon);
-	port = static_cast<uint16_t>(value);
-	return true;
-}
-
 constexpr const char* kUsage =
-	"Usage: qar-vulkan-source [--code [<code>]] [--host <hub-host:port>]\n"
-	"                         [--runtime <qar-streaming-c.dll>]\n"
+	"Usage: qar-vulkan-source\n"
 	"\n"
-	"Without arguments the app loads the QAROS installed on this PC (else the\n"
-	"runtime beside this executable) and joins it as a local app. The first run\n"
-	"waits until you click Allow in QAROS.\n"
-	"\n"
-	"  --code [<code>]    Join with an onboarding code or a full invite (one\n"
-	"                     line of JSON) instead, for a hub on another PC.\n"
-	"                     Without a value, the app reads it from stdin.\n"
-	"  --host <host:port> Hub a typed code joins. Default: this user's hub.\n"
-	"  --runtime <path>   Load this qar-streaming-c.dll instead of the\n"
-	"                     installed one (development builds of QAROS).\n"
-	"\n"
+	"Loads the QAROS runtime (qar_library_load(NULL): the installed QAROS, else\n"
+	"the runtime beside this executable, else one on PATH) and joins the QAROS on\n"
+	"this PC as a local app. The first run waits until you click Allow in QAROS.\n"
 	"The cube renders on the GPU its session was created on.\n"
 	"Stop with Ctrl+C, or by closing stdin when it is a pipe.\n";
-
-struct Options
-{
-	bool help = false;
-	bool useCode = false;
-	std::string code;
-	std::string host;
-	std::string runtime;
-};
-
-// The value following argv[index], when there is one that is not an option.
-bool
-HasValue(int argc, char** argv, int index)
-{
-	return index + 1 < argc && std::string_view(argv[index + 1]).rfind("--", 0) != 0;
-}
-
-std::optional<Options>
-ParseOptions(int argc, char** argv)
-{
-	Options options;
-	for(int index = 1; index < argc; ++index)
-	{
-		const std::string_view argument = argv[index];
-		const bool hasValue = HasValue(argc, argv, index);
-		if(argument == "--help" || argument == "-h")
-		{
-			options.help = true;
-			continue;
-		}
-		if(argument == "--code")
-		{
-			options.useCode = true;
-			options.code = hasValue ? argv[++index] : "";
-			continue;
-		}
-		if(argument == "--host" && hasValue)
-		{
-			options.host = argv[++index];
-			continue;
-		}
-		if(argument == "--runtime" && hasValue)
-		{
-			options.runtime = argv[++index];
-			continue;
-		}
-		std::cerr << "Unknown or incomplete argument: " << argument << "\n\n" << kUsage;
-		return std::nullopt;
-	}
-	if(not options.host.empty() && not options.useCode)
-	{
-		std::cerr << "--host needs --code: a local app joins the QAROS on this PC.\n";
-		return std::nullopt;
-	}
-	return options;
-}
-
-// The qar-streaming-c.dll beside this executable: a QAROS build or staged
-// tree ships the app in its bin/ next to the runtime.
-std::optional<std::filesystem::path>
-RuntimeBesideExecutable()
-{
-	std::wstring path(32768, L'\0');
-	const DWORD size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-	if(size == 0 || size >= path.size())
-	{
-		return std::nullopt;
-	}
-	path.resize(size);
-	const auto library = std::filesystem::path(path).parent_path() / "qar-streaming-c.dll";
-	std::error_code error;
-	if(not std::filesystem::is_regular_file(library, error))
-	{
-		return std::nullopt;
-	}
-	return library;
-}
-
-// Loads the runtime at `library`; `binaries` becomes its folder.
-bool
-LoadRuntimeAt(const std::filesystem::path& library, std::string& binaries)
-{
-	binaries = Utf8(library.parent_path());
-	if(qar_library_load(Utf8(library).c_str()))
-	{
-		return true;
-	}
-	std::cerr << "Could not load the QAROS runtime " << Utf8(library) << '\n';
-	return false;
-}
-
-// Loads the installed QAROS runtime, else the one beside this executable (a
-// QAROS build that was not installed), or the library --runtime names.
-// `binaries` stays empty for the installed runtime, which finds its own bin/.
-bool
-LoadRuntime(const Options& options, std::string& binaries)
-{
-	if(options.runtime.empty())
-	{
-		if(qar_library_load(nullptr))
-		{
-			return true;
-		}
-		if(const auto beside = RuntimeBesideExecutable(); beside.has_value())
-		{
-			std::cout << "Using the QAROS runtime beside this app: " << Utf8(*beside) << '\n';
-			return LoadRuntimeAt(*beside, binaries);
-		}
-		std::cerr << "Could not load QAROS. Install QAROS on this PC, then start this app again.\n";
-		return false;
-	}
-	std::error_code error;
-	const auto library = std::filesystem::absolute(options.runtime, error);
-	if(error)
-	{
-		std::cerr << "Invalid runtime path: " << error.message() << '\n';
-		return false;
-	}
-	return LoadRuntimeAt(library, binaries);
-}
-
-// Reads one line the user typed, false when stdin ended or a stop was
-// requested.
-bool
-AskLine(const char* question, std::string& answer)
-{
-	std::cout << question << std::flush;
-	const bool read = static_cast<bool>(std::getline(std::cin, answer));
-	return read && not g_stopRequested.load();
-}
-
-// The extension chain of one onboarding call. Members point at each other, so
-// it is filled in place and never copied. No QarGraphicsDeviceId is chained:
-// the session decides the GPU, and the cube creates its device on it.
-struct OnboardRequest
-{
-	QarOnboardInit init = qar_onboard_init_default();
-	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
-	QarOnboardCodeExt code = qar_onboard_code_ext_default();
-	QarOnboardInviteExt invite = qar_onboard_invite_ext_default();
-	QarOnboardHostExt host = qar_onboard_host_ext_default();
-	QarOnboardingInvite* inviteHandle = nullptr;
-	std::string hostname;
-	OnboardRequest() = default;
-	OnboardRequest(const OnboardRequest&) = delete;
-	OnboardRequest& operator=(const OnboardRequest&) = delete;
-	~OnboardRequest()
-	{
-		if(inviteHandle != nullptr)
-		{
-			qar_onboarding_invite_handle_destroy(inviteHandle);
-		}
-	}
-};
-
-// Local app by default: no code, the user approves the app once in QAROS. With
-// --code: a full invite, one line of JSON with the hub's address, port and a
-// one-time code, what QAROS hands an app it launches with a code (the session
-// is then created on the GPU QAROS chose for the app). Anything else is a code
-// typed by hand, which finds this user's hub on its own unless --host names
-// one.
-bool
-ChainRequest(OnboardRequest& request, const Options& options)
-{
-	request.init.presentation.display_name = "Vulkan Cube Source";
-	if(not options.useCode)
-	{
-		request.init.header.next = &request.local.header;
-		return true;
-	}
-	const std::string& line = options.code;
-	if(line.front() == '{')
-	{
-		if(not Check(qar_onboarding_invite_deserialize(
-			   reinterpret_cast<const uint8_t*>(line.data()), line.size(), &request.inviteHandle
-		   )))
-		{
-			return false;
-		}
-		request.invite.invite = request.inviteHandle;
-		request.init.header.next = &request.invite.header;
-		return true;
-	}
-	request.code.code = line.c_str();
-	request.init.header.next = &request.code.header;
-	if(options.host.empty())
-	{
-		return true;
-	}
-	if(not ParseHubAddress(options.host, request.hostname, request.host.port))
-	{
-		std::cerr << "--host must be host:port, for example 192.168.1.20:19121\n";
-		return false;
-	}
-	request.host.hostname = request.hostname.c_str();
-	request.code.header.next = &request.host.header;
-	return true;
-}
 
 void
 OnProgress(QarActionSeverity, float, const char* message, void*)
@@ -738,11 +487,17 @@ CancelOnStop(const std::atomic<bool>* finished, QarCancelToken* cancel)
 	}
 }
 
-// One onboarding call that Ctrl+C or a closed stdin can cancel. The approval
-// prompt can keep it waiting for minutes.
+// Joins the QAROS on this PC as a local app: no code, the user approves the app
+// once in QAROS. No QarGraphicsDeviceId is chained: the session decides the
+// GPU, and the cube creates its device on it. Ctrl+C or a closed stdin cancels
+// the call, which can wait minutes for the approval.
 QarResult
-Onboard(QarRuntime* runtime, const OnboardRequest& request, QarSession** session)
+JoinAsLocalApp(QarRuntime* runtime, QarSession** session)
 {
+	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+	QarOnboardInit init = qar_onboard_init_default();
+	init.presentation.display_name = "Vulkan Cube Source";
+	init.header.next = &local.header;
 	QarCancelToken* cancel = nullptr;
 	const QarResult created = qar_cancel_token_create(&cancel);
 	if(not qar_result_is_success(created))
@@ -752,21 +507,18 @@ Onboard(QarRuntime* runtime, const OnboardRequest& request, QarSession** session
 	std::atomic<bool> finished = false;
 	std::thread canceller(CancelOnStop, &finished, cancel);
 	QarOnboardingId onboarding{};
-	const QarResult result = qar_runtime_onboard(
-		runtime, &request.init, OnProgress, nullptr, cancel, &onboarding, session
-	);
+	const QarResult result =
+		qar_runtime_onboard(runtime, &init, OnProgress, nullptr, cancel, &onboarding, session);
 	finished.store(true);
 	canceller.join();
 	qar_cancel_token_handle_destroy(cancel);
 	return result;
 }
 
-// Tells the user, in plain words, why joining failed and what to do. Returns
-// whether asking again right away can succeed.
-bool
-ExplainOnboardingFailure(QarResult result, bool usesCode)
+// Tells the user, in plain words, why joining failed and what to do.
+void
+ExplainOnboardingFailure(QarResult result)
 {
-	bool retry = false;
 	if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_DENIED))
 	{
 		std::cerr << "QAROS did not allow this app to join: the approval was denied, or revoked. "
@@ -775,8 +527,7 @@ ExplainOnboardingFailure(QarResult result, bool usesCode)
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT))
 	{
 		std::cerr << "Nobody answered the approval prompt in QAROS in time. It opens in the QAROS "
-					 "Visualizer, or as a QAROS tray window.\n";
-		retry = true;
+					 "Visualizer, or as a QAROS tray window. Start the app again.\n";
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC))
 	{
@@ -791,16 +542,8 @@ ExplainOnboardingFailure(QarResult result, bool usesCode)
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
 	{
-		std::cerr
-			<< (usesCode ? "Could not reach the QAROS hub. Check that it runs, and the "
-						   "host:port given with --host.\n"
-						 : "QAROS is not running on this PC. Start QAROS from the Start "
-						   "menu, then start this app again.\n");
-	}
-	else if(qar_result_has_code(result, QAR_STATUS_PAKE_ERROR))
-	{
-		std::cerr << "The hub rejected the onboarding code. Check the code on the hub, or get a "
-					 "new one, and try again.\n";
+		std::cerr << "QAROS is not running on this PC. Start QAROS from the Start menu, then start "
+					 "this app again.\n";
 	}
 	else
 	{
@@ -809,93 +552,42 @@ ExplainOnboardingFailure(QarResult result, bool usesCode)
 	std::array<char, 512> detail{};
 	qar_result_message(result, detail.data(), detail.size());
 	std::cerr << "Details: " << detail.data() << '\n';
-	return retry;
-}
-
-enum class JoinOutcome
-{
-	Joined,
-	Stopped,
-	Failed
-};
-
-// Joins QAROS, asking again after an approval timeout while a person is at the
-// console.
-JoinOutcome
-Join(
-	QarRuntime* runtime, const OnboardRequest& request, const Options& options, QarSession** session
-)
-{
-	while(true)
-	{
-		if(not options.useCode)
-		{
-			std::cout << "Joining the QAROS on this PC. On the first run, click Allow in the QAROS "
-						 "approval prompt.\n";
-		}
-		const QarResult result = Onboard(runtime, request, session);
-		if(g_stopRequested.load())
-		{
-			return JoinOutcome::Stopped;
-		}
-		if(qar_result_is_success(result))
-		{
-			return JoinOutcome::Joined;
-		}
-		const bool retry = ExplainOnboardingFailure(result, options.useCode);
-		std::string answer;
-		if(not retry || not StdinIsConsole()
-		   || not AskLine("Press Enter to ask again, Ctrl+C to quit: ", answer))
-		{
-			return JoinOutcome::Failed;
-		}
-	}
-}
-
-// The onboarding code or invite from --code, or read from stdin when --code
-// has no value.
-bool
-ReadCode(Options& options)
-{
-	if(not options.useCode || not options.code.empty())
-	{
-		return true;
-	}
-	if(AskLine("Hub onboarding code: ", options.code) && not options.code.empty())
-	{
-		return true;
-	}
-	std::cerr << "No onboarding code given.\n";
-	return false;
 }
 
 // Everything between loading the library and unloading it. False on failure;
 // a stop request is not a failure.
 bool
-RunApp(const Options& options, const std::string& binaries)
+RunApp()
 {
 	VulkanDevice gpu; // Outlives every sender and camera.
 	Targets found;	  // Outlives session subscription teardown.
-	OnboardRequest request;
 	QarRuntime* runtime = nullptr;
 	QarSession* session = nullptr;
-	auto runtimeInit = qar_runtime_init_default();
-	runtimeInit.runtime_binaries_folder_path = binaries.c_str();
-	bool success =
-		ChainRequest(request, options) && Check(qar_runtime_create(&runtimeInit, &runtime));
-	const JoinOutcome joined =
-		success ? Join(runtime, request, options, &session) : JoinOutcome::Failed;
-	success = joined != JoinOutcome::Failed;
+	// runtime_binaries_folder_path stays empty: the runtime uses the folder it
+	// was loaded from.
+	const auto runtimeInit = qar_runtime_init_default();
+	bool success = Check(qar_runtime_create(&runtimeInit, &runtime));
+	if(success)
+	{
+		std::cout << "Joining the QAROS on this PC. On the first run, click Allow in the QAROS "
+					 "approval prompt.\n";
+		const QarResult joined = JoinAsLocalApp(runtime, &session);
+		success = qar_result_is_success(joined) || g_stopRequested.load();
+		if(not success)
+		{
+			ExplainOnboardingFailure(joined);
+		}
+	}
 	// Onboard first: the session decides the GPU, and the cube creates its own
 	// device on the same one.
-	if(joined == JoinOutcome::Joined)
+	if(session != nullptr && not g_stopRequested.load())
 	{
 		success = gpu.Create(SessionAdapter(session));
-	}
-	if(joined == JoinOutcome::Joined && success)
-	{
-		std::cout << "Connected. Waiting for rendering targets. Ctrl+C to quit.\n";
-		success = Run(session, gpu, found);
+		if(success)
+		{
+			std::cout << "Connected. Waiting for rendering targets. Ctrl+C to quit.\n";
+			success = Run(session, gpu, found);
+		}
 	}
 	if(session)
 	{
@@ -911,31 +603,23 @@ RunApp(const Options& options, const std::string& binaries)
 int
 main(int argc, char** argv)
 {
-	auto parsed = ParseOptions(argc, argv);
-	if(not parsed.has_value())
+	if(argc > 1)
 	{
-		return 1;
-	}
-	Options options = parsed.value();
-	if(options.help)
-	{
-		std::cout << kUsage;
-		return 0;
+		const bool help =
+			std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h";
+		(help ? std::cout : std::cerr) << kUsage;
+		return help ? 0 : 1;
 	}
 	std::signal(SIGINT, OnStopSignal);
 	std::signal(SIGTERM, OnStopSignal);
-	// Read before the stdin watcher starts, which takes over the pipe.
-	if(not ReadCode(options))
-	{
-		return 1;
-	}
 	if(StdinIsPipe())
 	{
 		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE)).detach();
 	}
-	std::string binaries;
-	if(not LoadRuntime(options, binaries))
+	// The header's default lookup: no path to find or pass.
+	if(not qar_library_load(nullptr))
 	{
+		std::cerr << "Could not load QAROS. Install QAROS on this PC, then start this app again.\n";
 		return 2;
 	}
 	auto libraryInit = qar_library_init_default();
@@ -945,7 +629,7 @@ main(int argc, char** argv)
 		qar_library_unload();
 		return 3;
 	}
-	bool success = RunApp(options, binaries);
+	bool success = RunApp();
 	if(not Check(qar_library_destroy()))
 	{
 		success = false;
