@@ -30,7 +30,7 @@ namespace Quaternar.Qaros.Tests
                 "{\"createdUnix\":1760000000,\"csrPem\":\"csr\",\"displayName\":\"Workshop PC\","
                 + "\"hasMembers\":false,\"machineName\":\"WORKSHOP-2\",\"memberHubKeyDer\":\"" + FakeKey + "\","
                 + "\"memberHubPeerId\":\"00112233-4455-6677-8899-aabbccddeeff\","
-                + "\"nonce\":\"00112233445566778899aabbccddeeff\",\"signature\":\"c2ln\",\"version\":1}");
+                + "\"nonce\":\"00112233445566778899aabbccddeeff\",\"operatorPeerIds\":[],\"signature\":\"c2ln\",\"version\":1}");
         }
 
         private static byte[] ReplyBytes(string status)
