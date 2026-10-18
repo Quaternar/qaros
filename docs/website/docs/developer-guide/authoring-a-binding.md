@@ -15,7 +15,8 @@ the C# binding (`Quaternar.Qaros`) are the reference implementations. A new bind
 
 The runtime is one shared library, `qar-streaming-c.dll` (Linux: `libqar-streaming-c.so`). A
 binding loads it at run time and never links it. Distributed applications run against the QAROS
-installed on the PC and never ship a copy of the runtime.
+installed on the PC and do not ship a copy of the runtime: a copy beside the application would be
+loaded first.
 
 ### The default lookup
 
@@ -23,23 +24,27 @@ Called with no path, the load takes the **first** match:
 
 | Step | Where | Notes |
 |---|---|---|
-| 1 | A `qar-streaming-c` already loaded in the process | A host (a game engine, a plug-in host) or another binding loaded it first. Take it, and take a reference so that unloading stays balanced. |
-| 2 | The installed QAROS: `<InstallFolder>\bin\qar-streaming-c.dll` | `InstallFolder` is the value under `HKLM\SOFTWARE\Quaternar\QAROS`. Read `HKLM` only, never `HKCU`, which every process of the user can write. **When QAROS is installed, only this copy is used:** if it is missing or fails to load, report that and stop. |
-| 3 | Beside the running executable | The folder of the process's executable (`GetModuleFileNameW(NULL)`). A managed binding also checks the application's base directory, because `dotnet app.dll` runs from `dotnet.exe`. Covers an unpacked development ZIP and an app built into a QAROS tree. |
+| 0 | A `qar-streaming-c` already loaded in the process | A host (a game engine, a plug-in host, a test fixture) or another binding loaded it first. Load nothing; take a reference so that unloading stays balanced. |
+| 1 | Beside the binding | The folder of the module the binding's code lives in: for C the executable or plug-in DLL that includes the header (`GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, …)`), for a managed binding its assembly's folder, then the application's base directory. Covers test binaries, an unpacked development ZIP and an app built into a QAROS tree. |
+| 2 | The folder named by `QAROS_RUNTIME_DIR` | For running against a chosen runtime, such as a development build, without copying it. **When the variable is set, it is the only copy considered:** if the library is missing there or fails to load, report that and stop. |
+| 3 | The installed QAROS: `<InstallFolder>\bin\qar-streaming-c.dll` | Windows. `InstallFolder` is the value under `HKLM\SOFTWARE\Quaternar\QAROS`. Read `HKLM` only, never `HKCU`, which every process of the user can write. **An installed copy that is missing or fails to load is reported, never skipped.** |
 | 4 | Each folder on `PATH`, in order | Linux: the dynamic linker's own search (`LD_LIBRARY_PATH`, runpath, the ld.so cache). |
 
 ```mermaid
 flowchart TD
     A["load(NULL)"] --> B{"qar-streaming-c already in the process?"}
     B -- yes --> Z["use it"]
-    B -- no --> C{"HKLM InstallFolder set?"}
-    C -- yes --> D["InstallFolder\bin\qar-streaming-c.dll"]
-    D --> Z
-    C -- no --> E{"beside the executable?"}
-    E -- yes --> Z
-    E -- no --> F{"in a folder on PATH?"}
-    F -- yes --> Z
-    F -- no --> X["fail: QAROS is not installed"]
+    B -- no --> C{"beside the binding?"}
+    C -- yes --> Z
+    C -- no --> E{"QAROS_RUNTIME_DIR set?"}
+    E -- yes --> F["QAROS_RUNTIME_DIR\qar-streaming-c.dll, or fail"]
+    F --> Z
+    E -- no --> G{"HKLM InstallFolder set?"}
+    G -- yes --> H["InstallFolder\bin\qar-streaming-c.dll, or fail"]
+    H --> Z
+    G -- no --> I{"in a folder on PATH?"}
+    I -- yes --> Z
+    I -- no --> X["fail: no QAROS runtime found"]
 ```
 
 - **Never search the current directory.** A library planted there would be loaded.
@@ -48,23 +53,28 @@ flowchart TD
   `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32)`.
 - **Do not change the process's search path.** No `SetDllDirectory`, no `PATH` edits: they change
   how every later library of the host process is found.
-- **Nothing found:** fail with a result whose message says QAROS is not installed and where the
-  library was looked for. Never let a missing library surface later as a crash or a loader
-  exception.
+- **Nothing found:** fail with a result whose message names every place looked at (beside the
+  binding, `QAROS_RUNTIME_DIR`, the installation, `PATH`). Never let a missing library surface
+  later as a crash or a loader exception.
+- **A runtime beside the binding wins over the installation.** That is what lets a test binary or
+  a development tree run its own build on a PC with QAROS installed. A hub only verifies the
+  version and flavor of the runtime it installed, so a distributed application that ships its own
+  copy runs an unverified runtime.
 
 ### An explicit path
 
 - The binding also accepts the path of the library **file**. Only that file is tried, with no
   fallback, using the same `LoadLibraryExW` flags.
 - Explicit paths are for development builds of QAROS itself. A distributed application uses the
-  default lookup.
+  default lookup; to point a run at another runtime without code, set `QAROS_RUNTIME_DIR`.
 
 ### After loading
 
 - Leave `QarRuntimeInit::runtime_binaries_folder_path` empty. The runtime then uses the folder it
   was loaded from, which is where it finds `qar-runtime-launcher` and its other processes.
-- Expose the installed `bin` folder for diagnostics (C: `qar_installed_bin_folder`, C#:
-  `InstalledRuntime.TryGetBinFolder`), and the path actually loaded (C#:
+- Expose the installed `bin` folder and the `QAROS_RUNTIME_DIR` folder for diagnostics (C:
+  `qar_installed_bin_folder`, `qar_runtime_env_folder`; C#: `InstalledRuntime.TryGetBinFolder`,
+  `InstalledRuntime.TryGetRuntimeDirFromEnvironment`), and the path actually loaded (C#:
   `InstalledRuntime.LoadedLibraryPath`).
 
 ### Reference implementations
@@ -98,13 +108,13 @@ shows the application side: it calls `qar_library_load(NULL)` and does no search
 
 ## Checklist for a new binding
 
-- [ ] The default lookup follows steps 1–4 above, in that order. An installed QAROS is the only
-  copy considered when it exists.
+- [ ] The default lookup follows steps 0–4 above, in that order. A set `QAROS_RUNTIME_DIR` or an
+  installed QAROS that does not load is reported, never skipped.
 - [ ] The explicit path loads only that file.
 - [ ] Candidates load from their absolute path, with dependencies from their own folder and
   System32. The current directory is never searched, and the process search path is never
   changed.
-- [ ] A missing runtime is a result with a "QAROS is not installed" message, not a crash.
+- [ ] A missing runtime is a result whose message names every place looked at, not a crash.
 - [ ] `runtime_binaries_folder_path` is left empty by default.
 - [ ] Every symbol resolves at load, or the load fails as a whole.
 - [ ] Strings are UTF-8, results are values, handles are released, callbacks are marshalled.

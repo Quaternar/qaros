@@ -27,7 +27,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
   targets.
 - **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
-  binding follows (already loaded, installed QAROS, beside the executable, `PATH`), how candidates
+  binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, installed QAROS,
+  `PATH`), how candidates
   load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
   Troubleshooting and Onboarding describe the new fallback.
 

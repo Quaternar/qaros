@@ -121,7 +121,7 @@ The C SDK is:
 
 ### Load the installed runtime
 
-Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()` in one source file and call `qar_library_load(NULL)` before any other API call. It finds the installed QAROS (`HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`) and loads `<InstallFolder>\bin\qar-streaming-c.dll`; without an installation it looks beside your executable, then on `PATH` ([the full lookup](/docs/developer-guide/authoring-a-binding#the-default-lookup)). With no runtime found it prints "QAROS is not installed" and returns `false`, so your app keeps working without AR/VR. Your app does no searching of its own. Leave `QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder the library came from.
+Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()` in one source file and call `qar_library_load(NULL)` before any other API call. It looks beside your executable, then in the folder `QAROS_RUNTIME_DIR` names, then loads the installed QAROS (`HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`, `<InstallFolder>\bin\qar-streaming-c.dll`), then searches `PATH` ([the full lookup](/docs/developer-guide/authoring-a-binding#the-default-lookup)). Do not ship `qar-streaming-c.dll` beside your app: that copy would win over the installed one. With no runtime found it prints where it looked and returns `false`, so your app keeps working without AR/VR. Your app does no searching of its own. Leave `QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder the library came from.
 
 ```c
 #define QAR_ENABLE_DYNAMIC_LOADING

@@ -57,12 +57,15 @@ namespace Quaternar.Qaros.Tests
                 DeviceFamily = "Luxonis",
                 DeviceName = "OAK-D Pro W \U0001F4F7"
             };
+            var myId = scope.Session.Peers.GetMySpec().ValueOrThrow().Id;
             scope.Session.Peers.UpdateDeviceIdentity(identity).EnsureSuccess();
+            // GetMySpec() is the spec the session joined with (it does not follow updates, see the
+            // skipped display-name test); the session's peer list does.
             var mySpec = QarNativeAssert.WaitUntil(
                 () =>
                 {
-                    var result = scope.Session.Peers.GetMySpec();
-                    return result.IsSuccess ? result.Value : null;
+                    var result = scope.Session.Peers.GetAll();
+                    return result.IsSuccess ? Array.Find(result.Value, peer => peer.Id.Equals(myId)) : null;
                 },
                 peer => peer.DeviceId == identity.DeviceId,
                 "device identity update",
