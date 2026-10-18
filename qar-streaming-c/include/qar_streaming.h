@@ -1701,8 +1701,10 @@ typedef struct QarRequestOnboardingCodesInit
  *
  * `connection_string` names the device kind and its address:
  *   - `"hololens:<host>"` — HoloLens
- *   - `"quest:<host>"`    — Meta Quest
- *   - `"android:<host>"`  — Android streamer
+ *   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
+ *     served by the Android streamer; it reports its exact model itself
+ *   - `"quest:<host>"`, `"android:<host>"` — older spellings of
+ *     `"headset:<host>"`
  * `<host>` is a hostname or an IP address; the two are interchangeable. A bare
  * `"<host>"` with no scheme is accepted as the legacy spelling of
  * `"hololens:<host>"`.
@@ -2882,6 +2884,10 @@ static inline QarResult qar_session_get_graphics_device_id(
  * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the hub has no
  *   target app it can launch for the device family the connection string
  *   names; which devices can be invited is the hub's decision.
+ *
+ * A device is invited as a HoloLens (`"hololens:<host>"`) or a Headset
+ * (`"headset:<host>"`; `"quest:"` and `"android:"` are older spellings of it).
+ * The headset reports its exact model itself once it runs.
  */
 static inline QarResult qar_session_invite_target_app(
 	QarSession* session,
@@ -2894,6 +2900,11 @@ static inline QarResult qar_session_invite_target_app(
 
 /**
  * @brief Ask this machine's hub to start the target app for one AR device.
+ *
+ * Non-blocking form of qar_session_invite_target_app. A device is invited as a
+ * HoloLens (`"hololens:<host>"`) or a Headset (`"headset:<host>"`;
+ * `"quest:"` and `"android:"` are older spellings of it) - see
+ * QarSessionInviteTargetAppInit.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
  * @param result_callback Fires exactly once with the outcome. Required.
@@ -2962,7 +2973,9 @@ static inline QarResult qar_target_app_connection_string_hololens(
 );
 
 /**
- * @brief Build the connection string for a Meta Quest target app.
+ * @brief Build the connection string for a headset target app, spelled
+ * `"quest:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -2972,7 +2985,9 @@ static inline QarResult qar_target_app_connection_string_quest(
 );
 
 /**
- * @brief Build the connection string for an Android streamer target app.
+ * @brief Build the connection string for a headset target app, spelled
+ * `"android:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -3105,7 +3120,7 @@ static inline QarResult qar_peer_spec_get_device_id(
 );
 /**
  * @brief The peer's device family: an open UTF-8 string ("MetaQuest",
- * "HoloLens", "Metalens", "Android", "Zed"), the fallback for a device id an
+ * "HoloLens", "Metalens", "Headset", "Zed"), the fallback for a device id an
  * application does not know. Empty when the peer has no family.
  *
  * Same buffer contract as qar_peer_spec_get_device_id().

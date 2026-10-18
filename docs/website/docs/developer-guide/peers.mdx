@@ -107,9 +107,9 @@ Every peer describes itself with five values. Read them from any `QarPeerSpec`, 
 | Device name | `qar_peer_spec_get_device_name` | `DeviceName` | `"Meta Quest 3"` | What to show the user |
 
 - Render for peers whose role is `TARGET`; the category and device only say *what* the target is.
-- **Ids and families are open strings**, not an enum: new models appear without a new QAROS SDK. Today's families include `HoloLens`, `MetaQuest`, `Metalens`, `Android` and `Zed`; treat this list as examples, never as complete.
+- **Ids and families are open strings**, not an enum: new models appear without a new QAROS SDK. Today's families include `HoloLens`, `MetaQuest`, `Metalens`, `Headset` (a headset that has not reported a known model) and `Zed`; treat this list as examples, never as complete.
 - Pick a picture or model by device id, else by family, else by category. An unknown model of a known family still matches its family; an unknown family still matches its category.
-- **The identity can change while the peer runs.** A headset first joins with its family and is refined to the exact model once its device answers. Re-read it in your `qar_peer_subscribe_updates` callback instead of caching it.
+- **The identity can change while the peer runs.** A headset first joins as the kind it was invited as (`HoloLens` or `Headset`) and is refined to the exact model once its device answers. Re-read it in your `qar_peer_subscribe_updates` callback instead of caching it.
 - The C string getters fill a caller buffer, like `qar_peer_spec_get_display_name`. Text is UTF-8.
 
 ### Show the user what each target is

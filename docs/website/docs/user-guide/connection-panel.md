@@ -65,8 +65,10 @@ Opens only when you ask for it. Pairing takes both Hubs:
 | Kind | Notes |
 |---|---|
 | HoloLens | Invited by IP address |
-| Meta Quest | *Legacy*: invited by IP address until its player pairs by QR code |
-| Metalens | *Legacy*: invited by IP address until its player pairs by QR code |
+| Headset | Any other headset: Meta Quest, METALENS glasses and other Android devices. *Legacy*: invited by IP address until its player pairs by QR code. The headset reports its exact model itself once it runs |
+
+A device remembered under an older kind (Meta Quest, Metalens) is not invited any more: forget it
+and add it again as a **Headset**.
 
 3. Enter the device's **Address** and an optional **Label**.
 4. Leave **Invite automatically** checked to remember the device and invite it on every start;

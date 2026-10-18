@@ -35,13 +35,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 ### Changed
 
 - **Docs:** the launcher configuration reference lists the catalog device ids for
-  `targetApps[].deviceType` (`HoloLens`, `MetaQuest`, `Android` and their models); the old names
-  still resolve, `CameraVisualizer` is gone.
+  `targetApps[].deviceType`: `HoloLens` or `Headset` (the headset reports its model itself); the
+  old generic names still resolve, a model id is skipped, `CameraVisualizer` is gone.
+- **Docs:** *Onboarding and Sessions* invites a non-HoloLens headset with `"headset:<host>"`
+  (`"quest:"` and `"android:"` remain as older spellings); *Working with Peers* names the
+  `Headset` family.
 - **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,
   and says which app streams to each `deviceType`: Quest and `AndroidStreamer` through
   `qar-android-streamer`, HoloLens through `qar-openxr-desktop`.
 - **Docs:** the Connection panel guide describes the Hubs and Devices areas (session, pairing another
-  hub by code, inviting HoloLens, Meta Quest and Metalens by address); approving and revoking source
+  hub by code, inviting HoloLens and Headset devices by address); approving and revoking source
   apps moved to the Source Applications guide. The player installation guides start with installing
   from the Visualizer's Devices tab, and QAROS World explains showing or printing the scene-origin
   marker there.
