@@ -18,6 +18,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Working with Peers* explains what a peer is (role, category, device id, family and
+  name) with their C getters and C# properties, how to show each target's name, pick a Unity model
+  by device, and declare or refine your own device with `QarPeerDeviceIdentity` and
+  `qar_peer_update_device_identity`. *Rendering Streams* finds targets by role instead of
+  `qar_peer_spec_is_target_app`.
 - **Docs:** the Unity guide describes joining the Hub and picking from its target apps (the target
   list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
   targets.
@@ -28,6 +33,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the launcher configuration reference lists the catalog device ids for
+  `targetApps[].deviceType` (`HoloLens`, `MetaQuest`, `Android` and their models); the old names
+  still resolve, `CameraVisualizer` is gone.
 - **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,
   and says which app streams to each `deviceType`: Quest and `AndroidStreamer` through
   `qar-android-streamer`, HoloLens through `qar-openxr-desktop`.

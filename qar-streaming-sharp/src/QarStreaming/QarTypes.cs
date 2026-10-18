@@ -24,34 +24,45 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// What a peer is: the device or application kind it joined the session as (C
-    /// <c>QarDeviceType</c>). Values are stable and only appended; treat an unnamed value as
-    /// "other". Kinds from 150 up are target apps (<see cref="PeerSpec.IsTargetApp"/>).
+    /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
+    /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
     /// </summary>
-    public enum DeviceType
+    public enum PeerRole
     {
-        /// <summary>QAROS infrastructure (hub services, pipelines).</summary>
+        /// <summary>QAROS pipeline infrastructure the hub launched itself.</summary>
         Internal = 0,
-        /// <summary>An application on a Windows PC, such as a source application.</summary>
-        DesktopWindows = 1,
-        DesktopLinux = 2,
-        ServerLinux = 3,
-        /// <summary>A QAROS runtime process.</summary>
-        Runtime = 4,
+        /// <summary>Provides content: a source application or a camera capture process.</summary>
+        Source = 1,
+        /// <summary>
+        /// Shows content: a headset's serving app, a Visualizer receiver, a camera's receiver slot.
+        /// </summary>
+        Target = 2,
+        /// <summary>A QAROS runtime (hub) process.</summary>
+        Runtime = 3,
         /// <summary>The operator's Visualizer control session.</summary>
-        VisualizerControl = 5,
-        /// <summary>An Android AR headset (METALENSE 2).</summary>
-        AndroidArHeadset = 150,
-        HoloLensArHeadset = 151,
-        MetaQuestHeadset = 152,
+        Control = 4
+    }
+
+    /// <summary>
+    /// What kind of device a peer is (C <c>QarDeviceCategory</c>): the rendering fallback when the
+    /// peer's <see cref="PeerSpec.DeviceId"/> and <see cref="PeerSpec.DeviceFamily"/> are unknown
+    /// to the application. A new device model never adds a value; treat an unnamed value as
+    /// <see cref="Unknown"/>.
+    /// </summary>
+    public enum DeviceCategory
+    {
+        /// <summary>Infrastructure, runtime, control, test targets and unrecognised devices.</summary>
+        Unknown = 0,
+        /// <summary>A desktop or laptop PC (every source application by default).</summary>
+        DesktopPC = 1,
+        /// <summary>A server machine.</summary>
+        Server = 2,
+        /// <summary>A headset or glasses of any model.</summary>
+        Headset = 3,
         /// <summary>A Visualizer receiver showing streams on the PC.</summary>
-        Visualizer = 153,
-        CameraVisualizer = 154,
-        /// <summary>The Android streamer serving a Quest or Android device.</summary>
-        AndroidStreamer = 155,
-        ZedCamera = 156,
-        /// <summary>A synthetic target of QAROS's own tests.</summary>
-        TestTarget = 157
+        Visualizer = 4,
+        /// <summary>A camera of any model: its capture process, or its receiver slot.</summary>
+        Camera = 5
     }
 
     /// <summary>
@@ -336,6 +347,7 @@ namespace Quaternar.Qaros
         SessionGraphicsDeviceId = 0x2004,
         SessionRequestInviteInit = 0x2005,
         PeerPresentation = 0x2006,
+        PeerDeviceIdentity = 0x2009,
         SessionInviteTargetAppInit = 0x2007,
         SessionRequestOnboardingCodesInit = 0x2008,
         RenderingStreamSenderInit = 0x3000,

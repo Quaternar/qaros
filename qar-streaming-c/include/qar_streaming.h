@@ -62,9 +62,11 @@
  *    that adapter, so the frames you render need no cross-GPU copy.
  * 5. Get the target `QarPeerId`s to render for, in one of two ways:
  *    - find the target apps already in the session: watch the peer list with
- *      qar_peer_subscribe_updates() and pick each peer for which
- *      qar_peer_spec_is_target_app() is true and whose
- *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING;
+ *      qar_peer_subscribe_updates() and pick each peer whose
+ *      qar_peer_spec_get_role() is QAR_PEER_ROLE_TARGET and whose
+ *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING. Show it to
+ *      the user with qar_peer_spec_get_device_name() (and the family and
+ *      category for an icon);
  *    - or start one with qar_session_invite_target_app() (or its async form),
  *      which writes out the new target's id. The hub remembers every invited
  *      device.
@@ -402,7 +404,16 @@ typedef enum QarStatusCode
 	QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC = 1807,
 	/// Local enrollment: the app no longer matches what the user approved
 	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
-	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808
+	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808,
+	/** The hub has no target app it can launch for the requested device (an
+	 * unknown connection-string scheme family, or a device kind that is never
+	 * invited, such as a camera). Nothing was invited; pick another target. */
+	QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE = 3100,
+	/** A QarPeerDeviceIdentity declared a category an application may not
+	 * claim. An application is always a source and may describe itself only as
+	 * QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
+	 * QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed. */
+	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101
 } QarStatusCode;
 
 /**
@@ -428,36 +439,51 @@ typedef enum QarAppState
 } QarAppState;
 
 /**
- * @brief What a peer is: the device or application kind it joined the session
- * as (qar_peer_spec_get_device_type()). Values are stable and only appended;
- * treat an unknown value as "other". Kinds from 150 up are target apps
- * (qar_peer_spec_is_target_app()).
+ * @brief What a peer is in the streaming graph (qar_peer_spec_get_role()).
+ *
+ * Code branches on the role; it never grows for a new device. An application
+ * using this API is always QAR_PEER_ROLE_SOURCE. Render for peers whose role is
+ * QAR_PEER_ROLE_TARGET.
  */
-typedef enum QarDeviceType
+typedef enum QarPeerRole
 {
-	/** QAROS infrastructure (hub services, pipelines). */
-	QAR_DEVICE_TYPE_INTERNAL = 0,
-	/** An application on a Windows PC, such as a source application. */
-	QAR_DEVICE_TYPE_DESKTOP_WINDOWS = 1,
-	QAR_DEVICE_TYPE_DESKTOP_LINUX = 2,
-	QAR_DEVICE_TYPE_SERVER_LINUX = 3,
-	/** A QAROS runtime process. */
-	QAR_DEVICE_TYPE_RUNTIME = 4,
+	/** QAROS pipeline infrastructure the hub launched itself (mixer,
+	 * conversion). */
+	QAR_PEER_ROLE_INTERNAL = 0,
+	/** Provides content: a source application or a camera capture process. */
+	QAR_PEER_ROLE_SOURCE = 1,
+	/** Shows content: a headset's serving app, a Visualizer receiver, a
+	 * camera's receiver slot. These are the peers a source renders for. */
+	QAR_PEER_ROLE_TARGET = 2,
+	/** A QAROS runtime (hub) process. */
+	QAR_PEER_ROLE_RUNTIME = 3,
 	/** The operator's Visualizer control session. */
-	QAR_DEVICE_TYPE_VISUALIZER_CONTROL = 5,
-	/** An Android AR headset (METALENSE 2). */
-	QAR_DEVICE_TYPE_ANDROID_AR_HEADSET = 150,
-	QAR_DEVICE_TYPE_HOLOLENS_AR_HEADSET = 151,
-	QAR_DEVICE_TYPE_META_QUEST_HEADSET = 152,
+	QAR_PEER_ROLE_CONTROL = 4
+} QarPeerRole;
+
+/**
+ * @brief What kind of device a peer is (qar_peer_spec_get_category()).
+ *
+ * For presentation, and the fallback when a viewer does not know the peer's
+ * device id or family. A new device model never adds a value; only a new kind
+ * of device does. Treat an unnamed value as QAR_DEVICE_CATEGORY_UNKNOWN.
+ */
+typedef enum QarDeviceCategory
+{
+	/** Infrastructure, runtime, control, test targets and unrecognised devices.
+	 */
+	QAR_DEVICE_CATEGORY_UNKNOWN = 0,
+	/** A desktop or laptop PC (every source application by default). */
+	QAR_DEVICE_CATEGORY_DESKTOP_PC = 1,
+	/** A server machine. */
+	QAR_DEVICE_CATEGORY_SERVER = 2,
+	/** A headset or glasses of any model. */
+	QAR_DEVICE_CATEGORY_HEADSET = 3,
 	/** A Visualizer receiver showing streams on the PC. */
-	QAR_DEVICE_TYPE_VISUALIZER = 153,
-	QAR_DEVICE_TYPE_CAMERA_VISUALIZER = 154,
-	/** The Android streamer serving a Quest or Android device. */
-	QAR_DEVICE_TYPE_ANDROID_STREAMER = 155,
-	QAR_DEVICE_TYPE_ZED_CAMERA = 156,
-	/** A synthetic target of QAROS's own tests. */
-	QAR_DEVICE_TYPE_TEST_TARGET = 157
-} QarDeviceType;
+	QAR_DEVICE_CATEGORY_VISUALIZER = 4,
+	/** A camera of any model: its capture process, or its receiver slot. */
+	QAR_DEVICE_CATEGORY_CAMERA = 5
+} QarDeviceCategory;
 
 /**
  * @brief Wall-clock instant: nanoseconds since the Unix epoch (UTC).
@@ -1171,6 +1197,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
+	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -1455,6 +1482,33 @@ typedef struct QarPeerPresentation
 	const char* app_custom_peer_info; /**< optional; app-defined peer metadata
 									   */
 } QarPeerPresentation;
+
+/**
+ * @brief Extension: the device this application describes itself as.
+ *
+ * Chain on QarPeerPresentation::header.next of QarOnboardInit or
+ * QarRejoinInit, or pass to qar_peer_update_device_identity(). Without it the
+ * application joins as a desktop PC with the fixed id of the host OS
+ * ("DesktopWindows" / "DesktopLinux").
+ *
+ * An application always joins as QAR_PEER_ROLE_SOURCE: it describes its
+ * device, never its role. `category` must be QAR_DEVICE_CATEGORY_DESKTOP_PC,
+ * QAR_DEVICE_CATEGORY_SERVER or QAR_DEVICE_CATEGORY_CAMERA; any other value is
+ * refused with QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED.
+ *
+ * Ids and families are open UTF-8 strings ("Zed2i", "Zed"), matched by
+ * viewers against the hub's device catalog. An id the catalog does not know
+ * is fine: viewers fall back to the family, then to the category, and show
+ * `device_name`.
+ */
+typedef struct QarPeerDeviceIdentity
+{
+	QarStructureHeader header;	/**< QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY */
+	QarDeviceCategory category; /**< DESKTOP_PC, SERVER or CAMERA */
+	const char* device_id;		/**< required, non-empty; e.g. "LuxonisOakD" */
+	const char* device_family;	/**< optional (NULL = none); e.g. "Luxonis" */
+	const char* device_name;	/**< optional (NULL = none); e.g. "OAK-D" */
+} QarPeerDeviceIdentity;
 
 /**
  * @brief Continue / rejoin the last persisted session (situation: continue).
@@ -2421,6 +2475,11 @@ static inline bool qar_onboarding_id_is_zero(const QarOnboardingId* id);
 
 /** @brief Default init for QarPeerPresentation (stamps type; NULL fields). */
 static inline QarPeerPresentation qar_peer_presentation_default(void);
+/**
+ * @brief Default init for QarPeerDeviceIdentity: stamps the type, category
+ * QAR_DEVICE_CATEGORY_DESKTOP_PC, NULL strings. Set at least device_id.
+ */
+static inline QarPeerDeviceIdentity qar_peer_device_identity_default(void);
 /** @brief Default init for QarRejoinInit. */
 static inline QarRejoinInit qar_rejoin_init_default(void);
 /** @brief Default init for QarOnboardInit. */
@@ -2812,9 +2871,13 @@ static inline QarResult qar_session_get_graphics_device_id(
  * @param progress_state User pointer passed to on_progress unchanged.
  * @param cancel Optional cancellation token (can be NULL).
  * @param out_peer Receives the target app's peer id. Untouched on failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string is malformed,
- *   or names a device kind that cannot be invited - rebuild it with a
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string is malformed
+ *   or names no host (a `visualizer:` connection, which only
+ *   qar_session_find_render_target resolves) - rebuild it with a
  *   qar_target_app_connection_string_* helper.
+ * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the hub has no
+ *   target app it can launch for the device family the connection string
+ *   names; which devices can be invited is the hub's decision.
  */
 static inline QarResult qar_session_invite_target_app(
 	QarSession* session,
@@ -2959,10 +3022,8 @@ static inline QarResult qar_peer_spec_get_room_tag(
 );
 /**
  * @brief Whether this peer is a target app: a device or viewer that shows
- * rendered content (a headset, the Android streamer, a visualizer receiver).
- *
- * See "Basic flow" at the top of this header for how a source application uses
- * it to find the targets it renders for.
+ * rendered content (a headset's serving app, a visualizer or camera receiver).
+ * The same as qar_peer_spec_get_role() returning QAR_PEER_ROLE_TARGET.
  *
  * @param handle Peer spec handle.
  * @param out_is_target_app Receives true for a target app, false for anything
@@ -2973,19 +3034,101 @@ static inline QarResult qar_peer_spec_get_room_tag(
 static inline QarResult
 qar_peer_spec_is_target_app(QarPeerSpec* handle, bool* out_is_target_app);
 /**
- * @brief What the peer is: the device or application kind it joined as (a
- * HoloLens, a Meta Quest, the Android streamer, a Visualizer, ...), for showing
- * targets to a user. Whether to render for a peer is still decided by
- * qar_peer_spec_is_target_app().
+ * @brief What the peer is in the streaming graph.
+ *
+ * A source application renders for the peers whose role is
+ * QAR_PEER_ROLE_TARGET (a headset's serving app, a Visualizer receiver, a
+ * camera's receiver slot). See "Basic flow" at the top of this header. An
+ * application using this API is always QAR_PEER_ROLE_SOURCE.
  *
  * @param handle Peer spec handle.
- * @param out_type Receives the kind; a value this header does not name is a
- * newer kind, shown as "other".
+ * @param out_role Receives the role.
  * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
  * output.
  */
 static inline QarResult
-qar_peer_spec_get_device_type(QarPeerSpec* handle, QarDeviceType* out_type);
+qar_peer_spec_get_role(QarPeerSpec* handle, QarPeerRole* out_role);
+/**
+ * @brief What kind of device the peer is: a headset, a Visualizer, a camera,
+ * a desktop PC, ...
+ *
+ * The rendering fallback when an application does not know the peer's device
+ * id or family: pick an icon or a model by id, else by family, else by
+ * category.
+ *
+ * @code
+ * QarPeerRole role;
+ * QAR_CHECK(qar_peer_spec_get_role(peer, &role));
+ * if(role == QAR_PEER_ROLE_TARGET)
+ * {
+ *     QarDeviceCategory category;
+ *     char name[128], family[64];
+ *     QAR_CHECK(qar_peer_spec_get_category(peer, &category));
+ *     QAR_CHECK(qar_peer_spec_get_device_name(peer, name, sizeof name));
+ *     QAR_CHECK(qar_peer_spec_get_device_family(peer, family, sizeof family));
+ *     ShowTarget(name, IconFor(family, category)); // app's own icon table
+ * }
+ * @endcode
+ *
+ * @param handle Peer spec handle.
+ * @param out_category Receives the category; treat a value this header does
+ * not name as QAR_DEVICE_CATEGORY_UNKNOWN.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult qar_peer_spec_get_category(
+	QarPeerSpec* handle, QarDeviceCategory* out_category
+);
+/**
+ * @brief The peer's device id: an open UTF-8 string naming the exact device
+ * or app ("MetaQuest3", "HoloLens2", "Zed2i", "Visualizer",
+ * "DesktopWindows").
+ *
+ * Ids are not an enum: a new device model is a new id without a new API. The
+ * id can change while the peer runs (a serving app refines it once the device
+ * reports its model), so re-read it in the qar_peer_subscribe_updates()
+ * callback instead of caching it. Same buffer contract as
+ * qar_peer_spec_get_display_name(): NUL-terminated, truncated on a UTF-8
+ * code point boundary.
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated id.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_id(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
+/**
+ * @brief The peer's device family: an open UTF-8 string ("MetaQuest",
+ * "HoloLens", "Metalens", "Android", "Zed"), the fallback for a device id an
+ * application does not know. Empty when the peer has no family.
+ *
+ * Same buffer contract as qar_peer_spec_get_device_id().
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated family.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_family(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
+/**
+ * @brief The human name of the peer's device ("Meta Quest 3"), for showing
+ * it to a user. Empty when nothing better than the id is known.
+ *
+ * Same buffer contract as qar_peer_spec_get_device_id(); the name can change
+ * while the peer runs.
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated name.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_name(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
@@ -3010,6 +3153,35 @@ static inline QarResult qar_query_peer_specs(
 /** @brief Update current peer's display name. */
 static inline QarResult
 qar_peer_update_display_name(QarSession* session, const char* name);
+/**
+ * @brief Replace the device this application describes itself as, for
+ * example once a camera SDK has reported the exact model it opened.
+ *
+ * Published as a normal peer spec update. The role stays
+ * QAR_PEER_ROLE_SOURCE. To join with an identity from the start, chain the
+ * same struct on QarPeerPresentation::header.next of QarOnboardInit or
+ * QarRejoinInit.
+ *
+ * @code
+ * QarPeerDeviceIdentity refined = qar_peer_device_identity_default();
+ * refined.category = QAR_DEVICE_CATEGORY_CAMERA;
+ * refined.device_id = "LuxonisOakDPro";
+ * refined.device_family = "Luxonis";
+ * refined.device_name = "OAK-D Pro W";
+ * QAR_CHECK(qar_peer_update_device_identity(session, &refined));
+ * @endcode
+ *
+ * @param session Active session handle.
+ * @param identity Required; see QarPeerDeviceIdentity.
+ * @retval QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED the category is not
+ *   DESKTOP_PC, SERVER or CAMERA. Nothing was changed.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED device_id is NULL or empty.
+ * @retval QAR_STATUS_LOGIC_ERROR a NULL or wrongly typed struct, or an invalid
+ *   session.
+ */
+static inline QarResult qar_peer_update_device_identity(
+	QarSession* session, const QarPeerDeviceIdentity* identity
+);
 /** @brief Callback invoked when a peer spec changes. */
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
@@ -5825,6 +5997,19 @@ qar_peer_presentation_default(void)
 	return presentation;
 }
 
+static inline QarPeerDeviceIdentity
+qar_peer_device_identity_default(void)
+{
+	QarPeerDeviceIdentity identity = {
+		{ QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY, NULL }, // header
+		QAR_DEVICE_CATEGORY_DESKTOP_PC,					   // category
+		NULL,											   // device_id
+		NULL,											   // device_family
+		NULL											   // device_name
+	};
+	return identity;
+}
+
 static inline QarRejoinInit
 qar_rejoin_init_default(void)
 {
@@ -6682,9 +6867,34 @@ typedef void (*qar_peer_update_callback_t)(
 	  (handle, out_is_target_app))                                             \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  peer_spec_get_device_type,                                               \
-	  (QarPeerSpec * handle, QarDeviceType * out_type),                        \
-	  (handle, out_type))
+	  peer_spec_get_role,                                                      \
+	  (QarPeerSpec * handle, QarPeerRole * out_role),                          \
+	  (handle, out_role))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_category,                                                  \
+	  (QarPeerSpec * handle, QarDeviceCategory * out_category),                \
+	  (handle, out_category))                                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_id,                                                 \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_family,                                             \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_name,                                               \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_update_device_identity,                                             \
+	  (QarSession * session, const QarPeerDeviceIdentity* identity),           \
+	  (session, identity))
 
 QAR_DECLARE_MODULE_COMMON(
 	PEER_MANAGEMENT,

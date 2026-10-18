@@ -298,8 +298,8 @@ struct Targets
 	// Queues the peer when it is a running target app.
 	void Offer(QarPeerSpec* spec)
 	{
-		bool isTargetApp = false;
-		if(not Check(qar_peer_spec_is_target_app(spec, &isTargetApp)) || not isTargetApp)
+		QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
+		if(not Check(qar_peer_spec_get_role(spec, &role)) || role != QAR_PEER_ROLE_TARGET)
 		{
 			return;
 		}

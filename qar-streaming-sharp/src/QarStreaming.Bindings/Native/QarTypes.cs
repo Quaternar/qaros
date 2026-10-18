@@ -496,6 +496,16 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct PeerDeviceIdentityNative
+    {
+        public StructureHeaderNative Header;
+        public DeviceCategory Category;
+        public IntPtr DeviceId;
+        public IntPtr DeviceFamily;
+        public IntPtr DeviceName;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct OnboardHostExtNative
     {
         public StructureHeaderNative Header;

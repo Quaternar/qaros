@@ -74,5 +74,5 @@ Details: Operator Guide, *Source Applications*, "Adding your own app".
 
 ## Notes
 
-- The cube renders for every running target app in the peer list (`qar_peer_subscribe_updates()` plus `qar_peer_spec_is_target_app()`): which targets to serve is a source app's own choice, and the cube serves them all. Each target gets an independent sender and stereo camera, including viewers arriving after rendering starts. The sender attaches its target to the cube's app volume, which is what makes the target ask for the content.
+- The cube renders for every running target app in the peer list (`qar_peer_subscribe_updates()` plus `qar_peer_spec_get_role()` == `QAR_PEER_ROLE_TARGET`): which targets to serve is a source app's own choice, and the cube serves them all. Each target gets an independent sender and stereo camera, including viewers arriving after rendering starts. The sender attaches its target to the cube's app volume, which is what makes the target ask for the content.
 - Known gaps: [01-improvements.md](01-improvements.md).

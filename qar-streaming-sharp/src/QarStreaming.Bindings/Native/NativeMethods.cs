@@ -185,10 +185,22 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_peer_spec_get_room_tag(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_peer_spec_is_target_app(IntPtr handle, [MarshalAs(UnmanagedType.U1)] out bool outIsTargetApp);
+        internal static extern ResultNative qar_impl_peer_spec_get_role(IntPtr handle, out PeerRole outRole);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_peer_spec_get_device_type(IntPtr handle, out DeviceType outType);
+        internal static extern ResultNative qar_impl_peer_spec_get_category(IntPtr handle, out DeviceCategory outCategory);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_id(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_family(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_name(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_update_device_identity(IntPtr session, IntPtr identity);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_get_my_spec(IntPtr session, out IntPtr outHandle);

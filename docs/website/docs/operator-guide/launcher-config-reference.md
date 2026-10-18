@@ -158,12 +158,12 @@ Each enabled entry is a device the Hub invites into the session at startup. Star
 |---|---|---|---|
 | `enabled` | boolean | `true` | `false` skips the entry. |
 | `hostname` | string | `""` | Host name or IP of the device. |
-| `deviceType` | string | `"Visualizer"` | `HoloLensARHeadset`, `MetaQuestHeadset` or `AndroidStreamer`. Quest and `AndroidStreamer` are streamed to by `qar-android-streamer`, HoloLens by `qar-openxr-desktop`. `Visualizer` and `CameraVisualizer` are ignored with a warning: use `autoLaunchVisualizer` instead. |
+| `deviceType` | string | `"Visualizer"` | A device id from the Hub's device catalog that can be invited: `HoloLens`, `MetaQuest` or `Android` (or a model of those families, such as `MetaQuest3`). The old names `HoloLensARHeadset`, `MetaQuestHeadset` and `AndroidStreamer` still work. Quest and Android devices are streamed to by `qar-android-streamer`, HoloLens by `qar-openxr-desktop`. `Visualizer` is ignored with a warning: use `autoLaunchVisualizer` instead. A camera is never a target app. |
 | `configOverrides` | object | `{}` | Passed into the launched app's config (e.g. `roomTag`). Aliases: `specialKeys`, `config`. |
 
 ```json
 "targetApps": [
-  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "MetaQuestHeadset", "configOverrides": { "roomTag": "default" } }
+  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "MetaQuest", "configOverrides": { "roomTag": "default" } }
 ]
 ```
 

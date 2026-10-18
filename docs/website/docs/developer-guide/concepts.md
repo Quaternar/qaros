@@ -61,7 +61,9 @@ important concrete rules are:
   [Rendering Streams](/docs/developer-guide/rendering-streams).
 - **Target app** is the broad runtime term for a stream consumer. A **player**
   is the device-side companion app variant of a target app; the desktop
-  visualizer is a target app too, but not a player.
+  visualizer is a target app too, but not a player. In the API a target app is
+  a peer whose role is `TARGET`; your application is always a `SOURCE`. See
+  [what a peer is](/docs/developer-guide/peers#what-a-peer-is-role-category-and-device).
 
 ## C <-> C# object map
 

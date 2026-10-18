@@ -18,7 +18,7 @@ The **render sender** is how your application's pixels reach the room. You creat
 **Your application decides which targets it renders for**: one, some or all of them. QAROS does not choose for it, not even for an app it launches. Find the targets in the peer list:
 
 - Watch peers with `qar_peer_subscribe_updates()`, and list the ones already there once with `qar_query_peer_specs()`. Subscribe first, so a target joining in between is not missed.
-- A peer for which `qar_peer_spec_is_target_app()` is true and whose app state is `QAR_APP_STATE_RUNNING` is a target you can render for: a headset, the Android streamer, a visualizer receiver.
+- A peer whose role (`qar_peer_spec_get_role()`) is `QAR_PEER_ROLE_TARGET` and whose app state is `QAR_APP_STATE_RUNNING` is a target you can render for: a headset, a visualizer receiver, a camera's view in the visualizer. Its category, device name and family say which one ([Working with Peers](/docs/developer-guide/peers#what-a-peer-is-role-category-and-device)).
 - Create the app volume first, then one sender and one camera per target you serve. **The sender attaches its target to your app volume**, and that is what makes the target ask for your content. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
 - Callbacks run asynchronously. Queue the target ID for your render thread, synchronize the handoff, and keep callback state alive through session/subscription teardown.
 - See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, local-app onboarding and multi-camera loop.
@@ -26,10 +26,10 @@ The **render sender** is how your application's pixels reach the room. You creat
 ```c
 static void on_peer(QarPeerSpec* peer, void* user_state)
 {
-    bool is_target_app = false;
+    QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
     QarAppState state = QAR_APP_STATE_UNKNOWN;
     QarPeerId target_peer_id = qar_peer_id_default();
-    if(qar_result_is_error(qar_peer_spec_is_target_app(peer, &is_target_app)) || !is_target_app
+    if(qar_result_is_error(qar_peer_spec_get_role(peer, &role)) || role != QAR_PEER_ROLE_TARGET
        || qar_result_is_error(qar_peer_spec_get_app_state(peer, &state))
        || state != QAR_APP_STATE_RUNNING
        || qar_result_is_error(qar_peer_spec_get_id(peer, &target_peer_id)))

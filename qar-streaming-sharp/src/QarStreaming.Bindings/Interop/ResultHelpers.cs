@@ -357,6 +357,15 @@ namespace Quaternar.Qaros.Interop
                     });
                 case GraphicsDeviceId graphicsDeviceId:
                     return scope.AllocStruct(graphicsDeviceId.ToNative());
+                case PeerDeviceIdentity identity:
+                    return scope.AllocStruct(new PeerDeviceIdentityNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.PeerDeviceIdentity),
+                        Category = identity.Category,
+                        DeviceId = scope.AllocUtf8(identity.DeviceId),
+                        DeviceFamily = scope.AllocUtf8(identity.DeviceFamily),
+                        DeviceName = scope.AllocUtf8(identity.DeviceName)
+                    });
                 default:
                     throw new NotSupportedException("Unsupported QAR extension structure type: " + structure.Type);
             }

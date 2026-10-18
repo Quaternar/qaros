@@ -139,7 +139,7 @@ when it is gone.
 | Member | Does |
 |---|---|
 | `Join()`, `IsJoined`, `LastJoinError` | Joins the Hub and starts listing targets; whether it did; why not |
-| `Targets` | The target list (`QarStreamTarget`: `Id`, `DisplayName`, `DeviceType`, `AppState`, `Selected`, `Device`, `ConnectionState`, `LastError`) |
+| `Targets` | The target list (`QarStreamTarget`: `Id`, `DisplayName`, `Category`, `DeviceId`, `DeviceFamily`, `DeviceName`, `DeviceLabel`, `AppState`, `Selected`, `Device`, `ConnectionState`, `LastError`) |
 | `TargetsChanged` | Raised on the main thread when a target joins, leaves, changes or is picked |
 | `StreamToAllTargets` | Stream to every running target, or only the picked ones |
 | `SetTargetSelected(PeerId, bool)`, `IsStreamedTo(target)` | Picks a target; whether it is streamed to |
