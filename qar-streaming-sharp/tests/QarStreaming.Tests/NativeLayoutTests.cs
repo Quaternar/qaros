@@ -59,8 +59,11 @@ namespace Quaternar.Qaros.Tests
             { typeof(OnboardInitNative), 72 },
             { typeof(OnboardCodeExtNative), 24 },
             { typeof(OnboardHostExtNative), 32 },
+            { typeof(PeerDeviceIdentityNative), 48 },
             { typeof(OnboardInviteExtNative), 24 },
             { typeof(OnboardPeerIdExtNative), 32 },
+            { typeof(OnboardLocalAppExtNative), 24 },
+            { typeof(RuntimeInfoNative), 24 },
             { typeof(RequestInviteInitNative), 16 },
             { typeof(SessionInviteTargetAppInitNative), 24 },
             { typeof(ForgetInitNative), 32 },
@@ -150,7 +153,14 @@ namespace Quaternar.Qaros.Tests
             { typeof(RejoinInitNative), nameof(RejoinInitNative.OnboardingId), 16 },
             { typeof(RejoinInitNative), nameof(RejoinInitNative.Presentation), 32 },
             { typeof(OnboardHostExtNative), nameof(OnboardHostExtNative.Port), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.Category), 16 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceId), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceFamily), 32 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceName), 40 },
             { typeof(OnboardPeerIdExtNative), nameof(OnboardPeerIdExtNative.PeerId), 16 },
+            { typeof(OnboardLocalAppExtNative), nameof(OnboardLocalAppExtNative.ApprovalTimeoutMs), 16 },
+            { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.Flavor), 8 },
+            { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.CApi), 16 },
             { typeof(SessionInviteTargetAppInitNative), nameof(SessionInviteTargetAppInitNative.ConnectionString), 16 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.IdType), 16 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.Luid), 20 },
@@ -232,17 +242,25 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
+            Assert.Equal(1805, (int)StatusCode.OnboardingApprovalDenied);
+            Assert.Equal(1806, (int)StatusCode.OnboardingApprovalTimeout);
+            Assert.Equal(1807, (int)StatusCode.OnboardingHubNotAuthentic);
+            Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
+            Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
+            Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(25, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(31, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
         public void StructureTypesMirrorC()
         {
             Assert.Equal(0x1009, (int)StructureType.RuntimeOnboardPeerIdExt);
+            Assert.Equal(0x100A, (int)StructureType.RuntimeOnboardLocalAppExt);
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
+            Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);
             Assert.Equal(0x4003, (int)StructureType.StreamOpenGlEglParamsExt);
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);

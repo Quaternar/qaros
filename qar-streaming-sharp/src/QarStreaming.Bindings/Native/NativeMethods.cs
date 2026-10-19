@@ -5,13 +5,24 @@ namespace Quaternar.Qaros.Interop
 {
     internal static class NativeMethods
     {
-        private const string LibraryName = "qar-streaming-c";
+        internal const string LibraryName = "qar-streaming-c";
+
+        // Runs before the first P/Invoke below (explicit static constructor, so the type is
+        // not beforefieldinit): binds every import to the runtime InstalledRuntime finds. A
+        // failure is left for Library.Init to report as "QAROS is not installed".
+        static NativeMethods()
+        {
+            InstalledRuntime.EnsureLoaded();
+        }
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_library_init(ref LibraryInitNative init);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_library_destroy();
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_runtime_info(out RuntimeInfoNative info);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_result_success();
@@ -174,7 +185,22 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_peer_spec_get_room_tag(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_peer_spec_is_target_app(IntPtr handle, [MarshalAs(UnmanagedType.U1)] out bool outIsTargetApp);
+        internal static extern ResultNative qar_impl_peer_spec_get_role(IntPtr handle, out PeerRole outRole);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_category(IntPtr handle, out DeviceCategory outCategory);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_id(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_family(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_device_name(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_update_device_identity(IntPtr session, IntPtr identity);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_get_my_spec(IntPtr session, out IntPtr outHandle);

@@ -14,7 +14,19 @@ namespace Quaternar.Qaros
     /// </summary>
     public sealed class PeerSpec
     {
-        internal PeerSpec(PeerId id, string displayName, string appVersion, string appCustomPeerInfo, AppState appState, string versionId, string roomTag, bool isTargetApp)
+        internal PeerSpec(
+            PeerId id,
+            string displayName,
+            string appVersion,
+            string appCustomPeerInfo,
+            AppState appState,
+            string versionId,
+            string roomTag,
+            PeerRole role,
+            DeviceCategory category = DeviceCategory.Unknown,
+            string deviceId = "",
+            string deviceFamily = "",
+            string deviceName = "")
         {
             Id = id;
             DisplayName = displayName;
@@ -23,7 +35,11 @@ namespace Quaternar.Qaros
             AppState = appState;
             VersionId = versionId;
             RoomTag = roomTag;
-            IsTargetApp = isTargetApp;
+            Role = role;
+            Category = category;
+            DeviceId = deviceId;
+            DeviceFamily = deviceFamily;
+            DeviceName = deviceName;
         }
 
         public PeerId Id { get; }
@@ -47,10 +63,36 @@ namespace Quaternar.Qaros
         public string RoomTag { get; }
 
         /// <summary>
-        /// Whether this peer shows rendered content (a headset, the Android streamer, a visualizer
-        /// receiver). A source application decides itself which target apps it renders for.
+        /// What the peer is in the streaming graph. A source application renders for the peers
+        /// whose role is <see cref="PeerRole.Target"/>; this process is always
+        /// <see cref="PeerRole.Source"/>.
         /// </summary>
-        public bool IsTargetApp { get; }
+        public PeerRole Role { get; }
+
+        /// <summary>
+        /// Whether this peer shows rendered content (a headset's serving app, a Visualizer
+        /// receiver, a camera's receiver slot): <see cref="Role"/> is <see cref="PeerRole.Target"/>.
+        /// A source application decides itself which target apps it renders for.
+        /// </summary>
+        public bool IsTargetApp => Role == PeerRole.Target;
+
+        /// <summary>
+        /// What kind of device the peer is; the fallback for a <see cref="DeviceId"/> and
+        /// <see cref="DeviceFamily"/> the application does not know.
+        /// </summary>
+        public DeviceCategory Category { get; }
+
+        /// <summary>
+        /// Open string naming the exact device or app ("MetaQuest3", "HoloLens2", "Visualizer").
+        /// It can change while the peer runs, once its serving app knows the model.
+        /// </summary>
+        public string DeviceId { get; }
+
+        /// <summary>Open string naming the device family ("MetaQuest"); empty when there is none.</summary>
+        public string DeviceFamily { get; }
+
+        /// <summary>Human name of the device ("Meta Quest 3"); empty when nothing better than the id is known.</summary>
+        public string DeviceName { get; }
 
         internal static Result<PeerSpec> FromHandle(IntPtr handle, bool destroyHandle)
         {
@@ -79,9 +121,21 @@ namespace Quaternar.Qaros
                 var roomTag = NativeString.GetString((buffer, size) => NativeMethods.qar_impl_peer_spec_get_room_tag(handle, buffer, size));
                 if (!roomTag.IsSuccess)
                     return Result<PeerSpec>.Failure(roomTag.Info);
-                var isTargetAppInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_is_target_app(handle, out var isTargetApp));
-                if (!isTargetAppInfo.IsSuccess)
-                    return Result<PeerSpec>.Failure(isTargetAppInfo);
+                var roleInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_role(handle, out var role));
+                if (!roleInfo.IsSuccess)
+                    return Result<PeerSpec>.Failure(roleInfo);
+                var categoryInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_category(handle, out var category));
+                if (!categoryInfo.IsSuccess)
+                    return Result<PeerSpec>.Failure(categoryInfo);
+                var deviceId = NativeString.GetString((buffer, size) => NativeMethods.qar_impl_peer_spec_get_device_id(handle, buffer, size));
+                if (!deviceId.IsSuccess)
+                    return Result<PeerSpec>.Failure(deviceId.Info);
+                var deviceFamily = NativeString.GetString((buffer, size) => NativeMethods.qar_impl_peer_spec_get_device_family(handle, buffer, size));
+                if (!deviceFamily.IsSuccess)
+                    return Result<PeerSpec>.Failure(deviceFamily.Info);
+                var deviceName = NativeString.GetString((buffer, size) => NativeMethods.qar_impl_peer_spec_get_device_name(handle, buffer, size));
+                if (!deviceName.IsSuccess)
+                    return Result<PeerSpec>.Failure(deviceName.Info);
                 return Result<PeerSpec>.Success(
                     idInfo,
                     new PeerSpec(
@@ -92,7 +146,11 @@ namespace Quaternar.Qaros
                         state,
                         versionId.Value,
                         roomTag.Value,
-                        isTargetApp));
+                        role,
+                        category,
+                        deviceId.Value,
+                        deviceFamily.Value,
+                        deviceName.Value));
             }
             finally
             {

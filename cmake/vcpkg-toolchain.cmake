@@ -85,6 +85,31 @@ if(NOT EXISTS "${_VCPKG_TOOLCHAIN}")
   message(FATAL_ERROR "vcpkg toolchain missing at ${_VCPKG_TOOLCHAIN}")
 endif()
 
+# The checkout is shallow, so the manifest's builtin-baseline commit is missing from it and vcpkg
+# cannot resolve any port version. Fetch that one commit.
+file(READ "${CMAKE_CURRENT_LIST_DIR}/../vcpkg.json" _qaros_manifest)
+string(JSON _qaros_baseline ERROR_VARIABLE _qaros_baseline_error GET "${_qaros_manifest}" builtin-baseline)
+if(NOT _qaros_baseline_error)
+  execute_process(
+    COMMAND git cat-file -e "${_qaros_baseline}^{commit}"
+    WORKING_DIRECTORY "${VCPKG_ROOT}"
+    RESULT_VARIABLE _qaros_baseline_present
+    OUTPUT_QUIET ERROR_QUIET
+  )
+  if(NOT _qaros_baseline_present EQUAL 0)
+    message(STATUS "Fetching vcpkg baseline ${_qaros_baseline}")
+    execute_process(
+      COMMAND git fetch --depth 1 origin "${_qaros_baseline}"
+      WORKING_DIRECTORY "${VCPKG_ROOT}"
+      RESULT_VARIABLE _qaros_baseline_fetch
+      ERROR_VARIABLE _qaros_baseline_fetch_stderr
+    )
+    if(NOT _qaros_baseline_fetch EQUAL 0)
+      message(FATAL_ERROR "Failed to fetch vcpkg baseline ${_qaros_baseline}: ${_qaros_baseline_fetch_stderr}")
+    endif()
+  endif()
+endif()
+
 function(_qaros_copy_compile_commands_to_parent_build_dir)
   if(NOT CMAKE_EXPORT_COMPILE_COMMANDS)
     return()

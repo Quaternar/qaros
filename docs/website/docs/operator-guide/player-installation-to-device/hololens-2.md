@@ -9,6 +9,8 @@ HoloLens 2 runs the **QAROS HoloLens Player** app, shipped as *QuaternAR Player*
 
 We support only the sideloaded Quaternar player app on HoloLens. The Microsoft Holographic Remoting Player is not part of this setup.
 
+The Visualizer's **Devices** tab installs players on Meta Quest and METALENSE 2 over USB; HoloLens 2 is still installed through the Device Portal, as below.
+
 ## Install the HoloLens Player
 
 The player ships in the QAROS ZIP under `devices/hololens/`: `QAROS Player HoloLens <version>.msix`, its `.cer` certificate and a `Dependencies/` folder. Sideload it through the HoloLens Device Portal.

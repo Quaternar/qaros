@@ -52,13 +52,37 @@ Each Hub operates its own private CA (based on `step-ca`). This means:
 
 When two Hubs connect, they exchange and merge **CA trust bundles**. Devices onboarded to Hub A are then accepted by Hub B and vice versa — federated *trust*. Signing stays local: each Hub only ever issues certificates for its own devices.
 
+## Local source apps (no code)
+
+A source app on the QAROS PC joins without a code. Windows, not the app, says who it is:
+
+- **Local only.** The app talks to the Hub over a named pipe that refuses remote clients and other Windows users.
+- **Identity from Windows.** The Hub reads the app's executable path, file hash, Authenticode signature and user from the operating system; what the app says about itself is shown but never trusted.
+- **Asked once.** An unknown app waits until someone clicks **Allow** in QAROS. The approval is remembered as a trust record: publisher and location for a signed app, path and file hash for an unsigned one. A moved, copied or re-signed app is refused.
+- **The app checks the Hub.** Before it talks, the runtime verifies that the pipe is served by the installed, Quaternar-signed QAROS (otherwise `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC`).
+- **Short-lived, memory-only credentials.** The app gets a 30-minute certificate for a key that never leaves its memory; the runtime renews it. Nothing is written to disk on the app side.
+- **Revocable.** Revoking an app in the Visualizer stops its renewal and blacklists its certificates.
+
+## Known gaps in this release
+
+What this release does **not** protect against. The full, maintained threat model is [Quaternar issue #220](https://github.com/Quaternar/Quaternar/issues/220).
+
+- **Malware running as the same Windows user.** Hub keys, Hub state and the approved-apps list are plain files in the user's profile. Such malware can read them, approve itself, or act as the Hub's user.
+- **Code inside an approved app.** Plugins, scripts or injected code in an approved process act as that app. Approving an editor or engine admits everything it loads.
+- **Session members are trusted.** Any admitted peer, including an approved local app, can see the session's streams. Operator-only actions are not yet bound to the Visualizer's authenticated identity, so a malicious admitted peer may perform them.
+- **Revocation reaches peers gradually.** A peer that has not read the Hub's revocation list accepts a revoked device until its certificate expires (local apps 30 minutes, devices up to 24 hours).
+- **Offline signature checks.** Revocation of a code-signing certificate is checked against the local cache only.
+- **Firewall on every network profile.** The installer opens the QAROS ports on public networks too. Restrict the rules yourself if the PC joins untrusted networks.
+
+Treat the QAROS PC and the signed-in user's account as the trust boundary.
+
 ## What this means for each audience
 
 **For users:** you type a short code once per device. Everything after that is automatic — reconnecting later needs no code.
 
-**For operators:** the security perimeter is (1) the Hub machine, and (2) whoever can see the pairing screen for the 10 seconds a code lives. Network eavesdroppers learn nothing useful from discovery, and cannot join without a code.
+**For operators:** the security perimeter is (1) the Hub machine and its signed-in user, (2) whoever can see the pairing screen for the 10 seconds a code lives, and (3) whoever answers the approval prompt for local apps. Network eavesdroppers learn nothing useful from discovery, and cannot join without a code.
 
-**For application developers:** the entire stack above is hidden behind three C API calls — *onboard*, *rejoin*, and *forget*. Your app persists one opaque onboarding ID and never touches keys or certificates. See [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).
+**For application developers:** the entire stack above is hidden behind the onboarding calls. A source app on the QAROS PC calls *onboard* as a local app and persists nothing; an app on another PC persists one opaque onboarding ID for *rejoin*. Neither touches keys or certificates. See [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).
 
 ## Going deeper
 
