@@ -121,6 +121,14 @@ Key choices:
 - **Depth matters.** Sending real depth (not just color) is what enables correct occlusion between app volumes and low-latency warping. Send it whenever you can.
 - **Alpha mode** — what your color's alpha channel means. See [Transparency](#transparency) below.
 
+## Color encoding
+
+The 8-bit color you send is **sRGB-encoded**, the way a display shows it. Every QAROS device shows it as is.
+
+- Render into an sRGB render target (for example `DXGI_FORMAT_B8G8R8A8_UNORM_SRGB` or `VK_FORMAT_B8G8R8A8_SRGB`) and declare the matching UNORM pixel format, or encode linear color in your last shader pass.
+- Linear-light values written into a plain UNORM texture look too dark on every device.
+- Alpha is not encoded. Premultiplied color is premultiplied in linear light, then encoded: what an sRGB render target produces when you blend over a transparent-black clear.
+
 ## Transparency
 
 A sender declares what its color's alpha means, and the mixer composites the stream by it. Chain a `QarRenderSenderAlphaModeExt` (`qar_render_sender_alpha_mode_ext_default()`, then set `alpha_mode`) on `init.header.next`; in C# set `RenderSenderOptions.AlphaMode`.

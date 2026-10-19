@@ -23,7 +23,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   and MRTK 3.
 - **Docs:** transparency, in the next version's docs: a sender's alpha mode in Rendering Streams
   (C and C#), straight alpha included, `Alpha Mode` on the Unity page, and how the mixer blends by
-  it.
+  it. Rendering Streams also states the color encoding a sender must send: sRGB.
 
 ### Fixed
 
