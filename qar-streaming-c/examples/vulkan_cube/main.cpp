@@ -1,4 +1,9 @@
 #include "renderer.hpp"
+#ifndef _WIN32
+#include <cerrno>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -35,20 +40,43 @@ OnStopSignal(int)
 bool
 StdinIsPipe()
 {
+#ifdef _WIN32
 	return GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_PIPE;
+#else
+	struct stat status{};
+	return fstat(STDIN_FILENO, &status) == 0
+		   && (S_ISFIFO(status.st_mode) || S_ISSOCK(status.st_mode));
+#endif
 }
 
 // QAROS stops an app it started by closing the app's stdin pipe. Whatever
 // arrives on the pipe is ignored; its end is the stop request.
 void
-StopWhenStdinCloses(HANDLE input)
+StopWhenStdinCloses()
 {
 	std::array<char, 256> buffer{};
+#ifdef _WIN32
+	const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD read = 0;
 	while(ReadFile(input, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)
 		  && read > 0)
 	{
 	}
+#else
+	for(;;)
+	{
+		const ssize_t count = read(STDIN_FILENO, buffer.data(), buffer.size());
+		if(count > 0 || (count < 0 && errno == EINTR))
+		{
+			continue;
+		}
+		if(count < 0)
+		{
+			std::cerr << "Reading launcher stdin failed: " << std::strerror(errno) << '\n';
+		}
+		break;
+	}
+#endif
 	g_stopRequested.store(true);
 }
 
@@ -614,7 +642,7 @@ main(int argc, char** argv)
 	std::signal(SIGTERM, OnStopSignal);
 	if(StdinIsPipe())
 	{
-		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE)).detach();
+		std::thread(StopWhenStdinCloses).detach();
 	}
 	// The header's default lookup: no path to find or pass.
 	if(not qar_library_load(nullptr))
