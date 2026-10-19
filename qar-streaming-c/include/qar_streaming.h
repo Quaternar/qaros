@@ -89,15 +89,16 @@
 #define QAR_STREAMING_EXTERN_C // Not needed in C
 #endif
 
-#ifdef QAR_STREAMING_EXPORTS // Defined when building the qar-streaming-c DLL
+#if defined(_WIN32) || defined(_WIN64)
+#ifdef QAR_STREAMING_EXPORTS
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllexport)
-#else // Defined when using the qar-streaming-c DLL OR static lib
-// If primarily used via DLL, dllimport is okay.
-// If static linking is a common use case, __declspec(dllimport) is problematic.
-// Consider separating macros for static linking vs DLL usage,
-// or just remove __declspec(dllimport) if static linking is preferred.
-// For now, keep original logic but with corrected EXTERN_C:
+#else
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllimport)
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
+#define QAR_C_API QAR_STREAMING_EXTERN_C __attribute__((visibility("default")))
+#else
+#define QAR_C_API QAR_STREAMING_EXTERN_C
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
