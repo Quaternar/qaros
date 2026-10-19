@@ -48,7 +48,7 @@ Two categories matter under the data root ([Installation: Where data and logs li
 - **Hub identity and CA state** - the Hub's trust root and issued device trust. Losing it means every device must re-onboard and any federation must be re-established. Back it up, and protect the backup as you would the Hub machine itself.
   - The secrets in `secure-store` are bound to this PC's TPM (or DPAPI) and this Windows user. A backup restores them only on the same PC, for the same user, while the TPM has not been cleared. Restored anywhere else, the Hub cannot read them, does not start, and must begin with a new `secure-store` (a new CA: every device pairs again).
 - **Runtime storage and session state** - preserves Shared Space continuity and peer continuity across a machine move.
-- **Logs** - under the log root (`%TEMP%\quaternar\logs`), not the data root. Collect them from a run *before* restarting if you need them for diagnosis. Logs are also where the current pairing code appears today (see [Managing Devices](/docs/operator-guide/managing-devices)).
+- **Logs** - under the log root (`%TEMP%\quaternar\logs`), not the data root. Collect them from a run *before* restarting if you need them for diagnosis.
 
 ## Version numbers
 

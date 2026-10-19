@@ -16,10 +16,11 @@ namespace Quaternar.Qaros
     public static class Library
     {
         /// <summary>
-        /// Loads the QAROS runtime installed on this PC (<see cref="InstalledRuntime"/>) and
-        /// initializes the library once per process, from a single thread. Calling it again without
-        /// a <see cref="Destroy"/> in between may fail. Fails with a "QAROS is not installed"
-        /// result when there is no installation, instead of a <see cref="DllNotFoundException"/>.
+        /// Loads the QAROS runtime (<see cref="InstalledRuntime"/>: the installed QAROS, else beside
+        /// the executable, else on <c>PATH</c>) and initializes the library once per process, from a
+        /// single thread. Calling it again without a <see cref="Destroy"/> in between may fail. Fails
+        /// with a "QAROS is not installed" result when no runtime is found, instead of a
+        /// <see cref="DllNotFoundException"/>.
         /// </summary>
         public static Result<Unit> Init(LibraryOptions? options = null)
         {

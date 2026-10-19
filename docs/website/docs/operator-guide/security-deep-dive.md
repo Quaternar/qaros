@@ -95,7 +95,7 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 |---|---|---|
 | Onboarding screen code | ~10 s, rotates | Yes, the only one |
 | Codes an onboarded app requests (1-64 per request, optionally bound to a planned peer id) | 2 min default, 10 min max | No |
-| Launch code of a QAROS API app, one per start | 2 min | No, written to the app's stdin only |
+| Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 
 - A request never invalidates codes others hold or the screen code.
 - A code that is not announced carries its invitation id and expiry with it (`qar-code:<id>:<expiry>:<code>`). Neither is secret; both cross the network in the handshake anyway.

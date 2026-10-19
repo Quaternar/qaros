@@ -7,13 +7,25 @@ using Quaternar.Qaros.Interop;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// Finds and loads the QAROS runtime installed on this PC. Every application runs
-    /// against that installation's <c>qar-streaming-c.dll</c>; none ships its own copy.
-    /// The installer (per machine) records the folder under <c>HKLM</c>
-    /// <c>SOFTWARE\Quaternar\QAROS</c>, value <c>InstallFolder</c>; the runtime is in its
-    /// <c>bin</c> folder. <see cref="Library.Init"/> loads it on first use, so calling
-    /// <see cref="Load()"/> yourself is only needed to learn about a missing install early.
-    /// Windows only.
+    /// Finds and loads the QAROS runtime, <c>qar-streaming-c.dll</c>, the same way as the C
+    /// header's <c>qar_library_load(NULL)</c> and every other QAROS binding (ADR-0339). The first
+    /// match wins:
+    /// <list type="number">
+    /// <item>(step 0) a <c>qar-streaming-c.dll</c> already loaded in the process: nothing is
+    /// loaded;</item>
+    /// <item>beside this binding: the folder of the <c>Quaternar.Qaros</c> assembly, then the
+    /// application's base directory (a test project's output folder, a development ZIP);</item>
+    /// <item>the folder named by the <c>QAROS_RUNTIME_DIR</c> environment variable; when it is
+    /// set, a runtime missing there is an error;</item>
+    /// <item>the installed QAROS: <c>&lt;InstallFolder&gt;\bin</c>, read from <c>HKLM</c>
+    /// <c>SOFTWARE\Quaternar\QAROS</c>, value <c>InstallFolder</c>; an installed copy that fails
+    /// to load is an error;</item>
+    /// <item>every folder on <c>PATH</c>, in order. The current directory is never searched.</item>
+    /// </list>
+    /// Each loads from its absolute path, its dependencies from its own folder and System32 only.
+    /// <see cref="Library.Init"/> loads it on first use, so calling <see cref="Load()"/> yourself
+    /// is only needed to learn about a missing runtime early. Windows only; elsewhere the
+    /// binding's <c>DllImport</c> probing finds the library.
     /// </summary>
     public static class InstalledRuntime
     {
@@ -22,8 +34,11 @@ namespace Quaternar.Qaros
 
         private const string RegistryKey = @"SOFTWARE\Quaternar\QAROS";
         private const string InstallFolderValue = "InstallFolder";
-        private const string NotInstalledMessage =
-            @"QAROS is not installed: no InstallFolder under HKLM\SOFTWARE\Quaternar\QAROS. Install QAROS to run this application.";
+        /// <summary>Environment variable naming a folder that holds the runtime (step 2).</summary>
+        public const string RuntimeDirEnvironmentVariable = "QAROS_RUNTIME_DIR";
+
+        private const string NotFoundMessage =
+            @"qar-streaming-c.dll is not beside the application, QAROS_RUNTIME_DIR is not set, QAROS is not installed (no InstallFolder under HKLM\SOFTWARE\Quaternar\QAROS), and it is not on PATH. Install QAROS to run this application.";
 
         private static readonly object s_lock = new object();
         private static IntPtr s_handle = IntPtr.Zero;
@@ -54,21 +69,17 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Loads the installed runtime. Succeeds immediately when it, or a
-        /// <c>qar-streaming-c.dll</c> loaded through <see cref="Load(string)"/>, is already
-        /// in the process. Fails with <see cref="StatusCode.LogicError"/> and a
-        /// "QAROS is not installed" message when there is no installation.
+        /// Loads the runtime by the lookup described on <see cref="InstalledRuntime"/>: already
+        /// loaded, else beside the binding, else <c>QAROS_RUNTIME_DIR</c>, else the installed QAROS,
+        /// else on <c>PATH</c>. Returns the loaded file's path. Fails with
+        /// <see cref="StatusCode.LogicError"/> when nothing is found, or when the copy that
+        /// <c>QAROS_RUNTIME_DIR</c> or the installation names is missing or does not load.
         /// </summary>
         public static Result<string> Load()
         {
             lock (s_lock)
             {
-                if (s_handle != IntPtr.Zero)
-                    return Result<string>.Success(SuccessInfo(), s_loadedPath!);
-                var binFolder = TryGetBinFolder();
-                if (binFolder == null)
-                    return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0, NotInstalledMessage));
-                return LoadLocked(Path.GetFullPath(Path.Combine(binFolder, LibraryFileName)));
+                return LoadDefaultLocked();
             }
         }
 
@@ -94,40 +105,92 @@ namespace Quaternar.Qaros
             }
         }
 
-        /// <summary>
-        /// Used by <see cref="Library.Init"/>: loads the installed runtime unless a
-        /// <c>qar-streaming-c.dll</c> is already in the process (loaded by the host, or by
-        /// the default DLL search of an earlier call).
-        /// </summary>
+        /// <summary>Used by <see cref="Library.Init"/>: <see cref="Load()"/>.</summary>
         internal static Result<string> EnsureLoaded()
         {
-            lock (s_lock)
+            return Load();
+        }
+
+        private static Result<string> LoadDefaultLocked()
+        {
+            if (s_handle != IntPtr.Zero)
+                return Result<string>.Success(SuccessInfo(), s_loadedPath!);
+            if (!IsWindows())
+                return Result<string>.Success(SuccessInfo(), LibraryFileName);
+            // 1. Already in the process (a host, or a load outside this class).
+            var existing = Kernel32.GetModuleHandleW(LibraryFileName);
+            if (existing != IntPtr.Zero)
             {
-                if (s_handle != IntPtr.Zero)
-                    return Result<string>.Success(SuccessInfo(), s_loadedPath!);
-                if (!IsWindows())
-                    return Result<string>.Success(SuccessInfo(), LibraryFileName);
-                var existing = Kernel32.GetModuleHandleW(LibraryFileName);
-                if (existing != IntPtr.Zero)
-                {
-                    s_handle = existing;
-                    s_loadedPath = ModulePath(existing) ?? LibraryFileName;
-                    RegisterResolver();
-                    return Result<string>.Success(SuccessInfo(), s_loadedPath);
-                }
-                var binFolder = TryGetBinFolder();
-                if (binFolder != null)
-                    return LoadLocked(Path.GetFullPath(Path.Combine(binFolder, LibraryFileName)));
-                // No installation: only our own development builds run like this, with
-                // the build tree on the library search path. Anything else gets the
-                // "not installed" error instead of a DllNotFoundException later.
-                var fromSearchPath = Kernel32.LoadLibraryW(LibraryFileName);
-                if (fromSearchPath == IntPtr.Zero)
-                    return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0, NotInstalledMessage));
-                s_handle = fromSearchPath;
-                s_loadedPath = ModulePath(fromSearchPath) ?? LibraryFileName;
+                s_handle = existing;
+                s_loadedPath = ModulePath(existing) ?? LibraryFileName;
                 RegisterResolver();
                 return Result<string>.Success(SuccessInfo(), s_loadedPath);
+            }
+            // 1. Beside this binding.
+            var beside = FirstExisting(BindingFolders());
+            if (beside != null)
+                return LoadLocked(beside);
+            // 2. QAROS_RUNTIME_DIR; when set, it is the only copy considered.
+            var envFolder = TryGetRuntimeDirFromEnvironment();
+            if (envFolder != null)
+                return LoadLocked(Path.GetFullPath(Path.Combine(envFolder, LibraryFileName)));
+            // 3. The installed QAROS; an installed copy that fails to load is an error.
+            var binFolder = TryGetBinFolder();
+            if (binFolder != null)
+                return LoadLocked(Path.GetFullPath(Path.Combine(binFolder, LibraryFileName)));
+            // 4. Each folder on PATH.
+            var onPath = FirstExisting(PathFolders());
+            if (onPath != null)
+                return LoadLocked(onPath);
+            return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0, NotFoundMessage));
+        }
+
+        /// <summary>
+        /// The folder <c>QAROS_RUNTIME_DIR</c> names, or null when it is unset or empty.
+        /// </summary>
+        public static string? TryGetRuntimeDirFromEnvironment()
+        {
+            var folder = Environment.GetEnvironmentVariable(RuntimeDirEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(folder) ? null : folder!.Trim().Trim('"');
+        }
+
+        private static string? FirstExisting(System.Collections.Generic.IEnumerable<string> folders)
+        {
+            foreach (var folder in folders)
+            {
+                var candidate = Path.Combine(folder, LibraryFileName);
+                if (File.Exists(candidate))
+                    return Path.GetFullPath(candidate);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Step 1: the folder of the <c>Quaternar.Qaros</c> assembly, then the application's base
+        /// directory. Empty for an assembly loaded from memory.
+        /// </summary>
+        private static System.Collections.Generic.IEnumerable<string> BindingFolders()
+        {
+            var assembly = typeof(InstalledRuntime).Assembly.Location;
+            if (!string.IsNullOrEmpty(assembly))
+            {
+                var folder = Path.GetDirectoryName(assembly);
+                if (!string.IsNullOrEmpty(folder))
+                    yield return folder!;
+            }
+            if (!string.IsNullOrEmpty(AppContext.BaseDirectory))
+                yield return AppContext.BaseDirectory;
+        }
+
+        /// <summary>Step 4: every rooted folder on <c>PATH</c>. Never the current directory.</summary>
+        private static System.Collections.Generic.IEnumerable<string> PathFolders()
+        {
+            var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            foreach (var raw in path.Split(Path.PathSeparator))
+            {
+                var entry = raw.Trim().Trim('"');
+                if (entry.Length > 0 && Path.IsPathRooted(entry))
+                    yield return entry;
             }
         }
 
@@ -137,7 +200,7 @@ namespace Quaternar.Qaros
                 return Result<string>.Failure(new ResultInfo(StatusCode.NotImplemented, 0, "Loading the installed QAROS runtime is supported on Windows only."));
             if (!File.Exists(fullPath))
                 return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0,
-                    "QAROS runtime library not found at '" + fullPath + "'. Repair or reinstall QAROS."));
+                    "QAROS runtime library not found at '" + fullPath + "'. Check QAROS_RUNTIME_DIR, or repair or reinstall QAROS."));
             // Absolute path; dependencies from the library's own folder and System32 only,
             // never from the application's folder (same rule as the C loader).
             var handle = Kernel32.LoadLibraryExW(fullPath, IntPtr.Zero, Kernel32.LoadLibrarySearchDllLoadDir | Kernel32.LoadLibrarySearchSystem32);
@@ -231,8 +294,6 @@ namespace Quaternar.Qaros
             internal const uint LoadLibrarySearchSystem32 = 0x00000800;
             [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
             internal static extern IntPtr LoadLibraryExW(string fileName, IntPtr file, uint flags);
-            [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
-            internal static extern IntPtr LoadLibraryW(string fileName);
             [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
             internal static extern IntPtr GetModuleHandleW(string moduleName);
             [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]

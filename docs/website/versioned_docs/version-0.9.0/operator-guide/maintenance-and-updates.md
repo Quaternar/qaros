@@ -35,7 +35,7 @@ Two categories matter under the data root ([Installation: Where data and logs li
 
 - **Hub identity and CA state** - the Hub's trust root and issued device trust. Losing it means every device must re-onboard and any federation must be re-established. Back it up, and protect the backup as you would the Hub machine itself.
 - **Runtime storage and session state** - preserves Shared Space continuity and peer continuity across a machine move.
-- **Logs** - under the log root (`%TEMP%\quaternar\logs`), not the data root. Collect them from a run *before* restarting if you need them for diagnosis. Logs are also where the current pairing code appears today (see [Managing Devices](/docs/operator-guide/managing-devices)).
+- **Logs** - under the log root (`%TEMP%\quaternar\logs`), not the data root. Collect them from a run *before* restarting if you need them for diagnosis.
 
 ## Version numbers
 

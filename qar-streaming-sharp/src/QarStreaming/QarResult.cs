@@ -73,40 +73,52 @@ namespace Quaternar.Qaros
         OnboardingAppIdentityMismatch = 1808,
         /// <summary>The device's certificate expired or its hub no longer renews it, and the pairing credential did not replace it. Ask the user to pair the device again with a new code.</summary>
         OnboardingRePairRequired = 1809,
+        /// <summary>
+        /// The hub has no target app it can launch for the device family the connection string
+        /// names. Nothing was invited; which devices can be invited is the hub's decision.
+        /// </summary>
+        HubTargetAppDeviceNotInvitable = 3100,
+        /// <summary>
+        /// A <see cref="PeerDeviceIdentity"/> declared a category an application may not claim. An
+        /// application is always a source and may describe itself only as
+        /// <see cref="DeviceCategory.DesktopPC"/>, <see cref="DeviceCategory.Server"/> or
+        /// <see cref="DeviceCategory.Camera"/>. Nothing was changed.
+        /// </summary>
+        PeerDeviceCategoryNotAllowed = 3101,
         /// <summary>Member join: the primary hub has the join request and waits for its operator to allow it. Not a failure; ask again later.</summary>
-        MemberJoinPending = 3000,
+        MemberJoinPending = 3400,
         /// <summary>Member join: the primary hub's operator denied the join request.</summary>
-        MemberJoinDenied = 3001,
+        MemberJoinDenied = 3401,
         /// <summary>Member join: the primary hub refused the join request outright, for example because the joining hub hosts members of its own. The message names the reason.</summary>
-        MemberJoinRefused = 3002,
+        MemberJoinRefused = 3402,
         /// <summary>Member join: the asked hub is itself a member of another hub; ask that primary hub instead.</summary>
-        MemberJoinRedirected = 3003,
+        MemberJoinRedirected = 3403,
         /// <summary>Member join: the primary hub removed this member hub; it has to join again.</summary>
-        MemberRemoved = 3004,
+        MemberRemoved = 3404,
         /// <summary>A member hub could not reach its primary hub.</summary>
-        PrimaryUnreachable = 3005,
+        PrimaryUnreachable = 3405,
         /// <summary>A session-wide action was asked of a member hub; only the primary hub performs it.</summary>
-        SessionWideActionOnMember = 3006,
+        SessionWideActionOnMember = 3406,
         /// <summary>Sponsored member join: the app's approval on the primary hub does not allow it to bring in member hubs.</summary>
-        MemberSponsorNotAllowed = 3007,
+        MemberSponsorNotAllowed = 3407,
         /// <summary>Sponsored member join: the app's approval has used its quota of member hubs.</summary>
-        MemberSponsorQuotaExceeded = 3008,
+        MemberSponsorQuotaExceeded = 3408,
         /// <summary>A hub's audit log does not verify: a record was edited, dropped or reordered.</summary>
-        AuditLogCorrupt = 3009,
+        AuditLogCorrupt = 3409,
         /// <summary>Secure storage: the encrypted store failed for a reason the codes below do not name.</summary>
-        SecureStorageError = 3100,
+        SecureStorageError = 3500,
         /// <summary>Secure storage: the value asked for is not stored.</summary>
-        SecureStorageNotFound = 3101,
+        SecureStorageNotFound = 3501,
         /// <summary>Secure storage: a stored value does not authenticate; it was edited, moved or replaced by an older copy.</summary>
-        SecureStorageTampered = 3102,
+        SecureStorageTampered = 3502,
         /// <summary>Secure storage: the data is protected by a key this machine, user or install does not have. Onboard again.</summary>
-        SecureStorageProtectorMismatch = 3103,
+        SecureStorageProtectorMismatch = 3503,
         /// <summary>Secure storage: the protecting key exists but cannot be used now (TPM cleared or locked out, keyring locked).</summary>
-        SecureStorageProtectorUnavailable = 3104,
+        SecureStorageProtectorUnavailable = 3504,
         /// <summary>Secure storage: an invalid storage key (an internal error).</summary>
-        SecureStorageInvalidKey = 3105,
+        SecureStorageInvalidKey = 3505,
         /// <summary>Secure storage: another process held the store's lock too long. Retrying may succeed.</summary>
-        SecureStorageLocked = 3106
+        SecureStorageLocked = 3506
     }
 
     /// <summary>

@@ -61,6 +61,25 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
+        /// Replaces the device this process describes itself as, for example once a camera SDK
+        /// has reported the exact model it opened. Published as a normal peer update; the role
+        /// stays <see cref="PeerRole.Source"/>. Fails with
+        /// <see cref="StatusCode.PeerDeviceCategoryNotAllowed"/> for a category an application may
+        /// not claim.
+        /// </summary>
+        public Result<Unit> UpdateDeviceIdentity(PeerDeviceIdentity identity)
+        {
+            if (identity == null)
+                throw new ArgumentNullException(nameof(identity));
+            using (var chain = NativeStructureChain.From(new PeerDeviceIdentity(identity.Category, identity.DeviceId)
+            {
+                DeviceFamily = identity.DeviceFamily,
+                DeviceName = identity.DeviceName
+            }))
+                return Results.FromNative(NativeMethods.qar_impl_peer_update_device_identity(_context.DangerousHandle, chain.Head));
+        }
+
+        /// <summary>
         /// Starts delivering peer updates to <see cref="Updated"/> until the returned subscription is
         /// disposed.
         /// </summary>

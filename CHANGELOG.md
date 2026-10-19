@@ -16,8 +16,44 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Added
+
+- **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
+  packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
+  and MRTK 3.
+- **Docs:** *Working with Peers* explains what a peer is (role, category, device id, family and
+  name) with their C getters and C# properties, how to show each target's name, pick a Unity model
+  by device, and declare or refine your own device with `QarPeerDeviceIdentity` and
+  `qar_peer_update_device_identity`. *Rendering Streams* finds targets by role instead of
+  `qar_peer_spec_is_target_app`.
+- **Docs:** the Unity guide describes joining the Hub and picking from its target apps (the target
+  list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
+  targets.
+- **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
+  binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, installed QAROS,
+  `PATH`), how candidates
+  load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
+  Troubleshooting and Onboarding describe the new fallback.
+
 ### Changed
 
+- **Docs:** the launcher configuration reference lists the catalog device ids for
+  `targetApps[].deviceType`: `HoloLens` or `Headset` (the headset reports its model itself); the
+  old generic names still resolve, a model id is skipped, `CameraVisualizer` is gone.
+- **Docs:** *Onboarding and Sessions* invites a non-HoloLens headset with `"headset:<host>"`
+  (`"quest:"` and `"android:"` remain as older spellings); *Working with Peers* names the
+  `Headset` family.
+- **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,
+  and says which app streams to each `deviceType`: Quest and `AndroidStreamer` through
+  `qar-android-streamer`, HoloLens through `qar-openxr-desktop`.
+- **Docs:** the Connection panel guide describes the Hubs and Devices areas (session, pairing another
+  hub by code, inviting HoloLens and Headset devices by address); approving and revoking source
+  apps moved to the Source Applications guide. The player installation guides start with installing
+  from the Visualizer's Devices tab, and QAROS World explains showing or printing the scene-origin
+  marker there.
+- **Docs:** the Source Applications guide no longer describes editing a web app's scripts on its
+  tile or the Local Grid mode: scripts come from registering the web app through the visualizer's
+  MCP, and web apps stream to targets only.
 - **Docs:** *Overview*, *Security model*, *Security deep dive*, *Networking & Federation* and
   *Running the Hub* describe primary and member Hubs instead of hub-connect federation: *Join hub…*
   by *Allow*, join code or a sponsoring app, one CA per session (the primary's), forwarding and
@@ -32,6 +68,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
+  current pairing code, instead of describing no such screen and the code only in the Hub log, and
+  covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
 - **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
@@ -43,6 +82,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Onboarding and sessions* states that only the Hub's operators can mint pairing codes
   (`qar_session_request_onboarding_codes`), and that target-app invite and kill are served only to
   apps the Hub admitted itself: local apps onboarded without a code and apps the Hub started.
+- **Docs:** the Source Applications guide, Rendering Streams and the security deep dive no longer
+  say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
+  with the same one-time approval; a launch invite on stdin remains only where local enrollment is
+  not available.
 
 ## [0.9.0] - 2026-10-12
 

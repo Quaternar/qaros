@@ -60,11 +60,50 @@ namespace Quaternar.Qaros
         public string? AppCustomPeerInfo { get; set; }
         internal Structure? Extension { get; private set; }
 
+        /// <summary>
+        /// Describes the device this application runs as, for example a camera. Without it the
+        /// application joins as a desktop PC with the host OS' fixed id.
+        /// </summary>
+        public PeerPresentationOptions WithDeviceIdentity(PeerDeviceIdentity identity)
+        {
+            return WithExtension(identity ?? throw new ArgumentNullException(nameof(identity)));
+        }
+
         public PeerPresentationOptions WithExtension(Structure extension)
         {
             Extension = StructureChainBuilder.Append(Extension, extension);
             return this;
         }
+    }
+
+    /// <summary>
+    /// The device an application describes itself as (C <c>QarPeerDeviceIdentity</c>). Pass it at
+    /// onboard or rejoin with <see cref="PeerPresentationOptions.WithDeviceIdentity"/>, or later
+    /// with <see cref="PeerControl.UpdateDeviceIdentity"/>.
+    /// </summary>
+    /// <remarks>
+    /// An application is always a <see cref="PeerRole.Source"/>: it describes its device, never its
+    /// role. <see cref="Category"/> must be <see cref="DeviceCategory.DesktopPC"/>,
+    /// <see cref="DeviceCategory.Server"/> or <see cref="DeviceCategory.Camera"/>; any other is
+    /// refused with <see cref="StatusCode.PeerDeviceCategoryNotAllowed"/>. Ids and families are open
+    /// strings ("LuxonisOakD", "Luxonis"); one the hub's device catalog does not know is fine.
+    /// </remarks>
+    public sealed class PeerDeviceIdentity : Structure
+    {
+        public PeerDeviceIdentity(DeviceCategory category, string deviceId)
+            : base(StructureType.PeerDeviceIdentity)
+        {
+            Category = category;
+            DeviceId = deviceId ?? throw new ArgumentNullException(nameof(deviceId));
+        }
+
+        public DeviceCategory Category { get; set; }
+        /// <summary>Required, non-empty; empty is refused with <see cref="StatusCode.ArgumentNotSupported"/>.</summary>
+        public string DeviceId { get; set; }
+        /// <summary>Optional; the rendering fallback for an id a viewer does not know.</summary>
+        public string? DeviceFamily { get; set; }
+        /// <summary>Optional human name of the device; any UTF-8.</summary>
+        public string? DeviceName { get; set; }
     }
 
     /// <summary>Options of <see cref="Runtime.Rejoin"/>.</summary>
@@ -140,7 +179,8 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Onboards from a full invite: one a sibling instance obtained with
         /// <see cref="Session.RequestOnboardingInvite"/>, or the launch invite QAROS writes as the
-        /// first stdin line of an API app it starts (<see cref="OnboardingInvite.Deserialize"/>).
+        /// first stdin line of an API app it starts where local enrollment is not available (not
+        /// Windows; <see cref="OnboardingInvite.Deserialize"/>).
         /// No discovery, no code.
         /// </summary>
         /// <remarks>

@@ -30,7 +30,7 @@ needs nothing else installed.
   for Windows** and put Direct3D11 first in the list. Other graphics APIs are not supported yet.
 - The built-in render pipeline or URP.
 - A running **QAROS Hub** (see [Installation](/docs/operator-guide/installation)). The app
-  onboards with it, and every connection goes through it.
+  joins it, and streams to the target apps in its session.
 
 ## Installation
 
@@ -76,139 +76,91 @@ and add the other one.
 ## The sample scene
 
 Open `QarSampleScene` from the `QarStreaming` package's `Samples` folder. It has one `QarStreaming`
-prefab with one endpoint whose **Connection Target** is `visualizer`, and a **Connect** button
-that calls `QarMultiUserStreamingBehaviour.InitAndConnectAll`.
+prefab and a **Connect** button that calls `QarMultiUserStreamingBehaviour.Join`.
 
-1. Start the Hub on this machine.
-2. The first time only: put the Hub's current pairing code into
-   **Onboarding > Code** on the `QarStreaming` object (see [Onboarding](#onboarding)).
-3. Enter Play mode and press **Connect**. The scene streams to the Visualizer.
+1. Start QAROS on this machine, and a target: a headset player, or a Visualizer receiver.
+2. Enter Play mode. The app joins the Hub on this PC as a local app; the first time, click
+   **Allow** in the QAROS approval prompt.
+3. The scene streams to every running target. The target list shows in the game view and in the
+   `QarStreaming` Inspector.
 
 ## Prefabs
 
 | Prefab | Role | Contains |
 |---|---|---|
-| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour`: the onboarding settings, the endpoint list with per-endpoint render and pose settings, the device prefab, and runtime-wide settings such as the native runtime folder (`DllFolder`) and `EnableMixer` |
-| `QarDevice` | One end user's view | `QarDeviceBehaviour`, a left-eye and a right-eye camera, and optional hand and head visualizers |
+| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour` (onboarding, which targets to stream to, render and gesture settings, the device prefab, runtime settings such as `DllFolder` and `EnableMixer`) and `QarTargetPickerOverlay` (the in-game target list) |
+| `QarDevice` | One target's view | `QarDeviceBehaviour`, a left-eye and a right-eye camera, and optional hand and head visualizers |
 
-`QarMultiUserStreamingBehaviour` creates a child `QarDevice` for every endpoint that has none,
-before it initializes or connects. Each generated child is named after its endpoint and takes
-that endpoint's render and pose settings.
+`QarMultiUserStreamingBehaviour` creates a child `QarDevice` for each target it streams to, named
+after the target, and destroys it when streaming to that target stops.
 
 ## Onboarding
 
-Every connection goes through the QAROS Hub. The app joins the Hub's session once, and all its
-endpoints share that session. The general flow is in
-[Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions); in Unity it is driven by
-**Onboarding** on `QarMultiUserStreamingBehaviour`.
+The app joins the Hub's session once; every target is streamed to through that session. The
+general flow is in [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions); in
+Unity it is driven by **Onboarding** on `QarMultiUserStreamingBehaviour`.
 
-1. **First connect:** read the Hub's current pairing code from the Visualizer's
-   [Connection panel](/docs/user-guide/connection-panel#onboard-a-device), put it into
-   **Onboarding > Code**, and connect within a few seconds. Codes are single-use and short-lived.
-2. **Every later connect** rejoins silently with the onboarding ID saved in `PlayerPrefs` under
-   **Onboarding Id Key**. The code is only used again when the Hub no longer knows that ID.
-3. **To unpair**, call `ForgetOnboarding()`. It disconnects, ends the session and erases the saved
-   ID; the next connect needs a fresh code.
+- **LocalApp** (the default) joins the Hub on this PC with no code. The first time, QAROS asks the
+  user to allow the app (the Unity Editor once for every project opened in it); later starts join
+  silently. Nothing is saved.
+- **Code** onboards with a Hub's pairing code, for a Hub on another machine. The onboarding ID is
+  saved in `PlayerPrefs` and rejoins silently later; `ForgetOnboarding()` erases it.
 
 | Setting | Use |
 |---|---|
-| **Code** | The pairing code. Used only when the saved onboarding ID cannot rejoin. |
-| **Hub Host**, **Hub Port** | Onboard with a Hub on another machine. Leave **Hub Host** empty to use the Hub on this machine. A remote Hub needs its port too: Hubs have no fixed onboarding port. |
-| **Onboarding Id Key** | The `PlayerPrefs` key the onboarding ID is saved under. |
-| **Use Unity Graphics Adapter** | Creates the session's GPU devices on the adapter Unity renders with (NVIDIA only), so frames need no copy between GPUs. On by default; `QAR_GPU_ADAPTER_ID` in the environment overrides it (see [Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)). |
-| **Planned Peer Id** | Joins under a given peer ID. Leave it empty unless another component planned this app's peer ID (see [Joining under a planned peer id](/docs/developer-guide/onboarding-and-sessions#joining-under-a-planned-peer-id)). |
-| **Timeout Seconds** | How long to wait for rejoin or onboarding before giving up. |
+| **Mode** | `LocalApp` or `Code`. A **Hub Host** always uses `Code`. |
+| **Code** | The pairing code (Code mode). Used only when the saved onboarding ID cannot rejoin. |
+| **Hub Host**, **Hub Port** | Onboard with a Hub on another machine. A remote Hub needs its port too: Hubs have no fixed onboarding port. |
+| **Approval Timeout Seconds** | LocalApp: how long to wait for the user to allow the app. 0 uses the Hub's default (120 s). |
+| **Use Unity Graphics Adapter** | Creates the session's GPU devices on the adapter Unity renders with (NVIDIA only), so frames need no copy between GPUs. `QAR_GPU_ADAPTER_ID` in the environment overrides it (see [Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)). |
+| **Onboarding Id Key**, **Planned Peer Id**, **Timeout Seconds** | Code mode details: where the ID is saved, joining under a planned peer ID, how long to wait. |
 
-If the session cannot be obtained, every enabled endpoint reports that error in `LastError`.
+`Join()` blocks until the Hub answers. When it fails, `LastJoinError` says why and the target list
+offers to join again.
 
-## Endpoints
+## Targets
 
-An endpoint is one end user. Its **Connection Target** says where its frames go:
+A target is a target app already in the Hub's session: a HoloLens 2, Meta Quest or Metalens player,
+the Android streamer, or a Visualizer receiver. **The app never invites or starts a device.** A
+target appears in the list once it joined the Hub on its own (see
+[Player Installation to Device](/docs/operator-guide/player-installation-to-device)), and leaves it
+when it is gone.
 
-| Connection Target | What happens |
+- **Stream To All Targets** (on by default) streams to every running target, including ones that
+  join later.
+- Turn it off to pick: only the targets checked in the list are streamed to.
+- Each row shows the target's display name, its device type and its state; hover it for the peer
+  ID.
+- The list is in the game view (`QarTargetPickerOverlay`, immediate-mode GUI, no Canvas needed) and
+  in the `QarStreaming` Inspector in Play mode. Turn the overlay's **Visible** off, or remove it, to
+  build your own UI on the API below.
+- A target that fails to connect is tried again every few seconds while it stays picked.
+
+| Member | Does |
 |---|---|
-| `visualizer`, `visualizer:N` | Streams to a Visualizer already running on this machine's Hub: the N-th one, `0` by default. Nothing is launched. |
-| `hololens:<host>`, or a bare host name or IP address | This machine's Hub starts the HoloLens 2 player at `<host>`. |
-| `quest:<host>` | The same for a Meta Quest. |
-| `android:<host>` | The same for an Android device, such as P&C Solutions METALENSE 2. |
+| `Join()`, `IsJoined`, `LastJoinError` | Joins the Hub and starts listing targets; whether it did; why not |
+| `Targets` | The target list (`QarStreamTarget`: `Id`, `DisplayName`, `Category`, `DeviceId`, `DeviceFamily`, `DeviceName`, `DeviceLabel`, `AppState`, `Selected`, `Device`, `ConnectionState`, `LastError`) |
+| `TargetsChanged` | Raised on the main thread when a target joins, leaves, changes or is picked |
+| `StreamToAllTargets` | Stream to every running target, or only the picked ones |
+| `SetTargetSelected(PeerId, bool)`, `IsStreamedTo(target)` | Picks a target; whether it is streamed to |
+| `Leave()` | Stops streaming to every target and stops listing them |
+| `ForgetOnboarding()` | Leaves, ends the session and erases the saved onboarding ID (Code mode) |
 
-- A player the endpoint started is stopped again when the endpoint disconnects.
-- Connecting returns at once with the endpoint in `Connecting`. Finding or starting the target and
-  creating the stream run in the background.
-- Endpoints that all use `visualizer` stream to the same Visualizer; use `visualizer:N` to reach
-  another one.
-- The device needs its player installed, see
-  [Player Installation to Device](/docs/operator-guide/player-installation-to-device).
+### App volume
 
-### App volumes
-
-Each endpoint streams into its own [app volume](/docs/developer-guide/app-volumes), identified by
-its **App Volume Common Name**. Left empty, the name is `<product name>/<endpoint name>`.
-Reconnecting gets the same volume back with its placement, and disconnecting keeps it. Give
-endpoints distinct names when they must not share a volume.
-
-### One end user
-
-Add one `QarStreaming` prefab to the scene and set its default endpoint.
-
-### Multiple end users
-
-1. Add one `QarStreaming` prefab to the scene.
-2. In `QarMultiUserStreamingBehaviour`'s **Endpoints**, add one entry per end user.
-3. Set each endpoint's **Name**, **Connection Target**, **App Volume Common Name**,
-   **Enable Gestures**, and its render settings (**Near**, **Far**).
-4. Change the runtime-wide settings on `QarMultiUserStreamingBehaviour` if the defaults do not
-   suit you.
-5. Call `QarMultiUserStreamingBehaviour.InitAndConnectAll`, or enable **Connect On Start**.
-
-- The native runtime is initialized once, and the session is rejoined or onboarded once, for all
-  endpoints.
-- Every enabled endpoint connects on its own. If one fails to connect, the others are still
-  attempted.
+Every target shows the scene in one [app volume](/docs/developer-guide/app-volumes), identified by
+**App Volume Common Name** (the product name when empty), so all users see the same scene placed
+once. Joining again gets the same volume back with its placement.
 
 ### Gestures
 
-Each endpoint's **Enable Gestures** turns QAROS [app volume gestures](/docs/developer-guide/app-volumes#gestures)
-on or off for that end user's hands. Keep it on for normal QAROS gesture handling. Turn it off
-when another input stack consumes that end user's hands.
-
-## Connecting and disconnecting
-
-`QarMultiUserStreamingBehaviour` has these methods for UI buttons and scripts:
-
-| Method | Does |
-|---|---|
-| `InitAndConnectAll()` | Initializes the runtime, obtains the session, then connects every enabled endpoint |
-| `ConnectAll()`, `ConnectEndpoint(int endpointIndex)` | Connects every enabled endpoint, or one |
-| `DisconnectAll()`, `DisconnectEndpoint(int endpointIndex)` | Disconnects every endpoint, or one |
-| `ReconnectAll()`, `ReconnectEndpoint(int endpointIndex)` | Disconnects and connects again |
-| `ForgetOnboarding()` | Disconnects, ends the session and erases the saved onboarding ID |
-
-- Disconnecting releases the endpoint's native objects but keeps its `QarDevice` GameObject, ready
-  to reconnect.
-- The shared session ends when the last endpoint and the coordinator have released the runtime.
-- When `QarMultiUserStreamingBehaviour` is destroyed, it disconnects every endpoint and destroys
-  only the `QarDevice` GameObjects it generated.
-
-### Changing endpoints at runtime
-
-Scripts can change the endpoint list with `SetEndpoints(Endpoint[] endpoints)`, `AddEndpoint(...)`,
-`RemoveEndpointAt(int endpointIndex)` and `RefreshEndpointDevices()`.
-
-- A removed endpoint is disconnected.
-- A generated `QarDevice` that no endpoint uses any more is destroyed.
-- An endpoint without a device gets a new one from the `QarDevice` prefab.
-
-### Connection status
-
-Each endpoint reports `CurrentConnectionState`, `LastResolvedConnectionString`, `LastError`,
-`LastConnectSucceeded` and `LastDisconnectSucceeded`. `GetEndpointConnectionState`,
-`GetEndpointLastError` and `GetEndpointLastResolvedConnectionString` look them up by endpoint
-index.
+**Enable Gestures** turns QAROS [app volume gestures](/docs/developer-guide/app-volumes#gestures) on
+or off for the targets' hands. Keep it on for normal QAROS gesture handling. Turn it off when
+another input stack consumes the hands.
 
 ## Coordinate spaces
 
-The views and hands an endpoint receives are in its app volume's
+The views and hands a target's device receives are in its app volume's
 [app content space](/docs/developer-guide/coordinate-systems#app-content-space--your-applications-world-inside-the-box),
 in OpenXR convention: right-handed, +Y up, -Z forward, in app units. The Unity world is the app
 content root.
@@ -226,10 +178,9 @@ hands become MRTK hands.
 
 - **Install MRTK first** with the [Mixed Reality Feature Tool](https://learn.microsoft.com/en-us/windows/mixed-reality/develop/unity/welcome-to-mr-feature-tool).
   The Unity Package Manager may not offer the MRTK versions the package needs.
-- **It uses the first endpoint only** (`Endpoints[0]`). To keep a hand from being handled twice,
-  by MRTK and by QAROS app volume gestures, it turns gestures off for that endpoint at runtime.
-  The **Enable Gestures** value in the Inspector does not change. Further endpoints stream as
-  usual, with gestures as configured.
+- **It uses the first streamed target only.** To keep a hand from being handled twice, by MRTK and
+  by QAROS app volume gestures, it turns gestures off for that target's device at runtime. The
+  **Enable Gestures** value in the Inspector does not change. Further targets stream as usual.
 - **The MRTK sample scene** `QarSampleSceneMrtk` has a debug **Connect** button built with MRTK UX
   Components and MRTK Extended Assets. The integration itself does not use those two packages;
   only that button does.

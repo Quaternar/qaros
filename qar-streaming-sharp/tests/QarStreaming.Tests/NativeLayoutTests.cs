@@ -62,6 +62,7 @@ namespace Quaternar.Qaros.Tests
             { typeof(OnboardInitNative), 72 },
             { typeof(OnboardCodeExtNative), 24 },
             { typeof(OnboardHostExtNative), 32 },
+            { typeof(PeerDeviceIdentityNative), 48 },
             { typeof(OnboardInviteExtNative), 24 },
             { typeof(OnboardPeerIdExtNative), 32 },
             { typeof(OnboardLocalAppExtNative), 24 },
@@ -155,6 +156,10 @@ namespace Quaternar.Qaros.Tests
             { typeof(RejoinInitNative), nameof(RejoinInitNative.OnboardingId), 16 },
             { typeof(RejoinInitNative), nameof(RejoinInitNative.Presentation), 32 },
             { typeof(OnboardHostExtNative), nameof(OnboardHostExtNative.Port), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.Category), 16 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceId), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceFamily), 32 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceName), 40 },
             { typeof(OnboardPeerIdExtNative), nameof(OnboardPeerIdExtNative.PeerId), 16 },
             { typeof(OnboardLocalAppExtNative), nameof(OnboardLocalAppExtNative.ApprovalTimeoutMs), 16 },
             { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.Flavor), 8 },
@@ -251,26 +256,28 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1807, (int)StatusCode.OnboardingHubNotAuthentic);
             Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
             Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
+            Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
+            Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
-            Assert.Equal(3000, (int)StatusCode.MemberJoinPending);
-            Assert.Equal(3001, (int)StatusCode.MemberJoinDenied);
-            Assert.Equal(3002, (int)StatusCode.MemberJoinRefused);
-            Assert.Equal(3003, (int)StatusCode.MemberJoinRedirected);
-            Assert.Equal(3004, (int)StatusCode.MemberRemoved);
-            Assert.Equal(3005, (int)StatusCode.PrimaryUnreachable);
-            Assert.Equal(3006, (int)StatusCode.SessionWideActionOnMember);
-            Assert.Equal(3007, (int)StatusCode.MemberSponsorNotAllowed);
-            Assert.Equal(3008, (int)StatusCode.MemberSponsorQuotaExceeded);
-            Assert.Equal(3009, (int)StatusCode.AuditLogCorrupt);
-            Assert.Equal(3100, (int)StatusCode.SecureStorageError);
-            Assert.Equal(3101, (int)StatusCode.SecureStorageNotFound);
-            Assert.Equal(3102, (int)StatusCode.SecureStorageTampered);
-            Assert.Equal(3103, (int)StatusCode.SecureStorageProtectorMismatch);
-            Assert.Equal(3104, (int)StatusCode.SecureStorageProtectorUnavailable);
-            Assert.Equal(3105, (int)StatusCode.SecureStorageInvalidKey);
-            Assert.Equal(3106, (int)StatusCode.SecureStorageLocked);
+            Assert.Equal(3400, (int)StatusCode.MemberJoinPending);
+            Assert.Equal(3401, (int)StatusCode.MemberJoinDenied);
+            Assert.Equal(3402, (int)StatusCode.MemberJoinRefused);
+            Assert.Equal(3403, (int)StatusCode.MemberJoinRedirected);
+            Assert.Equal(3404, (int)StatusCode.MemberRemoved);
+            Assert.Equal(3405, (int)StatusCode.PrimaryUnreachable);
+            Assert.Equal(3406, (int)StatusCode.SessionWideActionOnMember);
+            Assert.Equal(3407, (int)StatusCode.MemberSponsorNotAllowed);
+            Assert.Equal(3408, (int)StatusCode.MemberSponsorQuotaExceeded);
+            Assert.Equal(3409, (int)StatusCode.AuditLogCorrupt);
+            Assert.Equal(3500, (int)StatusCode.SecureStorageError);
+            Assert.Equal(3501, (int)StatusCode.SecureStorageNotFound);
+            Assert.Equal(3502, (int)StatusCode.SecureStorageTampered);
+            Assert.Equal(3503, (int)StatusCode.SecureStorageProtectorMismatch);
+            Assert.Equal(3504, (int)StatusCode.SecureStorageProtectorUnavailable);
+            Assert.Equal(3505, (int)StatusCode.SecureStorageInvalidKey);
+            Assert.Equal(3506, (int)StatusCode.SecureStorageLocked);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(47, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(49, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -283,6 +290,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x2009, (int)StructureType.SessionSponsorMemberInit);
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
+            Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);
             Assert.Equal(0x4003, (int)StructureType.StreamOpenGlEglParamsExt);
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);

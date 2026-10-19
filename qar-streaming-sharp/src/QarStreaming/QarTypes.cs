@@ -24,6 +24,48 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
+    /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
+    /// </summary>
+    public enum PeerRole
+    {
+        /// <summary>QAROS pipeline infrastructure the hub launched itself.</summary>
+        Internal = 0,
+        /// <summary>Provides content: a source application or a camera capture process.</summary>
+        Source = 1,
+        /// <summary>
+        /// Shows content: a headset's serving app, a Visualizer receiver, a camera's receiver slot.
+        /// </summary>
+        Target = 2,
+        /// <summary>A QAROS runtime (hub) process.</summary>
+        Runtime = 3,
+        /// <summary>The operator's Visualizer control session.</summary>
+        Control = 4
+    }
+
+    /// <summary>
+    /// What kind of device a peer is (C <c>QarDeviceCategory</c>): the rendering fallback when the
+    /// peer's <see cref="PeerSpec.DeviceId"/> and <see cref="PeerSpec.DeviceFamily"/> are unknown
+    /// to the application. A new device model never adds a value; treat an unnamed value as
+    /// <see cref="Unknown"/>.
+    /// </summary>
+    public enum DeviceCategory
+    {
+        /// <summary>Infrastructure, runtime, control, test targets and unrecognised devices.</summary>
+        Unknown = 0,
+        /// <summary>A desktop or laptop PC (every source application by default).</summary>
+        DesktopPC = 1,
+        /// <summary>A server machine.</summary>
+        Server = 2,
+        /// <summary>A headset or glasses of any model.</summary>
+        Headset = 3,
+        /// <summary>A Visualizer receiver showing streams on the PC.</summary>
+        Visualizer = 4,
+        /// <summary>A camera of any model: its capture process, or its receiver slot.</summary>
+        Camera = 5
+    }
+
+    /// <summary>
     /// The graphics backend a sender's frame textures live on. Every GPU value requires exactly
     /// the matching stream-parameter extension on the options; <see cref="Cpu"/> takes none.
     /// </summary>
@@ -307,6 +349,7 @@ namespace Quaternar.Qaros
         SessionGraphicsDeviceId = 0x2004,
         SessionRequestInviteInit = 0x2005,
         PeerPresentation = 0x2006,
+        PeerDeviceIdentity = 0x2009,
         SessionInviteTargetAppInit = 0x2007,
         SessionRequestOnboardingCodesInit = 0x2008,
         SessionSponsorMemberInit = 0x2009,
