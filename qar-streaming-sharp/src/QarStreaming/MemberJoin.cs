@@ -194,7 +194,12 @@ namespace Quaternar.Qaros.Interop
             {
                 state = (SponsorMemberAsyncState)GCHandle.FromIntPtr(userState).Target!;
                 var info = Results.ToInfo(status);
-                state.Complete(Results.FromHandle(info, reply, MemberJoinNative.FromHandle));
+                var result = Results.FromHandle(info, reply, MemberJoinNative.FromHandle);
+                // Cancelled before the native answer: nobody will read the result, so the reply
+                // blob it holds is released here instead of leaking.
+                if (!state.Completion.TrySetResult(result) && result.IsSuccess)
+                    result.Value.Dispose();
+                state.CleanupOnce();
             }
             catch (Exception ex)
             {

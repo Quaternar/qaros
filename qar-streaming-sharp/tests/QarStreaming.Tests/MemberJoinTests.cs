@@ -30,20 +30,20 @@ namespace Quaternar.Qaros.Tests
                 "{\"createdUnix\":1760000000,\"csrPem\":\"csr\",\"displayName\":\"Workshop PC\","
                 + "\"hasMembers\":false,\"machineName\":\"WORKSHOP-2\",\"memberHubKeyDer\":\"" + FakeKey + "\","
                 + "\"memberHubPeerId\":\"00112233-4455-6677-8899-aabbccddeeff\","
-                + "\"nonce\":\"00112233445566778899aabbccddeeff\",\"operatorPeerIds\":[],\"signature\":\"c2ln\",\"version\":1}");
+                + "\"nonce\":\"00112233445566778899aabbccddeeff\",\"operatorPeerIds\":[],\"signature\":\"c2ln\",\"ticket\":\"\",\"version\":2}");
         }
 
         private static byte[] ReplyBytes(string status)
         {
             return Encoding.UTF8.GetBytes(
-                "{\"caBundlePem\":\"\",\"certificateChainPem\":\"\",\"generation\":3,\"message\":\"\","
+                "{\"caBundlePem\":\"\",\"certificateChainPem\":\"\",\"csrNeeded\":null,\"generation\":3,\"message\":\"\","
                 + "\"onboardingHost\":\"studio.local\",\"onboardingPort\":47000,"
                 + "\"policy\":{\"mayApproveLocalApps\":true,\"mayPairHeadsets\":true,\"primaryMayLaunch\":true},"
                 + "\"primaryAuthorityKeyDer\":\"" + FakeKey + "\",\"primaryDisplayName\":\"Studio PC\","
                 + "\"primaryHubPeerId\":\"00112233-4455-6677-8899-aabbccddee00\",\"reasonCode\":\"\","
-                + "\"redirect\":null,\"requestNonce\":\"00112233445566778899aabbccddeeff\","
+                + "\"redirect\":null,\"requestNonce\":\"00112233445566778899aabbccddeeff\",\"sasNonce\":\"\","
                 + "\"sessionId\":\"00112233-4455-6677-8899-aabbccddee11\",\"sessionInvite\":null,"
-                + "\"signature\":\"c2ln\",\"status\":\"" + status + "\",\"version\":1}");
+                + "\"signature\":\"c2ln\",\"status\":\"" + status + "\",\"version\":2}");
         }
 
         private static Runtime CreateRuntime()

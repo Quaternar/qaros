@@ -65,6 +65,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   and does not protect against, and that backups restore only on the same PC and user. The new
   section *Updating to encrypted storage* lists what to do after the update: pair devices again,
   approve local apps again, join member Hubs again and activate the licence again.
+- **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
+  Hub's local message router.
 
 ### Fixed
 

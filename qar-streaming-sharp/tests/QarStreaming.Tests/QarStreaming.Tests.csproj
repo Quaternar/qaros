@@ -5,7 +5,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <LangVersion>8.0</LangVersion>
+    <!-- 9.0 for [ModuleInitializer] (BuildUnderTestRuntime.cs); the library stays on 8.0. -->
+    <LangVersion>9.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
