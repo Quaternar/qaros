@@ -319,11 +319,20 @@ private:
 // The peer callback hands over IDs only; main starts the targets. A plain
 // std::mutex, because this standalone SDK example cannot depend on
 // qar::Synchronized and must stay portable to Linux.
+// A target can be rendered for unless the hub says it is gone or it announced its leave. UNKNOWN
+// is a hub that has not reconciled the peer yet (or an older hub that never does): nothing says
+// it is gone, so it counts.
+static bool
+IsReachable(QarPeerPresence presence)
+{
+	return presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN;
+}
+
 struct Targets
 {
 	std::mutex lock;
 	std::map<PeerKey, QarPeerId> pending;
-	// Queues the peer when it is a running target app.
+	// Queues the peer when it is a reachable target app.
 	void Offer(QarPeerSpec* spec)
 	{
 		QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
@@ -331,9 +340,9 @@ struct Targets
 		{
 			return;
 		}
-		QarAppState state = QAR_APP_STATE_UNKNOWN;
+		QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
 		QarPeerId id{};
-		if(not Check(qar_peer_spec_get_app_state(spec, &state)) || state != QAR_APP_STATE_RUNNING
+		if(not Check(qar_peer_spec_get_presence(spec, &presence)) || not IsReachable(presence)
 		   || not Check(qar_peer_spec_get_id(spec, &id)))
 		{
 			return;
