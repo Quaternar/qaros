@@ -61,6 +61,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Onboarding and Sessions*, also in the 0.9.0 docs, no longer says a target requests a
+  render stream by itself and no longer links to a missing *Accepting render stream requests*
+  section: your application picks its targets and creates their senders, as *Finding rendering
+  targets* describes.
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
   current pairing code, instead of describing no such screen and the code only in the Hub log, and
   covers the one-time codes an onboarded application can request.
