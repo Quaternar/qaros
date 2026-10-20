@@ -126,7 +126,7 @@ Key choices:
 Every QAROS device shows the stream's 8-bit color as **sRGB-encoded**, the way a display expects it. The textures a sender gives you are plain UNORM, so the numbers you write are stored as they are. If your renderer shades in linear light, do one of these:
 
 - **Encode in your last shader pass**: convert linear color to sRGB before writing it. Best quality, since the encoding happens at full precision.
-- **Declare linear color** and let QAROS encode it: chain a `QarRenderSenderColorEncodingExt` with `QAR_COLOR_ENCODING_LINEAR` (`qar_render_sender_color_encoding_ext_default()`); in C# set `RenderSenderOptions.ColorEncoding = ColorEncoding.Linear`. It costs one GPU pass per frame in your process, and the darks band slightly, because 8-bit linear values have already lost precision there.
+- **Declare linear color** and let QAROS encode it: chain a `QarRenderSenderColorEncodingExt` with `QAR_COLOR_ENCODING_LINEAR` (`qar_render_sender_color_encoding_ext_default()`); in C# set `RenderSenderOptions.ColorEncoding = ColorEncoding.Linear`. It costs one GPU pass per frame in your process. Send linear color as `QAR_PIXEL_FORMAT_R16G16B16A16`: in an 8-bit format the darks band slightly, because 8-bit linear values have already lost precision there.
 
 Linear values sent without either look too dark on every device. Alpha is never encoded. Premultiplied color is premultiplied in linear light, then encoded: what an sRGB render target produces when you blend over a transparent-black clear.
 
