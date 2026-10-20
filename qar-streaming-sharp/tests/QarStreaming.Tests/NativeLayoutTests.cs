@@ -257,6 +257,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1807, (int)StatusCode.OnboardingHubNotAuthentic);
             Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
             Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
+            Assert.Equal(1810, (int)StatusCode.OnboardingRenewalPossessionUnproven);
             Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
             Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
             Assert.Equal(3300, (int)StatusCode.HubLifecycleOperationRunning);
@@ -285,7 +286,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(56, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(57, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]

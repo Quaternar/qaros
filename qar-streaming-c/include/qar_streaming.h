@@ -421,6 +421,12 @@ typedef enum QarStatusCode
 	/// pairing credential given did not replace it. Tell the user to pair the
 	/// device again with a new code from the hub; retrying does not help.
 	QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED = 1809,
+	/** The hub refused to renew the certificate: the renewal did not prove
+	 * it holds the key of the certificate it renews. This SDK makes that proof
+	 * itself, so the stored identity is damaged: pair the device again. An
+	 * SDK older than the hub never makes the proof and cannot renew there;
+	 * update the app or device, pairing again is not enough. */
+	QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN = 1810,
 	/** The hub has no target app it can launch for the requested device (an
 	 * unknown connection-string scheme family, or a device kind that is never
 	 * invited, such as a camera). Nothing was invited; pick another target. */

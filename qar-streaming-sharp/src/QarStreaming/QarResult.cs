@@ -73,6 +73,8 @@ namespace Quaternar.Qaros
         OnboardingAppIdentityMismatch = 1808,
         /// <summary>The device's certificate expired or its hub no longer renews it, and the pairing credential did not replace it. Ask the user to pair the device again with a new code.</summary>
         OnboardingRePairRequired = 1809,
+        /// <summary>The hub refused to renew the certificate: the renewal did not prove it holds the key of the certificate it renews. This SDK makes the proof itself, so the stored identity is damaged: pair the device again. An SDK older than the hub cannot renew there; update the app or device, pairing again is not enough.</summary>
+        OnboardingRenewalPossessionUnproven = 1810,
         /// <summary>
         /// The hub has no target app it can launch for the device family the connection string
         /// names. Nothing was invited; which devices can be invited is the hub's decision.
