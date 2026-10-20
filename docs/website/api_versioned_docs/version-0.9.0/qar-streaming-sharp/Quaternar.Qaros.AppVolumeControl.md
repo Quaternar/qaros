@@ -102,7 +102,7 @@ The id is derived from the common name alone, so the same common name gives the
 same volume in every session, from every peer and after a restart: call this on every
 start instead of persisting the id. The common name is the identity key and must be
 ASCII; put user-facing text, which may be any UTF-8, in
-[`AppVolumeOptions.DisplayName`](Quaternar.Qaros.AppVolumeOptions.md#displayname).
+[`AppVolumeOptions.DisplayName`](Quaternar.Qaros.AppVolumeOptions.md#displayname). Set a non-empty DisplayName when creating or reopening a volume; CommonName does not supply a default label.
 
 When an open volume of that name exists, the rest of `options` is
 ignored and the existing volume keeps its pose, size, app transform and gesture

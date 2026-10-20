@@ -35,7 +35,7 @@ public AppVolumeOptions(string commonName)
 | Member | Description |
 |---|---|
 | [CommonName](#commonname) | Required stable identity key the volume's id is derived from. Must be ASCII and non-empty; put any other text in [`AppVolumeOptions.DisplayName`](#displayname). |
-| [DisplayName](#displayname) | Label shown to users; any text, emoji included. |
+| [DisplayName](#displayname) | Required non-empty label when creating or reopening this object; Unicode and emoji are allowed. The constructor leaves it null: set it before calling GetOrCreate. CommonName supplies identity only and is not a fallback display name. |
 | [Pose](#pose) | Placement of the cuboid's centre in room space, and the rotation taking app volume space into room space. |
 | [Size](#size) | Cuboid extents in metres along app-volume-space X (width), Z (length) and Y (height). |
 | [InitialPeers](#initialpeers) |  |
@@ -57,7 +57,7 @@ public string CommonName { get; set; }
 
 ### DisplayName {#displayname}
 
-Label shown to users; any text, emoji included.
+Required non-empty label when creating or reopening this object; Unicode and emoji are allowed. The constructor leaves it null: set it before calling GetOrCreate. CommonName supplies identity only and is not a fallback display name.
 
 ```csharp
 public string? DisplayName { get; set; }

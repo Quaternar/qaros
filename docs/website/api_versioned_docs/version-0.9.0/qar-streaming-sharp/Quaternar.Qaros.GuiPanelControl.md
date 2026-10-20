@@ -83,7 +83,7 @@ The id is derived from the common name alone, so the same common name gives the
 same panel in every session, from every peer and after a restart: call this on every
 start instead of persisting the id. The common name is the identity key and must be
 ASCII; put user-facing text, which may be any UTF-8, in
-[`GuiPanelOptions.DisplayName`](Quaternar.Qaros.GuiPanelOptions.md#displayname).
+[`GuiPanelOptions.DisplayName`](Quaternar.Qaros.GuiPanelOptions.md#displayname). Set a non-empty DisplayName when creating or reopening a panel; CommonName does not supply a default label.
 
 When an open panel of that name exists, the rest of `options` is
 ignored. A closed panel is reopened, visible, with `options`.

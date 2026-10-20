@@ -67,7 +67,8 @@ namespace Quaternar.Qaros
         /// same volume in every session, from every peer and after a restart: call this on every
         /// start instead of persisting the id. The common name is the identity key and must be
         /// ASCII; put user-facing text, which may be any UTF-8, in
-        /// <see cref="AppVolumeOptions.DisplayName"/>.
+        /// <see cref="AppVolumeOptions.DisplayName"/>. Set a non-empty DisplayName when
+        /// creating or reopening a volume; CommonName does not supply a default label.
         /// </para>
         /// <para>
         /// When an open volume of that name exists, the rest of <paramref name="options"/> is

@@ -33,7 +33,7 @@ public GuiPanelOptions(string commonName)
 | Member | Description |
 |---|---|
 | [CommonName](#commonname) | Required stable identity key the panel's id is derived from. Must be ASCII and non-empty; put any other text in [`GuiPanelOptions.DisplayName`](#displayname). |
-| [DisplayName](#displayname) | Label shown to users; any text, emoji included. |
+| [DisplayName](#displayname) | Required non-empty label when creating or reopening this object; Unicode and emoji are allowed. The constructor leaves it null: set it before calling GetOrCreate. CommonName supplies identity only and is not a fallback display name. |
 | [Pose](#pose) | The panel's pose in room space: the midpoint of its top edge, front normal along -Z of the pose, the surface hanging below it. |
 | [Size](#size) | Defaults to [`GuiPanelSize.Default`](Quaternar.Qaros.GuiPanelSize.md#default). |
 | [ContentUri](#contenturi) | Website to show. Set at most one of this and [`GuiPanelOptions.ContentStreamId`](#contentstreamid), or [`GuiPanelControl.GetOrCreate`](Quaternar.Qaros.GuiPanelControl.md#getorcreate) throws [`ArgumentException`](https://learn.microsoft.com/dotnet/api/system.argumentexception); with neither, a website panel is created with the default URL. The content type is fixed at creation. |
@@ -53,7 +53,7 @@ public string CommonName { get; set; }
 
 ### DisplayName {#displayname}
 
-Label shown to users; any text, emoji included.
+Required non-empty label when creating or reopening this object; Unicode and emoji are allowed. The constructor leaves it null: set it before calling GetOrCreate. CommonName supplies identity only and is not a fallback display name.
 
 ```csharp
 public string? DisplayName { get; set; }

@@ -17,6 +17,10 @@ An **app volume** is your application's home in the room: a named 3D box that ho
 
 Like panels, volumes are identified by a stable **common name**:
 
+:::warning Required display name
+Set both the stable ASCII common name (`common_name` / `CommonName`) and a non-empty user-facing label (`display_name` / `DisplayName`) when creating or reopening a volume. The common name supplies identity; it is not a fallback label. C# option constructors leave `DisplayName` null, so set it explicitly in the initializer even though the property is nullable. An already open object may ignore creation options, which can hide an omitted label until a clean install or reopen.
+:::
+
 <CodeTabs>
 <Lang value="c">
 
@@ -50,7 +54,7 @@ qar_result_log_if_error(
 // The common name is required: GetOrCreate returns the existing volume of that name.
 var options = new AppVolumeOptions("assembly-view.myapp.example.com")
 {
-    DisplayName = "Assembly View",
+    DisplayName = "Assembly View", // required label; CommonName supplies identity only
 
     // Pose is the cuboid CENTER, room space.
     Pose = new Pose { Position = new Vec3(0f, 1.2f, 0f) },

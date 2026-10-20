@@ -1200,7 +1200,11 @@ namespace Quaternar.Qaros
         /// non-empty; put any other text in <see cref="DisplayName"/>.
         /// </summary>
         public string CommonName { get; set; }
-        /// <summary>Label shown to users; any text, emoji included.</summary>
+        /// <summary>
+        /// Required non-empty label when creating or reopening this object; Unicode and emoji
+        /// are allowed. The constructor leaves it null: set it before calling GetOrCreate.
+        /// CommonName supplies identity only and is not a fallback display name.
+        /// </summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// The panel's pose in room space: the midpoint of its top edge, front
@@ -1263,7 +1267,11 @@ namespace Quaternar.Qaros
         /// non-empty; put any other text in <see cref="DisplayName"/>.
         /// </summary>
         public string CommonName { get; set; }
-        /// <summary>Label shown to users; any text, emoji included.</summary>
+        /// <summary>
+        /// Required non-empty label when creating or reopening this object; Unicode and emoji
+        /// are allowed. The constructor leaves it null: set it before calling GetOrCreate.
+        /// CommonName supplies identity only and is not a fallback display name.
+        /// </summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// Placement of the cuboid's centre in room space, and the rotation taking
