@@ -111,9 +111,6 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_runtime_forget(IntPtr runtime, ref ForgetInitNative init);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void qar_impl_runtime_destroy(IntPtr runtime);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern void qar_impl_session_handle_destroy(IntPtr handle);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

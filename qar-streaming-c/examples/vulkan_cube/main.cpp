@@ -623,7 +623,7 @@ RunApp()
 	}
 	if(runtime)
 	{
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 	}
 	return success;
 }

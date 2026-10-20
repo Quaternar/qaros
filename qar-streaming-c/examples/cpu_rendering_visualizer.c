@@ -202,7 +202,7 @@ main(int argc, char** argv)
 	   ) != 0
 	   || session == NULL)
 	{
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
@@ -224,7 +224,7 @@ main(int argc, char** argv)
 	{
 		log_result("qar_app_volumes_get_or_create", volume_result);
 		qar_session_handle_destroy(session);
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 6;
@@ -259,7 +259,7 @@ main(int argc, char** argv)
 	{
 		log_result("qar_render_sender_create", sender_result);
 		qar_session_handle_destroy(session);
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 7;
@@ -301,7 +301,7 @@ main(int argc, char** argv)
 	//! [cpu_frames]
 
 	qar_session_handle_destroy(session);
-	qar_runtime_destroy(runtime);
+	qar_runtime_handle_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);
 	qar_library_unload();

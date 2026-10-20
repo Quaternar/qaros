@@ -183,7 +183,7 @@ main(int argc, char** argv)
 	   ) != 0
 	   || primary_session == NULL)
 	{
-		qar_runtime_destroy(primary_runtime);
+		qar_runtime_handle_destroy(primary_runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
@@ -286,7 +286,7 @@ main(int argc, char** argv)
 					qar_onboarding_invite_handle_destroy(sibling_invite);
 				}
 
-				qar_runtime_destroy(sibling_runtime);
+				qar_runtime_handle_destroy(sibling_runtime);
 			}
 
 			free(blob);
@@ -321,7 +321,7 @@ main(int argc, char** argv)
 					"qar_runtime_forget(sibling)",
 					qar_runtime_forget(sibling_runtime, &sibling_forget_init)
 				);
-				qar_runtime_destroy(sibling_runtime);
+				qar_runtime_handle_destroy(sibling_runtime);
 			}
 			remove("onboarding_and_rejoin.sibling-onboarding-id.txt");
 		}
@@ -335,7 +335,7 @@ main(int argc, char** argv)
 	}
 	//! [onboarding_teardown]
 
-	qar_runtime_destroy(primary_runtime);
+	qar_runtime_handle_destroy(primary_runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);
 	qar_library_unload();

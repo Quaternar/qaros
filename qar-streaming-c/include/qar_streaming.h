@@ -2451,8 +2451,6 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
 static inline QarResult
 qar_runtime_create(const QarRuntimeInit* init, QarRuntime** out_runtime);
 
-static inline void qar_runtime_destroy(QarRuntime* runtime);
-
 /** @} */ /* end of qar_c_runtime */
 
 // ============================================================================
@@ -3029,7 +3027,14 @@ static inline QarResult qar_peer_spec_get_app_version(
 static inline QarResult qar_peer_spec_get_app_custom_peer_info(
 	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
 );
-/** @brief Get application state for this peer. */
+/**
+ * @brief Get application state for this peer.
+ *
+ * The state to act on, not only the peer's last claim: a peer the hub no longer
+ * sees in the session reads as QAR_APP_STATE_SHUTTING_DOWN, since a killed
+ * process never publishes its leave, and reads as it was again once it is back.
+ * QAR_APP_STATE_RETIRED stays retired.
+ */
 static inline QarResult
 qar_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state);
 /** @brief Get internal version id string. */
@@ -3152,14 +3157,16 @@ static inline QarResult qar_peer_spec_get_device_name(
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
-/** @brief Query number of known peer specs. */
+/** @brief Query number of known peer specs, retired peers excluded. */
 static inline QarResult
 qar_query_peer_specs_count(QarSession* session, size_t* out_count);
 /**
  * @brief Enumerate peer specs into user-provided array.
  *
- * Size the array with qar_query_peer_specs_count(). The list also contains this
- * process' own peer; qar_session_get_my_spec() identifies it. Match
+ * Size the array with qar_query_peer_specs_count(). Retired peers
+ * (QAR_APP_STATE_RETIRED) never come back and are not listed; an update
+ * subscription still reports a peer turning retired. The list also contains
+ * this process' own peer; qar_session_get_my_spec() identifies it. Match
  * qar_peer_spec_get_id() against the id qar_session_invite_target_app()
  * returned to find an invited peer, and read qar_peer_spec_get_app_state() to
  * see whether it is ready.
@@ -7206,7 +7213,6 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 	  runtime_create,                                                          \
 	  (const QarRuntimeInit* init, QarRuntime** out_runtime),                  \
 	  (init, out_runtime))                                                     \
-	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
 	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
 	X(ACTIVE, QarResult, library_destroy, (void), ())                          \
 	X(ACTIVE, QarResult, runtime_info, (QarRuntimeInfo * out_info), (out_info))
