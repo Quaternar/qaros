@@ -56,7 +56,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   MCP, and web apps stream to targets only.
 - **Docs:** *Overview*, *Security model*, *Security deep dive*, *Networking & Federation* and
   *Running the Hub* describe primary and member Hubs instead of hub-connect federation: *Join hub…*
-  by *Allow*, join code or a sponsoring app, one CA per session (the primary's), forwarding and
+  by *Allow* or join code, or by a member-Hub invitation an approved app creates on the primary
+  (accepted from an administrator's allow-list of primaries, else from the first primary the Hub
+  joined; a Hub takes its paired devices along), one CA per session (the primary's), forwarding and
   removal, *Leave and start own session*, the new tray items, and the Hub audit log. The CA is
   described as built into the Hub (step-ca is gone), with its new storage layout and limitations.
 - **Docs:** *Security deep dive*, *Security model*, *Installation* and *Maintenance & Updates*

@@ -267,10 +267,12 @@ typedef struct QarSessionHandle QarSession;
 /// qar_runtime_onboard).
 typedef struct QarOnboardingInviteHandle QarOnboardingInvite;
 
-/// Member join blob (opaque) — a hub's signed member join request, or a
-/// primary hub's signed reply to one (see qar_runtime_request_member_join,
-/// qar_session_sponsor_member, qar_runtime_complete_member_join).
-typedef struct QarMemberJoinBlobHandle QarMemberJoinBlob;
+/// Member-hub invitation (opaque) — a primary hub's signed invitation that
+/// joins the QAROS hub on another PC to its session as a member (see
+/// qar_runtime_create_member_hub_invitation, qar_runtime_join_hub_as_member).
+/// A secret bearer credential: send it only over a trusted channel and never
+/// log it.
+typedef struct QarMemberHubInvitationHandle QarMemberHubInvitation;
 
 /// App volume (opaque)
 typedef struct QarAppVolumeHandle QarAppVolume;
@@ -428,6 +430,9 @@ typedef enum QarStatusCode
 	 * QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
 	 * QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed. */
 	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101,
+	/// The hub is in the middle of another session-wide operation (a session
+	/// rotation, a member join, a leave). Retry once it has finished.
+	QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING = 3300,
 	/// Member join: the primary hub has the join request and waits for its
 	/// operator to allow it. Not a failure; ask again later.
 	QAR_STATUS_MEMBER_JOIN_PENDING = 3400,
@@ -448,11 +453,11 @@ typedef enum QarStatusCode
 	/// A session-wide action was asked of a member hub; only the primary hub
 	/// performs it.
 	QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER = 3406,
-	/// Sponsored member join: the app's approval on the primary hub does not
+	/// Member-hub invitation: the app's approval on the primary hub does not
 	/// allow it to bring in member hubs. The primary's operator grants that
 	/// right on the approval.
 	QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED = 3407,
-	/// Sponsored member join: the app's approval has used its quota of member
+	/// Member-hub invitation: the app's approval has used its quota of member
 	/// hubs.
 	QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED = 3408,
 	/// A hub's audit log does not verify: a record was edited, dropped or
@@ -478,7 +483,29 @@ typedef enum QarStatusCode
 	QAR_STATUS_SECURE_STORAGE_INVALID_KEY = 3505,
 	/// Secure storage: another process held the store's lock too long.
 	/// Retrying may succeed.
-	QAR_STATUS_SECURE_STORAGE_LOCKED = 3506
+	QAR_STATUS_SECURE_STORAGE_LOCKED = 3506,
+	/// Member-hub invitation: the invitation does not parse, its signature,
+	/// kind or version is wrong, or the primary hub does not know it or judged
+	/// its proof invalid.
+	QAR_STATUS_MEMBER_INVITATION_INVALID = 3600,
+	/// Member-hub invitation: the invitation has expired. Ask for a new one.
+	QAR_STATUS_MEMBER_INVITATION_EXPIRED = 3601,
+	/// Member-hub invitation: the invitation was used as often as it allows.
+	QAR_STATUS_MEMBER_INVITATION_USED_UP = 3602,
+	/// Member-hub invitation: the primary hub's operator revoked it.
+	QAR_STATUS_MEMBER_INVITATION_REVOKED = 3603,
+	/// Member-hub invitation: the invitation's primary hub is not in this
+	/// PC's administrator allow-list, or is not the primary hub this PC's hub
+	/// joined first.
+	QAR_STATUS_MEMBER_INVITATION_PRIMARY_NOT_ALLOWED = 3604,
+	/// Member-hub invitation: this PC's member-invitation policy (registry key
+	/// or file) can be written by a non-administrator, so every invitation is
+	/// refused until an administrator fixes its permissions.
+	QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED = 3605,
+	/// The hub on this PC started unjoined by policy and waits for a
+	/// member-hub invitation; it onboards nothing until it has joined a
+	/// primary hub.
+	QAR_STATUS_HUB_AWAITING_INVITATION = 3606
 } QarStatusCode;
 
 /**
@@ -1242,7 +1269,10 @@ typedef struct QarAppVolumeControllerRayStyle
  *
  * Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
  * 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
- * 0x2002 (PEER_SPEC_INIT).
+ * 0x2002 (PEER_SPEC_INIT), 0x100B (RUNTIME_MEMBER_JOIN_REQUEST_INIT),
+ * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT). The never-released
+ * SESSION_SPONSOR_MEMBER_INIT shared 0x2009 by mistake; 0x2009 stays
+ * PEER_DEVICE_IDENTITY.
  */
 typedef enum QarStructureType
 {
@@ -1257,12 +1287,11 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
-	QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_REQUEST_INIT = 0x100B,
-	QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_COMPLETE_INIT = 0x100C,
+	QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT = 0x100D,
+	QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT = 0x100E,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
-	QAR_STRUCTURE_TYPE_SESSION_SPONSOR_MEMBER_INIT = 0x2009,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
@@ -1854,73 +1883,69 @@ typedef void (*qar_session_request_invite_result_callback_t)(
 );
 
 /**
- * @brief Ask the QAROS hub on this PC for its signed member join request
- * (qar_runtime_request_member_join).
+ * @brief The permissions a member-hub invitation grants at the primary hub
+ * (QarMemberHubInvitationInit::permissions).
+ */
+typedef enum QarMemberHubInvitationPermissionFlagBits
+{
+	/// A hub the primary does not know joins as a new member.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_JOIN = 0x1,
+	/// A member the primary already admitted (and has not removed) is
+	/// answered again; lets a member that lost its membership rejoin.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_REJOIN = 0x2,
+	/// A member the primary's operator removed is admitted again.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_READMIT = 0x4,
+	/// A hub that was a primary of its own moves its paired devices, launcher
+	/// children and approved local apps into the primary's session.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_BRING_DEVICES = 0x8,
+} QarMemberHubInvitationPermissionFlagBits;
+/// A combination of QarMemberHubInvitationPermissionFlagBits.
+typedef uint32_t QarMemberHubInvitationPermissionFlags;
+
+/**
+ * @brief Create a member-hub invitation on the primary hub of this PC
+ * (qar_runtime_create_member_hub_invitation).
  *
- * Deliberately empty: the request is the hub's own (its peer id, member hub
- * key, certificate request and names), so the app chooses nothing. The header
- * keeps it an ABI-safe growth point.
+ * Zero in a field selects its default.
  */
-typedef struct QarMemberJoinRequestInit
+typedef struct QarMemberHubInvitationInit
 {
-	QarStructureHeader
-		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_REQUEST_INIT */
-} QarMemberJoinRequestInit;
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT */
+	/// How long the invitation can be used, in seconds. 0 -> 86400 (24 h);
+	/// at most 604800 (7 days).
+	uint32_t lifetime_seconds;
+	/// How many hubs may join with it. 0 -> 1; at most 64, and never more
+	/// than the calling app's remaining quota of member hubs.
+	uint32_t max_uses;
+	/// 0 -> JOIN | REJOIN | BRING_DEVICES.
+	QarMemberHubInvitationPermissionFlags permissions;
+	/// Optional (NULL); a UTF-8 label of at most 64 bytes, shown in the
+	/// primary hub's visualizer next to the invitation.
+	const char* label;
+} QarMemberHubInvitationInit;
 
 /**
- * @brief Bring a hub into this session's primary hub as a member
- * (qar_session_sponsor_member).
- */
-typedef struct QarSponsorMemberInit
-{
-	QarStructureHeader
-		header; /**< QAR_STRUCTURE_TYPE_SESSION_SPONSOR_MEMBER_INIT */
-	/// Required; the joining hub's member join request blob, as
-	/// qar_runtime_request_member_join returned it on the joining PC.
-	/// Borrowed for the duration of the call.
-	const QarMemberJoinBlob* request;
-	/// Zero -> the hub on this PC, which must be the session's primary hub
-	/// (the sponsoring app runs on the primary's PC). Otherwise the primary
-	/// hub's peer id.
-	QarPeerId primary_peer_id;
-	/// Optional (NULL); the address the joining PC is known by to the
-	/// sponsoring app, e.g. its IP. Shown and recorded by the primary next to
-	/// the new member. UTF-8.
-	const char* client_address;
-	/// Optional (NULL); the joining PC's name as the sponsoring app knows it
-	/// (machine or user name). Shown and recorded like client_address. UTF-8.
-	const char* client_name;
-} QarSponsorMemberInit;
-
-/**
- * @brief Hand the QAROS hub on this PC a primary hub's reply
- * (qar_runtime_complete_member_join).
- */
-typedef struct QarMemberJoinCompleteInit
-{
-	QarStructureHeader
-		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_COMPLETE_INIT */
-	/// Required; the primary hub's reply blob, as qar_session_sponsor_member
-	/// returned it on the primary's PC. Borrowed for the duration of the call.
-	const QarMemberJoinBlob* reply;
-	/// Optional (NULL -> trust the key the reply names on first use). The
-	/// SHA-256 fingerprint of the primary hub's trust-authority key, 64 hex
-	/// digits in either case, optionally grouped by ':' or spaces, as the
-	/// primary's operator reads it out. A reply signed by any other key fails
-	/// with QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC.
-	const char* expected_primary_fingerprint;
-} QarMemberJoinCompleteInit;
-
-/**
- * @brief Result callback for qar_session_sponsor_member_async.
+ * @brief Join the QAROS hub on this PC to a primary hub as its member
+ * (qar_runtime_join_hub_as_member).
  *
- * Fires exactly once — on success, on error, and on cancellation.
- * `out_reply` is valid and owned by the app only on success (release with
- * qar_member_join_blob_handle_destroy).
+ * Zero in a timeout selects its default.
  */
-typedef void (*qar_session_sponsor_member_result_callback_t)(
-	QarResult status, QarMemberJoinBlob* out_reply, void* user_state
-);
+typedef struct QarJoinHubAsMemberInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT */
+	/// Required; the invitation the primary's app created, as
+	/// qar_member_hub_invitation_deserialize returned it. Borrowed for the
+	/// duration of the call.
+	const QarMemberHubInvitation* invitation;
+	/// How long to wait for a hub this call started to accept connections, in
+	/// milliseconds. 0 -> 60000.
+	uint32_t hub_start_timeout_ms;
+	/// How long to wait for the hub to come back as a member after its
+	/// restart, in milliseconds. 0 -> 120000.
+	uint32_t restart_timeout_ms;
+} QarJoinHubAsMemberInit;
 
 typedef enum QarGpuDeviceIdType
 {
@@ -2938,195 +2963,175 @@ static inline void
 qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
 
 // ---------------------------------------------------------------------------
-// Member join (sponsored)
+// Member hub (invitations)
 // ---------------------------------------------------------------------------
 
 /**
- * @name Member join
+ * @name Member hub
  *
- * Brings the QAROS hub of one PC into the session of the hub on another PC as
- * a member, when an application already connects the two PCs but their
+ * Joins the QAROS hub of one PC to the session of the hub on another PC as a
+ * member, when an application already connects the two PCs but their
  * operators cannot reach each other (for example a simulation whose server runs
- * on the primary hub's PC and whose clients run on the joining PCs). Three
- * steps, the blobs carried by the application's own channel:
+ * on the primary hub's PC and whose clients run on the joining PCs). Two
+ * steps, the invitation carried by the application's own channel:
  *
- * 1. On the joining PC: qar_runtime_request_member_join returns the hub's
- *    signed join request. Serialize it (qar_member_join_blob_serialize) and
- * send it to the application on the primary's PC.
- * 2. On the primary's PC: qar_session_sponsor_member hands the request to the
- *    primary hub, which admits the joining hub without a click when the
- *    application's approval allows it to bring in member hubs, and returns the
- *    primary's signed reply. Send it back.
- * 3. On the joining PC: qar_runtime_complete_member_join hands the reply to the
- *    hub, which verifies it, becomes a member and restarts into the primary's
- *    session.
+ * 1. On the primary's PC: qar_runtime_create_member_hub_invitation returns an
+ *    invitation signed by the primary hub. Serialize it
+ *    (qar_member_hub_invitation_serialize) and send it to the application on
+ *    the joining PC.
+ * 2. On the joining PC: qar_runtime_join_hub_as_member hands the invitation to
+ *    the hub on that PC, which joins the primary as a member and restarts into
+ *    the primary's session. Then onboard the application itself with
+ *    qar_runtime_onboard and QarOnboardLocalAppExt.
  *
- * The blobs carry no secret: a request is public, a reply carries certificates
- * for the joining hub's own key. An attacker on an unauthenticated channel can
- * still swap blobs, so pass the primary's key fingerprint to step 3 whenever
- * the operator can read it out. Both hubs refuse a blob of any other version.
- * Each application must be one the hub on its own PC approved; the hubs never
- * prompt for these steps. Windows only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
+ * The invitation is a secret bearer credential: whoever holds it can join a
+ * hub to the primary until it expires or is used up. Send it only over a
+ * trusted channel and never log it. No click is needed on either PC. Windows
+ * only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
  * @{ */
 
-/** @brief Default init for QarMemberJoinRequestInit. */
-static inline QarMemberJoinRequestInit
-qar_member_join_request_init_default(void);
-/** @brief Default init for QarSponsorMemberInit (the hub on this PC is the
- * primary; no client address or name). */
-static inline QarSponsorMemberInit qar_sponsor_member_init_default(void);
-/** @brief Default init for QarMemberJoinCompleteInit (trust the primary key
- * on first use). */
-static inline QarMemberJoinCompleteInit
-qar_member_join_complete_init_default(void);
+/** @brief Default init for QarMemberHubInvitationInit (24 h, one use, join,
+ * rejoin and bring devices). */
+static inline QarMemberHubInvitationInit
+qar_member_hub_invitation_init_default(void);
+/** @brief Default init for QarJoinHubAsMemberInit (set init.invitation; the
+ * timeouts default to 60 s and 120 s). */
+static inline QarJoinHubAsMemberInit qar_join_hub_as_member_init_default(void);
 
 /**
- * @brief Ask the QAROS hub on this PC for its signed member join request.
+ * @brief Ask the QAROS hub on this PC, the session's primary hub, for a
+ * member-hub invitation.
  *
- * Blocks until the hub answers. Needs no session: the hub identifies this
- * process from Windows, as for QarOnboardLocalAppExt, and answers only an
- * application it approved before. It never prompts. The hub picks the hub of
- * this runtime's QAROS installation, the same way QarOnboardLocalAppExt does.
+ * Needs no session: the hub identifies this process from Windows, as for
+ * QarOnboardLocalAppExt, and answers only an application it approved with the
+ * right to bring in member hubs ("May bring in member hubs") and with quota
+ * left. The quota is spent per hub the invitation admits, not per invitation.
+ * It never prompts. The hub picks the hub of this runtime's QAROS
+ * installation, the same way QarOnboardLocalAppExt does.
+ *
+ * The returned invitation is a secret bearer credential: send it only over a
+ * trusted channel and never log it. The primary hub's operator sees it in the
+ * visualizer and can revoke it.
  *
  * @param runtime Required; the runtime.
- * @param init Required; from qar_member_join_request_init_default().
+ * @param init Required; from qar_member_hub_invitation_init_default().
  * @param cancel Optional cancellation token (can be NULL).
- * @param out_request Required; receives the request blob on success, owned by
- *   the caller (release with qar_member_join_blob_handle_destroy).
+ * @param out_invitation Required; receives the invitation on success, owned by
+ *   the caller (release with qar_member_hub_invitation_handle_destroy).
  * @return Success, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED a field is out of range (lifetime
+ *   above 7 days, more than 64 uses or more than the quota left, a label over
+ *   64 bytes, unknown permission bits).
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE no QAROS hub runs on this PC
  *   for this user.
  * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the process serving the pipe
  *   is not the installed QAROS hub.
  * @retval QAR_STATUS_ONBOARDING_APPROVAL_DENIED the hub has not approved this
  *   application.
- * @retval QAR_STATUS_MEMBER_JOIN_REFUSED the hub cannot become a member: it
- *   hosts members of its own, or is already a member.
- */
-static inline QarResult qar_runtime_request_member_join(
-	QarRuntime* runtime,
-	const QarMemberJoinRequestInit* init,
-	QarCancelToken* cancel,
-	QarMemberJoinBlob** out_request
-);
-
-/**
- * @brief Hand a joining hub's request to this session's primary hub and get
- * the primary's signed reply.
- *
- * The session must be one this application joined through the primary hub on
- * this PC as a local application (QarOnboardLocalAppExt): the request is signed
- * with its certificate, and the primary admits the joining hub only for an
- * application whose approval allows it to bring in member hubs, within the
- * approval's quota. The primary records this application, client_address and
- * client_name as the new member's sponsor.
- *
- * Blocks until the primary answers. The reply is checked before it is handed
- * out: it answers this request, and its certificate is for the key of the
- * request's certificate request.
- *
- * @param session Required; the sponsoring application's session.
- * @param init Required; the request blob and the optional client details.
- * @param on_progress Optional progress callback (can be NULL).
- * @param progress_state User pointer passed to on_progress unchanged.
- * @param cancel Optional cancellation token (can be NULL).
- * @param out_reply Required; receives the reply blob on success, owned by the
- *   caller (release with qar_member_join_blob_handle_destroy).
- * @return Success, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->request is not a member join
- *   request blob, or the primary hub could not be resolved (set
- *   init->primary_peer_id).
  * @retval QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED the approval does not allow
  *   this application to bring in member hubs.
  * @retval QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED the approval has used its
  *   quota.
- * @retval QAR_STATUS_MEMBER_JOIN_REFUSED the primary refused the joining hub;
- *   qar_result_message names the reason.
- * @retval QAR_STATUS_MEMBER_JOIN_DENIED, QAR_STATUS_MEMBER_JOIN_PENDING,
- *   QAR_STATUS_MEMBER_JOIN_REDIRECTED the reply does not admit the hub.
- * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the reply does not answer
- *   this request or does not certify its key.
+ * @retval QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER the hub on this PC is a
+ *   member; create the invitation on its primary's PC.
+ * @retval QAR_STATUS_HUB_AWAITING_INVITATION the hub on this PC waits to join
+ *   a primary itself.
+ * @retval QAR_STATUS_NOT_IMPLEMENTED not on Windows.
  */
-static inline QarResult qar_session_sponsor_member(
-	QarSession* session,
-	const QarSponsorMemberInit* init,
-	qar_progress_callback_t on_progress,
-	void* progress_state,
+static inline QarResult qar_runtime_create_member_hub_invitation(
+	QarRuntime* runtime,
+	const QarMemberHubInvitationInit* init,
 	QarCancelToken* cancel,
-	QarMemberJoinBlob** out_reply
+	QarMemberHubInvitation** out_invitation
 );
 
 /**
- * @brief Async variant of qar_session_sponsor_member.
+ * @brief Join the QAROS hub on this PC to the invitation's primary hub as a
+ * member.
  *
- * Returns immediately after starting; result_callback fires exactly once on a
- * background thread (also on cancellation). An invalid argument is returned
- * directly and the callback does not fire.
- */
-static inline QarResult qar_session_sponsor_member_async(
-	QarSession* session,
-	const QarSponsorMemberInit* init,
-	qar_session_sponsor_member_result_callback_t result_callback,
-	qar_progress_callback_t update_callback,
-	void* user_state,
-	QarCancelToken* cancel
-);
-
-/**
- * @brief Hand the QAROS hub on this PC the primary hub's reply, so it becomes
- * a member of the primary's session.
+ * This joins this PC's hub, not the calling application: it does **not**
+ * onboard the caller. Once it returns, call qar_runtime_onboard with
+ * QarOnboardLocalAppExt, which then succeeds without a prompt for the
+ * application the invitation was created by.
  *
- * Checks the reply first: it must admit the hub, and when
- * init->expected_primary_fingerprint is set, be signed by that key. The hub
- * then checks that the reply answers its own latest request and certifies its
- * own key, records the membership and restarts into the primary's session:
- * every process it started reconnects. Like qar_runtime_request_member_join,
- * only an application the hub approved may call it.
+ * The call:
+ * - starts the installed QAROS hub when none runs for this user, and waits up
+ *   to init->hub_start_timeout_ms for it;
+ * - checks the invitation: its signature, its expiry, then whether this PC
+ *   trusts its primary hub - the administrator's allow-list
+ *   (HKLM\\SOFTWARE\\Policies\\Quaternar\\QAROS\\MemberInvitations or
+ *   %ProgramData%\\Quaternar\\QAROS\\policy\\member-invitations.json) when
+ *   there is one, else the primary this PC's hub joined first (pinned on that
+ *   first join);
+ * - joins, rejoins or readmits the hub at the primary, and blocks through the
+ *   hub's restart into the primary's session, up to init->restart_timeout_ms.
+ *   Every process the hub started reconnects; with the invitation's
+ *   permission, the devices paired to this PC's hub move along.
+ *
+ * Called again with an invitation of the primary the hub is already a member
+ * of, it returns success at once. Any process of this PC's user may call it;
+ * the signed invitation is what authorizes the join.
  *
  * @param runtime Required; the runtime.
- * @param init Required; the reply blob and the optional expected fingerprint.
+ * @param init Required; the invitation and the optional timeouts.
  * @param on_progress Optional progress callback (can be NULL).
  * @param progress_state User pointer passed to on_progress unchanged.
  * @param cancel Optional cancellation token (can be NULL).
- * @return Success once the hub committed the membership, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->reply is not a member join
- *   reply blob, or the fingerprint is not 64 hex digits.
- * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the reply is not signed by
- *   the expected key, or does not certify the hub's own key.
- * @retval QAR_STATUS_MEMBER_JOIN_PENDING, QAR_STATUS_MEMBER_JOIN_DENIED,
- *   QAR_STATUS_MEMBER_JOIN_REDIRECTED, QAR_STATUS_MEMBER_JOIN_REFUSED the reply
- *   does not admit the hub.
+ * @return Success once the hub runs as the primary's member, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->invitation is missing or not
+ *   a valid handle.
+ * @retval QAR_STATUS_MEMBER_INVITATION_INVALID the invitation's signature is
+ *   wrong, or the primary does not know it or judged it invalid.
+ * @retval QAR_STATUS_MEMBER_INVITATION_EXPIRED,
+ *   QAR_STATUS_MEMBER_INVITATION_USED_UP, QAR_STATUS_MEMBER_INVITATION_REVOKED
+ *   ask the primary's application for a new invitation.
+ * @retval QAR_STATUS_MEMBER_INVITATION_PRIMARY_NOT_ALLOWED this PC does not
+ *   trust the invitation's primary hub.
+ * @retval QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED this PC's
+ *   member-invitation policy can be written by a non-administrator.
+ * @retval QAR_STATUS_MEMBER_JOIN_REFUSED the hub on this PC hosts members of
+ *   its own or is a member of another primary, or the invitation does not
+ *   permit the join; qar_result_message names the reason.
+ * @retval QAR_STATUS_MEMBER_REMOVED the primary removed this hub and the
+ *   invitation does not permit readmitting it.
+ * @retval QAR_STATUS_PRIMARY_UNREACHABLE none of the invitation's addresses of
+ *   the primary hub answers.
+ * @retval QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING the hub on this PC is in
+ *   the middle of another session-wide operation; retry.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE no QAROS hub runs on this PC
- *   for this user.
- * @retval QAR_STATUS_ONBOARDING_APPROVAL_DENIED the hub has not approved this
- *   application.
+ *   and none could be started.
+ * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the process serving the pipe
+ *   is not the installed QAROS hub.
+ * @retval QAR_STATUS_TIMEOUT the hub did not come back as a member in time;
+ *   the join is committed, so calling again returns success once it has.
+ * @retval QAR_STATUS_NOT_IMPLEMENTED not on Windows.
  */
-static inline QarResult qar_runtime_complete_member_join(
+static inline QarResult qar_runtime_join_hub_as_member(
 	QarRuntime* runtime,
-	const QarMemberJoinCompleteInit* init,
+	const QarJoinHubAsMemberInit* init,
 	qar_progress_callback_t on_progress,
 	void* progress_state,
 	QarCancelToken* cancel
 );
 
 /**
- * @brief Sizing getter for qar_member_join_blob_serialize.
+ * @brief Sizing getter for qar_member_hub_invitation_serialize.
  *
- * @param blob Required; a member join blob.
+ * @param invitation Required; an invitation.
  * @param out_size Required; receives the serialized size in bytes.
  * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle.
  */
-static inline QarResult qar_member_join_blob_serialized_size(
-	const QarMemberJoinBlob* blob, size_t* out_size
+static inline QarResult qar_member_hub_invitation_serialized_size(
+	const QarMemberHubInvitation* invitation, size_t* out_size
 );
 
 /**
- * @brief Serialize a member join blob to bytes for the application's own
- * channel.
+ * @brief Serialize an invitation to bytes for the application's own channel.
  *
- * The bytes are UTF-8 JSON, at most 128 KiB.
+ * The bytes are UTF-8 JSON, at most 16 KiB. They carry the invitation's
+ * secret: never log them.
  *
- * @param blob Required; a member join blob.
+ * @param invitation Required; an invitation.
  * @param out_buffer Receives the bytes. May be NULL (with buffer_size 0) to
  *   query the size only.
  * @param buffer_size Size of out_buffer in bytes.
@@ -3136,43 +3141,41 @@ static inline QarResult qar_member_join_blob_serialized_size(
  *   *out_bytes_written still holds the required size.
  * @retval QAR_STATUS_LOGIC_ERROR the handle is invalid.
  */
-static inline QarResult qar_member_join_blob_serialize(
-	const QarMemberJoinBlob* blob,
+static inline QarResult qar_member_hub_invitation_serialize(
+	const QarMemberHubInvitation* invitation,
 	uint8_t* out_buffer,
 	size_t buffer_size,
 	size_t* out_bytes_written
 );
 
 /**
- * @brief Parse a member join blob (a request or a reply) from bytes
- * qar_member_join_blob_serialize wrote.
+ * @brief Parse an invitation from bytes qar_member_hub_invitation_serialize
+ * wrote.
  *
- * Strict: a blob with an unknown or missing field, of another version, or over
- * 128 KiB is refused. Signatures are not checked here; the steps that use a
- * blob check it.
+ * Strict: an invitation with an unknown or missing field, of another kind or
+ * version, out of its bounds, or over 16 KiB is refused. Its signature is not
+ * checked here; qar_runtime_join_hub_as_member checks it.
  *
  * @param wire_data Required; the bytes.
  * @param wire_data_size Their size.
- * @param out_blob Required; receives the blob, owned by the caller (release
- *   with qar_member_join_blob_handle_destroy).
+ * @param out_invitation Required; receives the invitation, owned by the caller
+ *   (release with qar_member_hub_invitation_handle_destroy).
  * @return Success, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the bytes are not a member join
- *   request or reply.
+ * @retval QAR_STATUS_MEMBER_INVITATION_INVALID the bytes are not a member-hub
+ *   invitation.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED a required pointer is NULL.
  */
-static inline QarResult qar_member_join_blob_deserialize(
+static inline QarResult qar_member_hub_invitation_deserialize(
 	const uint8_t* wire_data,
 	size_t wire_data_size,
-	QarMemberJoinBlob** out_blob
+	QarMemberHubInvitation** out_invitation
 );
 
-/** @brief Check if a member join blob handle is valid. */
-static inline bool
-qar_member_join_blob_handle_is_valid(const QarMemberJoinBlob* blob);
+/** @brief Destroy an invitation handle. NULL is ignored. */
+static inline void
+qar_member_hub_invitation_handle_destroy(QarMemberHubInvitation* invitation);
 
-/** @brief Destroy a member join blob handle. NULL is ignored. */
-static inline void qar_member_join_blob_handle_destroy(QarMemberJoinBlob* blob);
-
-/** @} */ /* end of Member join */
+/** @} */ /* end of Member hub */
 
 /** @} */ /* end of qar_c_onboarding */
 
@@ -6525,36 +6528,28 @@ qar_session_invite_target_app_init_default(void)
 	return init;
 }
 
-static inline QarMemberJoinRequestInit
-qar_member_join_request_init_default(void)
+static inline QarMemberHubInvitationInit
+qar_member_hub_invitation_init_default(void)
 {
-	QarMemberJoinRequestInit init = {
-		{ QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_REQUEST_INIT, NULL } // header
-	};
-	return init;
-}
-
-static inline QarSponsorMemberInit
-qar_sponsor_member_init_default(void)
-{
-	QarSponsorMemberInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_SPONSOR_MEMBER_INIT, NULL }, // header
-		NULL,													  // request
-		qar_peer_id_default(), // primary_peer_id -> the hub on this PC
-		NULL,				   // client_address
-		NULL				   // client_name
-	};
-	return init;
-}
-
-static inline QarMemberJoinCompleteInit
-qar_member_join_complete_init_default(void)
-{
-	QarMemberJoinCompleteInit init = {
-		{ QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_JOIN_COMPLETE_INIT,
+	QarMemberHubInvitationInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT,
 		  NULL }, // header
-		NULL,	  // reply
-		NULL	  // expected_primary_fingerprint -> trust on first use
+		0,		  // lifetime_seconds -> 24 h
+		0,		  // max_uses -> 1
+		0,		  // permissions -> JOIN | REJOIN | BRING_DEVICES
+		NULL	  // label
+	};
+	return init;
+}
+
+static inline QarJoinHubAsMemberInit
+qar_join_hub_as_member_init_default(void)
+{
+	QarJoinHubAsMemberInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT, NULL }, // header
+		NULL, // invitation (required)
+		0,	  // hub_start_timeout_ms -> 60 s
+		0	  // restart_timeout_ms -> 120 s
 	};
 	return init;
 }
@@ -7167,71 +7162,46 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  (invite, out_buffer, buffer_size, out_length))                           \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  runtime_request_member_join,                                             \
+	  runtime_create_member_hub_invitation,                                    \
 	  (QarRuntime * runtime,                                                   \
-	   const QarMemberJoinRequestInit* init,                                   \
+	   const QarMemberHubInvitationInit* init,                                 \
 	   QarCancelToken* cancel,                                                 \
-	   QarMemberJoinBlob** out_request),                                       \
-	  (runtime, init, cancel, out_request))                                    \
+	   QarMemberHubInvitation** out_invitation),                               \
+	  (runtime, init, cancel, out_invitation))                                 \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  session_sponsor_member,                                                  \
-	  (QarSession * session,                                                   \
-	   const QarSponsorMemberInit* init,                                       \
-	   qar_progress_callback_t on_progress,                                    \
-	   void* progress_state,                                                   \
-	   QarCancelToken* cancel,                                                 \
-	   QarMemberJoinBlob** out_reply),                                         \
-	  (session, init, on_progress, progress_state, cancel, out_reply))         \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_sponsor_member_async,                                            \
-	  (QarSession * session,                                                   \
-	   const QarSponsorMemberInit* init,                                       \
-	   qar_session_sponsor_member_result_callback_t result_callback,           \
-	   qar_progress_callback_t update_callback,                                \
-	   void* user_state,                                                       \
-	   QarCancelToken* cancel),                                                \
-	  (session, init, result_callback, update_callback, user_state, cancel))   \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  runtime_complete_member_join,                                            \
+	  runtime_join_hub_as_member,                                              \
 	  (QarRuntime * runtime,                                                   \
-	   const QarMemberJoinCompleteInit* init,                                  \
+	   const QarJoinHubAsMemberInit* init,                                     \
 	   qar_progress_callback_t on_progress,                                    \
 	   void* progress_state,                                                   \
 	   QarCancelToken* cancel),                                                \
 	  (runtime, init, on_progress, progress_state, cancel))                    \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  member_join_blob_serialized_size,                                        \
-	  (const QarMemberJoinBlob* blob, size_t* out_size),                       \
-	  (blob, out_size))                                                        \
+	  member_hub_invitation_serialized_size,                                   \
+	  (const QarMemberHubInvitation* invitation, size_t* out_size),            \
+	  (invitation, out_size))                                                  \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  member_join_blob_serialize,                                              \
-	  (const QarMemberJoinBlob* blob,                                          \
+	  member_hub_invitation_serialize,                                         \
+	  (const QarMemberHubInvitation* invitation,                               \
 	   uint8_t* out_buffer,                                                    \
 	   size_t buffer_size,                                                     \
 	   size_t* out_bytes_written),                                             \
-	  (blob, out_buffer, buffer_size, out_bytes_written))                      \
+	  (invitation, out_buffer, buffer_size, out_bytes_written))                \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
-	  member_join_blob_deserialize,                                            \
+	  member_hub_invitation_deserialize,                                       \
 	  (const uint8_t* wire_data,                                               \
 	   size_t wire_data_size,                                                  \
-	   QarMemberJoinBlob** out_blob),                                          \
-	  (wire_data, wire_data_size, out_blob))                                   \
-	X(ACTIVE,                                                                  \
-	  bool,                                                                    \
-	  member_join_blob_handle_is_valid,                                        \
-	  (const QarMemberJoinBlob* blob),                                         \
-	  (blob))                                                                  \
+	   QarMemberHubInvitation** out_invitation),                               \
+	  (wire_data, wire_data_size, out_invitation))                             \
 	X(ACTIVE,                                                                  \
 	  void,                                                                    \
-	  member_join_blob_handle_destroy,                                         \
-	  (QarMemberJoinBlob * blob),                                              \
-	  (blob))
+	  member_hub_invitation_handle_destroy,                                    \
+	  (QarMemberHubInvitation * invitation),                                   \
+	  (invitation))
 
 QAR_DECLARE_MODULE_COMMON(
 	ONBOARDING, Onboarding, onboarding, QAR_ONBOARDING_FUNCTION_LIST

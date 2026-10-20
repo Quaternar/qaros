@@ -85,6 +85,8 @@ namespace Quaternar.Qaros
         /// <see cref="DeviceCategory.Camera"/>. Nothing was changed.
         /// </summary>
         PeerDeviceCategoryNotAllowed = 3101,
+        /// <summary>The hub is in the middle of another session-wide operation (a session rotation, a member join, a leave). Retry once it has finished.</summary>
+        HubLifecycleOperationRunning = 3300,
         /// <summary>Member join: the primary hub has the join request and waits for its operator to allow it. Not a failure; ask again later.</summary>
         MemberJoinPending = 3400,
         /// <summary>Member join: the primary hub's operator denied the join request.</summary>
@@ -99,9 +101,9 @@ namespace Quaternar.Qaros
         PrimaryUnreachable = 3405,
         /// <summary>A session-wide action was asked of a member hub; only the primary hub performs it.</summary>
         SessionWideActionOnMember = 3406,
-        /// <summary>Sponsored member join: the app's approval on the primary hub does not allow it to bring in member hubs.</summary>
+        /// <summary>Member-hub invitation: the app's approval on the primary hub does not allow it to bring in member hubs.</summary>
         MemberSponsorNotAllowed = 3407,
-        /// <summary>Sponsored member join: the app's approval has used its quota of member hubs.</summary>
+        /// <summary>Member-hub invitation: the app's approval has used its quota of member hubs.</summary>
         MemberSponsorQuotaExceeded = 3408,
         /// <summary>A hub's audit log does not verify: a record was edited, dropped or reordered.</summary>
         AuditLogCorrupt = 3409,
@@ -118,7 +120,21 @@ namespace Quaternar.Qaros
         /// <summary>Secure storage: an invalid storage key (an internal error).</summary>
         SecureStorageInvalidKey = 3505,
         /// <summary>Secure storage: another process held the store's lock too long. Retrying may succeed.</summary>
-        SecureStorageLocked = 3506
+        SecureStorageLocked = 3506,
+        /// <summary>Member-hub invitation: it does not parse, its signature, kind or version is wrong, or the primary hub does not know it or judged its proof invalid.</summary>
+        MemberInvitationInvalid = 3600,
+        /// <summary>Member-hub invitation: it has expired. Ask for a new one.</summary>
+        MemberInvitationExpired = 3601,
+        /// <summary>Member-hub invitation: it was used as often as it allows.</summary>
+        MemberInvitationUsedUp = 3602,
+        /// <summary>Member-hub invitation: the primary hub's operator revoked it.</summary>
+        MemberInvitationRevoked = 3603,
+        /// <summary>Member-hub invitation: this PC does not trust its primary hub (not in the administrator's allow-list, or not the primary this PC's hub joined first).</summary>
+        MemberInvitationPrimaryNotAllowed = 3604,
+        /// <summary>Member-hub invitation: this PC's member-invitation policy can be written by a non-administrator, so every invitation is refused.</summary>
+        MemberInvitationPolicyNotProtected = 3605,
+        /// <summary>The hub on this PC started unjoined by policy and waits for a member-hub invitation; it onboards nothing until it has joined a primary hub.</summary>
+        HubAwaitingInvitation = 3606
     }
 
     /// <summary>

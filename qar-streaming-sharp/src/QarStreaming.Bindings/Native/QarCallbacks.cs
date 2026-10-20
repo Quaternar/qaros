@@ -13,9 +13,6 @@ namespace Quaternar.Qaros.Interop
     internal delegate void SessionRequestInviteResultCallback(ResultNative status, IntPtr invite, IntPtr userState);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    internal delegate void SessionSponsorMemberResultCallback(ResultNative status, IntPtr reply, IntPtr userState);
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void RenderRequestCallback(IntPtr request, IntPtr userState);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

@@ -212,17 +212,19 @@ Every secret is in one encrypted store, `secure-store` under the runtime storage
 
 ```text
 Hub M -> primary P : signed join request (M's Hub key, CSR, names, nonce) on P's onboarding port
-P                  : pending until an operator allows it (or a join code / approved sponsor app)
+P                  : pending until an operator allows it (or a join code / a member-Hub invitation)
 P -> M             : reply signed with P's Hub key: member certificate, CA bundle, session invite
 M                  : verifies the reply, pins P's key, deletes its own CA, restarts as a member
 ```
 
 - **One CA per session.** A member trusts only the primary's CA; there is no merge of roots between Hubs.
 - **Forwarding.** A member authorizes its own headsets and local apps, then forwards each request over a certificate-authenticated channel to the primary, which authorizes it again (member admitted and not removed, device name only, app approval applies to that member, quota of 200 per 10 minutes, peer id not taken) and stamps the member's SAN.
-- **Pinning.** The primary pins the member's Hub key; the member pins the primary's on the first verified reply or by fingerprint. A pinned member rejoins without a click; a sponsored rejoin spends no quota.
+- **Invitations.** An app approved on the primary to bring in member Hubs creates an invitation signed with P's Hub key (24 h by default, at most 7 days, bounded uses, revocable in the Visualizer); each Hub admitted spends one unit of that app's quota. The joining Hub proves it holds the invitation's secret without sending it, and accepts P only if P's key is in the administrator's allow-list or, without one, if P is the first primary it joined by invitation (pinned). A writable policy refuses every invitation.
+- **Pinning.** The primary pins the member's Hub key; the member pins the primary's on the first verified reply, or checks it against the invitation's key. A pinned member rejoins without a click and spends no quota.
+- **Devices move along.** A Hub that was a primary of its own can take its paired devices, launcher children and approved apps into P's session: it cross-certifies P's CA with its old CA root before it restarts, and its devices renew through it without a code (old certificates for 30 days, known device keys for 180 days).
 - **No chains.** A member redirects joiners to its primary; a Hub with members cannot join another.
 - **Reset.** A member detects that its primary started a new session within about 10 s and restarts into it; when the primary is unreachable it backs off and reports it.
-- **EST.** With an EST-backed primary, sponsored joins are refused and headsets paired at a member cannot be issued yet.
+- **EST.** An EST-backed primary admits a Hub joining by invitation in one round. A Hub whose own certificates came from EST cannot take its devices along; they pair again.
 
 ## Audit log
 
@@ -257,7 +259,7 @@ Ranked by severity. These are current, known engineering items.
 | L7 | Medium | **Revocation reaches only peers that read the Hub's list, and is enforced by peer id, not at TLS.** | A peer that has not read it accepts a revoked certificate until expiry (≤ 24 h); one that has keeps the link open but refuses to serve the device. |
 | L14 | Medium | **The peer id is not checked per connection.** A device certificate is the same for every device of a session, so a device can claim another device's peer id in session messages. | It cannot act as the Hub: the Hub's topics accept only the Hub's certificate. |
 | L15 | Medium | **Member Hubs share one name.** One member can publish under another member's identity on the topics members may use. | It cannot publish the primary's authority topics. |
-| L18 | Medium | **First join trusts the operator or the first key.** *Allow* relies on recognising the Hub; code and sponsor joins trust the primary's key on first use without a fingerprint. | A wrong *Allow* admits a rogue member with member rights. |
+| L18 | Medium | **First join trusts the operator or the first key.** *Allow* relies on recognising the Hub; a join by invitation without an administrator's allow-list trusts the primary of the first invitation the Hub accepts. | A wrong *Allow* admits a rogue member with member rights. |
 | L19 | Low | **A member follows a new session by restarting.** | Its local apps and headsets are interrupted briefly. |
 | L16 | Low | Same-machine checks (revoke, allow, rotation) trust the machine name a peer states about itself. | A remote operator peer could pass for local. |
 | L17 | Low | Zenoh keeps the TLS key in its own memory unscrubbed while the session runs. | Memory read access to a running process reveals its session key. |

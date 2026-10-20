@@ -558,27 +558,22 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct MemberJoinRequestInitNative
+    internal struct MemberHubInvitationInitNative
     {
         public StructureHeaderNative Header;
+        public uint LifetimeSeconds;
+        public uint MaxUses;
+        public uint Permissions;
+        public IntPtr Label;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct SponsorMemberInitNative
+    internal struct JoinHubAsMemberInitNative
     {
         public StructureHeaderNative Header;
-        public IntPtr Request;
-        public PeerIdNative PrimaryPeerId;
-        public IntPtr ClientAddress;
-        public IntPtr ClientName;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct MemberJoinCompleteInitNative
-    {
-        public StructureHeaderNative Header;
-        public IntPtr Reply;
-        public IntPtr ExpectedPrimaryFingerprint;
+        public IntPtr Invitation;
+        public uint HubStartTimeoutMs;
+        public uint RestartTimeoutMs;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -807,12 +802,12 @@ namespace Quaternar.Qaros.Interop
         protected override bool ReleaseHandle() { NativeMethods.qar_impl_onboarding_invite_handle_destroy(handle); return true; }
     }
 
-    internal sealed class MemberJoinBlobSafeHandle : SafeHandle
+    internal sealed class MemberHubInvitationSafeHandle : SafeHandle
     {
-        private MemberJoinBlobSafeHandle() : base(IntPtr.Zero, true) { }
-        internal MemberJoinBlobSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
+        private MemberHubInvitationSafeHandle() : base(IntPtr.Zero, true) { }
+        internal MemberHubInvitationSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
         public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
-        protected override bool ReleaseHandle() { NativeMethods.qar_impl_member_join_blob_handle_destroy(handle); return true; }
+        protected override bool ReleaseHandle() { NativeMethods.qar_impl_member_hub_invitation_handle_destroy(handle); return true; }
     }
 
     internal sealed class CancelTokenSafeHandle : SafeHandle

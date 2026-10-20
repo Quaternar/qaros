@@ -157,32 +157,22 @@ namespace Quaternar.Qaros.Interop
         internal static extern void qar_impl_onboarding_invite_handle_destroy(IntPtr invite);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_runtime_request_member_join(IntPtr runtime, ref MemberJoinRequestInitNative init, IntPtr cancel, out IntPtr outRequest);
+        internal static extern ResultNative qar_impl_runtime_create_member_hub_invitation(IntPtr runtime, ref MemberHubInvitationInitNative init, IntPtr cancel, out IntPtr outInvitation);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_session_sponsor_member(IntPtr session, ref SponsorMemberInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel, out IntPtr outReply);
+        internal static extern ResultNative qar_impl_runtime_join_hub_as_member(IntPtr runtime, ref JoinHubAsMemberInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_session_sponsor_member_async(IntPtr session, ref SponsorMemberInitNative init, SessionSponsorMemberResultCallback resultCallback, ProgressCallback? updateCallback, IntPtr userState, IntPtr cancel);
+        internal static extern ResultNative qar_impl_member_hub_invitation_serialized_size(IntPtr invitation, out UIntPtr outSize);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_runtime_complete_member_join(IntPtr runtime, ref MemberJoinCompleteInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel);
+        internal static extern ResultNative qar_impl_member_hub_invitation_serialize(IntPtr invitation, [Out] byte[]? outBuffer, UIntPtr bufferSize, out UIntPtr outBytesWritten);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_member_join_blob_serialized_size(IntPtr blob, out UIntPtr outSize);
+        internal static extern ResultNative qar_impl_member_hub_invitation_deserialize(byte[]? wireData, UIntPtr wireDataSize, out IntPtr outInvitation);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_member_join_blob_serialize(IntPtr blob, [Out] byte[]? outBuffer, UIntPtr bufferSize, out UIntPtr outBytesWritten);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_member_join_blob_deserialize(byte[]? wireData, UIntPtr wireDataSize, out IntPtr outBlob);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        [return: MarshalAs(UnmanagedType.I1)]
-        internal static extern bool qar_impl_member_join_blob_handle_is_valid(IntPtr blob);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void qar_impl_member_join_blob_handle_destroy(IntPtr blob);
+        internal static extern void qar_impl_member_hub_invitation_handle_destroy(IntPtr invitation);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.I1)]
