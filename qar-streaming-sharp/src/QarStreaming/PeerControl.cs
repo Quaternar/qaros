@@ -100,7 +100,7 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Calls <paramref name="handler"/> for every peer that joins, leaves or changes its
         /// presentation or app state, until the returned subscription is disposed. The way to learn
-        /// that an invited target app joined and reached <see cref="AppState.Running"/>.
+        /// that an invited target app joined: it is listed and <see cref="PeerSpec.IsReachable"/>.
         /// </summary>
         /// <remarks>
         /// <para>

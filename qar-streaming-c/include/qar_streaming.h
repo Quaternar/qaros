@@ -68,9 +68,10 @@
  *    - find the target apps already in the session: watch the peer list with
  *      qar_peer_subscribe_updates() and pick each peer whose
  *      qar_peer_spec_get_role() is QAR_PEER_ROLE_TARGET and whose
- *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING. Show it to
- *      the user with qar_peer_spec_get_device_name() (and the family and
- *      category for an icon);
+ *      qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or
+ *      QAR_PEER_PRESENCE_UNKNOWN, a peer the hub has not reconciled). Show it
+ * to the user with qar_peer_spec_get_device_name() (and the family and category
+ * for an icon);
  *    - or start one with qar_session_invite_target_app() (or its async form),
  *      which writes out the new target's id. The hub remembers every invited
  *      device.
@@ -433,6 +434,14 @@ typedef struct QarResult
 	uint32_t error_handle; // 0 if success, non-zero if error
 } QarResult;
 
+/**
+ * @deprecated Read qar_peer_spec_get_presence() and QarPeerPresence instead.
+ * Every session claims QAR_APP_STATE_RUNNING as soon as it is created, so
+ * UNKNOWN, INITIALIZING and RUNNING say nothing beyond "the peer joined", and
+ * a peer is never "fully configured" by this value. Kept, with its values, for
+ * applications that already read it; qar_peer_spec_get_app_state() keeps
+ * working.
+ */
 typedef enum QarAppState
 {
 	QAR_APP_STATE_UNKNOWN = 0,
@@ -442,6 +451,36 @@ typedef enum QarAppState
 	/** The peer left for good and never comes back under its id. */
 	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
+
+/**
+ * @brief Whether a peer is here, as an application should act on it.
+ *
+ * Two sources make it up: the hub's own liveliness evidence (ONLINE /
+ * OFFLINE, which follows the peer's session without the peer republishing
+ * anything), and the leave the peer itself announced on its way out (LEAVING /
+ * RETIRED), which outranks the evidence. Render for, wait for and count ONLINE
+ * peers, and UNKNOWN ones: a hub that has not reconciled a peer yet (or an
+ * older hub that never does) says nothing about it being gone. Stop at
+ * OFFLINE, LEAVING or RETIRED. Treat a value this header does not name as
+ * QAR_PEER_PRESENCE_UNKNOWN.
+ */
+typedef enum QarPeerPresence
+{
+	/** The hub has not reconciled this peer yet (an older hub that never
+	 * does, or a hub that has just started). The peer has not announced a
+	 * leave: treat it like ONLINE. */
+	QAR_PEER_PRESENCE_UNKNOWN = 0,
+	/** The hub sees the peer in the session. */
+	QAR_PEER_PRESENCE_ONLINE = 1,
+	/** The hub no longer sees the peer: a crash, a kill, a network loss or a
+	 * short drop. It reads ONLINE again when it is back. */
+	QAR_PEER_PRESENCE_OFFLINE = 2,
+	/** The peer announced it is leaving (a clean exit). It may come back under
+	 * the same id, and reads ONLINE when it does. */
+	QAR_PEER_PRESENCE_LEAVING = 3,
+	/** The peer left for good and never comes back under its id. */
+	QAR_PEER_PRESENCE_RETIRED = 4
+} QarPeerPresence;
 
 /**
  * @brief What a peer is in the streaming graph (qar_peer_spec_get_role()).
@@ -3034,13 +3073,50 @@ static inline QarResult qar_peer_spec_get_app_custom_peer_info(
 /**
  * @brief Get application state for this peer.
  *
- * The state to act on, not only the peer's last claim: a peer the hub no longer
- * sees in the session reads as QAR_APP_STATE_SHUTTING_DOWN, since a killed
- * process never publishes its leave, and reads as it was again once it is back.
- * QAR_APP_STATE_RETIRED stays retired.
+ * @deprecated Use qar_peer_spec_get_presence(). Kept working: the value is
+ * computed from the presence. OFFLINE and LEAVING read as
+ * QAR_APP_STATE_SHUTTING_DOWN, RETIRED as QAR_APP_STATE_RETIRED, and an
+ * ONLINE or not yet reconciled peer reads as what it claimed, which every
+ * current peer claims as QAR_APP_STATE_RUNNING from the moment it joins.
+ * RUNNING therefore means "joined", never "finished configuring".
  */
 static inline QarResult
 qar_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state);
+/**
+ * @brief Whether this peer is here: the value to pick targets by.
+ *
+ * ONLINE while the hub sees the peer in the session. A peer the hub no longer
+ * sees reads as QAR_PEER_PRESENCE_OFFLINE (a killed process never announces its
+ * leave) and as ONLINE again once it is back, without the peer doing anything.
+ * A peer that announced its leave reads as QAR_PEER_PRESENCE_LEAVING, or
+ * QAR_PEER_PRESENCE_RETIRED when it never comes back under its id.
+ * QAR_PEER_PRESENCE_UNKNOWN is a peer the hub has not reconciled yet: an older
+ * hub that never reports presence, or one that has just started. Nothing says
+ * it is gone, so render for it like an ONLINE peer. A peer's readiness to
+ * receive a stream is negotiated by its render sender, not announced here.
+ *
+ * @code
+ * QarPeerPresence presence;
+ * QAR_CHECK(qar_peer_spec_get_presence(peer, &presence));
+ * if(presence == QAR_PEER_PRESENCE_ONLINE
+ *    || presence == QAR_PEER_PRESENCE_UNKNOWN)
+ * {
+ *     StartRenderingFor(peer);
+ * }
+ * else
+ * {
+ *     StopRenderingFor(peer); // offline, leaving or retired
+ * }
+ * @endcode
+ *
+ * @param handle Peer spec handle.
+ * @param out_presence Receives the presence; treat a value this header does
+ * not name as QAR_PEER_PRESENCE_UNKNOWN.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult
+qar_peer_spec_get_presence(QarPeerSpec* handle, QarPeerPresence* out_presence);
 /** @brief Get internal version id string. */
 static inline QarResult qar_peer_spec_get_version_id(
 	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
@@ -3168,12 +3244,12 @@ qar_query_peer_specs_count(QarSession* session, size_t* out_count);
  * @brief Enumerate peer specs into user-provided array.
  *
  * Size the array with qar_query_peer_specs_count(). Retired peers
- * (QAR_APP_STATE_RETIRED) never come back and are not listed; an update
+ * (QAR_PEER_PRESENCE_RETIRED) never come back and are not listed; an update
  * subscription still reports a peer turning retired. The list also contains
  * this process' own peer; qar_session_get_my_spec() identifies it. Match
  * qar_peer_spec_get_id() against the id qar_session_invite_target_app()
- * returned to find an invited peer, and read qar_peer_spec_get_app_state() to
- * see whether it is ready.
+ * returned to find an invited peer, and read qar_peer_spec_get_presence() to
+ * see whether it has joined.
  */
 static inline QarResult qar_query_peer_specs(
 	QarSession* session,
@@ -3221,8 +3297,9 @@ typedef void (*qar_peer_update_callback_t)(
  * @brief Subscribe for asynchronous peer spec updates.
  *
  * The push form of qar_query_peer_specs(), and the way to learn that a peer
- * invited with qar_session_invite_target_app() has joined and reached
- * QAR_APP_STATE_RUNNING.
+ * invited with qar_session_invite_target_app() has joined: it is listed, and
+ * its qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or UNKNOWN on
+ * a hub that does not report presence).
  *
  * @param token Required; cancelling or destroying it ends the subscription
  *              and waits for a running callback, see
@@ -6925,7 +7002,12 @@ typedef void (*qar_peer_update_callback_t)(
 	  QarResult,                                                               \
 	  peer_update_device_identity,                                             \
 	  (QarSession * session, const QarPeerDeviceIdentity* identity),           \
-	  (session, identity))
+	  (session, identity))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_presence,                                                  \
+	  (QarPeerSpec * handle, QarPeerPresence * out_presence),                  \
+	  (handle, out_presence))
 
 QAR_DECLARE_MODULE_COMMON(
 	PEER_MANAGEMENT,

@@ -14,6 +14,9 @@ namespace Quaternar.Qaros
     /// </summary>
     public sealed class PeerSpec
     {
+#pragma warning disable CS0618 // AppState is deprecated (Presence) and still carried
+        private readonly AppState _appState;
+
         internal PeerSpec(
             PeerId id,
             string displayName,
@@ -26,13 +29,15 @@ namespace Quaternar.Qaros
             DeviceCategory category = DeviceCategory.Unknown,
             string deviceId = "",
             string deviceFamily = "",
-            string deviceName = "")
+            string deviceName = "",
+            PeerPresence presence = PeerPresence.Unknown)
         {
             Id = id;
             DisplayName = displayName;
             AppVersion = appVersion;
             AppCustomPeerInfo = appCustomPeerInfo;
-            AppState = appState;
+            _appState = appState;
+            Presence = presence;
             VersionId = versionId;
             RoomTag = roomTag;
             Role = role;
@@ -52,10 +57,27 @@ namespace Quaternar.Qaros
         public string AppCustomPeerInfo { get; }
 
         /// <summary>
-        /// Whether the peer is still starting, live or gone. A target app is ready to be rendered
-        /// for once this is <see cref="AppState.Running"/>.
+        /// Deprecated: read <see cref="Presence"/>. Computed from it: <see cref="PeerPresence.Offline"/>
+        /// and <see cref="PeerPresence.Leaving"/> read <see cref="AppState.ShuttingDown"/>,
+        /// <see cref="PeerPresence.Retired"/> reads <see cref="AppState.Retired"/>, and any other peer
+        /// reads what it claimed, which is <see cref="AppState.Running"/> from the moment it joins.
         /// </summary>
-        public AppState AppState { get; }
+        [Obsolete("Read Presence instead. AppState.Running only means the peer joined.")]
+        public AppState AppState => _appState;
+#pragma warning restore CS0618
+
+        /// <summary>
+        /// Whether the peer is here. A target app is rendered for while it <see cref="IsReachable"/>;
+        /// whether it is ready for a stream is negotiated by the render sender, not announced here.
+        /// </summary>
+        public PeerPresence Presence { get; }
+
+        /// <summary>
+        /// Whether the peer can be rendered for, waited for or counted: its <see cref="Presence"/> is
+        /// <see cref="PeerPresence.Online"/>, or <see cref="PeerPresence.Unknown"/> on a hub that has
+        /// not reconciled it. False once it is offline, leaving or retired.
+        /// </summary>
+        public bool IsReachable => Presence == PeerPresence.Online || Presence == PeerPresence.Unknown;
 
         public string VersionId { get; }
 
@@ -102,10 +124,15 @@ namespace Quaternar.Qaros
                 var idInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_id(handle, ref id));
                 if (!idInfo.IsSuccess)
                     return Result<PeerSpec>.Failure(idInfo);
+#pragma warning disable CS0618 // the deprecated AppState is still read for PeerSpec.AppState
                 var state = AppState.Unknown;
                 var stateInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_app_state(handle, out state));
+#pragma warning restore CS0618
                 if (!stateInfo.IsSuccess)
                     return Result<PeerSpec>.Failure(stateInfo);
+                var presenceInfo = Results.ToInfo(NativeMethods.qar_impl_peer_spec_get_presence(handle, out var presence));
+                if (!presenceInfo.IsSuccess)
+                    return Result<PeerSpec>.Failure(presenceInfo);
                 var displayName = NativeString.GetString((buffer, size) => NativeMethods.qar_impl_peer_spec_get_display_name(handle, buffer, size));
                 if (!displayName.IsSuccess)
                     return Result<PeerSpec>.Failure(displayName.Info);
@@ -150,7 +177,8 @@ namespace Quaternar.Qaros
                         category,
                         deviceId.Value,
                         deviceFamily.Value,
-                        deviceName.Value));
+                        deviceName.Value,
+                        presence));
             }
             finally
             {
