@@ -284,9 +284,8 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3603, (int)StatusCode.MemberInvitationRevoked);
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
-            Assert.Equal(3606, (int)StatusCode.HubAwaitingInvitation);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(57, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(56, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]

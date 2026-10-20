@@ -501,11 +501,7 @@ typedef enum QarStatusCode
 	/// Member-hub invitation: this PC's member-invitation policy (registry key
 	/// or file) can be written by a non-administrator, so every invitation is
 	/// refused until an administrator fixes its permissions.
-	QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED = 3605,
-	/// The hub on this PC started unjoined by policy and waits for a
-	/// member-hub invitation; it onboards nothing until it has joined a
-	/// primary hub.
-	QAR_STATUS_HUB_AWAITING_INVITATION = 3606
+	QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED = 3605
 } QarStatusCode;
 
 /**
@@ -3034,8 +3030,6 @@ static inline QarJoinHubAsMemberInit qar_join_hub_as_member_init_default(void);
  *   quota.
  * @retval QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER the hub on this PC is a
  *   member; create the invitation on its primary's PC.
- * @retval QAR_STATUS_HUB_AWAITING_INVITATION the hub on this PC waits to join
- *   a primary itself.
  * @retval QAR_STATUS_NOT_IMPLEMENTED not on Windows.
  */
 static inline QarResult qar_runtime_create_member_hub_invitation(

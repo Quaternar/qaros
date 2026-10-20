@@ -132,9 +132,7 @@ namespace Quaternar.Qaros
         /// <summary>Member-hub invitation: this PC does not trust its primary hub (not in the administrator's allow-list, or not the primary this PC's hub joined first).</summary>
         MemberInvitationPrimaryNotAllowed = 3604,
         /// <summary>Member-hub invitation: this PC's member-invitation policy can be written by a non-administrator, so every invitation is refused.</summary>
-        MemberInvitationPolicyNotProtected = 3605,
-        /// <summary>The hub on this PC started unjoined by policy and waits for a member-hub invitation; it onboards nothing until it has joined a primary hub.</summary>
-        HubAwaitingInvitation = 3606
+        MemberInvitationPolicyNotProtected = 3605
     }
 
     /// <summary>
