@@ -496,6 +496,16 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct PeerDeviceIdentityNative
+    {
+        public StructureHeaderNative Header;
+        public DeviceCategory Category;
+        public IntPtr DeviceId;
+        public IntPtr DeviceFamily;
+        public IntPtr DeviceName;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct OnboardHostExtNative
     {
         public StructureHeaderNative Header;
@@ -515,6 +525,21 @@ namespace Quaternar.Qaros.Interop
     {
         public StructureHeaderNative Header;
         public PeerIdNative PeerId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct OnboardLocalAppExtNative
+    {
+        public StructureHeaderNative Header;
+        public uint ApprovalTimeoutMs;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RuntimeInfoNative
+    {
+        public IntPtr Version;
+        public IntPtr Flavor;
+        public IntPtr CApi;
     }
 
     [StructLayout(LayoutKind.Sequential)]

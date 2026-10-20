@@ -107,17 +107,18 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	{
 		return false;
 	}
+#ifdef _WIN32
 	const std::array<const char*, 2> extensions = {
 		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
 	};
+#else
+	const std::array<const char*, 1> extensions = { VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME };
+#endif
+	std::vector<const char*> enabledExtensions(extensions.begin(), extensions.end());
 	for(auto candidate : devices)
 	{
 		VkPhysicalDeviceProperties gpuProperties{};
 		vkGetPhysicalDeviceProperties(candidate, &gpuProperties);
-		if(gpuProperties.vendorID != 0x10de)
-		{
-			continue; // Current SDK supports NVIDIA adapters.
-		}
 		if(not requestedAdapter.empty()
 		   && not MatchesAdapterId(AdapterId(candidate), requestedAdapter))
 		{
@@ -171,13 +172,23 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 		}
 		if(physical)
 		{
+#ifndef _WIN32
+			for(const auto& extension : available)
+			{
+				if(std::string_view(extension.extensionName)
+				   == VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME)
+				{
+					enabledExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME);
+				}
+			}
+#endif
 			break;
 		}
 	}
 	if(not physical && not requestedAdapter.empty())
 	{
 		std::cerr << "The GPU the launch invite names (" << requestedAdapter << ")"
-				  << " names no NVIDIA graphics GPU with external "
+				  << " names no graphics GPU with external "
 					 "memory/semaphore support\n";
 		return false;
 	}
@@ -197,8 +208,8 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	VkDeviceCreateInfo deviceInfo{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
 	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
-	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-	deviceInfo.ppEnabledExtensionNames = extensions.data();
+	deviceInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+	deviceInfo.ppEnabledExtensionNames = enabledExtensions.data();
 	if(not CheckVk(vkCreateDevice(physical, &deviceInfo, nullptr, &device), "vkCreateDevice"))
 	{
 		return false;

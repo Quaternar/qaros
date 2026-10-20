@@ -24,6 +24,48 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
+    /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
+    /// </summary>
+    public enum PeerRole
+    {
+        /// <summary>QAROS pipeline infrastructure the hub launched itself.</summary>
+        Internal = 0,
+        /// <summary>Provides content: a source application or a camera capture process.</summary>
+        Source = 1,
+        /// <summary>
+        /// Shows content: a headset's serving app, a Visualizer receiver, a camera's receiver slot.
+        /// </summary>
+        Target = 2,
+        /// <summary>A QAROS runtime (hub) process.</summary>
+        Runtime = 3,
+        /// <summary>The operator's Visualizer control session.</summary>
+        Control = 4
+    }
+
+    /// <summary>
+    /// What kind of device a peer is (C <c>QarDeviceCategory</c>): the rendering fallback when the
+    /// peer's <see cref="PeerSpec.DeviceId"/> and <see cref="PeerSpec.DeviceFamily"/> are unknown
+    /// to the application. A new device model never adds a value; treat an unnamed value as
+    /// <see cref="Unknown"/>.
+    /// </summary>
+    public enum DeviceCategory
+    {
+        /// <summary>Infrastructure, runtime, control, test targets and unrecognised devices.</summary>
+        Unknown = 0,
+        /// <summary>A desktop or laptop PC (every source application by default).</summary>
+        DesktopPC = 1,
+        /// <summary>A server machine.</summary>
+        Server = 2,
+        /// <summary>A headset or glasses of any model.</summary>
+        Headset = 3,
+        /// <summary>A Visualizer receiver showing streams on the PC.</summary>
+        Visualizer = 4,
+        /// <summary>A camera of any model: its capture process, or its receiver slot.</summary>
+        Camera = 5
+    }
+
+    /// <summary>
     /// The graphics backend a sender's frame textures live on. Every GPU value requires exactly
     /// the matching stream-parameter extension on the options; <see cref="Cpu"/> takes none.
     /// </summary>
@@ -301,9 +343,11 @@ namespace Quaternar.Qaros
         RuntimeOnboardCodeExt = 0x1007,
         RuntimeOnboardInviteExt = 0x1008,
         RuntimeOnboardPeerIdExt = 0x1009,
+        RuntimeOnboardLocalAppExt = 0x100A,
         SessionGraphicsDeviceId = 0x2004,
         SessionRequestInviteInit = 0x2005,
         PeerPresentation = 0x2006,
+        PeerDeviceIdentity = 0x2009,
         SessionInviteTargetAppInit = 0x2007,
         SessionRequestOnboardingCodesInit = 0x2008,
         RenderingStreamSenderInit = 0x3000,
@@ -715,6 +759,25 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// Onboarding mode: join the QAROS hub installed on this PC as a local source
+    /// app, with no code. Select with <see cref="OnboardOptions.UseLocalApp"/>.
+    /// The hub asks the user once; later starts join silently while the app still
+    /// matches. Stateless: the returned onboarding id is the zero id, so rejoin and
+    /// forget do not apply. Not combinable with a host or peer id extension.
+    /// Windows only.
+    /// </summary>
+    public sealed class OnboardLocalApp : Structure
+    {
+        public OnboardLocalApp()
+            : base(StructureType.RuntimeOnboardLocalAppExt)
+        {
+        }
+
+        /// <summary>Max wait for the user's first-time approval; zero takes the hub default (120 s).</summary>
+        public TimeSpan ApprovalTimeout { get; set; } = TimeSpan.Zero;
+    }
+
+    /// <summary>
     /// Extension: selects the graphics adapter the session's Vulkan and D3D11
     /// devices, and with them every render sender's frame textures, are created
     /// on. Chain on <see cref="OnboardOptions"/> or <see cref="RejoinOptions"/>;
@@ -989,10 +1052,10 @@ namespace Quaternar.Qaros
     public sealed class RuntimeOptions
     {
         /// <summary>
-        /// The SDK <c>bin</c> folder: the one the native library was loaded from, not the
-        /// application folder. The runtime starts <c>qar-runtime-launcher</c> from it; left null
-        /// or empty, no launcher starts and peer invites never complete.
-        /// A relative path resolves against the current working directory.
+        /// Runtime <c>bin</c> folder holding <c>qar-runtime-launcher</c>. Leave null: the runtime
+        /// uses the folder its loaded <c>qar-streaming-c.dll</c> came from, which is the installed
+        /// QAROS <c>bin</c> (<see cref="InstalledRuntime.TryGetBinFolder"/>). Set it only for our
+        /// own development builds. A relative path resolves against the current working directory.
         /// </summary>
         public string? RuntimeBinariesFolderPath { get; set; }
         /// <summary>

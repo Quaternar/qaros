@@ -13,33 +13,48 @@
  * symbols declared in this header (and the companion basic_types.h) are
  * considered stable for C consumers.
  *
- * @par Shipping the binaries
- * The SDK is one folder (`bin/` in the package) holding the shared library
- * (`qar-streaming-c.dll` / `libqar-streaming-c.so`), `qar-runtime-launcher`
- * and every dependency the two need. Deploy it whole and unmodified; do not
- * copy individual files out of it into your own application folder.
+ * @par Load the installed runtime
+ * A distributed application runs against the QAROS installed on the PC. The
+ * runtime (`qar-streaming-c.dll`, `qar-runtime-launcher` and every dependency)
+ * lives in the installation's `bin/` folder, and the application does not ship
+ * its own copy: a copy beside it would be loaded first (step 1 below). The
+ * installer (per machine) records the folder under
+ * `HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`.
  *
  * @par Prefer dynamic loading
  * Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
- * in exactly one translation unit, and call qar_library_load() before any
- * other API call. The application then carries no link-time dependency on the
- * SDK, chooses the SDK folder at run time, and lets the SDK's own dependency
- * libraries resolve out of that folder instead of out of the application's.
- * Link-time linking also works, but then the whole `bin/` content has to sit
- * next to the executable or on the library search path.
+ * in exactly one translation unit, and call `qar_library_load(NULL)` before
+ * any other API call. It takes the first of:
+ * 0. a `qar-streaming-c` already loaded in the process: nothing is loaded;
+ * 1. `qar-streaming-c.dll` beside the module that calls it: the executable, or
+ *    the plugin DLL that loads QAROS (a test binary, a development ZIP, an app
+ *    built into a QAROS tree);
+ * 2. the folder named by the `QAROS_RUNTIME_DIR` environment variable; when it
+ *    is set, a runtime missing there is an error, not a reason to go on;
+ * 3. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll` (Windows);
+ *    an installed copy that fails to load is an error;
+ * 4. `qar-streaming-c.dll` in a folder on `PATH` (Linux: the dynamic linker's
+ *    search). The current directory is never searched.
+ * Each loads from its absolute path, with the runtime's dependencies from its
+ * own folder and System32, never from the application's. With nothing found
+ * it prints why and returns false. Every QAROS binding (C#, Unity, future
+ * ones) follows the same order. The application carries no link-time
+ * dependency on the runtime. Link-time linking also works, but then the whole
+ * `bin/` content has to sit next to the executable or on the library search
+ * path.
  *
- * @par The two paths you must set
- * qar_library_load() takes the library **file**:
- * `<sdk>/bin/qar-streaming-c.dll`. QarRuntimeInit::runtime_binaries_folder_path
- * takes the **folder** that file came from: `<sdk>/bin`. Relative paths resolve
- * against the current working directory, so derive both from the install
- * location. Leaving the folder empty starts no launcher, and peer invites then
- * never complete.
+ * @par Runtime binaries folder
+ * Leave QarRuntimeInit::runtime_binaries_folder_path empty: the runtime then
+ * uses the folder the loaded `qar-streaming-c` came from, which is the
+ * installed `bin/`. That is where it finds `qar-runtime-launcher`. Set it only
+ * to point at another runtime tree (our own development builds);
+ * qar_installed_bin_folder() returns the installed one.
  *
  * @par Basic flow: get a session, get a target app, stream to it
  * 1. qar_library_init() - once per process.
- * 2. qar_runtime_create() - with runtime_binaries_folder_path set as above.
- * 3. qar_runtime_onboard() with exactly one chained mode extension, or
+ * 2. qar_runtime_create() - runtime_binaries_folder_path left empty.
+ * 3. qar_runtime_onboard() with exactly one chained mode extension (a source
+ *    app on the hub's PC uses QarOnboardLocalAppExt and needs no code), or
  *    qar_runtime_rejoin() with a previously persisted QarOnboardingId -
  *    **the only calls that produce an active `QarSession*`**. There is no
  *    "current session" getter, so keep the returned pointer: it is the first
@@ -51,9 +66,11 @@
  *    that adapter, so the frames you render need no cross-GPU copy.
  * 5. Get the target `QarPeerId`s to render for, in one of two ways:
  *    - find the target apps already in the session: watch the peer list with
- *      qar_peer_subscribe_updates() and pick each peer for which
- *      qar_peer_spec_is_target_app() is true and whose
- *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING;
+ *      qar_peer_subscribe_updates() and pick each peer whose
+ *      qar_peer_spec_get_role() is QAR_PEER_ROLE_TARGET and whose
+ *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING. Show it to
+ *      the user with qar_peer_spec_get_device_name() (and the family and
+ *      category for an icon);
  *    - or start one with qar_session_invite_target_app() (or its async form),
  *      which writes out the new target's id. The hub remembers every invited
  *      device.
@@ -86,15 +103,16 @@
 #define QAR_STREAMING_EXTERN_C // Not needed in C
 #endif
 
-#ifdef QAR_STREAMING_EXPORTS // Defined when building the qar-streaming-c DLL
+#if defined(_WIN32) || defined(_WIN64)
+#ifdef QAR_STREAMING_EXPORTS
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllexport)
-#else // Defined when using the qar-streaming-c DLL OR static lib
-// If primarily used via DLL, dllimport is okay.
-// If static linking is a common use case, __declspec(dllimport) is problematic.
-// Consider separating macros for static linking vs DLL usage,
-// or just remove __declspec(dllimport) if static linking is preferred.
-// For now, keep original logic but with corrected EXTERN_C:
+#else
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllimport)
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
+#define QAR_C_API QAR_STREAMING_EXTERN_C __attribute__((visibility("default")))
+#else
+#define QAR_C_API QAR_STREAMING_EXTERN_C
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -379,7 +397,28 @@ typedef enum QarStatusCode
 	QAR_STATUS_ONBOARDING_HUB_UNREACHABLE = 1802,
 	/// qar_runtime_forget was called while the slot still has an active
 	/// session — destroy the active session handle first.
-	QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE = 1803
+	QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE = 1803,
+	/// Local enrollment: the user denied the app in the QAROS hub, or its
+	/// approval was revoked. Stop and tell the user.
+	QAR_STATUS_ONBOARDING_APPROVAL_DENIED = 1805,
+	/// Local enrollment: nobody answered the approval prompt in time. Offer a
+	/// retry.
+	QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT = 1806,
+	/// Local enrollment: the process serving the enrollment pipe is not the
+	/// installed QAROS hub. Stop; do not retry silently.
+	QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC = 1807,
+	/// Local enrollment: the app no longer matches what the user approved
+	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
+	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808,
+	/** The hub has no target app it can launch for the requested device (an
+	 * unknown connection-string scheme family, or a device kind that is never
+	 * invited, such as a camera). Nothing was invited; pick another target. */
+	QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE = 3100,
+	/** A QarPeerDeviceIdentity declared a category an application may not
+	 * claim. An application is always a source and may describe itself only as
+	 * QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
+	 * QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed. */
+	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101
 } QarStatusCode;
 
 /**
@@ -403,6 +442,53 @@ typedef enum QarAppState
 	/** The peer left for good and never comes back under its id. */
 	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
+
+/**
+ * @brief What a peer is in the streaming graph (qar_peer_spec_get_role()).
+ *
+ * Code branches on the role; it never grows for a new device. An application
+ * using this API is always QAR_PEER_ROLE_SOURCE. Render for peers whose role is
+ * QAR_PEER_ROLE_TARGET.
+ */
+typedef enum QarPeerRole
+{
+	/** QAROS pipeline infrastructure the hub launched itself (mixer,
+	 * conversion). */
+	QAR_PEER_ROLE_INTERNAL = 0,
+	/** Provides content: a source application or a camera capture process. */
+	QAR_PEER_ROLE_SOURCE = 1,
+	/** Shows content: a headset's serving app, a Visualizer receiver, a
+	 * camera's receiver slot. These are the peers a source renders for. */
+	QAR_PEER_ROLE_TARGET = 2,
+	/** A QAROS runtime (hub) process. */
+	QAR_PEER_ROLE_RUNTIME = 3,
+	/** The operator's Visualizer control session. */
+	QAR_PEER_ROLE_CONTROL = 4
+} QarPeerRole;
+
+/**
+ * @brief What kind of device a peer is (qar_peer_spec_get_category()).
+ *
+ * For presentation, and the fallback when a viewer does not know the peer's
+ * device id or family. A new device model never adds a value; only a new kind
+ * of device does. Treat an unnamed value as QAR_DEVICE_CATEGORY_UNKNOWN.
+ */
+typedef enum QarDeviceCategory
+{
+	/** Infrastructure, runtime, control, test targets and unrecognised devices.
+	 */
+	QAR_DEVICE_CATEGORY_UNKNOWN = 0,
+	/** A desktop or laptop PC (every source application by default). */
+	QAR_DEVICE_CATEGORY_DESKTOP_PC = 1,
+	/** A server machine. */
+	QAR_DEVICE_CATEGORY_SERVER = 2,
+	/** A headset or glasses of any model. */
+	QAR_DEVICE_CATEGORY_HEADSET = 3,
+	/** A Visualizer receiver showing streams on the PC. */
+	QAR_DEVICE_CATEGORY_VISUALIZER = 4,
+	/** A camera of any model: its capture process, or its receiver slot. */
+	QAR_DEVICE_CATEGORY_CAMERA = 5
+} QarDeviceCategory;
 
 /**
  * @brief Wall-clock instant: nanoseconds since the Unix epoch (UTC).
@@ -1110,11 +1196,13 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT = 0x1007,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
+	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -1401,6 +1489,33 @@ typedef struct QarPeerPresentation
 } QarPeerPresentation;
 
 /**
+ * @brief Extension: the device this application describes itself as.
+ *
+ * Chain on QarPeerPresentation::header.next of QarOnboardInit or
+ * QarRejoinInit, or pass to qar_peer_update_device_identity(). Without it the
+ * application joins as a desktop PC with the fixed id of the host OS
+ * ("DesktopWindows" / "DesktopLinux").
+ *
+ * An application always joins as QAR_PEER_ROLE_SOURCE: it describes its
+ * device, never its role. `category` must be QAR_DEVICE_CATEGORY_DESKTOP_PC,
+ * QAR_DEVICE_CATEGORY_SERVER or QAR_DEVICE_CATEGORY_CAMERA; any other value is
+ * refused with QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED.
+ *
+ * Ids and families are open UTF-8 strings ("Zed2i", "Zed"), matched by
+ * viewers against the hub's device catalog. An id the catalog does not know
+ * is fine: viewers fall back to the family, then to the category, and show
+ * `device_name`.
+ */
+typedef struct QarPeerDeviceIdentity
+{
+	QarStructureHeader header;	/**< QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY */
+	QarDeviceCategory category; /**< DESKTOP_PC, SERVER or CAMERA */
+	const char* device_id;		/**< required, non-empty; e.g. "LuxonisOakD" */
+	const char* device_family;	/**< optional (NULL = none); e.g. "Luxonis" */
+	const char* device_name;	/**< optional (NULL = none); e.g. "OAK-D" */
+} QarPeerDeviceIdentity;
+
+/**
  * @brief Continue / rejoin the last persisted session (situation: continue).
  */
 typedef struct QarRejoinInit
@@ -1418,6 +1533,7 @@ typedef struct QarRejoinInit
  * extensions through header.next:
  * - QarOnboardCodeExt for code onboarding
  * - QarOnboardInviteExt for a full invite blob
+ * - QarOnboardLocalAppExt for a source app on the hub's own PC (no code)
  */
 typedef struct QarOnboardInit
 {
@@ -1501,6 +1617,53 @@ typedef struct QarOnboardPeerIdExt
 } QarOnboardPeerIdExt;
 
 /**
+ * @brief Extension: join the QAROS hub installed on this PC as a local source
+ * app, with no code.
+ *
+ * Chain into QarOnboardInit.header.next as the only mode extension. The hub
+ * identifies the calling process from Windows (its executable, signature and
+ * user), asks the user once ("Allow <app> to join QAROS?"), and signs a
+ * 30-minute certificate for a key that exists only in this process's memory.
+ * Later starts of the same app join silently while it still matches what the
+ * user approved. The runtime renews the certificate before it expires.
+ *
+ * - Joins the hub of the QAROS installation this runtime belongs to: the
+ *   QAR_INSTANCE environment variable when set, else the installation holding
+ *   the loaded qar-streaming-c, else the installed (HKLM) one. The hub's
+ *   qar-runtime-launcher must run as this user in this Windows session, from
+ *   that installation's bin/, signed with the QAROS key pinned in the runtime;
+ *   otherwise QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC.
+ * - Stateless: writes nothing to disk; out_onboarding_id is the zero id.
+ *   qar_runtime_rejoin and qar_runtime_forget do not apply.
+ * - Not combinable with QarOnboardHostExt (local only) or QarOnboardPeerIdExt
+ *   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ * - The progress callback reports "Waiting for approval in QAROS hub" while
+ *   the prompt is open.
+ * - Windows only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
+ */
+typedef struct QarOnboardLocalAppExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT */
+	/// Max wait for the user's first-time approval; 0 -> hub default (120 s).
+	uint32_t approval_timeout_ms;
+} QarOnboardLocalAppExt;
+
+/**
+ * @brief What the loaded qar-streaming-c reports about itself
+ * (qar_runtime_info).
+ */
+typedef struct QarRuntimeInfo
+{
+	/// Product version, e.g. "0.9.0" or "0.9.0-rc.2". Static storage.
+	const char* version;
+	/// "release" or "demo". Static storage.
+	const char* flavor;
+	/// C API generation, "v0". Static storage.
+	const char* c_api;
+} QarRuntimeInfo;
+
+/**
  * @brief Mint an invite to hand to a sibling instance (session-scoped).
  *
  * Deliberately empty: the invite is always requested from the hub this
@@ -1539,8 +1702,10 @@ typedef struct QarRequestOnboardingCodesInit
  *
  * `connection_string` names the device kind and its address:
  *   - `"hololens:<host>"` — HoloLens
- *   - `"quest:<host>"`    — Meta Quest
- *   - `"android:<host>"`  — Android streamer
+ *   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
+ *     served by the Android streamer; it reports its exact model itself
+ *   - `"quest:<host>"`, `"android:<host>"` — older spellings of
+ *     `"headset:<host>"`
  * `<host>` is a hostname or an IP address; the two are interchangeable. A bare
  * `"<host>"` with no scheme is accepted as the legacy spelling of
  * `"hololens:<host>"`.
@@ -2062,20 +2227,36 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @brief Dynamic library load/unload helpers for the C API.
  * @{ */
 /**
- * @brief Load the shared library from a custom path for dynamic mode.
+ * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
- * @param library_path Path to the library **file** itself, for example
- *        `<sdk>/bin/qar-streaming-c.dll`, absolute or relative to the current
- *        working directory. The SDK's own dependency libraries are resolved
- *        from that same folder, so the folder must stay intact. UTF-8, like
- *        every path in this API (see @ref qar_text_encoding).
- * @return true on success. Call this before qar_library_init().
+ * @param library_path NULL is the normal call: the library beside the calling
+ *        module, else `QAROS_RUNTIME_DIR`, else the installed QAROS, else one
+ *        on `PATH` (see "Prefer dynamic loading" above for the full order). A
+ * non-NULL path names the library **file** itself, absolute or relative to the
+ * current working directory, and only that file is tried. The runtime's
+ *        dependency libraries are resolved from the library's own folder and
+ *        System32. UTF-8, like every path in this API (see
+ *        @ref qar_text_encoding).
+ * @return true on success; false, with a printed reason, when no runtime is
+ *         found or the library fails to load. Call this before
+ *         qar_library_init().
  */
 static inline bool qar_library_load(const char* library_path);
 /** @brief Unload the shared library previously loaded. */
 static inline void qar_library_unload(void);
 /** @brief Check if the shared library is currently loaded. */
 static inline bool qar_is_library_loaded(void);
+/**
+ * @brief UTF-8 `<InstallFolder>/bin` of the installed QAROS.
+ *
+ * Reads `HKLM\SOFTWARE\Quaternar\QAROS` value `InstallFolder`.
+ * Windows only; elsewhere it always returns false.
+ *
+ * @param out Receives the NUL-terminated folder.
+ * @param capacity Size of out in bytes.
+ * @return false when QAROS is not installed or out is too small.
+ */
+static inline bool qar_installed_bin_folder(char* out, size_t capacity);
 /** @} */ /* end of qar_c_dynamic_loading */
 #endif
 
@@ -2107,6 +2288,18 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @return QarResult Success or error code.
  */
 static inline QarResult qar_library_destroy(void);
+
+/**
+ * @brief Version, flavor and C API generation of the loaded qar-streaming-c.
+ *
+ * Works before qar_library_init(). With one QAROS installation per PC, this
+ * is the installed runtime's identity; use it in diagnostics. The strings are
+ * static and stay valid until the library is unloaded.
+ *
+ * @param out_info Receives the info; must not be NULL.
+ * @return QarResult Success, or QAR_STATUS_LOGIC_ERROR for a NULL out_info.
+ */
+static inline QarResult qar_runtime_info(QarRuntimeInfo* out_info);
 /** @} */ /* end of qar_c_library */
 
 // ============================================================================
@@ -2245,11 +2438,11 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
 /**
  * @brief Create a runtime instance that can host sessions and streams.
  *
- * QarRuntimeInit::runtime_binaries_folder_path must name the SDK `bin` folder,
- * the one the shared library itself was loaded from. That is where the runtime
- * finds `qar-runtime-launcher`, the process that answers
+ * QarRuntimeInit::runtime_binaries_folder_path names the runtime `bin` folder,
+ * where the runtime finds `qar-runtime-launcher`, the process that answers
  * qar_session_invite_target_app() and starts the device applications. Left
- * empty, the runtime still creates sessions but no peer can ever be invited.
+ * empty, it defaults to the folder the loaded qar-streaming-c came from: the
+ * installed QAROS `bin/` for every distributed application.
  *
  * @param init Runtime initialization parameters.
  * @param out_runtime Out pointer receiving the created runtime handle.
@@ -2289,6 +2482,11 @@ static inline bool qar_onboarding_id_is_zero(const QarOnboardingId* id);
 
 /** @brief Default init for QarPeerPresentation (stamps type; NULL fields). */
 static inline QarPeerPresentation qar_peer_presentation_default(void);
+/**
+ * @brief Default init for QarPeerDeviceIdentity: stamps the type, category
+ * QAR_DEVICE_CATEGORY_DESKTOP_PC, NULL strings. Set at least device_id.
+ */
+static inline QarPeerDeviceIdentity qar_peer_device_identity_default(void);
 /** @brief Default init for QarRejoinInit. */
 static inline QarRejoinInit qar_rejoin_init_default(void);
 /** @brief Default init for QarOnboardInit. */
@@ -2301,6 +2499,9 @@ static inline QarOnboardHostExt qar_onboard_host_ext_default(void);
 static inline QarOnboardInviteExt qar_onboard_invite_ext_default(void);
 /** @brief Default init for QarOnboardPeerIdExt (zero peer id; set it). */
 static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
+/** @brief Default init for QarOnboardLocalAppExt (hub default approval
+ * timeout). */
+static inline QarOnboardLocalAppExt qar_onboard_local_app_ext_default(void);
 /** @brief Default init for QarRequestInviteInit. */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
 /** @brief Default init for QarRequestOnboardingCodesInit (one code, hub
@@ -2677,9 +2878,17 @@ static inline QarResult qar_session_get_graphics_device_id(
  * @param progress_state User pointer passed to on_progress unchanged.
  * @param cancel Optional cancellation token (can be NULL).
  * @param out_peer Receives the target app's peer id. Untouched on failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string is malformed,
- *   or names a device kind that cannot be invited - rebuild it with a
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the connection string is malformed
+ *   or names no host (a `visualizer:` connection, which only
+ *   qar_session_find_render_target resolves) - rebuild it with a
  *   qar_target_app_connection_string_* helper.
+ * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the hub has no
+ *   target app it can launch for the device family the connection string
+ *   names; which devices can be invited is the hub's decision.
+ *
+ * A device is invited as a HoloLens (`"hololens:<host>"`) or a Headset
+ * (`"headset:<host>"`; `"quest:"` and `"android:"` are older spellings of it).
+ * The headset reports its exact model itself once it runs.
  */
 static inline QarResult qar_session_invite_target_app(
 	QarSession* session,
@@ -2692,6 +2901,11 @@ static inline QarResult qar_session_invite_target_app(
 
 /**
  * @brief Ask this machine's hub to start the target app for one AR device.
+ *
+ * Non-blocking form of qar_session_invite_target_app. A device is invited as a
+ * HoloLens (`"hololens:<host>"`) or a Headset (`"headset:<host>"`;
+ * `"quest:"` and `"android:"` are older spellings of it) - see
+ * QarSessionInviteTargetAppInit.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
  * @param result_callback Fires exactly once with the outcome. Required.
@@ -2760,7 +2974,9 @@ static inline QarResult qar_target_app_connection_string_hololens(
 );
 
 /**
- * @brief Build the connection string for a Meta Quest target app.
+ * @brief Build the connection string for a headset target app, spelled
+ * `"quest:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -2770,7 +2986,9 @@ static inline QarResult qar_target_app_connection_string_quest(
 );
 
 /**
- * @brief Build the connection string for an Android streamer target app.
+ * @brief Build the connection string for a headset target app, spelled
+ * `"android:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -2824,10 +3042,8 @@ static inline QarResult qar_peer_spec_get_room_tag(
 );
 /**
  * @brief Whether this peer is a target app: a device or viewer that shows
- * rendered content (a headset, the Android streamer, a visualizer receiver).
- *
- * See "Basic flow" at the top of this header for how a source application uses
- * it to find the targets it renders for.
+ * rendered content (a headset's serving app, a visualizer or camera receiver).
+ * The same as qar_peer_spec_get_role() returning QAR_PEER_ROLE_TARGET.
  *
  * @param handle Peer spec handle.
  * @param out_is_target_app Receives true for a target app, false for anything
@@ -2837,6 +3053,102 @@ static inline QarResult qar_peer_spec_get_room_tag(
  */
 static inline QarResult
 qar_peer_spec_is_target_app(QarPeerSpec* handle, bool* out_is_target_app);
+/**
+ * @brief What the peer is in the streaming graph.
+ *
+ * A source application renders for the peers whose role is
+ * QAR_PEER_ROLE_TARGET (a headset's serving app, a Visualizer receiver, a
+ * camera's receiver slot). See "Basic flow" at the top of this header. An
+ * application using this API is always QAR_PEER_ROLE_SOURCE.
+ *
+ * @param handle Peer spec handle.
+ * @param out_role Receives the role.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult
+qar_peer_spec_get_role(QarPeerSpec* handle, QarPeerRole* out_role);
+/**
+ * @brief What kind of device the peer is: a headset, a Visualizer, a camera,
+ * a desktop PC, ...
+ *
+ * The rendering fallback when an application does not know the peer's device
+ * id or family: pick an icon or a model by id, else by family, else by
+ * category.
+ *
+ * @code
+ * QarPeerRole role;
+ * QAR_CHECK(qar_peer_spec_get_role(peer, &role));
+ * if(role == QAR_PEER_ROLE_TARGET)
+ * {
+ *     QarDeviceCategory category;
+ *     char name[128], family[64];
+ *     QAR_CHECK(qar_peer_spec_get_category(peer, &category));
+ *     QAR_CHECK(qar_peer_spec_get_device_name(peer, name, sizeof name));
+ *     QAR_CHECK(qar_peer_spec_get_device_family(peer, family, sizeof family));
+ *     ShowTarget(name, IconFor(family, category)); // app's own icon table
+ * }
+ * @endcode
+ *
+ * @param handle Peer spec handle.
+ * @param out_category Receives the category; treat a value this header does
+ * not name as QAR_DEVICE_CATEGORY_UNKNOWN.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult qar_peer_spec_get_category(
+	QarPeerSpec* handle, QarDeviceCategory* out_category
+);
+/**
+ * @brief The peer's device id: an open UTF-8 string naming the exact device
+ * or app ("MetaQuest3", "HoloLens2", "Zed2i", "Visualizer",
+ * "DesktopWindows").
+ *
+ * Ids are not an enum: a new device model is a new id without a new API. The
+ * id can change while the peer runs (a serving app refines it once the device
+ * reports its model), so re-read it in the qar_peer_subscribe_updates()
+ * callback instead of caching it. Same buffer contract as
+ * qar_peer_spec_get_display_name(): NUL-terminated, truncated on a UTF-8
+ * code point boundary.
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated id.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_id(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
+/**
+ * @brief The peer's device family: an open UTF-8 string ("MetaQuest",
+ * "HoloLens", "Metalens", "Headset", "Zed"), the fallback for a device id an
+ * application does not know. Empty when the peer has no family.
+ *
+ * Same buffer contract as qar_peer_spec_get_device_id().
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated family.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_family(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
+/**
+ * @brief The human name of the peer's device ("Meta Quest 3"), for showing
+ * it to a user. Empty when nothing better than the id is known.
+ *
+ * Same buffer contract as qar_peer_spec_get_device_id(); the name can change
+ * while the peer runs.
+ *
+ * @param handle Peer spec handle.
+ * @param out_buffer Receives the NUL-terminated name.
+ * @param buffer_size Size of out_buffer in bytes; must be > 0.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or buffer.
+ */
+static inline QarResult qar_peer_spec_get_device_name(
+	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
+);
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
@@ -2861,6 +3173,35 @@ static inline QarResult qar_query_peer_specs(
 /** @brief Update current peer's display name. */
 static inline QarResult
 qar_peer_update_display_name(QarSession* session, const char* name);
+/**
+ * @brief Replace the device this application describes itself as, for
+ * example once a camera SDK has reported the exact model it opened.
+ *
+ * Published as a normal peer spec update. The role stays
+ * QAR_PEER_ROLE_SOURCE. To join with an identity from the start, chain the
+ * same struct on QarPeerPresentation::header.next of QarOnboardInit or
+ * QarRejoinInit.
+ *
+ * @code
+ * QarPeerDeviceIdentity refined = qar_peer_device_identity_default();
+ * refined.category = QAR_DEVICE_CATEGORY_CAMERA;
+ * refined.device_id = "LuxonisOakDPro";
+ * refined.device_family = "Luxonis";
+ * refined.device_name = "OAK-D Pro W";
+ * QAR_CHECK(qar_peer_update_device_identity(session, &refined));
+ * @endcode
+ *
+ * @param session Active session handle.
+ * @param identity Required; see QarPeerDeviceIdentity.
+ * @retval QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED the category is not
+ *   DESKTOP_PC, SERVER or CAMERA. Nothing was changed.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED device_id is NULL or empty.
+ * @retval QAR_STATUS_LOGIC_ERROR a NULL or wrongly typed struct, or an invalid
+ *   session.
+ */
+static inline QarResult qar_peer_update_device_identity(
+	QarSession* session, const QarPeerDeviceIdentity* identity
+);
 /** @brief Callback invoked when a peer spec changes. */
 typedef void (*qar_peer_update_callback_t)(
 	QarPeerSpec* handle, void* user_state
@@ -5676,6 +6017,19 @@ qar_peer_presentation_default(void)
 	return presentation;
 }
 
+static inline QarPeerDeviceIdentity
+qar_peer_device_identity_default(void)
+{
+	QarPeerDeviceIdentity identity = {
+		{ QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY, NULL }, // header
+		QAR_DEVICE_CATEGORY_DESKTOP_PC,					   // category
+		NULL,											   // device_id
+		NULL,											   // device_family
+		NULL											   // device_name
+	};
+	return identity;
+}
+
 static inline QarRejoinInit
 qar_rejoin_init_default(void)
 {
@@ -5735,6 +6089,16 @@ qar_onboard_peer_id_ext_default(void)
 	QarOnboardPeerIdExt ext = {
 		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT, NULL },
 		qar_peer_id_default() // peer_id (required, caller must set)
+	};
+	return ext;
+}
+
+static inline QarOnboardLocalAppExt
+qar_onboard_local_app_ext_default(void)
+{
+	QarOnboardLocalAppExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT, NULL }, // header
+		0 // approval_timeout_ms (0 -> hub default, 120 s)
 	};
 	return ext;
 }
@@ -6520,7 +6884,37 @@ typedef void (*qar_peer_update_callback_t)(
 	  QarResult,                                                               \
 	  peer_spec_is_target_app,                                                 \
 	  (QarPeerSpec * handle, bool* out_is_target_app),                         \
-	  (handle, out_is_target_app))
+	  (handle, out_is_target_app))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_role,                                                      \
+	  (QarPeerSpec * handle, QarPeerRole * out_role),                          \
+	  (handle, out_role))                                                      \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_category,                                                  \
+	  (QarPeerSpec * handle, QarDeviceCategory * out_category),                \
+	  (handle, out_category))                                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_id,                                                 \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_family,                                             \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_device_name,                                               \
+	  (QarPeerSpec * handle, char* out_buffer, size_t buffer_size),            \
+	  (handle, out_buffer, buffer_size))                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_update_device_identity,                                             \
+	  (QarSession * session, const QarPeerDeviceIdentity* identity),           \
+	  (session, identity))
 
 QAR_DECLARE_MODULE_COMMON(
 	PEER_MANAGEMENT,
@@ -6814,7 +7208,8 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 	  (init, out_runtime))                                                     \
 	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
 	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
-	X(ACTIVE, QarResult, library_destroy, (void), ())
+	X(ACTIVE, QarResult, library_destroy, (void), ())                          \
+	X(ACTIVE, QarResult, runtime_info, (QarRuntimeInfo * out_info), (out_info))
 
 QAR_DECLARE_MODULE_COMMON(RUNTIME, Runtime, runtime, QAR_RUNTIME_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RUNTIME_FUNCTION_LIST)
@@ -7073,6 +7468,7 @@ QAR_VIDEO_SENDER_FUNCTION_LIST(QAR_VIDEO_SENDER_DECLARE_WRAPPER)
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 
@@ -7113,11 +7509,272 @@ qar_loadlib(const char* path)
 		return NULL;
 	}
 
+	/* The runtime's dependencies come from its own folder and System32 only,
+	 * never from the application's folder (docs: authoring a binding). */
 	return LoadLibraryExW(
 		abs_path,
 		NULL,
-		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
 	);
+}
+
+/// File name of the runtime library the default lookup looks for.
+#define QAR_RUNTIME_LIBRARY_FILE_NAME L"qar-streaming-c.dll"
+
+/// Loads `<folder>\qar-streaming-c.dll` when the file exists there, its
+/// dependencies from that folder and System32 only. NULL when it is not
+/// there, or (with a printed reason) when it is there but fails to load.
+static inline HMODULE
+qar_loadlib_in_folder_w(const wchar_t* folder)
+{
+	wchar_t path[MAX_PATH];
+	const size_t length = wcslen(folder);
+	if(length == 0
+	   || length + 1 + wcslen(QAR_RUNTIME_LIBRARY_FILE_NAME) >= MAX_PATH)
+	{
+		return NULL;
+	}
+	wcscpy_s(path, MAX_PATH, folder);
+	if(path[length - 1] != L'\\' && path[length - 1] != L'/')
+	{
+		wcscat_s(path, MAX_PATH, L"\\");
+	}
+	wcscat_s(path, MAX_PATH, QAR_RUNTIME_LIBRARY_FILE_NAME);
+	const DWORD attributes = GetFileAttributesW(path);
+	if(attributes == INVALID_FILE_ATTRIBUTES
+	   || (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+	{
+		return NULL;
+	}
+	HMODULE handle = LoadLibraryExW(
+		path,
+		NULL,
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
+	);
+	if(handle == NULL)
+	{
+		printf(
+			"Loading the QAROS runtime '%ls' failed: Error %lu\n",
+			path,
+			GetLastError()
+		);
+	}
+	return handle;
+}
+
+/// Step 1 of the default lookup: the folder of the module this header is
+/// compiled into - the application's executable, or the plugin DLL that loads
+/// QAROS. The address of this function names that module.
+static inline HMODULE
+qar_loadlib_beside_module(void)
+{
+	HMODULE module = NULL;
+	if(!GetModuleHandleExW(
+		   GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+			   | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		   (LPCWSTR)(void*)&qar_loadlib_beside_module,
+		   &module
+	   ))
+	{
+		return NULL;
+	}
+	wchar_t folder[MAX_PATH];
+	const DWORD length = GetModuleFileNameW(module, folder, MAX_PATH);
+	if(length == 0 || length >= MAX_PATH)
+	{
+		return NULL;
+	}
+	wchar_t* separator = wcsrchr(folder, L'\\');
+	if(separator == NULL)
+	{
+		return NULL;
+	}
+	*separator = L'\0';
+	return qar_loadlib_in_folder_w(folder);
+}
+
+/// Environment variable naming a folder that holds the runtime (step 2).
+#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
+#define QAR_RUNTIME_DIR_ENV_NAME_W L"QAROS_RUNTIME_DIR"
+
+/// The folder QAROS_RUNTIME_DIR names, wide. False when it is unset or empty.
+static inline bool
+qar_runtime_env_folder_w(wchar_t* out, DWORD capacity_chars)
+{
+	const DWORD length = GetEnvironmentVariableW(
+		QAR_RUNTIME_DIR_ENV_NAME_W, out, capacity_chars
+	);
+	return length > 0 && length < capacity_chars;
+}
+
+/// UTF-8 form of qar_runtime_env_folder_w.
+static inline bool
+qar_runtime_env_folder(char* out, size_t capacity)
+{
+	wchar_t folder[MAX_PATH];
+	if(!qar_runtime_env_folder_w(folder, MAX_PATH))
+	{
+		return false;
+	}
+	const int written = WideCharToMultiByte(
+		CP_UTF8, 0, folder, -1, out, (int)capacity, NULL, NULL
+	);
+	return written > 0;
+}
+
+/// Step 4 of the default lookup: every folder on PATH, in order. The current
+/// directory is not searched: a library planted there would be loaded.
+static inline HMODULE
+qar_loadlib_on_path(void)
+{
+	const DWORD needed = GetEnvironmentVariableW(L"PATH", NULL, 0);
+	if(needed == 0)
+	{
+		return NULL;
+	}
+	wchar_t* paths = (wchar_t*)malloc(needed * sizeof(wchar_t));
+	if(paths == NULL)
+	{
+		return NULL;
+	}
+	HMODULE handle = NULL;
+	if(GetEnvironmentVariableW(L"PATH", paths, needed) < needed)
+	{
+		wchar_t* context = NULL;
+		for(wchar_t* entry = wcstok_s(paths, L";", &context);
+			entry != NULL && handle == NULL;
+			entry = wcstok_s(NULL, L";", &context))
+		{
+			/* PATH entries may be quoted. */
+			size_t length = wcslen(entry);
+			if(length >= 2 && entry[0] == L'"' && entry[length - 1] == L'"')
+			{
+				entry[length - 1] = L'\0';
+				++entry;
+			}
+			handle = qar_loadlib_in_folder_w(entry);
+		}
+	}
+	free(paths);
+	return handle;
+}
+
+/// Key the QAROS installer writes, per machine, under HKLM. An installation is
+/// never read from HKCU: every process of the user can write that hive.
+#define QAR_INSTALL_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS"
+
+/// `<InstallFolder>\bin` of the installed QAROS, wide. False when QAROS is not
+/// installed.
+static inline bool
+qar_installed_bin_folder_w(wchar_t* out, DWORD capacity_chars)
+{
+	DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
+	const LSTATUS status = RegGetValueW(
+		HKEY_LOCAL_MACHINE,
+		QAR_INSTALL_REGISTRY_KEY,
+		L"InstallFolder",
+		RRF_RT_REG_SZ,
+		NULL,
+		out,
+		&size
+	);
+	if(status != ERROR_SUCCESS)
+	{
+		return false;
+	}
+	const size_t length = wcslen(out);
+	if(length + 5 >= capacity_chars)
+	{
+		return false;
+	}
+	wcscat_s(out, capacity_chars, L"\\bin");
+	return true;
+}
+
+/// UTF-8 form of qar_installed_bin_folder_w, for
+/// QarRuntimeInit::runtime_binaries_folder_path. Leaving that path empty has
+/// the same effect: the runtime uses the folder qar-streaming-c was loaded
+/// from.
+static inline bool
+qar_installed_bin_folder(char* out, size_t capacity)
+{
+	wchar_t folder[MAX_PATH];
+	if(!qar_installed_bin_folder_w(folder, MAX_PATH))
+	{
+		return false;
+	}
+	const int written = WideCharToMultiByte(
+		CP_UTF8, 0, folder, -1, out, (int)capacity, NULL, NULL
+	);
+	return written > 0;
+}
+
+/// qar_library_load(NULL): the runtime lookup every QAROS binding follows
+/// (docs: authoring a binding, ADR-0339). The first match wins:
+///   0. a qar-streaming-c.dll already loaded in this process: nothing is
+///   loaded;
+///   1. the folder of the module this header is compiled into (the
+///      executable, or the plugin DLL that loads QAROS);
+///   2. the folder named by QAROS_RUNTIME_DIR; when it is set, a runtime
+///      missing there or failing to load is an error;
+///   3. the installed QAROS, `<InstallFolder>\bin` from HKLM; when installed, a
+///      copy failing to load there is an error;
+///   4. every folder on PATH, in order.
+/// Each candidate loads from its absolute path, with its dependencies from its
+/// own folder and System32 only.
+static inline HMODULE
+qar_loadlib_default(void)
+{
+	HMODULE handle = NULL;
+	/* Takes a reference, so qar_library_unload's FreeLibrary stays balanced. */
+	if(GetModuleHandleExW(0, QAR_RUNTIME_LIBRARY_FILE_NAME, &handle))
+	{
+		return handle;
+	}
+	handle = qar_loadlib_beside_module();
+	if(handle != NULL)
+	{
+		return handle;
+	}
+	wchar_t folder[MAX_PATH];
+	if(qar_runtime_env_folder_w(folder, MAX_PATH))
+	{
+		handle = qar_loadlib_in_folder_w(folder);
+		if(handle == NULL)
+		{
+			printf(
+				"QAROS_RUNTIME_DIR is '%ls', but no loadable "
+				"qar-streaming-c.dll "
+				"is there.\n",
+				folder
+			);
+		}
+		return handle;
+	}
+	if(qar_installed_bin_folder_w(folder, MAX_PATH))
+	{
+		handle = qar_loadlib_in_folder_w(folder);
+		if(handle == NULL)
+		{
+			printf(
+				"The installed QAROS runtime in '%ls' could not be loaded. "
+				"Repair or reinstall QAROS.\n",
+				folder
+			);
+		}
+		return handle;
+	}
+	handle = qar_loadlib_on_path();
+	if(handle == NULL)
+	{
+		printf(
+			"qar-streaming-c.dll is not beside this module, QAROS_RUNTIME_DIR "
+			"is "
+			"not set, QAROS is not installed (no InstallFolder under "
+			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and it is not on PATH.\n"
+		);
+	}
+	return handle;
 }
 
 static inline void
@@ -7141,6 +7798,7 @@ qar_load_symbol(QAR_DLL_HANDLE_TYPE handle, const char* name)
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef void* QAR_DLL_HANDLE_TYPE;
 
@@ -7162,6 +7820,143 @@ qar_loadlib(const char* path)
 
 	free(abs_path);
 	return handle;
+}
+
+#define QAR_RUNTIME_LIBRARY_FILE_NAME "libqar-streaming-c.so"
+
+/// Environment variable naming a folder that holds the runtime (step 2).
+#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
+
+/// Loads `<folder>/libqar-streaming-c.so` when the file exists there. NULL
+/// when it is not there, or (with a printed reason) when it fails to load.
+static inline void*
+qar_loadlib_in_folder(const char* folder, size_t folder_length)
+{
+	const size_t size =
+		folder_length + 1 + strlen(QAR_RUNTIME_LIBRARY_FILE_NAME) + 1;
+	char* path = (char*)malloc(size);
+	if(path == NULL)
+	{
+		return NULL;
+	}
+	snprintf(
+		path,
+		size,
+		"%.*s/%s",
+		(int)folder_length,
+		folder,
+		QAR_RUNTIME_LIBRARY_FILE_NAME
+	);
+	void* handle = NULL;
+	if(access(path, F_OK) == 0)
+	{
+		handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+		if(handle == NULL)
+		{
+			printf("dlopen failed for '%s': %s\n", path, dlerror());
+		}
+	}
+	free(path);
+	return handle;
+}
+
+/// Step 1: the folder of the module this header is compiled into. dladdr is a
+/// GNU extension; a C caller built without _GNU_SOURCE gets the executable's
+/// folder instead.
+static inline void*
+qar_loadlib_beside_module(void)
+{
+#if defined(__USE_GNU)
+	Dl_info info;
+	if(dladdr((void*)&qar_loadlib_beside_module, &info) == 0
+	   || info.dli_fname == NULL)
+	{
+		return NULL;
+	}
+	char* module = realpath(info.dli_fname, NULL);
+#else
+	char* module = realpath("/proc/self/exe", NULL);
+#endif
+	if(module == NULL)
+	{
+		return NULL;
+	}
+	const char* separator = strrchr(module, '/');
+	void* handle =
+		separator != NULL
+			? qar_loadlib_in_folder(module, (size_t)(separator - module))
+			: NULL;
+	free(module);
+	return handle;
+}
+
+/// The folder QAROS_RUNTIME_DIR names. False when it is unset or empty.
+static inline bool
+qar_runtime_env_folder(char* out, size_t capacity)
+{
+	const char* folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
+	if(folder == NULL || folder[0] == '\0' || strlen(folder) >= capacity)
+	{
+		return false;
+	}
+	snprintf(out, capacity, "%s", folder);
+	return true;
+}
+
+/// qar_library_load(NULL) on Linux: the Windows lookup without step 3 (there is
+/// no installation record yet). 0. already loaded in this process; 1. the
+/// folder of the module this header is compiled into; 2. QAROS_RUNTIME_DIR;
+/// 4. the dynamic linker's own search (LD_LIBRARY_PATH, runpath, ld.so cache),
+/// its counterpart of PATH.
+static inline void*
+qar_loadlib_default(void)
+{
+	void* handle = dlopen(
+		QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD
+	);
+	if(handle != NULL)
+	{
+		return handle;
+	}
+	handle = qar_loadlib_beside_module();
+	if(handle != NULL)
+	{
+		return handle;
+	}
+	const char* env_folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
+	if(env_folder != NULL && env_folder[0] != '\0')
+	{
+		handle = qar_loadlib_in_folder(env_folder, strlen(env_folder));
+		if(handle == NULL)
+		{
+			printf(
+				"QAROS_RUNTIME_DIR is '%s', but no loadable %s is there.\n",
+				env_folder,
+				QAR_RUNTIME_LIBRARY_FILE_NAME
+			);
+		}
+		return handle;
+	}
+	handle = dlopen(QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL);
+	if(handle == NULL)
+	{
+		printf(
+			"%s is not beside this module, QAROS_RUNTIME_DIR is not set, and "
+			"it "
+			"is not on the library search path: %s\n",
+			QAR_RUNTIME_LIBRARY_FILE_NAME,
+			dlerror()
+		);
+	}
+	return handle;
+}
+
+static inline bool
+qar_installed_bin_folder(char* out, size_t capacity)
+{
+	(void)out;
+	(void)capacity;
+	return false;
 }
 
 static inline void
@@ -7278,7 +8073,10 @@ qar_library_load(const char* library_path)
 		return true;
 	}
 
-	g_qar_dynamic_library_handle = qar_loadlib(library_path);
+	// NULL: the default lookup (qar_loadlib_default), installed QAROS first.
+	g_qar_dynamic_library_handle = library_path != NULL
+									   ? qar_loadlib(library_path)
+									   : qar_loadlib_default();
 	if(g_qar_dynamic_library_handle == NULL)
 	{
 		return false;

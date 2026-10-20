@@ -23,13 +23,13 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 ## The two onboarding paths
 
-**Push (operator-configured).** You add a device through the Hub UI, and the Hub sends it an onboarding invite automatically at startup. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+**Push (operator-configured).** You add a device in the Visualizer's [Connection panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** > **Add device**), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
 
-**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. It requires that someone can read the Hub's current code (see [Reading this Hub's code](#reading-this-hubs-code)).
+**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
 
 ## Listing connected peers
 
-The runtime tracks which peers are connected. The visualizer surfaces the connected peers so you can see who is currently in the session.
+The runtime tracks which peers are connected. In the Visualizer's Connection panel, **Hubs** lists every Hub of the session; expand one to see the apps and devices it serves. **Devices** lists the headsets with their streaming status.
 
 ## Forgetting and blacklisting a device
 
@@ -55,8 +55,8 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 
 ## Reading this Hub's code
 
-The Visualizer shows this Hub's current code: in the **Connection** panel, use **Onboard a Device** (steps in [Connection Panel](/docs/user-guide/connection-panel#onboard-a-device)). It shows the code together with this Hub's hostname, and as a QR code for a device that can scan one. The display follows the Hub's rotation, so read out the code shown at that moment.
+For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its short lifetime. A code is offered only while that card is open.
 
-- **Push onboarding** needs no code at all.
-- **Pull onboarding:** relay the shown code to the device owner within its short lifetime. A failed attempt uses it up; take the next one.
+Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Add device** > **Other devices** shows the large QR code for them.
+
 - **Several devices at once:** have an onboarded application request one-time codes (see [Requested codes](#how-pairing-codes-are-minted)) instead of racing the rotation.

@@ -8,7 +8,7 @@ namespace Quaternar.Qaros.Tests
         [Fact]
         public void PeerUpdateEventArgsCarrySnapshot()
         {
-            var peer = new PeerSpec(PeerId.Default, "display", "1.0", "custom", AppState.Running, "v", "room", true);
+            var peer = new PeerSpec(PeerId.Default, "display", "1.0", "custom", AppState.Running, "v", "room", PeerRole.Target);
             var args = new PeerSpecUpdatedEventArgs(peer);
             Assert.Same(peer, args.Peer);
         }
