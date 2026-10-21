@@ -18,6 +18,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the minimum SDK for certificate renewal and the migration steps: a hub renews only a
+  renewal that proves it holds the certificate's key, so apps and devices on an older SDK are
+  updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
+  status table lists `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` and
+  `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` with what to tell the user.
+
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.

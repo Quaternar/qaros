@@ -192,6 +192,7 @@ Every secret is in one encrypted store, `secure-store` under the runtime storage
 - A device renews online, with a new key, over a channel on the Hub's onboarding port where both ends prove the certificates they hold. No code is needed.
 - It renews during the session before expiry, and on joining after a long time offline.
 - After a session rotation, a certificate of one of the two previous sessions renews into the current one; it is admitted for nothing else.
+- Every renewal proves possession: a signature by the certificate's current key over the new request, verified by every hub path before it signs. A renewal without it (an SDK older than the hub) is refused with `renewal_possession_unproven` and the device cannot renew until it is updated ([Maintenance & Updates](./maintenance-and-updates.md#certificate-renewal-needs-the-current-sdk)).
 - An expired, revoked or older certificate is refused: the device reports that it must be paired again and the operator pairs it with a new code.
 
 ## Revocation and blacklist
