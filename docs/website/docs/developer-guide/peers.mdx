@@ -61,7 +61,7 @@ for (size_t i = 0; i < count; ++i)
     char name[128];
     qar_peer_spec_get_display_name(specs[i], name, sizeof(name));
     /* also: _get_app_version, _get_app_custom_peer_info,
-             _get_app_state, _get_version_id, _get_room_tag,
+             _get_presence, _get_version_id, _get_room_tag,
              _get_id, _get_role, _get_category, _get_device_id,
              _get_device_family, _get_device_name */
     qar_peer_spec_handle_destroy(specs[i]);
@@ -79,7 +79,7 @@ foreach (PeerSpec peer in result.ValueOrThrow())
 {
     string name = peer.DisplayName;
     // also: peer.AppVersion, peer.AppCustomPeerInfo,
-    //       peer.AppState, peer.VersionId, peer.RoomTag, peer.Id,
+    //       peer.Presence, peer.VersionId, peer.RoomTag, peer.Id,
     //       peer.Role, peer.Category, peer.DeviceId,
     //       peer.DeviceFamily, peer.DeviceName
 }
@@ -90,7 +90,17 @@ foreach (PeerSpec peer in result.ValueOrThrow())
 
 Useful fields:
 
-- **app state** — `QAR_APP_STATE_INITIALIZING / RUNNING / SHUTTING_DOWN / UNKNOWN`: distinguish a peer that is present-but-loading from one that is live.
+- **presence** — `qar_peer_spec_get_presence()` (`PeerSpec.Presence` in C#): whether the peer is here. Render for, wait for and count `QAR_PEER_PRESENCE_ONLINE` and `QAR_PEER_PRESENCE_UNKNOWN` peers; stop at `OFFLINE`, `LEAVING` or `RETIRED`.
+
+  | Presence | Means |
+  |---|---|
+  | `ONLINE` | the hub sees the peer in the session |
+  | `OFFLINE` | the hub no longer sees it: a crash, a kill, a network loss or a short drop. It reads `ONLINE` again once it is back |
+  | `LEAVING` | it announced a clean exit, and may come back under the same id |
+  | `RETIRED` | it left for good; query results no longer list it |
+  | `UNKNOWN` | the hub has not reconciled it yet (an older hub that never reports presence, or one that just started); nothing says it is gone, so treat it like `ONLINE` |
+
+- **app state** (deprecated) — `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` still work and are computed from the presence, but every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
 - **room tag** — which physical room the peer is in; lets multi-room deployments group peers.
 - **`qar_session_get_my_spec`** — your own peer's spec (e.g. to learn your assigned peer ID).
 
@@ -203,7 +213,7 @@ Declaring `CAMERA` changes how the visualizer lists and draws your peer. Streami
 ```c
 static void on_peer_update(/* peer update info */ ..., void* state)
 {
-    /* peer joined / left / changed presentation or app state */
+    /* peer joined / left / changed presentation or presence */
 }
 
 qar_peer_subscribe_updates(session, on_peer_update, NULL);
@@ -216,7 +226,7 @@ qar_peer_subscribe_updates(session, on_peer_update, NULL);
 // As a C# event: fires on the library thread — marshal to your own thread.
 session.Peers.Updated += (sender, e) =>
 {
-    PeerSpec peer = e.Peer; // joined / left / changed presentation or app state
+    PeerSpec peer = e.Peer; // joined / left / changed presentation or presence
 };
 
 // Or as a disposable subscription — Dispose() stops native delivery:

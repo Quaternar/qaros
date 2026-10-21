@@ -41,6 +41,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
+  presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for
   `targetApps[].deviceType`: `HoloLens` or `Headset` (the headset reports its model itself); the
   old generic names still resolve, a model id is skipped, `CameraVisualizer` is gone.

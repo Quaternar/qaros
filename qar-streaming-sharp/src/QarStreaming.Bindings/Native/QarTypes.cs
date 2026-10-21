@@ -764,7 +764,7 @@ namespace Quaternar.Qaros.Interop
         private RuntimeSafeHandle() : base(IntPtr.Zero, true) { }
         internal RuntimeSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
         public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
-        protected override bool ReleaseHandle() { NativeMethods.qar_impl_runtime_destroy(handle); return true; }
+        protected override bool ReleaseHandle() { NativeMethods.qar_impl_runtime_handle_destroy(handle); return true; }
     }
 
     internal sealed class SessionSafeHandle : SafeHandle

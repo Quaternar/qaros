@@ -81,7 +81,7 @@ prefab and a **Connect** button that calls `QarMultiUserStreamingBehaviour.Join`
 1. Start QAROS on this machine, and a target: a headset player, or a Visualizer receiver.
 2. Enter Play mode. The app joins the Hub on this PC as a local app; the first time, click
    **Allow** in the QAROS approval prompt.
-3. The scene streams to every running target. The target list shows in the game view and in the
+3. The scene streams to every reachable target. The target list shows in the game view and in the
    `QarStreaming` Inspector.
 
 ## Prefabs
@@ -126,7 +126,7 @@ target appears in the list once it joined the Hub on its own (see
 [Player Installation to Device](/docs/operator-guide/player-installation-to-device)), and leaves it
 when it is gone.
 
-- **Stream To All Targets** (on by default) streams to every running target, including ones that
+- **Stream To All Targets** (on by default) streams to every reachable target, including ones that
   join later.
 - Turn it off to pick: only the targets checked in the list are streamed to.
 - Each row shows the target's display name, its device type and its state; hover it for the peer
@@ -139,9 +139,9 @@ when it is gone.
 | Member | Does |
 |---|---|
 | `Join()`, `IsJoined`, `LastJoinError` | Joins the Hub and starts listing targets; whether it did; why not |
-| `Targets` | The target list (`QarStreamTarget`: `Id`, `DisplayName`, `Category`, `DeviceId`, `DeviceFamily`, `DeviceName`, `DeviceLabel`, `AppState`, `Selected`, `Device`, `ConnectionState`, `LastError`) |
+| `Targets` | The target list (`QarStreamTarget`: `Id`, `DisplayName`, `Category`, `DeviceId`, `DeviceFamily`, `DeviceName`, `DeviceLabel`, `Presence`, `IsOnline`, `IsReachable`, `Selected`, `Device`, `ConnectionState`, `LastError`) |
 | `TargetsChanged` | Raised on the main thread when a target joins, leaves, changes or is picked |
-| `StreamToAllTargets` | Stream to every running target, or only the picked ones |
+| `StreamToAllTargets` | Stream to every reachable target, or only the picked ones |
 | `SetTargetSelected(PeerId, bool)`, `IsStreamedTo(target)` | Picks a target; whether it is streamed to |
 | `Leave()` | Stops streaming to every target and stops listing them |
 | `ForgetOnboarding()` | Leaves, ends the session and erases the saved onboarding ID (Code mode) |
