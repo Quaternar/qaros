@@ -328,7 +328,7 @@ main(int argc, char** argv)
 	   ) != 0
 	   || session == NULL)
 	{
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
@@ -425,7 +425,7 @@ main(int argc, char** argv)
 
 	/* Destroying the handle leaves the session. */
 	qar_session_handle_destroy(session);
-	qar_runtime_destroy(runtime);
+	qar_runtime_handle_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);
 	qar_library_unload();

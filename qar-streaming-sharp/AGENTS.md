@@ -346,7 +346,7 @@ internal sealed class RuntimeSafeHandle : SafeHandle
     public override bool IsInvalid => handle == IntPtr.Zero;
     protected override bool ReleaseHandle()
     {
-        NativeMethods.qar_impl_runtime_destroy(handle);
+        NativeMethods.qar_impl_runtime_handle_destroy(handle);
         return true;
     }
 }
@@ -510,12 +510,12 @@ public sealed class Object : IDisposable
 
 ```c
 QarResult qar_runtime_create(const QarRuntimeInit* init, QarRuntime** runtime);
-void qar_runtime_destroy(QarRuntime* runtime);
+void qar_runtime_handle_destroy(QarRuntime* handle);
 ```
 
 ```csharp
 internal static extern ResultNative qar_impl_runtime_create(ref RuntimeInitNative init, out IntPtr runtime);
-internal static extern void qar_impl_runtime_destroy(IntPtr runtime);
+internal static extern void qar_impl_runtime_handle_destroy(IntPtr handle);
 ```
 
 ```csharp

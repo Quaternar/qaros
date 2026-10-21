@@ -329,6 +329,12 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(56, (int)PixelFormat.B8G8R8X8);
             Assert.Equal(20, (int)VideoFrameViewEye.Right);
             Assert.Equal(0x8UL, (ulong)HandJointLocationFlags.PositionTracked);
+            Assert.Equal(0, (int)PeerPresence.Unknown);
+            Assert.Equal(1, (int)PeerPresence.Online);
+            Assert.Equal(2, (int)PeerPresence.Offline);
+            Assert.Equal(3, (int)PeerPresence.Leaving);
+            Assert.Equal(4, (int)PeerPresence.Retired);
+            Assert.Equal(5, Enum.GetValues(typeof(PeerPresence)).Length);
         }
 
         [Fact]

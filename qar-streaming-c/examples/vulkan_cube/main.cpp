@@ -1,4 +1,9 @@
 #include "renderer.hpp"
+#ifndef _WIN32
+#include <cerrno>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -35,20 +40,43 @@ OnStopSignal(int)
 bool
 StdinIsPipe()
 {
+#ifdef _WIN32
 	return GetFileType(GetStdHandle(STD_INPUT_HANDLE)) == FILE_TYPE_PIPE;
+#else
+	struct stat status{};
+	return fstat(STDIN_FILENO, &status) == 0
+		   && (S_ISFIFO(status.st_mode) || S_ISSOCK(status.st_mode));
+#endif
 }
 
 // QAROS stops an app it started by closing the app's stdin pipe. Whatever
 // arrives on the pipe is ignored; its end is the stop request.
 void
-StopWhenStdinCloses(HANDLE input)
+StopWhenStdinCloses()
 {
 	std::array<char, 256> buffer{};
+#ifdef _WIN32
+	const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD read = 0;
 	while(ReadFile(input, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)
 		  && read > 0)
 	{
 	}
+#else
+	for(;;)
+	{
+		const ssize_t count = read(STDIN_FILENO, buffer.data(), buffer.size());
+		if(count > 0 || (count < 0 && errno == EINTR))
+		{
+			continue;
+		}
+		if(count < 0)
+		{
+			std::cerr << "Reading launcher stdin failed: " << std::strerror(errno) << '\n';
+		}
+		break;
+	}
+#endif
 	g_stopRequested.store(true);
 }
 
@@ -291,11 +319,20 @@ private:
 // The peer callback hands over IDs only; main starts the targets. A plain
 // std::mutex, because this standalone SDK example cannot depend on
 // qar::Synchronized and must stay portable to Linux.
+// A target can be rendered for unless the hub says it is gone or it announced its leave. UNKNOWN
+// is a hub that has not reconciled the peer yet (or an older hub that never does): nothing says
+// it is gone, so it counts.
+static bool
+IsReachable(QarPeerPresence presence)
+{
+	return presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN;
+}
+
 struct Targets
 {
 	std::mutex lock;
 	std::map<PeerKey, QarPeerId> pending;
-	// Queues the peer when it is a running target app.
+	// Queues the peer when it is a reachable target app.
 	void Offer(QarPeerSpec* spec)
 	{
 		QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
@@ -303,9 +340,9 @@ struct Targets
 		{
 			return;
 		}
-		QarAppState state = QAR_APP_STATE_UNKNOWN;
+		QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
 		QarPeerId id{};
-		if(not Check(qar_peer_spec_get_app_state(spec, &state)) || state != QAR_APP_STATE_RUNNING
+		if(not Check(qar_peer_spec_get_presence(spec, &presence)) || not IsReachable(presence)
 		   || not Check(qar_peer_spec_get_id(spec, &id)))
 		{
 			return;
@@ -595,7 +632,7 @@ RunApp()
 	}
 	if(runtime)
 	{
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 	}
 	return success;
 }
@@ -614,7 +651,7 @@ main(int argc, char** argv)
 	std::signal(SIGTERM, OnStopSignal);
 	if(StdinIsPipe())
 	{
-		std::thread(StopWhenStdinCloses, GetStdHandle(STD_INPUT_HANDLE)).detach();
+		std::thread(StopWhenStdinCloses).detach();
 	}
 	// The header's default lookup: no path to find or pass.
 	if(not qar_library_load(nullptr))

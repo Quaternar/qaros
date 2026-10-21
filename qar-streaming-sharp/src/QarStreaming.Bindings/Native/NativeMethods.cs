@@ -111,9 +111,6 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_runtime_forget(IntPtr runtime, ref ForgetInitNative init);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void qar_impl_runtime_destroy(IntPtr runtime);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern void qar_impl_session_handle_destroy(IntPtr handle);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -193,8 +190,13 @@ namespace Quaternar.Qaros.Interop
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_app_custom_peer_info(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
 
+#pragma warning disable CS0618 // AppState is deprecated (PeerPresence) and still bound
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_app_state(IntPtr handle, out AppState outState);
+#pragma warning restore CS0618
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_presence(IntPtr handle, out PeerPresence outPresence);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_version_id(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);

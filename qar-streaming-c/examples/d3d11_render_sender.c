@@ -226,7 +226,7 @@ teardown(QarRuntime* runtime, QarSession* session)
 		/* Destroying the handle leaves the session. */
 		qar_session_handle_destroy(session);
 	}
-	qar_runtime_destroy(runtime);
+	qar_runtime_handle_destroy(runtime);
 	log_result("qar_library_destroy", qar_library_destroy());
 	qar_library_unload();
 }

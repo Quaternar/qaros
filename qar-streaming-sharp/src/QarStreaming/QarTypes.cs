@@ -10,9 +10,11 @@ using Quaternar.Qaros.Mathematics;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// A peer's lifecycle state. A target app is ready to be rendered for only while it is
-    /// <see cref="Running"/>.
+    /// The state a peer last claimed about itself. Deprecated: read <see cref="PeerSpec.Presence"/>.
+    /// Every peer claims <see cref="Running"/> as soon as it joins, so the value says nothing beyond
+    /// "joined", never "finished configuring".
     /// </summary>
+    [Obsolete("Read PeerSpec.Presence (PeerPresence) instead. AppState.Running only means the peer joined.")]
     public enum AppState
     {
         Unknown = 0,
@@ -21,6 +23,33 @@ namespace Quaternar.Qaros
         ShuttingDown = 100,
         /// <summary>The peer left for good and never comes back under its id.</summary>
         Retired = 200
+    }
+
+    /// <summary>
+    /// Whether a peer is here, as an application should act on it (C <c>QarPeerPresence</c>).
+    /// Render for, wait for and count <see cref="Online"/> and <see cref="Unknown"/> peers
+    /// (<see cref="PeerSpec.IsReachable"/>). The hub's own view of the session decides
+    /// <see cref="Online"/> and <see cref="Offline"/>; a leave the peer announced decides
+    /// <see cref="Leaving"/> and <see cref="Retired"/>.
+    /// </summary>
+    public enum PeerPresence
+    {
+        /// <summary>
+        /// The hub has not reconciled the peer yet (an older hub that never does, or one that just
+        /// started). Nothing says it is gone: treat it like <see cref="Online"/>.
+        /// </summary>
+        Unknown = 0,
+        /// <summary>The hub sees the peer in the session.</summary>
+        Online = 1,
+        /// <summary>
+        /// The hub no longer sees the peer: a crash, a kill, a network loss or a short drop. It reads
+        /// <see cref="Online"/> again once it is back, without doing anything.
+        /// </summary>
+        Offline = 2,
+        /// <summary>The peer announced it is leaving (a clean exit); it may come back under its id.</summary>
+        Leaving = 3,
+        /// <summary>The peer left for good and never comes back under its id.</summary>
+        Retired = 4
     }
 
     /// <summary>
@@ -61,8 +90,13 @@ namespace Quaternar.Qaros
         Headset = 3,
         /// <summary>A Visualizer receiver showing streams on the PC.</summary>
         Visualizer = 4,
-        /// <summary>A camera of any model: its capture process, or its receiver slot.</summary>
-        Camera = 5
+        /// <summary>A camera of any model: its capture process. (A build before
+        /// <see cref="Observer"/> also used it for a camera's receiver.)</summary>
+        Camera = 5,
+        /// <summary>A target app that sees the scene through a camera: it blends a camera's
+        /// RGB-D frames and pose with the mixer's stream. Its device id and name are the
+        /// camera's.</summary>
+        Observer = 6
     }
 
     /// <summary>

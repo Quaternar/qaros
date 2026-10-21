@@ -207,7 +207,7 @@ int main(void)
     // 4. Do work: app volume, render streams, panels
 
     // 5. Teardown, in reverse
-    qar_runtime_destroy(runtime);
+    qar_runtime_handle_destroy(runtime);
     qar_result_log_if_error(qar_library_destroy());
     return 0;
 }
