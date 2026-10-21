@@ -31,7 +31,7 @@ The C header names the space of every field that holds one.
 
 Conventions:
 
-- **Units are meters**, everywhere. Sizes, positions, and gesture points are all metric.
+- **Room and volume units are meters.** Render-sender poses and gesture points use app-content units. If a renderer uses a different unit from world meters, its geographic conversion must declare that relationship separately.
 - Poses are a **position vector + orientation quaternion** (`QarPose`). Quaternions are stored as `{x, y, z, w}` (scalar last).
 - Room space follows **OpenXR conventions: right-handed, Y-up, −Z forward**. The QAROS math types deliberately mirror OpenXR's (`XrPosef`, `XrVector3f`), and the room frame is the runtime's OpenXR reference space.
 
@@ -39,13 +39,17 @@ The room origin itself is established by the underlying XR runtime and the platf
 
 ### World space — pinning the room to the Earth
 
-**World space** is an optional absolute geographic frame. An app volume can carry a **world anchor** (`QarGeoAnchorFrame`) that pins it to an Earth-fixed pose, expressed in **ECEF WGS84 meters** (the standard Earth-Centered, Earth-Fixed Cartesian frame used by GPS):
+**World space** is an optional absolute geographic frame. An app volume can carry **world-anchor metadata** (`AppWorldAnchor`, containing a `QarGeoAnchorFrame`) that identifies an Earth-fixed reference frame in **ECEF WGS84 meters** (Earth-Centered, Earth-Fixed Cartesian coordinates):
 
 - `origin_world` — the anchor's origin as an ECEF position (double precision, meters),
 - `axis_x/y/z_world` — the anchor's local axes as unit vectors in the ECEF frame,
 - `handedness` — `QAR_HANDEDNESS_RIGHT` or `QAR_HANDEDNESS_LEFT` (right-handed means `X × Y = Z`). `QAR_HANDEDNESS_UNSPECIFIED` is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
 
-World anchors let outdoor and large-scale deployments place content at real geographic locations, and let two deployments agree on absolute placement. If you never set a world anchor, world space simply does not participate — the room is your outermost frame.
+This shared reference lets applications agree on a geographic location and orientation. In the current SDK, the anchor is stored and replicated with the volume; setting or clearing it does **not** change the volume's `pose`, `app_pose`, or `app_scale`. The render sender does not automatically use it to transform view poses, align tracking rooms, or reproject pixels against geographic coordinates. Applications must implement the geographic conversion and any alignment they require. If you never set an anchor, the room remains the outermost frame used by the rendering transforms.
+
+The anchor's axes are **unit vectors**, not a place to store display scale or a units conversion. If an application renders in units other than true world meters, the anchor alone is not a complete georeference. Publish the additional conversion as application-specific metadata and make consumers apply it explicitly. For example, if one render-coordinate unit represents `S0 = 1000` world meters, retain that `worldMetersPerAppUnit` value separately; do not multiply the anchor axes by `S0`, put ECEF values into `app_pose`, or change streaming `depth_scale` to carry it. Names such as an integration's `appCoordinate` snapshot describe its own protocol, not an SDK field or an automatic coordinate conversion.
+
+A one-to-one interpretation of app-content coordinates as local Earth-meter offsets requires those coordinates to actually use world meters, as well as an explicit choice of how they relate to the anchor. The SDK does not define a complete anchor-to-app-content mapping for applications; `app_scale` still controls physical display size independently.
 
 ### App volume space — a box in the room
 
@@ -67,6 +71,8 @@ Inside the volume, your application keeps its own coordinate system. Two values 
   - `app_scale = 1.0` → 1 meter in your app appears as 1 meter in the room,
   - `app_scale = 0.5` → your content appears at half size,
   - `app_scale = 10.0` → your content appears ten times larger than life.
+
+`app_pose.position` is a Euclidean translation in **volume meters**, relative to the box's center. It is not latitude/longitude, an ECEF position, or an offset whose unit is inherited from `AppWorldAnchor`. The render sender converts room poses through the volume pose and then the inverse app pose, and divides positions by `app_scale` to produce **app-content units**. Changing `app_scale` does not multiply the stored app-pose translation.
 
 This separation is the key trick: users can grab the volume to move the whole box around the room (changing the volume's room-space `pose`), or use gestures mapped to `app_pose`/`app_scale` to pan and zoom the content *within* the box — for example shrinking an entire factory into a tabletop model, then zooming into one machine — without your application changing how it renders.
 
@@ -102,7 +108,7 @@ When your application streams frames, the projection metadata you provide (per-e
 | App volume `size` | Room | Extents in meters |
 | `app_pose` | App volume (unscaled meters) | Where the app origin sits in the volume |
 | `app_scale` | — | Room-meters per app-meter |
-| World anchor | ECEF WGS84 (meters, double) | Pins a volume to the Earth |
+| World anchor | ECEF WGS84 (meters, double) | Shared geographic reference metadata; no automatic render-pose conversion |
 | GUI panel pose | Room | **Midpoint of the top edge** of the quad |
 | Panel size + content scale | Room / pixels | Physical size; pixel density |
 | App volume gesture points | App content | Where the gesture started / acts |

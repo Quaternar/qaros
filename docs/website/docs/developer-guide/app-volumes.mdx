@@ -92,7 +92,7 @@ Because other peers (and gestures) can change these too, read the *live* values 
 
 ## World anchors
 
-To pin a volume to a geographic pose (ECEF WGS84 — see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
+To publish an Earth-fixed reference frame with a volume (ECEF WGS84; see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
 
 ```c
 QarGeoAnchorFrame frame;
@@ -103,6 +103,16 @@ qar_app_volumes_change_app_world_anchor(session, &volume_id, &frame);
 /* ... */
 qar_app_volumes_clear_app_world_anchor(session, &volume_id);
 ```
+
+`AppWorldAnchor` is shared geographic reference metadata. The current SDK stores and replicates it, but setting or clearing it does not move the box, modify `AppPose`/`AppScale`, transform render-sender view poses, or enable automatic geographic reprojection. Applications implement the required geographic mapping and room alignment.
+
+Keep the units separate:
+
+- `origin_world` is an absolute ECEF position in meters; each axis is a unit direction vector.
+- `AppPose.Position` is a Euclidean offset in **volume meters**, relative to the box center. It is neither an ECEF position nor an Earth-frame offset, and `AppScale` does not scale this stored translation.
+- Render-sender view poses and gesture points use **app-content units**, after the inverse volume/app transforms and division by `AppScale`.
+
+If render-coordinate units differ from world meters, publish a separate application-specific conversion, such as `worldMetersPerAppUnit = S0`. Unit axes cannot encode that scale. A custom snapshot may group this value and the anchor under a name such as `appCoordinate`; that is an integration protocol, not an SDK property. Do not encode `S0` in non-unit axes or streaming `depth_scale`. A one-to-one local-Earth-meter interpretation requires actual world-meter app coordinates and a consumer-defined mapping to the anchor; the anchor alone does not establish that mapping. See [World space](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth).
 
 The compiled tutorial builds a full east/up/south frame from a latitude/longitude: [Pin to the Earth with a World Anchor](/docs/developer-guide/tutorials/c/app-volume-management).
 
