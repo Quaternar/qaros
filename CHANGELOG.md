@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Rendering Streams* has a *Choosing a depth format* section: the depth formats each
+  graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
+  D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
+  depth-stencil texture. *Troubleshooting* lists the refused format as an integration mistake.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
