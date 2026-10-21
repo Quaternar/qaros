@@ -27,6 +27,7 @@ namespace Quaternar.Qaros.Tests
         [InlineData(DeviceCategory.Headset, 3)]
         [InlineData(DeviceCategory.Visualizer, 4)]
         [InlineData(DeviceCategory.Camera, 5)]
+        [InlineData(DeviceCategory.Observer, 6)]
         public void CategoryValuesMatchTheCApi(DeviceCategory category, int value)
         {
             Assert.Equal(value, (int)category);

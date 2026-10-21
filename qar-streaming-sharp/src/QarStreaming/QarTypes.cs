@@ -90,8 +90,13 @@ namespace Quaternar.Qaros
         Headset = 3,
         /// <summary>A Visualizer receiver showing streams on the PC.</summary>
         Visualizer = 4,
-        /// <summary>A camera of any model: its capture process, or its receiver slot.</summary>
-        Camera = 5
+        /// <summary>A camera of any model: its capture process. (A build before
+        /// <see cref="Observer"/> also used it for a camera's receiver.)</summary>
+        Camera = 5,
+        /// <summary>A target app that sees the scene through a camera: it blends a camera's
+        /// RGB-D frames and pose with the mixer's stream. Its device id and name are the
+        /// camera's.</summary>
+        Observer = 6
     }
 
     /// <summary>

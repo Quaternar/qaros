@@ -525,8 +525,13 @@ typedef enum QarDeviceCategory
 	QAR_DEVICE_CATEGORY_HEADSET = 3,
 	/** A Visualizer receiver showing streams on the PC. */
 	QAR_DEVICE_CATEGORY_VISUALIZER = 4,
-	/** A camera of any model: its capture process, or its receiver slot. */
-	QAR_DEVICE_CATEGORY_CAMERA = 5
+	/** A camera of any model: its capture process. (A build before
+	 * QAR_DEVICE_CATEGORY_OBSERVER also used it for a camera's receiver.) */
+	QAR_DEVICE_CATEGORY_CAMERA = 5,
+	/** A target app that sees the scene through a camera: it blends a camera's
+	 * RGB-D frames and pose with the mixer's stream. Its device id and name are
+	 * the camera's. Never declared by an application. */
+	QAR_DEVICE_CATEGORY_OBSERVER = 6
 } QarDeviceCategory;
 
 /**
