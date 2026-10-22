@@ -31,19 +31,24 @@ Discovery (the multicast beacon and framed TCP discovery on the onboarding port)
 
 Because it is unauthenticated, **do not expose discovery to the internet.** Keep multicast `239.77.77.77:7445` and the Hub port range on the LAN. Off-LAN reach is the job of a relay, not of opening discovery to the world.
 
-## Connecting two Hubs (federation)
+## Joining Hubs: primary and members
 
-Two Hubs can be joined so that a device onboarded to one is trusted by the other:
+Several PCs share one session by making one Hub the **primary** and joining the others to it as **members**. Joining always makes this Hub a member.
 
-1. On the visualizer, open the Connection panel's **Hubs** > **Pair another Hub** > **Join another hub** (or the **hub-connect** screen from the tray menu -> *Connect to other Hub*). The remote Hub shows its code under **Let another hub join us**.
-2. Pick the remote Hub from the nearby list, or enter its address as **`host:port`** (the port is shown with its pairing code; there is no default port), and its **current pairing code**. Hubs run by your own user account on this PC are listed first and marked *(yours)*.
-3. On a successful connection, the two Hubs **merge their CA trust bundles** through a trust-store service. From then on, devices onboarded to either Hub are accepted by both.
+1. On the Hub that should become a member, choose *Join hub…* (Visualizer Connection panel, **Hubs** area, or tray menu).
+2. Pick the primary from the nearby list, or enter its address as **`host:port`** (there is no default port). Hubs run by your own user account on this PC are listed first and marked *(yours)*.
+3. Either wait for the primary's operator to click **Allow** on the pending request in the primary's *Members* list (up to 10 minutes), or type the primary's 8-digit **join code** (shown on the primary; valid briefly, no click on the primary).
+4. The member restarts into the primary's session; the tray shows "Member of *primary*".
 
-### What federation does and does not do - read this
+Apps that link several PCs themselves (for example a simulation) can bring a Hub in without any click: approve the app on the primary with **may bring in member hubs** and a quota.
 
-Federation shares **trust**, not signing authority. Be precise about the boundaries:
+### What a member is - read this
 
-- **Signing stays one-CA-per-Hub.** Each Hub only ever issues certificates for its own devices. Connecting Hubs does not create a shared CA; it makes each Hub *trust the other's root*.
-- **Merges are additive-only.** Connecting adds the remote Hub's trust to the local store. There is no "disconnect and untrust" that cleanly withdraws it - **removing trust requires an out-of-band rotation** (re-issuing/rotating the affected CA material), not a menu action. Treat a federation as a commitment.
+- **One CA per session.** The member has no CA; every certificate in the session is signed by the primary. There is no merge of trust between Hubs.
+- **The primary decides.** App approvals, revocation, new sessions and member admission happen on the primary. The primary's policy says whether a member may pair headsets and approve local apps on its own PC.
+- **Members follow the primary.** When the primary starts a new session, members follow within seconds by restarting. While the primary is unreachable nothing new is admitted and the member says so.
+- **Leaving and removing.** *Leave and start own session* on the member starts a fresh, standalone session (it revokes nothing; its devices pair again). *Remove* on the primary is final and revokes the member and everything it enrolled.
+- **No chains.** A member cannot accept members, and a Hub with members cannot join another.
+- **After this update:** Hubs that were connected with the old *Connect to other Hub* start on their own and show a one-time notice offering to join the former Hub as a member.
 
 For the pairing and enrollment protocol behind all of this, see [Security Model](/docs/operator-guide/security-model).

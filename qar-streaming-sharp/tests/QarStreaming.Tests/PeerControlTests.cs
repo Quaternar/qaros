@@ -77,6 +77,50 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(identity.DeviceName, mySpec.DeviceName);
         }
 
+        // A joined peer is Online in the hub's view, and the deprecated AppState still reads the
+        // Running every session claims when it joins (ADR-0363).
+        [Fact]
+        public void AJoinedPeerReadsOnlineAndItsDeprecatedAppStateStaysRunning()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var myId = scope.Session.Peers.GetMySpec().ValueOrThrow().Id;
+            var mySpec = QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    var result = scope.Session.Peers.GetAll();
+                    return result.IsSuccess ? Array.Find(result.Value, peer => peer.Id.Equals(myId)) : null;
+                },
+                peer => peer.Presence == PeerPresence.Online,
+                "own peer online",
+                timeoutMs: 10000,
+                intervalMs: 100);
+            Assert.Equal(PeerPresence.Online, mySpec.Presence);
+#pragma warning disable CS0618 // the deprecated AppState keeps working
+            Assert.Equal(AppState.Running, mySpec.AppState);
+#pragma warning restore CS0618
+        }
+
+        // A peer that exits cleanly announces its leave: the session lists it as Leaving rather than
+        // Online, and the deprecated AppState reads ShuttingDown (ADR-0363).
+        [Fact]
+        public void APeerThatLeavesReadsLeaving()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var peer = scope.Hub.CreatePeer("QarStreamingSharpTests leaving peer");
+            var peerId = peer.Id;
+            PeerSpec? Find()
+            {
+                var result = scope.Session.Peers.GetAll();
+                return result.IsSuccess ? Array.Find(result.Value, spec => spec.Id.Equals(peerId)) : null;
+            }
+            QarNativeAssert.WaitUntil(Find, spec => spec.Presence == PeerPresence.Online, "peer online", timeoutMs: 15000, intervalMs: 100);
+            peer.Dispose();
+            var left = QarNativeAssert.WaitUntil(Find, spec => spec.Presence == PeerPresence.Leaving, "peer leaving", timeoutMs: 15000, intervalMs: 100);
+#pragma warning disable CS0618 // the deprecated AppState keeps working
+            Assert.Equal(AppState.ShuttingDown, left.AppState);
+#pragma warning restore CS0618
+        }
+
         [Theory]
         [InlineData(DeviceCategory.Headset)]
         [InlineData(DeviceCategory.Visualizer)]

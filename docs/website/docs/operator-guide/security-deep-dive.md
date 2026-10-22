@@ -1,7 +1,7 @@
 ---
 sidebar_position: 7.5
 title: Security Deep Dive
-description: Auditor-level reference for QAROS onboarding and certificates - layer protocols, EC-JPAKE transcript binding, the secure-channel nonce scheme, CA gateway policy, certificate SANs, storage, renewal, revocation, federation, and known limitations.
+description: Auditor-level reference for QAROS onboarding and certificates - layer protocols, EC-JPAKE transcript binding, the secure-channel nonce scheme, CA gateway policy, certificate SANs, storage, renewal, revocation, member Hubs, the audit log, and known limitations.
 ---
 
 # Security Deep Dive
@@ -9,7 +9,7 @@ description: Auditor-level reference for QAROS onboarding and certificates - lay
 This page is for security reviewers and auditors. It states what each layer does, what it assumes, and where today's implementation falls short of the design. For the operator-level summary read [Security Model](./security-model.md) first.
 
 :::caution Read the limitations
-The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enrolment) is sound. The open gaps are in **authorization, trust distribution and secrets at rest** - see [Limitations](#limitations). Do not assume any guarantee this page does not state.
+The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enrolment) is sound. Secrets at rest are encrypted under a key of the signed-in user (TPM-backed where the PC has one), which stops other users and disk copies but not malware running as that user; this and the other gaps are listed in [Limitations](#limitations). Do not assume any guarantee this page does not state.
 :::
 
 ## Layers at a glance
@@ -17,7 +17,7 @@ The cryptographic core (EC-JPAKE, the AES-256-GCM secure channel, CSR-based enro
 | Layer | Transport | Purpose | Authentication | Confidential |
 |---|---|---|---|---|
 | 0a Beacon | UDP multicast `239.77.77.77:7445`, every 5 s for a Hub | Announce a Hub on the LAN | None | No |
-| 0b Discovery | Framed TCP, the Hub's onboarding port (claimed from 19120-19199) | Return the invitation metadata (no code) | None | No |
+| 0b Discovery | Framed TCP, the Hub's onboarding port (claimed from 19120-19199) | Return the invitation metadata (no code) | Hub signature for a device that knows the Hub, none on first contact | No |
 | 1 Pairing | Framed TCP, same onboarding port (same listener) | EC-JPAKE - prove knowledge of the code | Pairing code | Handshake only |
 | 2 Enrolment | Secure channel over the pairing connection | Issue the device certificate | Key from layer 1 (or a provisioned key) | Yes (AES-256-GCM) |
 | 3 Session | Zenoh over TLS, TCP `19120-19200` | All session traffic | Mutual TLS, Hub-CA certificates | Yes |
@@ -28,11 +28,14 @@ The Hub's TCP listener reads the first frame of each connection and dispatches i
 
 - **Beacon** carries device id, display name, device type and the discovery endpoint.
 - **Discovery reply** carries invitation id, Hub server id, pairing host/port and invitation expiry. Never the code.
-- Both are plaintext and unauthenticated by design. Discovery is *untrusted input*; the code is the trust boundary.
+- Both are plaintext. The beacon is never authenticated. The Hub signs each discovery reply over a fresh nonce the device sent, with the Hub key the device pinned when it enrolled: a device that already knows the Hub refuses a reply that key did not sign (`QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC`).
+- First contact is unchecked by design. Discovery is *untrusted input*; the code is the trust boundary.
+- Discovery input is strictly validated: printable codes and invitation ids, unknown or oversized fields refused, expired invitations refused before any handshake, bracketed IPv6.
+- The listener caps handshakes in flight, overall and per address, and backs off an address after repeated failed authentications.
 
 | Attacker | Outcome |
 |---|---|
-| Forged beacon / forged discovery reply | Device is pointed at a rogue host; pairing fails without the code |
+| Forged beacon / forged discovery reply | First contact: device is pointed at a rogue host; pairing fails without the code. Known Hub: the forged reply is refused |
 | Passive LAN eavesdropper | Learns metadata only |
 | On-path observer of the invitation id | Can burn the single-use invitation (denial of service), cannot pair |
 | Off-LAN attacker | Multicast does not cross routers; TCP ports are not meant to be internet-exposed |
@@ -111,11 +114,12 @@ Hub    -> device : session invite { Zenoh endpoints, CA bundle }
 ```
 
 - The private key **never leaves the device**. Only the CSR travels.
-- The Hub **assigns** the common name: a fresh `<uuid>.device.qaros.local` per enrolment.
+- The Hub **assigns** the common name and the peer id. Every device of a session gets the session's device name `<session-id>.session.qaros.local`; the primary Hub gets `hub.<session-id>.session.qaros.local`, a member Hub `member.<session-id>.session.qaros.local`.
+- A pairing credential is bound to one peer id: planned when the code is minted, or assigned by the Hub during the handshake. A request for any other peer id, or for the Hub name on a device credential, is refused.
 
 ### CA gateway policy
 
-The CA itself is reachable only on the Hub's loopback interface. Every signing request passes the gateway first:
+The CA runs inside the primary Hub's process and has no network endpoint. Every signing request passes the gateway first:
 
 | Check | Rejects with |
 |---|---|
@@ -123,9 +127,12 @@ The CA itself is reachable only on the Hub's loopback interface. Every signing r
 | Channel binding does not match the channel | rejected before authorization |
 | Channel not authenticated | `unauthenticated` |
 | Claimed peer id differs from the channel's peer | `peer_mismatch` |
+| Claimed peer id is not the one the Hub assigned to this credential | `peer_not_assigned` |
+| Hub name requested on a device credential | `role_not_assigned` |
 | Requested session differs from the channel's session | `session_mismatch` |
 | CSR empty / larger than 32 KiB | `missing_csr` / `csr_too_large` |
-| Device blacklisted and channel is not a fresh pairing | `device_revoked_manual_pake_required` |
+| Device revoked (its assigned peer id, or the key it enrolled with), on every channel including a new pairing | `device_revoked_operator_allow_required` |
+| Too many signing requests from this peer, or too many at once | `ca_gateway_overloaded` |
 | Peer not in the gateway inventory | `unknown_peer` |
 | Profile, DNS SAN or IP SAN not assigned | `profile_not_allowed` / `dns_san_not_allowed` / `ip_san_not_allowed` |
 | Common name differs from the assigned one | `common_name_not_allowed` |
@@ -134,9 +141,10 @@ Every decision is written to the gateway audit log.
 
 ### Signing
 
-- Backend: a private Smallstep `step-ca` on loopback, reached over HTTPS with the root fingerprint pinned.
-- Each request carries a one-time token (ES256 JWT) signed with the provisioner key. The token lives 5 minutes and is never stored. The provisioner key is decrypted in memory only.
-- Certificate lifetime: the Hub requests the configured lifetime (`certLifetimeHours`); the CA's provisioner policy caps it at **24 h**.
+- Backend: the in-process CA (root and intermediate, P-256, under `caDir/ca/`), or an administrator's EST server that the primary reaches as a registration authority. A member Hub has no CA; it relays to its primary.
+- The CA takes the certificate's names from the gateway's decision, never from the CSR; the CSR contributes only the public key.
+- Bootstrap is crash-safe (staged, then renamed into place); a damaged CA is reported, never silently replaced.
+- Certificate lifetime: the Hub requests the configured lifetime (`certLifetimeHours`). The gateway caps it at **24 h** for devices and **1 h** for local apps, and the CA caps it again.
 
 ### Certificate URI SANs
 
@@ -144,14 +152,16 @@ Every decision is written to the gateway audit log.
 |---|---|---|
 | `qar://peer/<peer-id>` | The QAROS peer the certificate is issued to | Derived by the gateway from the channel's peer, not copied from the CSR |
 | `qar://session/<session-id>` | The session the certificate is bound to | The channel's session; omitted when there is none |
+| `qar://member/<peer-id>` | The member Hub the request came through | Stamped by the primary on every forwarded request, never copied from the CSR |
 
-A stored certificate is reused only while both the peer and the session still match; otherwise the device generates a new key and enrols again. **The SANs are minted but not enforced at connect** - see L4.
+A stored certificate is reused only while the peer, the session and the session name still match; otherwise the device generates a new key and enrols again. A process opens a session only with a certificate naming that session and its own peer id.
 
 ## Layer 3 - Session (mutual TLS)
 
 - Each peer builds its TLS configuration from the received CA bundle plus its **own** key and certificate. Material is passed to Zenoh in memory; no temporary files.
 - With TLS on, multicast scouting is off and peers dial known endpoints in `19120-19200`.
-- Trust anchor: the merged CA bundle. `verify_name_on_connect` is off - hostnames are not checked, by design (L4).
+- Trust anchor: the merged CA bundle. `verify_name_on_connect` is off - hostnames are not checked, by design.
+- **Session access control.** Every peer admits only the session's three names (device, member, Hub) and refuses everything else by default. Only the Hub name may publish on the primary's authority topics (trust bundle, revocation list, approvals, member admission, device admin, rotation); the member name may also publish on the per-Hub topics (launcher, targets, pairing, role, audit). A peer with another certificate keeps its link but nothing it sends is delivered.
 - TLS material is redacted from logs.
 
 ## Hub self-enrolment
@@ -160,28 +170,30 @@ The Hub signs its own certificate through an in-process gateway (no network hop)
 
 ## What is stored where
 
-Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root (`runtimeStorageRoot`) - see [Launcher Configuration Reference](./launcher-config-reference.md).
+Every secret is in one encrypted store, `secure-store` under the runtime storage root (`runtimeStorageRoot`, default the per-user data folder); the rest are plain files. Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root - see [Launcher Configuration Reference](./launcher-config-reference.md).
 
-| Location | Contents | Protection today |
+| Location | Contents | Protection |
 |---|---|---|
-| `caDir/certs/` | Root and intermediate CA certificates | Public trust material |
-| `caDir/secrets/` | CA private keys (step-ca encrypted), blacklist key | OS file permissions only |
-| `caDir/config/ca.json` | CA configuration incl. the encrypted provisioner key | OS file permissions only |
-| `caDir/ca-password.txt`, `provisioner-password.txt` | Passwords that unlock the CA keys and the provisioner key | **Plaintext**, OS file permissions only |
-| `caDir/ca-db.bolt` | CA database (issued records, used tokens) | Not relied on for trust |
-| `caDir/policy/device-blacklist.enc` | Device blacklist, AES-256-GCM, tamper-evident | Key stored on the same host |
-| `caDir/security-service/` | Gateway audit log, issued-certificate inventory | OS file permissions only |
-| `<storage>/identities/<process>/` | Per-process `private_key.pem`, certificate chain, CA bundle, last CSR, binding metadata | **Plaintext**, OS file permissions only |
-| `<storage>/identities/<process>/trusted-hub-ca-bundles.json` | Merged federation trust store | OS file permissions only |
-| `<storage>/zenoh-storage.key` | Key for the encrypted session store | **Plaintext hex** next to the data |
+| `<storage>/secure-store/` | Hub and member identity, CA private keys (primary only; a member deletes them on join), trust-authority key, session-store key, device blacklist, issued-certificate inventory, approved local apps, licence, launcher state; each device and app's identity (private key, certificate chain, CA bundle) and last session; trusted Hub CAs | **Encrypted** (AES-256-GCM per value, bound to its name) under a key of the signed-in user: the TPM through the Microsoft Platform Crypto Provider, or DPAPI where no TPM works |
+| `caDir/ca/certs/` | Root and intermediate CA certificates (primary only) | Public trust material |
+| `caDir/ca/db/revoked-serials.json` | Revoked serials, an audit artifact | Not relied on for trust |
+| `caDir/hub-state.json` | Hub name, room, remembered devices, membership (member) or members and their pinned keys (primary) | OS file permissions only |
+| `caDir/audit/` | Hash-chained audit log; on a primary also `members/<peer>/` | Checkpoints signed with the Hub key; OS file permissions |
+| `caDir/security-service/` | Gateway audit log | OS file permissions only |
+| `%ProgramData%\Quaternar\Qaros\secure\` | Service storage: a machine key `QAROS-storage-kek-v1-system` on the TPM (or software) usable only by SYSTEM and the QAROS service | Not used yet by the Hub |
 
-No file is written with explicit permission hardening; each inherits its parent directory's ACL. Protect `caDir` and the storage root like a domain controller's secrets.
+- The store's key never leaves the TPM and needs no PIN; it is not bound to the boot state. Secrets are bound to **this PC and this Windows user**: a copy of the folder, a backup restored elsewhere, or another user cannot read them.
+- A store the PC can no longer read (TPM cleared, Windows reinstalled, profile moved) is reported, never silently replaced. The Hub does not start until the `secure-store` folder is deleted, which creates a new CA: every device pairs again.
+- Values that must not go backwards (blacklist, approvals, licence) carry a revision; an older one is refused while the Hub runs, not across a restart.
+- Updating from a build before this storage destroys the old plaintext key files at the first start; nothing is imported (see [Maintenance & Updates](./maintenance-and-updates.md#updating-to-encrypted-storage)).
 
 ## Renewal
 
-- The renewal policy marks a certificate due at **75 %** of its lifetime or within **1 h** of expiry.
-- There is **no online renewal path in production today**. The gateway's renewal check (current-certificate fingerprint bound to a certificate-authenticated channel) exists but no production channel supplies that binding.
-- Effect: once a stored certificate is due, silent rejoin is refused and the device **onboards again** (new code, or a new provisioned key for Hub-launched processes). With the default 24 h cap, that is roughly once a day for a device that is not re-launched by the Hub.
+- A device renews online, with a new key, over a channel on the Hub's onboarding port where both ends prove the certificates they hold. No code is needed.
+- It renews during the session before expiry, and on joining after a long time offline.
+- After a session rotation, a certificate of one of the two previous sessions renews into the current one; it is admitted for nothing else.
+- Every renewal proves possession: a signature by the certificate's current key over the new request, verified by every hub path before it signs. A renewal without it (an SDK older than the hub) is refused with `renewal_possession_unproven` and the device cannot renew until it is updated ([Maintenance & Updates](./maintenance-and-updates.md#certificate-renewal-needs-the-current-sdk)).
+- An expired, revoked or older certificate is refused: the device reports that it must be paired again and the operator pairs it with a new code.
 
 ## Revocation and blacklist
 
@@ -190,24 +202,38 @@ No file is written with explicit permission hardening; each inherits its parent 
 | 1. CA revocation | The certificate serial is revoked at the local CA |
 | 2. Gateway blacklist | Device added to the encrypted blacklist; blocks enrolment and renewal |
 | 3. Peer revocation list | The Hub publishes the blacklist (peer id, serial) on a stored topic; peers that read it refuse the device |
-| Re-entry | Only through a fresh pairing; a successful enrolment on that pairing clears the entry |
+| Re-entry | Only after an operator clicks **Allow**; a new pairing code alone is refused |
 
 - A peer that has read the list refuses the device's peer id: the launcher releases its pipeline at once and never provisions it again. The zenoh link is not closed; zenoh decides TLS acceptance itself and offers no per-certificate hook.
 - A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h. A missing list is "unknown", never "everyone is revoked".
-- Revoke / allow / list is restricted to configured admin peers, but it is an in-process interface; there is no authenticated remote control plane yet.
+- Removing a member Hub revokes the member and every certificate it forwarded. Revoking an app approval does not revoke certificates already issued through members; they expire within 30 minutes.
+- Revoke / allow / list run over the session for the Hub, its own Visualizer and configured operator peers. The Hub takes the sender from a signature made with the sender's session certificate, never from a field of the request. Revoke and allow also need the Hub's machine. Every action is audited.
 
-## Hub federation via trust bundles
+## Member Hubs
 
 ```text
-Hub A pairs into Hub B (B's code)  ->  A receives B's CA bundle during enrolment
-A merges B's roots into its trust store (dedup by certificate fingerprint, versioned, persisted)
-A publishes the merged bundle to its session devices  ->  each device merges, persists, acknowledges
+Hub M -> primary P : signed join request (M's Hub key, CSR, names, nonce) on P's onboarding port
+P                  : pending until an operator allows it (or a join code / a member-Hub invitation)
+P -> M             : reply signed with P's Hub key: member certificate, CA bundle, session invite
+M                  : verifies the reply, pins P's key, deletes its own CA, restarts as a member
 ```
 
-- Federated **trust**, not federated signing: each Hub signs only its own devices.
-- The merged store survives restarts without the remote Hub online.
-- Bundle updates are ordered per connection id (stale versions dropped).
-- Treat a federation as a commitment: there is no operator action to withdraw a remote root. See [Networking & Federation](./networking-and-federation.md).
+- **One CA per session.** A member trusts only the primary's CA; there is no merge of roots between Hubs.
+- **Forwarding.** A member authorizes its own headsets and local apps, then forwards each request over a certificate-authenticated channel to the primary, which authorizes it again (member admitted and not removed, device name only, app approval applies to that member, quota of 200 per 10 minutes, peer id not taken) and stamps the member's SAN.
+- **Invitations.** An app approved on the primary to bring in member Hubs creates an invitation signed with P's Hub key (24 h by default, at most 7 days, bounded uses, revocable in the Visualizer); each Hub admitted spends one unit of that app's quota. The joining Hub proves it holds the invitation's secret without sending it, and accepts P only if P's key is in the administrator's allow-list or, without one, if P is the first primary it joined by invitation (pinned). A writable policy refuses every invitation.
+- **Pinning.** The primary pins the member's Hub key; the member pins the primary's on the first verified reply, or checks it against the invitation's key. A pinned member rejoins without a click and spends no quota.
+- **Devices move along.** A Hub that was a primary of its own can take its paired devices, launcher children and approved apps into P's session: it cross-certifies P's CA with its old CA root before it restarts, and its devices renew through it without a code (old certificates for 30 days, known device keys for 180 days).
+- **No chains.** A member redirects joiners to its primary; a Hub with members cannot join another.
+- **Reset.** A member detects that its primary started a new session within about 10 s and restarts into it; when the primary is unreachable it backs off and reports it.
+- **EST.** An EST-backed primary admits a Hub joining by invitation in one round. A Hub whose own certificates came from EST cannot take its devices along; they pair again.
+
+## Audit log
+
+- Every Hub writes enrolments, issued and refused certificates, operator actions and trust changes to a daily JSON Lines file. Each record is SHA-256 chained to the previous one; every 100 records or 10 minutes a checkpoint is signed with the Hub key.
+- Kept 90 days, at most 256 MB. Secrets are never logged.
+- Members forward their records to the primary, which verifies them against the member's pinned key and marks any gap.
+- Read by operators only (signed request), in the Visualizer's *Audit log* panel.
+- Limit: the Hub's own Windows user can read the key and rewrite the whole log; there is no off-PC export yet.
 
 ## Assumptions
 
@@ -219,7 +245,8 @@ A publishes the merged bundle to its session devices  ->  each device merges, pe
 | A3b | A requested or launch code reaches only the device or app it was minted for | Its holder can onboard within its lifetime (at most 10 minutes) |
 | A4 | OS file permissions on the Hub and devices are enforced | Local admin / same-user processes read keys |
 | A5 | Deployment is a LAN or private network | Discovery and pairing ports are not designed for internet exposure |
-| A6 | One signing CA per Hub; federation shares roots only | - |
+| A6 | One signing CA per session, the primary's; members have none | - |
+| A8 | A member Hub's account of what it verified on its PC is believed | A compromised member gets device certificates for its own PC within its quota |
 | A7 | Discovery is untrusted input | - |
 
 ## Limitations
@@ -228,27 +255,21 @@ Ranked by severity. These are current, known engineering items.
 
 | # | Severity | Limitation | Consequence |
 |---|---|---|---|
-| L1 | High | **Trust-bundle updates are not signed or bound to the Hub.** Devices accept a bundle update from any authenticated session peer. | An onboarded peer can inject a CA root that persists across restarts. Combined with L4, that allows peer impersonation inside the session. |
-| L2 | High | **Peer identity on the pairing path is self-asserted.** The gateway takes the peer id from the client's request; pairing proves knowledge of the code, not an identity. | A paired device can obtain a certificate with any `qar://peer/<id>`. The common name is Hub-assigned and not affected. |
-| L3 | High | **Blacklist is keyed on that self-asserted id.** | A revoked device can re-pair under a new id (it still needs a valid code). |
-| L4 | Medium | **No identity check at connect.** Hostnames are not verified and `qar://peer` / `qar://session` SANs are not enforced; any certificate chaining to a trusted root is accepted as any peer. | Amplifies L1 and L2. |
-| L5 | High | **Secrets at rest are plaintext** (device private keys, CA and provisioner passwords, session-store key) and rely on OS file permissions; the blacklist key sits beside the blacklist. | File-system read access means key theft or CA takeover. |
-| L6 | Medium | **No online renewal**; certificates are short-lived and devices re-onboard. | Availability cost, not a confidentiality gap. |
+| L5 | High | **Secrets at rest are protected by the signed-in user's key.** They are encrypted under a TPM-backed (or DPAPI) key of that user; a program running as the same user can open them like the Hub does. | Malware in the Hub user's account can read the CA keys and approve itself; other users, disk copies and backups cannot. |
+| L20 | Low | **A rollback between two Hub runs is not detected.** Someone who can write the store's folder while the Hub is stopped can put back an older blacklist, approval list or licence. | A revoked device could be unrevoked by restoring an older copy. |
 | L7 | Medium | **Revocation reaches only peers that read the Hub's list, and is enforced by peer id, not at TLS.** | A peer that has not read it accepts a revoked certificate until expiry (≤ 24 h); one that has keeps the link open but refuses to serve the device. |
-| L8 | Medium | **No rate limit** on concurrent pairing handshakes or CA signing. | CPU / CA exhaustion by connection flood. |
-| L9 | Medium | **Admin surface is in-process only**; the admin actor is caller-asserted. | No authenticated remote revocation yet. |
-| L10 | Medium | **Certificate lifetime is capped only by CA configuration**, not also by the gateway. | A mis-edited CA config would lift the cap. |
-| L11 | Low | The default (Smallstep) CA bootstrap is Windows-only. | No supported Linux Hub CA yet. |
-| L12 | Low | Discovery is plaintext; some discovery inputs are loosely validated. | Denial of service only. |
-| L13 | Low | Confirmation tags are compared in non-constant time. | Not practically exploitable over a network. |
+| L14 | Medium | **The peer id is not checked per connection.** A device certificate is the same for every device of a session, so a device can claim another device's peer id in session messages. | It cannot act as the Hub: the Hub's topics accept only the Hub's certificate. |
+| L15 | Medium | **Member Hubs share one name.** One member can publish under another member's identity on the topics members may use. | It cannot publish the primary's authority topics. |
+| L18 | Medium | **First join trusts the operator or the first key.** *Allow* relies on recognising the Hub; a join by invitation without an administrator's allow-list trusts the primary of the first invitation the Hub accepts. | A wrong *Allow* admits a rogue member with member rights. |
+| L19 | Low | **A member follows a new session by restarting.** | Its local apps and headsets are interrupted briefly. |
+| L16 | Low | Same-machine checks (revoke, allow, rotation) trust the machine name a peer states about itself. | A remote operator peer could pass for local. |
+| L17 | Low | Zenoh keeps the TLS key in its own memory unscrubbed while the session runs. | Memory read access to a running process reveals its session key. |
+
+Closed since 0.9.0: plaintext secrets at rest (L5 now covers only the same-user case), the Windows-only CA bootstrap (L11, the CA is now in process), the merged multi-CA trust bundle (old L15, one CA per session), unsigned trust-bundle updates (L1), self-asserted peer identity and the blacklist bypass (L2, L3), no identity check at connect (L4, now the session access control), no online renewal (L6), no rate limits and no gateway lifetime cap (L8, L10), in-process admin (L9), loose discovery input (L12), non-constant-time tag compares (L13).
 
 ## Roadmap
 
 Planned, in priority order. Nothing here is shipped.
 
-1. Authenticate trust-bundle updates (bind to the Hub authority and/or sign them) - closes L1.
-2. Hub-assigned peer identity bound to the pairing, blacklist keyed on it, and SAN enforcement at connect - closes L2, L3, L4.
-3. Encrypted storage for keys and secrets (DPAPI on Windows, Android Keystore, TPM where available), with rollback detection for policy stores - closes most of L5.
-4. Authenticated online renewal over mutual TLS - closes L6.
-5. Gateway rate limits, gateway-side lifetime clamp, authenticated remote admin endpoint - closes L8, L9, L10.
-6. Discovery input hardening and constant-time comparisons - L12, L13.
+1. Secrets held by the QAROS system service instead of the user (its TPM machine key is already provisioned), and rollback detection across restarts - closes L5 and L20.
+2. Scrubbing Zenoh's copy of the TLS key - closes L17.

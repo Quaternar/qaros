@@ -68,9 +68,10 @@
  *    - find the target apps already in the session: watch the peer list with
  *      qar_peer_subscribe_updates() and pick each peer whose
  *      qar_peer_spec_get_role() is QAR_PEER_ROLE_TARGET and whose
- *      qar_peer_spec_get_app_state() is QAR_APP_STATE_RUNNING. Show it to
- *      the user with qar_peer_spec_get_device_name() (and the family and
- *      category for an icon);
+ *      qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or
+ *      QAR_PEER_PRESENCE_UNKNOWN, a peer the hub has not reconciled). Show it
+ * to the user with qar_peer_spec_get_device_name() (and the family and category
+ * for an icon);
  *    - or start one with qar_session_invite_target_app() (or its async form),
  *      which writes out the new target's id. The hub remembers every invited
  *      device.
@@ -103,15 +104,16 @@
 #define QAR_STREAMING_EXTERN_C // Not needed in C
 #endif
 
-#ifdef QAR_STREAMING_EXPORTS // Defined when building the qar-streaming-c DLL
+#if defined(_WIN32) || defined(_WIN64)
+#ifdef QAR_STREAMING_EXPORTS
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllexport)
-#else // Defined when using the qar-streaming-c DLL OR static lib
-// If primarily used via DLL, dllimport is okay.
-// If static linking is a common use case, __declspec(dllimport) is problematic.
-// Consider separating macros for static linking vs DLL usage,
-// or just remove __declspec(dllimport) if static linking is preferred.
-// For now, keep original logic but with corrected EXTERN_C:
+#else
 #define QAR_C_API QAR_STREAMING_EXTERN_C __declspec(dllimport)
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
+#define QAR_C_API QAR_STREAMING_EXTERN_C __attribute__((visibility("default")))
+#else
+#define QAR_C_API QAR_STREAMING_EXTERN_C
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -267,6 +269,13 @@ typedef struct QarSessionHandle QarSession;
 /// qar_runtime_onboard).
 typedef struct QarOnboardingInviteHandle QarOnboardingInvite;
 
+/// Member-hub invitation (opaque) — a primary hub's signed invitation that
+/// joins the QAROS hub on another PC to its session as a member (see
+/// qar_runtime_create_member_hub_invitation, qar_runtime_join_hub_as_member).
+/// A secret bearer credential: send it only over a trusted channel and never
+/// log it.
+typedef struct QarMemberHubInvitationHandle QarMemberHubInvitation;
+
 /// App volume (opaque)
 typedef struct QarAppVolumeHandle QarAppVolume;
 
@@ -409,6 +418,17 @@ typedef enum QarStatusCode
 	/// Local enrollment: the app no longer matches what the user approved
 	/// (moved, re-signed, tampered). Ask the user to revoke and re-approve it.
 	QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH = 1808,
+	/// The device's certificate expired, or its hub no longer renews it (it
+	/// missed more than two session rotations, or was revoked), and the
+	/// pairing credential given did not replace it. Tell the user to pair the
+	/// device again with a new code from the hub; retrying does not help.
+	QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED = 1809,
+	/** The hub refused to renew the certificate: the renewal did not prove
+	 * it holds the key of the certificate it renews. This SDK makes that proof
+	 * itself, so the stored identity is damaged: pair the device again. An
+	 * SDK older than the hub never makes the proof and cannot renew there;
+	 * update the app or device, pairing again is not enough. */
+	QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN = 1810,
 	/** The hub has no target app it can launch for the requested device (an
 	 * unknown connection-string scheme family, or a device kind that is never
 	 * invited, such as a camera). Nothing was invited; pick another target. */
@@ -417,7 +437,79 @@ typedef enum QarStatusCode
 	 * claim. An application is always a source and may describe itself only as
 	 * QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
 	 * QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed. */
-	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101
+	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101,
+	/// The hub is in the middle of another session-wide operation (a session
+	/// rotation, a member join, a leave). Retry once it has finished.
+	QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING = 3300,
+	/// Member join: the primary hub has the join request and waits for its
+	/// operator to allow it. Not a failure; ask again later.
+	QAR_STATUS_MEMBER_JOIN_PENDING = 3400,
+	/// Member join: the primary hub's operator denied the join request.
+	QAR_STATUS_MEMBER_JOIN_DENIED = 3401,
+	/// Member join: the primary hub refused the join request outright, for
+	/// example because the joining hub hosts members of its own.
+	/// qar_result_message names the reason.
+	QAR_STATUS_MEMBER_JOIN_REFUSED = 3402,
+	/// Member join: the asked hub is itself a member of another hub; ask that
+	/// primary hub instead.
+	QAR_STATUS_MEMBER_JOIN_REDIRECTED = 3403,
+	/// Member join: the primary hub removed this member hub; it has to join
+	/// again.
+	QAR_STATUS_MEMBER_REMOVED = 3404,
+	/// A member hub could not reach its primary hub.
+	QAR_STATUS_PRIMARY_UNREACHABLE = 3405,
+	/// A session-wide action was asked of a member hub; only the primary hub
+	/// performs it.
+	QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER = 3406,
+	/// Member-hub invitation: the app's approval on the primary hub does not
+	/// allow it to bring in member hubs. The primary's operator grants that
+	/// right on the approval.
+	QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED = 3407,
+	/// Member-hub invitation: the app's approval has used its quota of member
+	/// hubs.
+	QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED = 3408,
+	/// A hub's audit log does not verify: a record was edited, dropped or
+	/// reordered.
+	QAR_STATUS_AUDIT_LOG_CORRUPT = 3409,
+	/// Secure storage: the encrypted store holding the peer's identity and
+	/// session failed for a reason the codes below do not name (an I/O
+	/// error). qar_result_message says what failed.
+	QAR_STATUS_SECURE_STORAGE_ERROR = 3500,
+	/// Secure storage: the value asked for is not stored.
+	QAR_STATUS_SECURE_STORAGE_NOT_FOUND = 3501,
+	/// Secure storage: a stored value does not authenticate; it was edited,
+	/// moved or replaced by an older copy.
+	QAR_STATUS_SECURE_STORAGE_TAMPERED = 3502,
+	/// Secure storage: the stored data is protected by a key this machine,
+	/// user or install does not have (for example a store copied from
+	/// another PC). Onboard the peer again.
+	QAR_STATUS_SECURE_STORAGE_PROTECTOR_MISMATCH = 3503,
+	/// Secure storage: the key protecting the store exists but cannot be used
+	/// now (TPM cleared or locked out, keyring locked).
+	QAR_STATUS_SECURE_STORAGE_PROTECTOR_UNAVAILABLE = 3504,
+	/// Secure storage: an invalid storage key (an internal error).
+	QAR_STATUS_SECURE_STORAGE_INVALID_KEY = 3505,
+	/// Secure storage: another process held the store's lock too long.
+	/// Retrying may succeed.
+	QAR_STATUS_SECURE_STORAGE_LOCKED = 3506,
+	/// Member-hub invitation: the invitation does not parse, its signature,
+	/// kind or version is wrong, or the primary hub does not know it or judged
+	/// its proof invalid.
+	QAR_STATUS_MEMBER_INVITATION_INVALID = 3600,
+	/// Member-hub invitation: the invitation has expired. Ask for a new one.
+	QAR_STATUS_MEMBER_INVITATION_EXPIRED = 3601,
+	/// Member-hub invitation: the invitation was used as often as it allows.
+	QAR_STATUS_MEMBER_INVITATION_USED_UP = 3602,
+	/// Member-hub invitation: the primary hub's operator revoked it.
+	QAR_STATUS_MEMBER_INVITATION_REVOKED = 3603,
+	/// Member-hub invitation: the invitation's primary hub is not in this
+	/// PC's administrator allow-list, or is not the primary hub this PC's hub
+	/// joined first.
+	QAR_STATUS_MEMBER_INVITATION_PRIMARY_NOT_ALLOWED = 3604,
+	/// Member-hub invitation: this PC's member-invitation policy (registry key
+	/// or file) can be written by a non-administrator, so every invitation is
+	/// refused until an administrator fixes its permissions.
+	QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED = 3605
 } QarStatusCode;
 
 /**
@@ -432,6 +524,14 @@ typedef struct QarResult
 	uint32_t error_handle; // 0 if success, non-zero if error
 } QarResult;
 
+/**
+ * @deprecated Read qar_peer_spec_get_presence() and QarPeerPresence instead.
+ * Every session claims QAR_APP_STATE_RUNNING as soon as it is created, so
+ * UNKNOWN, INITIALIZING and RUNNING say nothing beyond "the peer joined", and
+ * a peer is never "fully configured" by this value. Kept, with its values, for
+ * applications that already read it; qar_peer_spec_get_app_state() keeps
+ * working.
+ */
 typedef enum QarAppState
 {
 	QAR_APP_STATE_UNKNOWN = 0,
@@ -441,6 +541,36 @@ typedef enum QarAppState
 	/** The peer left for good and never comes back under its id. */
 	QAR_APP_STATE_RETIRED = 200
 } QarAppState;
+
+/**
+ * @brief Whether a peer is here, as an application should act on it.
+ *
+ * Two sources make it up: the hub's own liveliness evidence (ONLINE /
+ * OFFLINE, which follows the peer's session without the peer republishing
+ * anything), and the leave the peer itself announced on its way out (LEAVING /
+ * RETIRED), which outranks the evidence. Render for, wait for and count ONLINE
+ * peers, and UNKNOWN ones: a hub that has not reconciled a peer yet (or an
+ * older hub that never does) says nothing about it being gone. Stop at
+ * OFFLINE, LEAVING or RETIRED. Treat a value this header does not name as
+ * QAR_PEER_PRESENCE_UNKNOWN.
+ */
+typedef enum QarPeerPresence
+{
+	/** The hub has not reconciled this peer yet (an older hub that never
+	 * does, or a hub that has just started). The peer has not announced a
+	 * leave: treat it like ONLINE. */
+	QAR_PEER_PRESENCE_UNKNOWN = 0,
+	/** The hub sees the peer in the session. */
+	QAR_PEER_PRESENCE_ONLINE = 1,
+	/** The hub no longer sees the peer: a crash, a kill, a network loss or a
+	 * short drop. It reads ONLINE again when it is back. */
+	QAR_PEER_PRESENCE_OFFLINE = 2,
+	/** The peer announced it is leaving (a clean exit). It may come back under
+	 * the same id, and reads ONLINE when it does. */
+	QAR_PEER_PRESENCE_LEAVING = 3,
+	/** The peer left for good and never comes back under its id. */
+	QAR_PEER_PRESENCE_RETIRED = 4
+} QarPeerPresence;
 
 /**
  * @brief What a peer is in the streaming graph (qar_peer_spec_get_role()).
@@ -485,8 +615,13 @@ typedef enum QarDeviceCategory
 	QAR_DEVICE_CATEGORY_HEADSET = 3,
 	/** A Visualizer receiver showing streams on the PC. */
 	QAR_DEVICE_CATEGORY_VISUALIZER = 4,
-	/** A camera of any model: its capture process, or its receiver slot. */
-	QAR_DEVICE_CATEGORY_CAMERA = 5
+	/** A camera of any model: its capture process. (A build before
+	 * QAR_DEVICE_CATEGORY_OBSERVER also used it for a camera's receiver.) */
+	QAR_DEVICE_CATEGORY_CAMERA = 5,
+	/** A target app that sees the scene through a camera: it blends a camera's
+	 * RGB-D frames and pose with the mixer's stream. Its device id and name are
+	 * the camera's. Never declared by an application. */
+	QAR_DEVICE_CATEGORY_OBSERVER = 6
 } QarDeviceCategory;
 
 /**
@@ -1181,7 +1316,10 @@ typedef struct QarAppVolumeControllerRayStyle
  *
  * Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
  * 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
- * 0x2002 (PEER_SPEC_INIT).
+ * 0x2002 (PEER_SPEC_INIT), 0x100B (RUNTIME_MEMBER_JOIN_REQUEST_INIT),
+ * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT). The never-released
+ * SESSION_SPONSOR_MEMBER_INIT shared 0x2009 by mistake; 0x2009 stays
+ * PEER_DEVICE_IDENTITY.
  */
 typedef enum QarStructureType
 {
@@ -1196,6 +1334,8 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INVITE_EXT = 0x1008,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT = 0x1009,
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
+	QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT = 0x100D,
+	QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT = 0x100E,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
 	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
@@ -1638,6 +1778,10 @@ typedef struct QarOnboardPeerIdExt
  *   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  * - The progress callback reports "Waiting for approval in QAROS hub" while
  *   the prompt is open.
+ * - Starts the QAROS hub when it does not run: qaros-hub-service from the
+ *   installation's bin/, else from
+ * QarRuntimeInit::runtime_binaries_folder_path. A running hub is left as it is,
+ * and the hub outlives the app.
  * - Windows only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
  */
 typedef struct QarOnboardLocalAppExt
@@ -1788,6 +1932,71 @@ typedef void (*qar_runtime_onboard_result_callback_t)(
 typedef void (*qar_session_request_invite_result_callback_t)(
 	QarResult status, QarOnboardingInvite* out_invite, void* user_state
 );
+
+/**
+ * @brief The permissions a member-hub invitation grants at the primary hub
+ * (QarMemberHubInvitationInit::permissions).
+ */
+typedef enum QarMemberHubInvitationPermissionFlagBits
+{
+	/// A hub the primary does not know joins as a new member.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_JOIN = 0x1,
+	/// A member the primary already admitted (and has not removed) is
+	/// answered again; lets a member that lost its membership rejoin.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_REJOIN = 0x2,
+	/// A member the primary's operator removed is admitted again.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_READMIT = 0x4,
+	/// A hub that was a primary of its own moves its paired devices, launcher
+	/// children and approved local apps into the primary's session.
+	QAR_MEMBER_HUB_INVITATION_PERMISSION_BRING_DEVICES = 0x8,
+} QarMemberHubInvitationPermissionFlagBits;
+/// A combination of QarMemberHubInvitationPermissionFlagBits.
+typedef uint32_t QarMemberHubInvitationPermissionFlags;
+
+/**
+ * @brief Create a member-hub invitation on the primary hub of this PC
+ * (qar_runtime_create_member_hub_invitation).
+ *
+ * Zero in a field selects its default.
+ */
+typedef struct QarMemberHubInvitationInit
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT */
+	/// How long the invitation can be used, in seconds. 0 -> 86400 (24 h);
+	/// at most 604800 (7 days).
+	uint32_t lifetime_seconds;
+	/// How many hubs may join with it. 0 -> 1; at most 64, and never more
+	/// than the calling app's remaining quota of member hubs.
+	uint32_t max_uses;
+	/// 0 -> JOIN | REJOIN | BRING_DEVICES.
+	QarMemberHubInvitationPermissionFlags permissions;
+	/// Optional (NULL); a UTF-8 label of at most 64 bytes, shown in the
+	/// primary hub's visualizer next to the invitation.
+	const char* label;
+} QarMemberHubInvitationInit;
+
+/**
+ * @brief Join the QAROS hub on this PC to a primary hub as its member
+ * (qar_runtime_join_hub_as_member).
+ *
+ * Zero in a timeout selects its default.
+ */
+typedef struct QarJoinHubAsMemberInit
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT */
+	/// Required; the invitation the primary's app created, as
+	/// qar_member_hub_invitation_deserialize returned it. Borrowed for the
+	/// duration of the call.
+	const QarMemberHubInvitation* invitation;
+	/// How long to wait for a hub this call started to accept connections, in
+	/// milliseconds. 0 -> 60000.
+	uint32_t hub_start_timeout_ms;
+	/// How long to wait for the hub to come back as a member after its
+	/// restart, in milliseconds. 0 -> 120000.
+	uint32_t restart_timeout_ms;
+} QarJoinHubAsMemberInit;
 
 typedef enum QarGpuDeviceIdType
 {
@@ -2299,6 +2508,28 @@ static inline QarResult qar_library_destroy(void);
  * @return QarResult Success, or QAR_STATUS_LOGIC_ERROR for a NULL out_info.
  */
 static inline QarResult qar_runtime_info(QarRuntimeInfo* out_info);
+
+/**
+ * @brief Give the library the process's Java VM (Android).
+ *
+ * The secure store protects its keys with the Android Keystore, which native
+ * code reaches through the Java VM. Pass `ANativeActivity::vm`, the `JavaVM*`
+ * of `JNI_OnLoad`, or the one Unity or your engine exposes, before the first
+ * runtime or session is created. Without it the library asks
+ * `libnativehelper.so` for the created VM (Android 12, API 31, and newer), and
+ * otherwise protects stored secrets with a file key instead of the Android
+ * Keystore. Android has one VM per process; calling again replaces the
+ * earlier pointer. Works before qar_library_init(). The library never
+ * destroys the VM, and only attaches threads it calls from that are not yet
+ * attached, detaching them again afterwards.
+ *
+ * @param java_vm The process's `JavaVM*`, passed as `void*` so this header
+ *                needs no `jni.h`; must not be NULL.
+ * @return QarResult Success; QAR_STATUS_LOGIC_ERROR for a NULL java_vm;
+ *         QAR_STATUS_ARGUMENT_NOT_SUPPORTED on every platform other than
+ *         Android.
+ */
+static inline QarResult qar_platform_set_android_java_vm(void* java_vm);
 /** @} */ /* end of qar_c_library */
 
 // ============================================================================
@@ -2449,8 +2680,6 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
  */
 static inline QarResult
 qar_runtime_create(const QarRuntimeInit* init, QarRuntime** out_runtime);
-
-static inline void qar_runtime_destroy(QarRuntime* runtime);
 
 /** @} */ /* end of qar_c_runtime */
 
@@ -2782,6 +3011,219 @@ static inline QarResult qar_onboarding_invite_get_code(
 static inline void
 qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
 
+// ---------------------------------------------------------------------------
+// Member hub (invitations)
+// ---------------------------------------------------------------------------
+
+/**
+ * @name Member hub
+ *
+ * Joins the QAROS hub of one PC to the session of the hub on another PC as a
+ * member, when an application already connects the two PCs but their
+ * operators cannot reach each other (for example a simulation whose server runs
+ * on the primary hub's PC and whose clients run on the joining PCs). Two
+ * steps, the invitation carried by the application's own channel:
+ *
+ * 1. On the primary's PC: qar_runtime_create_member_hub_invitation returns an
+ *    invitation signed by the primary hub. Serialize it
+ *    (qar_member_hub_invitation_serialize) and send it to the application on
+ *    the joining PC.
+ * 2. On the joining PC: qar_runtime_join_hub_as_member hands the invitation to
+ *    the hub on that PC, which joins the primary as a member and restarts into
+ *    the primary's session. Then onboard the application itself with
+ *    qar_runtime_onboard and QarOnboardLocalAppExt.
+ *
+ * The invitation is a secret bearer credential: whoever holds it can join a
+ * hub to the primary until it expires or is used up. Send it only over a
+ * trusted channel and never log it. No click is needed on either PC. Windows
+ * only; QAR_STATUS_NOT_IMPLEMENTED elsewhere.
+ * @{ */
+
+/** @brief Default init for QarMemberHubInvitationInit (24 h, one use, join,
+ * rejoin and bring devices). */
+static inline QarMemberHubInvitationInit
+qar_member_hub_invitation_init_default(void);
+/** @brief Default init for QarJoinHubAsMemberInit (set init.invitation; the
+ * timeouts default to 60 s and 120 s). */
+static inline QarJoinHubAsMemberInit qar_join_hub_as_member_init_default(void);
+
+/**
+ * @brief Ask the QAROS hub on this PC, the session's primary hub, for a
+ * member-hub invitation.
+ *
+ * Needs no session: the hub identifies this process from Windows, as for
+ * QarOnboardLocalAppExt, and answers only an application it approved with the
+ * right to bring in member hubs ("May bring in member hubs") and with quota
+ * left. The quota is spent per hub the invitation admits, not per invitation.
+ * It never prompts. The hub picks the hub of this runtime's QAROS
+ * installation, the same way QarOnboardLocalAppExt does.
+ *
+ * The returned invitation is a secret bearer credential: send it only over a
+ * trusted channel and never log it. The primary hub's operator sees it in the
+ * visualizer and can revoke it.
+ *
+ * @param runtime Required; the runtime.
+ * @param init Required; from qar_member_hub_invitation_init_default().
+ * @param cancel Optional cancellation token (can be NULL).
+ * @param out_invitation Required; receives the invitation on success, owned by
+ *   the caller (release with qar_member_hub_invitation_handle_destroy).
+ * @return Success, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED a field is out of range (lifetime
+ *   above 7 days, more than 64 uses or more than the quota left, a label over
+ *   64 bytes, unknown permission bits).
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE no QAROS hub runs on this PC
+ *   for this user.
+ * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the process serving the pipe
+ *   is not the installed QAROS hub.
+ * @retval QAR_STATUS_ONBOARDING_APPROVAL_DENIED the hub has not approved this
+ *   application.
+ * @retval QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED the approval does not allow
+ *   this application to bring in member hubs.
+ * @retval QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED the approval has used its
+ *   quota.
+ * @retval QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER the hub on this PC is a
+ *   member; create the invitation on its primary's PC.
+ * @retval QAR_STATUS_NOT_IMPLEMENTED not on Windows.
+ */
+static inline QarResult qar_runtime_create_member_hub_invitation(
+	QarRuntime* runtime,
+	const QarMemberHubInvitationInit* init,
+	QarCancelToken* cancel,
+	QarMemberHubInvitation** out_invitation
+);
+
+/**
+ * @brief Join the QAROS hub on this PC to the invitation's primary hub as a
+ * member.
+ *
+ * This joins this PC's hub, not the calling application: it does **not**
+ * onboard the caller. Once it returns, call qar_runtime_onboard with
+ * QarOnboardLocalAppExt, which then succeeds without a prompt for the
+ * application the invitation was created by.
+ *
+ * The call:
+ * - starts the installed QAROS hub when none runs for this user, and waits up
+ *   to init->hub_start_timeout_ms for it;
+ * - checks the invitation: its signature, its expiry, then whether this PC
+ *   trusts its primary hub - the administrator's allow-list
+ *   (HKLM\\SOFTWARE\\Policies\\Quaternar\\QAROS\\MemberInvitations or
+ *   %ProgramData%\\Quaternar\\QAROS\\policy\\member-invitations.json) when
+ *   there is one, else the primary this PC's hub joined first (pinned on that
+ *   first join);
+ * - joins, rejoins or readmits the hub at the primary, and blocks through the
+ *   hub's restart into the primary's session, up to init->restart_timeout_ms.
+ *   Every process the hub started reconnects; with the invitation's
+ *   permission, the devices paired to this PC's hub move along.
+ *
+ * Called again with an invitation of the primary the hub is already a member
+ * of, it returns success at once. Any process of this PC's user may call it;
+ * the signed invitation is what authorizes the join.
+ *
+ * @param runtime Required; the runtime.
+ * @param init Required; the invitation and the optional timeouts.
+ * @param on_progress Optional progress callback (can be NULL).
+ * @param progress_state User pointer passed to on_progress unchanged.
+ * @param cancel Optional cancellation token (can be NULL).
+ * @return Success once the hub runs as the primary's member, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->invitation is missing or not
+ *   a valid handle.
+ * @retval QAR_STATUS_MEMBER_INVITATION_INVALID the invitation's signature is
+ *   wrong, or the primary does not know it or judged it invalid.
+ * @retval QAR_STATUS_MEMBER_INVITATION_EXPIRED,
+ *   QAR_STATUS_MEMBER_INVITATION_USED_UP, QAR_STATUS_MEMBER_INVITATION_REVOKED
+ *   ask the primary's application for a new invitation.
+ * @retval QAR_STATUS_MEMBER_INVITATION_PRIMARY_NOT_ALLOWED this PC does not
+ *   trust the invitation's primary hub.
+ * @retval QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED this PC's
+ *   member-invitation policy can be written by a non-administrator.
+ * @retval QAR_STATUS_MEMBER_JOIN_REFUSED the hub on this PC hosts members of
+ *   its own or is a member of another primary, or the invitation does not
+ *   permit the join; qar_result_message names the reason.
+ * @retval QAR_STATUS_MEMBER_REMOVED the primary removed this hub and the
+ *   invitation does not permit readmitting it.
+ * @retval QAR_STATUS_PRIMARY_UNREACHABLE none of the invitation's addresses of
+ *   the primary hub answers.
+ * @retval QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING the hub on this PC is in
+ *   the middle of another session-wide operation; retry.
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE no QAROS hub runs on this PC
+ *   and none could be started.
+ * @retval QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC the process serving the pipe
+ *   is not the installed QAROS hub.
+ * @retval QAR_STATUS_TIMEOUT the hub did not come back as a member in time;
+ *   the join is committed, so calling again returns success once it has.
+ * @retval QAR_STATUS_NOT_IMPLEMENTED not on Windows.
+ */
+static inline QarResult qar_runtime_join_hub_as_member(
+	QarRuntime* runtime,
+	const QarJoinHubAsMemberInit* init,
+	qar_progress_callback_t on_progress,
+	void* progress_state,
+	QarCancelToken* cancel
+);
+
+/**
+ * @brief Sizing getter for qar_member_hub_invitation_serialize.
+ *
+ * @param invitation Required; an invitation.
+ * @param out_size Required; receives the serialized size in bytes.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle.
+ */
+static inline QarResult qar_member_hub_invitation_serialized_size(
+	const QarMemberHubInvitation* invitation, size_t* out_size
+);
+
+/**
+ * @brief Serialize an invitation to bytes for the application's own channel.
+ *
+ * The bytes are UTF-8 JSON, at most 16 KiB. They carry the invitation's
+ * secret: never log them.
+ *
+ * @param invitation Required; an invitation.
+ * @param out_buffer Receives the bytes. May be NULL (with buffer_size 0) to
+ *   query the size only.
+ * @param buffer_size Size of out_buffer in bytes.
+ * @param out_bytes_written Required; receives the serialized size.
+ * @return Success, or the failure.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small;
+ *   *out_bytes_written still holds the required size.
+ * @retval QAR_STATUS_LOGIC_ERROR the handle is invalid.
+ */
+static inline QarResult qar_member_hub_invitation_serialize(
+	const QarMemberHubInvitation* invitation,
+	uint8_t* out_buffer,
+	size_t buffer_size,
+	size_t* out_bytes_written
+);
+
+/**
+ * @brief Parse an invitation from bytes qar_member_hub_invitation_serialize
+ * wrote.
+ *
+ * Strict: an invitation with an unknown or missing field, of another kind or
+ * version, out of its bounds, or over 16 KiB is refused. Its signature is not
+ * checked here; qar_runtime_join_hub_as_member checks it.
+ *
+ * @param wire_data Required; the bytes.
+ * @param wire_data_size Their size.
+ * @param out_invitation Required; receives the invitation, owned by the caller
+ *   (release with qar_member_hub_invitation_handle_destroy).
+ * @return Success, or the failure.
+ * @retval QAR_STATUS_MEMBER_INVITATION_INVALID the bytes are not a member-hub
+ *   invitation.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED a required pointer is NULL.
+ */
+static inline QarResult qar_member_hub_invitation_deserialize(
+	const uint8_t* wire_data,
+	size_t wire_data_size,
+	QarMemberHubInvitation** out_invitation
+);
+
+/** @brief Destroy an invitation handle. NULL is ignored. */
+static inline void
+qar_member_hub_invitation_handle_destroy(QarMemberHubInvitation* invitation);
+
+/** @} */ /* end of Member hub */
+
 /** @} */ /* end of qar_c_onboarding */
 
 // ============================================================================
@@ -3028,9 +3470,53 @@ static inline QarResult qar_peer_spec_get_app_version(
 static inline QarResult qar_peer_spec_get_app_custom_peer_info(
 	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
 );
-/** @brief Get application state for this peer. */
+/**
+ * @brief Get application state for this peer.
+ *
+ * @deprecated Use qar_peer_spec_get_presence(). Kept working: the value is
+ * computed from the presence. OFFLINE and LEAVING read as
+ * QAR_APP_STATE_SHUTTING_DOWN, RETIRED as QAR_APP_STATE_RETIRED, and an
+ * ONLINE or not yet reconciled peer reads as what it claimed, which every
+ * current peer claims as QAR_APP_STATE_RUNNING from the moment it joins.
+ * RUNNING therefore means "joined", never "finished configuring".
+ */
 static inline QarResult
 qar_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state);
+/**
+ * @brief Whether this peer is here: the value to pick targets by.
+ *
+ * ONLINE while the hub sees the peer in the session. A peer the hub no longer
+ * sees reads as QAR_PEER_PRESENCE_OFFLINE (a killed process never announces its
+ * leave) and as ONLINE again once it is back, without the peer doing anything.
+ * A peer that announced its leave reads as QAR_PEER_PRESENCE_LEAVING, or
+ * QAR_PEER_PRESENCE_RETIRED when it never comes back under its id.
+ * QAR_PEER_PRESENCE_UNKNOWN is a peer the hub has not reconciled yet: an older
+ * hub that never reports presence, or one that has just started. Nothing says
+ * it is gone, so render for it like an ONLINE peer. A peer's readiness to
+ * receive a stream is negotiated by its render sender, not announced here.
+ *
+ * @code
+ * QarPeerPresence presence;
+ * QAR_CHECK(qar_peer_spec_get_presence(peer, &presence));
+ * if(presence == QAR_PEER_PRESENCE_ONLINE
+ *    || presence == QAR_PEER_PRESENCE_UNKNOWN)
+ * {
+ *     StartRenderingFor(peer);
+ * }
+ * else
+ * {
+ *     StopRenderingFor(peer); // offline, leaving or retired
+ * }
+ * @endcode
+ *
+ * @param handle Peer spec handle.
+ * @param out_presence Receives the presence; treat a value this header does
+ * not name as QAR_PEER_PRESENCE_UNKNOWN.
+ * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ * output.
+ */
+static inline QarResult
+qar_peer_spec_get_presence(QarPeerSpec* handle, QarPeerPresence* out_presence);
 /** @brief Get internal version id string. */
 static inline QarResult qar_peer_spec_get_version_id(
 	QarPeerSpec* handle, char* out_buffer, size_t buffer_size
@@ -3151,17 +3637,19 @@ static inline QarResult qar_peer_spec_get_device_name(
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
-/** @brief Query number of known peer specs. */
+/** @brief Query number of known peer specs, retired peers excluded. */
 static inline QarResult
 qar_query_peer_specs_count(QarSession* session, size_t* out_count);
 /**
  * @brief Enumerate peer specs into user-provided array.
  *
- * Size the array with qar_query_peer_specs_count(). The list also contains this
- * process' own peer; qar_session_get_my_spec() identifies it. Match
+ * Size the array with qar_query_peer_specs_count(). Retired peers
+ * (QAR_PEER_PRESENCE_RETIRED) never come back and are not listed; an update
+ * subscription still reports a peer turning retired. The list also contains
+ * this process' own peer; qar_session_get_my_spec() identifies it. Match
  * qar_peer_spec_get_id() against the id qar_session_invite_target_app()
- * returned to find an invited peer, and read qar_peer_spec_get_app_state() to
- * see whether it is ready.
+ * returned to find an invited peer, and read qar_peer_spec_get_presence() to
+ * see whether it has joined.
  */
 static inline QarResult qar_query_peer_specs(
 	QarSession* session,
@@ -3209,8 +3697,9 @@ typedef void (*qar_peer_update_callback_t)(
  * @brief Subscribe for asynchronous peer spec updates.
  *
  * The push form of qar_query_peer_specs(), and the way to learn that a peer
- * invited with qar_session_invite_target_app() has joined and reached
- * QAR_APP_STATE_RUNNING.
+ * invited with qar_session_invite_target_app() has joined: it is listed, and
+ * its qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or UNKNOWN on
+ * a hub that does not report presence).
  *
  * @param token Required; cancelling or destroying it ends the subscription
  *              and waits for a running callback, see
@@ -6133,6 +6622,32 @@ qar_session_invite_target_app_init_default(void)
 	return init;
 }
 
+static inline QarMemberHubInvitationInit
+qar_member_hub_invitation_init_default(void)
+{
+	QarMemberHubInvitationInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT,
+		  NULL }, // header
+		0,		  // lifetime_seconds -> 24 h
+		0,		  // max_uses -> 1
+		0,		  // permissions -> JOIN | REJOIN | BRING_DEVICES
+		NULL	  // label
+	};
+	return init;
+}
+
+static inline QarJoinHubAsMemberInit
+qar_join_hub_as_member_init_default(void)
+{
+	QarJoinHubAsMemberInit init = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT, NULL }, // header
+		NULL, // invitation (required)
+		0,	  // hub_start_timeout_ms -> 60 s
+		0	  // restart_timeout_ms -> 120 s
+	};
+	return init;
+}
+
 static inline QarForgetInit
 qar_forget_init_default(void)
 {
@@ -6738,7 +7253,49 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	   char* out_buffer,                                                       \
 	   size_t buffer_size,                                                     \
 	   size_t* out_length),                                                    \
-	  (invite, out_buffer, buffer_size, out_length))
+	  (invite, out_buffer, buffer_size, out_length))                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_create_member_hub_invitation,                                    \
+	  (QarRuntime * runtime,                                                   \
+	   const QarMemberHubInvitationInit* init,                                 \
+	   QarCancelToken* cancel,                                                 \
+	   QarMemberHubInvitation** out_invitation),                               \
+	  (runtime, init, cancel, out_invitation))                                 \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_join_hub_as_member,                                              \
+	  (QarRuntime * runtime,                                                   \
+	   const QarJoinHubAsMemberInit* init,                                     \
+	   qar_progress_callback_t on_progress,                                    \
+	   void* progress_state,                                                   \
+	   QarCancelToken* cancel),                                                \
+	  (runtime, init, on_progress, progress_state, cancel))                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  member_hub_invitation_serialized_size,                                   \
+	  (const QarMemberHubInvitation* invitation, size_t* out_size),            \
+	  (invitation, out_size))                                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  member_hub_invitation_serialize,                                         \
+	  (const QarMemberHubInvitation* invitation,                               \
+	   uint8_t* out_buffer,                                                    \
+	   size_t buffer_size,                                                     \
+	   size_t* out_bytes_written),                                             \
+	  (invitation, out_buffer, buffer_size, out_bytes_written))                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  member_hub_invitation_deserialize,                                       \
+	  (const uint8_t* wire_data,                                               \
+	   size_t wire_data_size,                                                  \
+	   QarMemberHubInvitation** out_invitation),                               \
+	  (wire_data, wire_data_size, out_invitation))                             \
+	X(ACTIVE,                                                                  \
+	  void,                                                                    \
+	  member_hub_invitation_handle_destroy,                                    \
+	  (QarMemberHubInvitation * invitation),                                   \
+	  (invitation))
 
 QAR_DECLARE_MODULE_COMMON(
 	ONBOARDING, Onboarding, onboarding, QAR_ONBOARDING_FUNCTION_LIST
@@ -6913,7 +7470,12 @@ typedef void (*qar_peer_update_callback_t)(
 	  QarResult,                                                               \
 	  peer_update_device_identity,                                             \
 	  (QarSession * session, const QarPeerDeviceIdentity* identity),           \
-	  (session, identity))
+	  (session, identity))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  peer_spec_get_presence,                                                  \
+	  (QarPeerSpec * handle, QarPeerPresence * out_presence),                  \
+	  (handle, out_presence))
 
 QAR_DECLARE_MODULE_COMMON(
 	PEER_MANAGEMENT,
@@ -7205,10 +7767,18 @@ QAR_RESULT_FUNCTION_LIST(QAR_RESULT_DECLARE_WRAPPER)
 	  runtime_create,                                                          \
 	  (const QarRuntimeInit* init, QarRuntime** out_runtime),                  \
 	  (init, out_runtime))                                                     \
-	X(ACTIVE, void, runtime_destroy, (QarRuntime * runtime), (runtime))        \
 	X(ACTIVE, QarResult, library_init, (const QarLibraryInit* init), (init))   \
 	X(ACTIVE, QarResult, library_destroy, (void), ())                          \
-	X(ACTIVE, QarResult, runtime_info, (QarRuntimeInfo * out_info), (out_info))
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  runtime_info,                                                            \
+	  (QarRuntimeInfo * out_info),                                             \
+	  (out_info))                                                              \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  platform_set_android_java_vm,                                            \
+	  (void* java_vm),                                                         \
+	  (java_vm))
 
 QAR_DECLARE_MODULE_COMMON(RUNTIME, Runtime, runtime, QAR_RUNTIME_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_RUNTIME_FUNCTION_LIST)

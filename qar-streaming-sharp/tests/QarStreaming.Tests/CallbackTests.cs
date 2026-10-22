@@ -1,6 +1,8 @@
 using Quaternar.Qaros;
 using Xunit;
 
+#pragma warning disable CS0618 // PeerSpec is still constructed with its deprecated AppState
+
 namespace Quaternar.Qaros.Tests
 {
     public sealed class CallbackTests

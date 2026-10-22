@@ -1,6 +1,8 @@
 using Quaternar.Qaros;
 using Xunit;
 
+#pragma warning disable CS0618 // PeerSpec is still constructed with its deprecated AppState
+
 namespace Quaternar.Qaros.Tests
 {
     public sealed class PeerIdentityTests
@@ -25,6 +27,7 @@ namespace Quaternar.Qaros.Tests
         [InlineData(DeviceCategory.Headset, 3)]
         [InlineData(DeviceCategory.Visualizer, 4)]
         [InlineData(DeviceCategory.Camera, 5)]
+        [InlineData(DeviceCategory.Observer, 6)]
         public void CategoryValuesMatchTheCApi(DeviceCategory category, int value)
         {
             Assert.Equal(value, (int)category);
@@ -56,6 +59,21 @@ namespace Quaternar.Qaros.Tests
             var presentation = new PeerPresentationOptions().WithDeviceIdentity(identity);
             Assert.NotNull(presentation);
             Assert.Throws<System.ArgumentNullException>(() => new PeerDeviceIdentity(DeviceCategory.Camera, null!));
+        }
+
+        [Theory]
+        [InlineData(PeerPresence.Online, true)]
+        [InlineData(PeerPresence.Unknown, true)]
+        [InlineData(PeerPresence.Offline, false)]
+        [InlineData(PeerPresence.Leaving, false)]
+        [InlineData(PeerPresence.Retired, false)]
+        public void APeerIsReachableUnlessItIsGoneOrLeaving(PeerPresence presence, bool reachable)
+        {
+            var peer = new PeerSpec(
+                PeerId.Default, "Quest", "1.0", "", AppState.Running, "v", "",
+                PeerRole.Target, presence: presence);
+            Assert.Equal(presence, peer.Presence);
+            Assert.Equal(reachable, peer.IsReachable);
         }
     }
 }

@@ -111,9 +111,6 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_runtime_forget(IntPtr runtime, ref ForgetInitNative init);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void qar_impl_runtime_destroy(IntPtr runtime);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern void qar_impl_session_handle_destroy(IntPtr handle);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -157,6 +154,24 @@ namespace Quaternar.Qaros.Interop
         internal static extern void qar_impl_onboarding_invite_handle_destroy(IntPtr invite);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_runtime_create_member_hub_invitation(IntPtr runtime, ref MemberHubInvitationInitNative init, IntPtr cancel, out IntPtr outInvitation);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_runtime_join_hub_as_member(IntPtr runtime, ref JoinHubAsMemberInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_member_hub_invitation_serialized_size(IntPtr invitation, out UIntPtr outSize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_member_hub_invitation_serialize(IntPtr invitation, [Out] byte[]? outBuffer, UIntPtr bufferSize, out UIntPtr outBytesWritten);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_member_hub_invitation_deserialize(byte[]? wireData, UIntPtr wireDataSize, out IntPtr outInvitation);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern void qar_impl_member_hub_invitation_handle_destroy(IntPtr invitation);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.I1)]
         internal static extern bool qar_impl_peer_spec_handle_is_valid(IntPtr handle);
 
@@ -175,8 +190,13 @@ namespace Quaternar.Qaros.Interop
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_app_custom_peer_info(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);
 
+#pragma warning disable CS0618 // AppState is deprecated (PeerPresence) and still bound
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_app_state(IntPtr handle, out AppState outState);
+#pragma warning restore CS0618
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_peer_spec_get_presence(IntPtr handle, out PeerPresence outPresence);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_peer_spec_get_version_id(IntPtr handle, [Out] byte[] outBuffer, UIntPtr bufferSize);

@@ -18,6 +18,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the minimum SDK for certificate renewal and the migration steps: a hub renews only a
+  renewal that proves it holds the certificate's key, so apps and devices on an older SDK are
+  updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
+  status table lists `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` and
+  `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` with what to tell the user.
+
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
@@ -37,6 +43,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
+  presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for
   `targetApps[].deviceType`: `HoloLens` or `Headset` (the headset reports its model itself); the
   old generic names still resolve, a model id is skipped, `CameraVisualizer` is gone.
@@ -54,6 +62,21 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** the Source Applications guide no longer describes editing a web app's scripts on its
   tile or the Local Grid mode: scripts come from registering the web app through the visualizer's
   MCP, and web apps stream to targets only.
+- **Docs:** *Overview*, *Security model*, *Security deep dive*, *Networking & Federation* and
+  *Running the Hub* describe primary and member Hubs instead of hub-connect federation: *Join hub…*
+  by *Allow* or join code, or by a member-Hub invitation an approved app creates on the primary
+  (accepted from an administrator's allow-list of primaries, else from the first primary the Hub
+  joined; a Hub takes its paired devices along), one CA per session (the primary's), forwarding and
+  removal, *Leave and start own session*, the new tray items, and the Hub audit log. The CA is
+  described as built into the Hub (step-ca is gone), with its new storage layout and limitations.
+- **Docs:** *Security deep dive*, *Security model*, *Installation* and *Maintenance & Updates*
+  describe the encrypted secret storage: every key, identity, approval and the licence in
+  `secure-store`, protected by a TPM-backed (or DPAPI) key of the signed-in user, what that does
+  and does not protect against, and that backups restore only on the same PC and user. The new
+  section *Updating to encrypted storage* lists what to do after the update: pair devices again,
+  approve local apps again, join member Hubs again and activate the licence again.
+- **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
+  Hub's local message router.
 
 ### Fixed
 
@@ -62,6 +85,15 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
+  hardening: session-named certificates and session access control, hub-assigned peer ids, online
+  renewal across session rotations, signed discovery replies for known hubs, gateway lifetime caps
+  and rate limits, signed operator requests. The CA gateway rejection is now
+  `device_revoked_operator_allow_required`: a revoked device returns only after an operator
+  *Allow*.
+- **Docs:** *Onboarding and sessions* states that only the Hub's operators can mint pairing codes
+  (`qar_session_request_onboarding_codes`), and that target-app invite and kill are served only to
+  apps the Hub admitted itself: local apps onboarded without a code and apps the Hub started.
 - **Docs:** the Source Applications guide, Rendering Streams and the security deep dive no longer
   say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
   with the same one-time approval; a launch invite on stdin remains only where local enrollment is

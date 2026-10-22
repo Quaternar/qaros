@@ -45,9 +45,6 @@ qar_session_handle_destroy(session);
 QarForgetInit forget = qar_forget_init_default();
 forget.onboarding_id = saved_id;
 qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
-
-// Likewise the runtime distinguishes releasing your handle
-// (qar_runtime_handle_destroy) from full runtime shutdown (qar_runtime_destroy).
 ```
 
 </Lang>

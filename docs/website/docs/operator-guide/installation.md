@@ -71,7 +71,7 @@ Program files and data are kept apart. Data survives upgrades and uninstall.
 
 | Folder | Holds |
 |---|---|
-| `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA, Hub and session state, device identities, approved local apps, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc` |
+| `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA, Hub and session state, device identities, approved local apps, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc`. Every key and approval is in `secure-store`, encrypted under the user's TPM key ([Security Deep Dive](./security-deep-dive.md#what-is-stored-where)) |
 | `%ProgramData%\Quaternar\Qaros` | per machine: service state |
 | `QAR_APP_DATA_ROOT` environment variable | overrides the per-user folder |
 
@@ -91,7 +91,7 @@ Logs are kept apart from the data, under the **log root** `%TEMP%\quaternar\logs
 
 Run the newer `QAROS-Setup-<version>.exe`. It asks the running Hub to exit and replaces the program files. Start QAROS from the Start menu if it is not running afterwards.
 
-- Approved local apps, the session and paired devices are kept: approved apps join without a new prompt.
+- Approved local apps, the session and paired devices are kept: approved apps join without a new prompt. Exception: the first update to encrypted storage starts the Hub with a new CA, so devices pair again, apps are approved again and the licence is activated again once ([Maintenance & Updates](./maintenance-and-updates.md#updating-to-encrypted-storage)).
 - Installing the **demo** over a **release** installation deletes the QAROS data first (a demo never runs on release data). Demo to release keeps it.
 - Source apps need no change: they load the runtime from the installation.
 

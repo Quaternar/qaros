@@ -17,8 +17,8 @@ A Hub is not one program. Three processes ship together and start in a chain:
 | Process | Role |
 |---|---|
 | `qaros-hub-service.exe` | The tray supervisor. It is the always-on parent: it starts the runtime launcher, restarts it with backoff if it crashes, and gives you the tray menu. This is what you launch (or what autostart launches). |
-| `qar-runtime-launcher.exe` | The runtime. It hosts the session and message router, runs the private CA and onboarding services, broadcasts the discovery beacon, and orchestrates the streaming pipeline (source apps, mixers, targets). Everything operationally interesting happens here. |
-| `qar-streaming-viz.exe` | The visualizer - the interactive desktop window where you see and manipulate the shared room, and where the hub-connect UI lives. |
+| `qar-runtime-launcher.exe` | The runtime. It hosts the session and message router, runs the private CA (in process) and onboarding services, broadcasts the discovery beacon, keeps the audit log, and orchestrates the streaming pipeline (source apps, mixers, targets). Everything operationally interesting happens here. |
+| `qar-streaming-viz.exe` | The visualizer - the interactive desktop window where you see and manipulate the shared room, and where you join another Hub or manage member Hubs. |
 
 The startup chain is: you start the tray service -> it starts the launcher -> the launcher restores or creates a session, registers source-app volumes, starts streaming and onboarding services, begins broadcasting discovery, and invites a local visualizer. If the launcher dies, the tray service brings it back.
 
@@ -28,19 +28,23 @@ Inside the runtime's streaming pipeline sits the **mixer**: the component that c
 
 ## The per-Hub Certificate Authority
 
-Each Hub operates its own private certificate authority (based on `step-ca`), localhost-only. It is the trust root for the deployment: a device onboarded to this Hub carries a certificate this Hub signed. No internet, cloud, or corporate PKI is required. A short pairing code - typed once, never sent over the network - bootstraps each device's full cryptographic identity. See [Security Model](/docs/operator-guide/security-model) for the trust model and onboarding flow.
+Each primary Hub operates its own private certificate authority, built into the Hub process (no separate CA program, no port). It is the trust root for its session: a device onboarded to this Hub carries a certificate this Hub signed. No internet, cloud, or corporate PKI is required. A short pairing code - typed once, never sent over the network - bootstraps each device's full cryptographic identity. See [Security Model](/docs/operator-guide/security-model) for the trust model and onboarding flow.
+
+## Primary and member Hubs
+
+With several PCs, run a Hub on every PC and make one of them the **primary**. The others use *Join hub…* and become **member Hubs**: they run everything locally (source apps, mixer, targets, headsets at that PC) but have no CA of their own. The primary signs every certificate, keeps every app approval, revocation and the session, and its operator allows or removes members. A member leaves with *Leave and start own session*. See [Networking & Federation](/docs/operator-guide/networking-and-federation).
 
 ## Where data lives
 
-Everything the Hub keeps between runs - identity slots, CA state, session state, approved local apps - is kept out of the install directory, under the per-user data root (`%LOCALAPPDATA%\Quaternar\...`); logs go to `%TEMP%\quaternar\logs` ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)). That is why an upgrade keeps it, and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
+Everything the Hub keeps between runs - identity slots, CA state, session state, approved local apps, the audit log - is kept out of the install directory, under the per-user data root (`%LOCALAPPDATA%\Quaternar\...`); logs go to `%TEMP%\quaternar\logs` ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)). That is why an upgrade keeps it, and it is what you back up. See [Maintenance & Updates](/docs/operator-guide/maintenance-and-updates).
 
 ## What the operator owns
 
 Four things are yours to manage:
 
 - **Configuration** - source apps (see [Source Applications](/docs/operator-guide/source-applications)), target devices, and other Hub behavior, managed through the visualizer and persisted across restarts.
-- **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) relay or Hub federation.
-- **Device trust** - minting and reading pairing codes, connecting peers, and forgetting or blacklisting devices.
+- **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) a relay.
+- **Device and Hub trust** - minting and reading pairing codes, connecting peers, forgetting or blacklisting devices, allowing and removing member Hubs, and reading the audit log.
 - **Updates** - moving between versions with the installer and the device apps, and backing up Hub identity.
 
 ## What's in this guide
@@ -52,7 +56,7 @@ Four things are yours to manage:
 | [Player Installation to Device](/docs/operator-guide/player-installation-to-device) | Operator-side player installation section with separate pages for HoloLens 2, P&C Solutions METALENSE 2, and Meta Quest. |
 | [Running the Hub](/docs/operator-guide/running-the-hub) | Starting the tray service, the startup sequence, the visualizer, reconnects, logs and crash dumps. |
 | [Source Applications](/docs/operator-guide/source-applications) | Launching, configuring and stopping the apps that stream into the room. |
-| [Networking & Federation](/docs/operator-guide/networking-and-federation) | Ports and firewall, LAN vs relay, and connecting two Hubs. |
+| [Networking & Federation](/docs/operator-guide/networking-and-federation) | Ports and firewall, LAN vs relay, and joining Hubs as primary and members. |
 | [Security Model](/docs/operator-guide/security-model) | The four-layer trust model, the per-Hub CA, and onboarding. |
 | [Managing Devices](/docs/operator-guide/managing-devices) | Pairing codes, connecting peers, and forgetting/blacklisting devices. |
 | [The Mixer](/docs/operator-guide/the-mixer) | How multiple streams are composited into one per-user view. |

@@ -558,6 +558,25 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct MemberHubInvitationInitNative
+    {
+        public StructureHeaderNative Header;
+        public uint LifetimeSeconds;
+        public uint MaxUses;
+        public uint Permissions;
+        public IntPtr Label;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct JoinHubAsMemberInitNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr Invitation;
+        public uint HubStartTimeoutMs;
+        public uint RestartTimeoutMs;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct SessionInviteTargetAppInitNative
     {
         public StructureHeaderNative Header;
@@ -781,6 +800,14 @@ namespace Quaternar.Qaros.Interop
         internal OnboardingInviteSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
         public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
         protected override bool ReleaseHandle() { NativeMethods.qar_impl_onboarding_invite_handle_destroy(handle); return true; }
+    }
+
+    internal sealed class MemberHubInvitationSafeHandle : SafeHandle
+    {
+        private MemberHubInvitationSafeHandle() : base(IntPtr.Zero, true) { }
+        internal MemberHubInvitationSafeHandle(IntPtr handle) : base(IntPtr.Zero, true) { SetHandle(handle); }
+        public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
+        protected override bool ReleaseHandle() { NativeMethods.qar_impl_member_hub_invitation_handle_destroy(handle); return true; }
     }
 
     internal sealed class CancelTokenSafeHandle : SafeHandle
