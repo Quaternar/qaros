@@ -107,6 +107,9 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	{
 		return false;
 	}
+	//! [vulkan_extensions]
+	// QAROS shares the frame images and the semaphore with your device as
+	// external memory and an external semaphore.
 #ifdef _WIN32
 	const std::array<const char*, 2> extensions = {
 		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
@@ -114,6 +117,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 #else
 	const std::array<const char*, 1> extensions = { VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME };
 #endif
+	//! [vulkan_extensions]
 	std::vector<const char*> enabledExtensions(extensions.begin(), extensions.end());
 	for(auto candidate : devices)
 	{
@@ -187,7 +191,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	}
 	if(not physical && not requestedAdapter.empty())
 	{
-		std::cerr << "The GPU the launch invite names (" << requestedAdapter << ")"
+		std::cerr << "The session's GPU (" << requestedAdapter << ")"
 				  << " names no graphics GPU with external "
 					 "memory/semaphore support\n";
 		return false;
@@ -199,7 +203,7 @@ VulkanDevice::Create(std::string_view requestedAdapter)
 	}
 	std::cout << "Rendering on " << DescribeAdapter(physical)
 			  << (requestedAdapter.empty() ? ", the first supported GPU\n"
-										   : ", named by the launch invite\n");
+										   : ", the session's GPU\n");
 	const float priority = 1;
 	VkDeviceQueueCreateInfo queueInfo{ VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 	queueInfo.queueFamilyIndex = family;
@@ -559,6 +563,10 @@ CubeCamera::Render(
 	{
 		return false;
 	}
+	//! [vulkan_barriers]
+	// Each image is taken from the layout and queue family the frame reports,
+	// and handed back in TRANSFER_SRC_OPTIMAL, released to the external queue
+	// family.
 	std::array<VkImageMemoryBarrier, 4> acquire{}, release{};
 	for(size_t i = 0; i < frame.textures_count; ++i)
 	{
@@ -595,6 +603,7 @@ CubeCamera::Render(
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL;
 		release[i] = barrier;
 	}
+	//! [vulkan_barriers]
 	vkCmdPipelineBarrier(
 		slot->commands,
 		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -679,6 +688,7 @@ CubeCamera::Render(
 	{
 		return false;
 	}
+	//! [vulkan_handoff]
 	// The semaphore hands the frame to the sender, which waits for it on the
 	// GPU; the fence only tells this camera when the slot is free again.
 	VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -700,13 +710,16 @@ CubeCamera::Render(
 	}
 	frame.synchronization.fence = VK_NULL_HANDLE;
 	return true;
+	//! [vulkan_handoff]
 }
 
+//! [vulkan_discard]
 bool
 CubeCamera::Discard(QarVideoFrameVulkan& frame)
 {
 	// A begun frame that could not be rendered still signals the borrowed
-	// semaphore, so the sender can consume it on its discard path.
+	// semaphore, so the show that closes the frame cycle has something to
+	// wait for.
 	Slot* slot = nullptr;
 	if(not NextSlot(slot))
 	{
@@ -720,6 +733,7 @@ CubeCamera::Discard(QarVideoFrameVulkan& frame)
 	}
 	return m_gpu->Submit(submit, slot->fence, "signal discarded camera frame");
 }
+//! [vulkan_discard]
 
 bool
 CubeCamera::Drain()
