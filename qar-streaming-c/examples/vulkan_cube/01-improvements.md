@@ -9,5 +9,7 @@ Open work on the Vulkan cube example only. Runtime-side gaps live in the Quatern
 - A failed target is retried after a fixed 3 s (`main.cpp`, `retries`). A kill-and-relaunch can take
   ~5 s to reconnect, so the cube waits a whole extra period. Retry on the sender's reconnect state,
   or back off from a short first delay.
+- An app volume that does not resolve keeps its targets waiting (`IsWaiting`), as the header calls
+  it recoverable. A volume that was removed never resolves, and the cube does not recreate it.
 - The executable is unsigned, so QAROS approves it by path and hash: every rebuild asks for approval
   again. A signed build would be admitted across updates.
