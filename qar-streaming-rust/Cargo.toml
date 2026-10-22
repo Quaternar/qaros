@@ -3,11 +3,18 @@ resolver = "3"
 members = [
     "crates/qaros-sys",
     "crates/qaros",
+    "crates/qaros-stub",
+    "crates/qaros-conformance",
+    "tests/qar-streaming-rust-ext",
     "xtask",
 ]
+# tests/qar-streaming-rust-ext is left out: it needs qar-streaming-c-ext, a test-only
+# library of Debug and RelWithDebInfo SDK builds.
 default-members = [
     "crates/qaros-sys",
     "crates/qaros",
+    "crates/qaros-stub",
+    "crates/qaros-conformance",
 ]
 
 [workspace.package]
