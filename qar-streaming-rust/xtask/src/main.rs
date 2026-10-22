@@ -8,6 +8,11 @@
 //!   `qar_impl_function_list!` macro, which `qaros-sys` expands into the
 //!   runtime-loading table and the `link`-mode externs, and `qaros-stub`
 //!   expands into its exported symbols.
+//!
+//! `cargo xtask tutorials [--check]` generates the docs site's Rust tutorial pages from
+//! `examples/tutorials/` (see `tutorials.rs`).
+
+mod tutorials;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -26,11 +31,13 @@ fn main() -> ExitCode {
         print_usage();
         return ExitCode::FAILURE;
     };
-    if command == "bindgen" {
-        regenerate_bindings(command_arguments)
-    } else {
-        print_usage();
-        ExitCode::FAILURE
+    match command.as_str() {
+        "bindgen" => regenerate_bindings(command_arguments),
+        "tutorials" => tutorials::run(command_arguments),
+        _ => {
+            print_usage();
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -55,6 +62,7 @@ fn regenerate_bindings(requested_targets: &[String]) -> ExitCode {
 
 fn print_usage() {
     eprintln!("usage: cargo xtask bindgen [target...]");
+    eprintln!("       cargo xtask tutorials [--check]");
     eprintln!("default targets: {}", DEFAULT_TARGETS.join(", "));
     eprintln!("set LIBCLANG_PATH if libclang is not found automatically");
 }
