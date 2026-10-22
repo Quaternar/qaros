@@ -27,7 +27,7 @@ A source app on the Hub machine needs no code: it joins as a local app with noth
 
 - Work through [Dynamic Loading](/docs/developer-guide/tutorials/rust/dynamic-loading) first: this example loads the runtime the same way.
 - **Windows, on the Hub machine**, with the QAROS runtime (installed, or `QAROS_RUNTIME_DIR` naming its `bin` folder) and a Hub running under your Windows user. The example passes no Hub address, so it finds only that Hub, as step 3 explains.
-- **A pairing code** for the first run, from the Hub's onboarding screen. It lives about ten seconds, so type it quickly.
+- **A pairing code** for the first run. The Visualizer on the Hub machine shows the current one: open the Connection panel, then **Hubs** > **Pair another Hub** > **Let another hub join us** ([Reading this Hub's code](/docs/operator-guide/managing-devices#reading-this-hubs-code)). It lives about ten seconds, so type it quickly.
 - **macOS or Linux:** the example runs against `qaros-stub`. The stub accepts any code except `WRONG` (a pairing error) and `UNREACHABLE` (no Hub).
 - **The latest stable Rust.** Run the commands from `qar-streaming-rust/`.
 
@@ -199,9 +199,10 @@ The C tutorial [Onboarding and Rejoin](/docs/developer-guide/tutorials/c/onboard
 | `qar_runtime_forget` with `QarForgetInit` | `Runtime::forget(id)` |
 | `qar_result_has_code(r, QAR_STATUS_PAKE_ERROR)` | `error.has_code(StatusCode::PAKE_ERROR)` |
 | `qar_uuid_to_string`, `qar_uuid_from_string` | `Library::uuid_to_string`, `Library::uuid_from_string` |
-| exit codes 1 to 5 | exit code 1 on any error, with the message on stderr |
+| `--hub=HOST:PORT`, chained as `QarOnboardHostExt` | no Hub address: `OnboardMethod::Code` with `hub: None` |
+| exit codes 1 and 2 | exit code 1 on any error, with the message on stderr |
 
-Two differences in behaviour. The Rust `rejoin` and `forget` refuse the zero onboarding id with `Error::InvalidArgument` before calling C. And the C sample destroys the sibling runtime after onboarding and creates it again for `--forget`; the Rust port keeps it until the end.
+One difference in behaviour: the Rust `rejoin` and `forget` refuse the zero onboarding id with `Error::InvalidArgument` before calling C.
 
 ## Next
 

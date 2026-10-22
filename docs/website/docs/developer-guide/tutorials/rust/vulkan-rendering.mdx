@@ -158,7 +158,7 @@ fn main() -> ExitCode {
 
 `stop::watch_for_stop_requests` installs a Ctrl+C handler (SIGINT and SIGTERM outside Windows) and, when stdin is a pipe, a thread that waits for its end. A signal handler may safely do nothing but write an atomic, so all QAROS and GPU cleanup stays on the main thread, which polls `stop::requested()`.
 
-`Library::load_default` is the C `qar_library_load(NULL)`: the runtime beside the executable, the folder `QAROS_RUNTIME_DIR` names, the installed QAROS, then `PATH`. It is `unsafe` because a library file that does not match these bindings is undefined behavior. The exit codes are the C example's: 0 after a stop, 2 when no runtime loads, 3 when the library fails to initialize, 4 for any other failure.
+`Library::load_default` is the C `qar_library_load(NULL)`: the runtime beside the executable, the folder `QAROS_RUNTIME_DIR` names, the installed QAROS, then `PATH`. It is `unsafe` because a library file that does not match these bindings is undefined behavior. The exit codes: 0 after a stop, 2 when no runtime loads, 3 when the library fails to initialize, 4 for any other failure.
 
 ### 2. The order of the whole program
 
@@ -809,7 +809,7 @@ pub fn is_waiting(error: &qaros::Error) -> bool {
 }
 ```
 
-This is the CPU tutorial's helper, shared in `examples/src/lib.rs`: paused, reconnecting, transfer-less streams and an unresolved app volume keep the sender; anything else, `RENDERING_STREAM_IS_CLOSED` included, drops the target, and the next listing creates a new one when the target still runs ([Troubleshooting](/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow)). The C cube's `IsWaiting` does not include the unresolved app volume; the header calls that status recoverable, so the Rust port keeps the sender for it.
+This is the CPU tutorial's helper, shared in `examples/src/lib.rs`: paused, reconnecting, transfer-less streams and an unresolved app volume keep the sender; anything else, `RENDERING_STREAM_IS_CLOSED` included, drops the target, and the next listing creates a new one when the target still runs ([Troubleshooting](/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow)). The C cube's `IsWaiting` keeps the sender for the unresolved app volume too, as the header calls that status recoverable.
 
 ## Ownership and teardown
 
@@ -858,13 +858,14 @@ What the wrapper guarantees on this path: the frame record is borrowed, so it ca
 
 ## From C
 
-There is no C tutorial for this path. The C original is the [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube), and [Getting Started](/docs/developer-guide/getting-started) builds and runs it. What corresponds:
+The C tutorial is [Vulkan Rendering](/docs/developer-guide/tutorials/c/vulkan-rendering); the C original is the [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube), and [Getting Started](/docs/developer-guide/getting-started) builds and runs it. What corresponds:
 
 | C cube (`main.cpp`) | Rust |
 | --- | --- |
 | `qar_library_load(NULL)` | `Library::load_default` |
 | `JoinAsLocalApp`, `CancelOnStop` | `join_as_local_app`, `CancelToken::cancel_handle` |
 | `ExplainOnboardingFailure` | `explain_onboarding_failure` |
+| exit codes 0, 1 (a bad argument, a failed `qar_library_init`, any other failure), 2, and 3 to 7 for a refused join | exit codes 0, 1 (a bad argument), 2, 3 (a failed `qar_library_init`), 4 for any other failure |
 | `SessionAdapter` (`qar_session_get_graphics_device_id`) | `Session::graphics_adapter` |
 | `QarStreamParamsVulkan` chained into `QarRenderSenderInit` | `VulkanStreamParams`, `unsafe Session::create_vulkan_render_sender` |
 | `qar_peer_spec_get_role` is `QAR_PEER_ROLE_TARGET` | `PeerInfo::is_target_app` (`qar_peer_spec_is_target_app`, defined as the same test) |
@@ -873,8 +874,8 @@ There is no C tutorial for this path. The C original is the [`vulkan_cube` sourc
 | `qar_render_sender_frame_vulkan` | `OwnedFrame::vulkan_frame` |
 | `FindFrameView` | `VulkanFrameState::view_index` |
 | writing `layout`, `queue_family_index` and `fence` into the record | `VulkanFrame::release_to_external`, `set_image_state`, `set_fence` |
-| `IsWaiting` | `is_waiting`, plus the unresolved app volume |
-| frame info destroyed right after the submission, before `show_frame` | kept until the frame is shown or dropped |
+| `IsWaiting`, the unresolved app volume included | `is_waiting` |
+| frame info kept until `show_frame` (a `std::unique_ptr` with a deleter) | kept until the frame is shown or dropped |
 | retry a failed target after 3 s | after 3 s, doubling up to 60 s |
 | `qar_session_handle_destroy`, then `qar_runtime_handle_destroy`, the device after the session | drop the session, then the device; the runtime goes when `run_app` returns, the library when `main` drops it |
 
