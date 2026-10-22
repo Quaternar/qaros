@@ -206,7 +206,7 @@ The [Troubleshooting](/docs/developer-guide/troubleshooting) page covers what co
 
 ## From C
 
-The C tutorial [Dynamic Loading Overview](/docs/developer-guide/tutorials/c/dynamic-loading) shows the same lifecycle with explicit calls.
+The C tutorial [Dynamic Loading](/docs/developer-guide/tutorials/c/dynamic-loading) shows the same lifecycle with explicit calls.
 
 | C | Rust |
 |---|---|
@@ -216,8 +216,8 @@ The C tutorial [Dynamic Loading Overview](/docs/developer-guide/tutorials/c/dyna
 | `qar_library_destroy()` then `qar_library_unload()` | drop the last `Library`; it destroys and never unloads |
 | `qar_installed_bin_folder`, `qar_runtime_env_folder` | `qaros::installed_bin_folder()`, `qaros::runtime_dir_from_environment()` |
 | `qar_runtime_info` | `Library::runtime_info()` |
-| first argument `installed` or a path, second the runtime folder | no argument for the default lookup, `--qaros-library=PATH` for a file; the runtime folder is always the folder the library came from |
-| exit codes 1, 2, 3 | exit code 1 on any error, with the message on stderr |
+| no argument for the default lookup, `--qaros-library=PATH` for a file | the same, and a file from `QAROS_DLL` or `qaros-library.txt` beside the executable |
+| exit codes 1 and 2 | exit code 1 on any error, with the message on stderr |
 
 With the `link` feature the bindings link the import library instead and `Library::linked(&config)` initializes it; the runtime package ships no import library, so this is for builds of QAROS itself.
 
