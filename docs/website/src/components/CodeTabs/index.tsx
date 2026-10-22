@@ -53,8 +53,10 @@ export default function CodeTabs({ children }: { children: ReactNode }): ReactNo
   }, []);
 
   // Fall back to the first available language if the chosen one isn't provided
-  // on this particular CodeTabs instance.
+  // on this particular CodeTabs instance, and say so above the code.
   const active = available.includes(selected) ? selected : available[0];
+  const missingLanguage =
+    active !== undefined && active !== selected ? selected : undefined;
   const activeLang = langs.find((l) => l.props.value === active);
 
   return (
@@ -77,6 +79,12 @@ export default function CodeTabs({ children }: { children: ReactNode }): ReactNo
           );
         })}
       </div>
+      {missingLanguage && (
+        <p className={styles.fallbackNote}>
+          No {LANGUAGE_LABELS[missingLanguage] ?? missingLanguage} example here; showing{' '}
+          {LANGUAGE_LABELS[active] ?? active}.
+        </p>
+      )}
       <div className={styles.panel} role="tabpanel">
         {activeLang?.props.children}
       </div>

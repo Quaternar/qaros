@@ -10,11 +10,12 @@
 // any remaining native `<Tabs groupId="language">` still pick up the choice on
 // their next mount.
 
-export type LanguageValue = 'c' | 'csharp';
+export type LanguageValue = 'c' | 'csharp' | 'rust';
 
 export const LANGUAGE_LABELS: Record<string, string> = {
   c: 'C',
   csharp: 'C#',
+  rust: 'Rust',
   // Future languages are a one-line addition here (e.g. cpp: 'C++', unity: 'Unity').
 };
 
