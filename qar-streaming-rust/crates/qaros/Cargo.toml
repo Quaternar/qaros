@@ -1,0 +1,39 @@
+[package]
+name = "qaros"
+description = "Safe Rust API over the QAROS streaming C API: runtime, onboarding, peers, CPU, Vulkan and D3D11 render senders, app volumes and GUI panels."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+keywords = ["qaros", "quaternar", "xr", "streaming", "rendering"]
+categories = ["api-bindings", "rendering"]
+build = "build.rs"
+
+[features]
+default = []
+# Link the import library instead of loading the DLL at runtime.
+link = ["qaros-sys/link"]
+# The Vulkan render sender: Session::create_vulkan_render_sender and the
+# sender-owned frame images, with ash types (the ash version wgpu-hal uses).
+vulkan = ["dep:ash"]
+# The D3D11 render sender: Session::create_d3d11_render_sender and the shared
+# frame textures, with `windows` crate types on Windows. Compiled where the
+# bindings carry D3D11 (Windows, and macOS for qaros-stub); nothing elsewhere.
+d3d11 = ["dep:windows"]
+
+[dependencies]
+qaros-sys.workspace = true
+log.workspace = true
+ash = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, optional = true, features = [
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+] }
+
+[lints]
+workspace = true
