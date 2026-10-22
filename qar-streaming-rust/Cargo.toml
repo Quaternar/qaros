@@ -5,6 +5,7 @@ members = [
     "crates/qaros",
     "crates/qaros-stub",
     "crates/qaros-conformance",
+    "examples",
     "tests/qar-streaming-rust-ext",
     "xtask",
 ]
@@ -15,6 +16,7 @@ default-members = [
     "crates/qaros",
     "crates/qaros-stub",
     "crates/qaros-conformance",
+    "examples",
 ]
 
 [workspace.package]

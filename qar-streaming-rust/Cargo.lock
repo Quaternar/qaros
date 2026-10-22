@@ -95,6 +95,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
 
 [[package]]
+name = "glam"
+version = "0.30.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -200,6 +206,18 @@ version = "0.9.0"
 dependencies = [
  "cc",
  "qaros-sys",
+]
+
+[[package]]
+name = "qaros-examples"
+version = "0.9.0"
+dependencies = [
+ "ash",
+ "glam",
+ "log",
+ "qaros",
+ "qaros-stub",
+ "windows",
 ]
 
 [[package]]
