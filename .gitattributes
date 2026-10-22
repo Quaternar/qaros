@@ -16,3 +16,4 @@
 *.ttf filter=lfs diff=lfs merge=lfs -text
 *.pfm filter=lfs diff=lfs merge=lfs -text
 docs/website/docs/developer-guide/tutorials/rust/** linguist-generated=true
+*.spv binary
