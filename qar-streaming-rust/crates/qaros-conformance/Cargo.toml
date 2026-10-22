@@ -1,0 +1,17 @@
+[package]
+name = "qaros-conformance"
+description = "Test-only: compiles the C header's static inline qar_*_default() initializers with the C compiler and checks the Rust ports in qaros_sys::defaults against them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+qaros-sys.workspace = true
+
+[build-dependencies]
+cc = "1"
+
+[lints]
+workspace = true

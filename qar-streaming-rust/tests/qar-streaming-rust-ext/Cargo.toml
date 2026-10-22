@@ -1,0 +1,26 @@
+[package]
+name = "qar-streaming-rust-ext"
+description = "Test-only Rust layer of qar-streaming-c-ext, the C API's counterparts (in-process hub, peers, receivers), and the integration tests that drive the binding against it. Never shipped."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# The integration tests against a Debug or RelWithDebInfo SDK build that
+# includes qar-streaming-c-ext (QAROS_PACKAGE_BIN). Off by default, so
+# `cargo test --workspace` never runs them.
+e2e = []
+
+[dependencies]
+qaros-sys.workspace = true
+libloading.workspace = true
+
+[dev-dependencies]
+qaros = { workspace = true, features = ["vulkan"] }
+ash = { workspace = true, features = ["loaded"] }
+
+[lints]
+workspace = true

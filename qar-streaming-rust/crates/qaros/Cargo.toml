@@ -35,5 +35,19 @@ windows = { workspace = true, optional = true, features = [
     "Win32_Graphics_Dxgi",
 ] }
 
+[dev-dependencies]
+ash = { workspace = true, features = ["loaded"] }
+libloading.workspace = true
+qaros-stub = { path = "../qaros-stub" }
+
+# A WARP device for the D3D11 stub tests on Windows.
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+] }
+
 [lints]
 workspace = true
