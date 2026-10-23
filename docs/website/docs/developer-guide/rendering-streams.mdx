@@ -122,6 +122,35 @@ Key choices:
 - **Frame views** — the order you declare in `frame_views` is guaranteed: the layout (`qar_render_sender_layout`) and every frame list their views in exactly that order, each with the `eye` and `data_type` you declared at that position. Textures come in the order the views first use them (one per view for `SEPARATED_TEXTURES`, one per data type for side by side and layered); each view's `texture_index` names its texture. A view the layout provides that you did not declare follows yours.
 - **Frame layout** — how views pack into textures: `SIDE_BY_SIDE` (both eyes in one texture), `SEPARATED_TEXTURES`, or `LAYERED` (texture array). The negotiated layout can be queried (`qar_render_sender_layout`) and changed at runtime (`qar_render_sender_change_layout`).
 - **Depth matters.** Sending real depth (not just color) is what enables correct occlusion between app volumes and low-latency warping. Send it whenever you can.
+- **Alpha mode** — what your color's alpha channel means. See [Transparency](#transparency) below.
+
+## Color encoding
+
+Every QAROS device shows the stream's 8-bit color as **sRGB-encoded**, the way a display expects it. The textures a sender gives you are plain UNORM, so the numbers you write are stored as they are. If your renderer shades in linear light, do one of these:
+
+- **Encode in your last shader pass**: convert linear color to sRGB before writing it. Best quality, since the encoding happens at full precision.
+- **Declare linear color** and let QAROS encode it: chain a `QarRenderSenderColorEncodingExt` with `QAR_COLOR_ENCODING_LINEAR` (`qar_render_sender_color_encoding_ext_default()`); in C# set `RenderSenderOptions.ColorEncoding = ColorEncoding.Linear`. It costs one GPU pass per frame in your process. Send linear color as `QAR_PIXEL_FORMAT_R16G16B16A16`: in an 8-bit format the darks band slightly, because 8-bit linear values have already lost precision there.
+
+Linear values sent without either look too dark on every device. Alpha is never encoded. Premultiplied color is premultiplied in linear light, then encoded: what an sRGB render target produces when you blend over a transparent-black clear.
+
+If you render into a texture of your own first and then copy into the sender's texture, an sRGB render target (for example `DXGI_FORMAT_B8G8R8A8_UNORM_SRGB`) gives you encoded bytes with no extra work.
+
+## Transparency
+
+A sender declares what its color's alpha means, and the mixer composites the stream by it. Chain a `QarRenderSenderAlphaModeExt` (`qar_render_sender_alpha_mode_ext_default()`, then set `alpha_mode`) on `init.header.next`; in C# set `RenderSenderOptions.AlphaMode`.
+
+| Alpha mode | Means | The mixer |
+|---|---|---|
+| `QAR_COLOR_ALPHA_MODE_UNSPECIFIED` / `Unspecified` (default) | Nothing declared | Draws the stream opaque, unless the operator turns on `mixerSourceAlpha` for undeclared streams |
+| `QAR_COLOR_ALPHA_MODE_OPAQUE` / `Opaque` | The alpha channel means nothing | Every pixel fully covers what is behind it |
+| `QAR_COLOR_ALPHA_MODE_PREMULTIPLIED` / `Premultiplied` | Color is premultiplied by alpha, and alpha is the pixel's coverage | Blends each pixel over what is behind it by its coverage |
+| `QAR_COLOR_ALPHA_MODE_STRAIGHT` / `Straight` | Color is not multiplied by alpha, and alpha is the pixel's coverage | As `Premultiplied`: QAROS premultiplies the color before the frame leaves your application |
+
+- **Premultiplied** is what a renderer produces when it clears to transparent black (0, 0, 0, 0) and draws with ordinary alpha blending. Declare it only if the alpha channel stays correct up to the frame you send: a post-processing pass that overwrites alpha makes your content disappear. Declare `Opaque` then.
+- Translucent pixels that **write depth** are blended at their depth. Pixels with coverage but **no depth** (most transparent materials) are placed at the middle of your app volume along each view ray, so they show and occlude there, without parallax.
+- Color **brighter than its alpha** — glow, bloom, additive particles, even with alpha 0 — adds light over what is behind it.
+- Alpha crosses the network for a `Premultiplied` stream, at half resolution, so hard edges are slightly softer than on one machine. Both ends must run the same QAROS version.
+- **Straight** costs one GPU pass per frame in your process, even when the frame would otherwise be copied unchanged. If your renderer can produce premultiplied color directly, declare `Premultiplied` instead.
 
 ## The frame loop
 
