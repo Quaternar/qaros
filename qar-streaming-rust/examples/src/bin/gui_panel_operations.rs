@@ -10,19 +10,34 @@
 
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Duration;
 
-use qaros::{GuiPanelConfig, GuiPanelSize, GuiPanelState, Pose, Vec3};
+use qaros::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanelState, Pose, Vec3};
 use qaros_examples::{
-    Arguments, ExampleResult, create_runtime, join_session, load_library, report,
+    Arguments, ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS,
+    create_runtime, join_session, load_library, nearly_equal, report, same_pose,
+    updates_until_quiet,
 };
-
-/// How long the update loop waits for one more update before it moves on.
-const UPDATE_QUIET_PERIOD: Duration = Duration::from_millis(500);
 
 fn main() -> ExitCode {
     report(run())
 }
+
+// ANCHOR: same_update
+/// Whether two updates show the same panel: pose and size at the precision of `same_pose`, state
+/// and address exactly.
+fn same_panel_update(first: &GuiPanelInfo, second: &GuiPanelInfo) -> bool {
+    same_pose(&first.pose, &second.pose)
+        && nearly_equal(first.size.width, second.size.width, SAME_LENGTH_METERS)
+        && nearly_equal(first.size.height, second.size.height, SAME_LENGTH_METERS)
+        && nearly_equal(
+            first.size.content_scale,
+            second.size.content_scale,
+            SAME_FACTOR,
+        )
+        && first.state == second.state
+        && first.content_uri == second.content_uri
+}
+// ANCHOR_END: same_update
 
 fn run() -> ExampleResult {
     // ANCHOR: session
@@ -49,7 +64,7 @@ fn run() -> ExampleResult {
         ..GuiPanelSize::default()
     };
     let panel_id = panels.get_or_create(&config)?;
-    println!("Created GUI panel with id: {panel_id}");
+    println!("GUI panel id: {panel_id}");
     // ANCHOR_END: create
 
     // ANCHOR: subscribe
@@ -72,7 +87,19 @@ fn run() -> ExampleResult {
     // ANCHOR_END: update
 
     // ANCHOR: receive
-    while let Ok(update) = panel_updates.recv_timeout(UPDATE_QUIET_PERIOD) {
+    let mut received_count = 0;
+    let mut printed_count = 0;
+    let mut last_printed: Option<GuiPanelInfo> = None;
+    for update in updates_until_quiet(&panel_updates) {
+        received_count += 1;
+        // The Hub repeats updates; print only one that differs from the last one printed.
+        if last_printed
+            .as_ref()
+            .is_some_and(|last| same_panel_update(last, &update))
+        {
+            continue;
+        }
+        printed_count += 1;
         println!(
             "Update: position({:.2}, {:.2}, {:.2}) size({:.2} x {:.2}) state={:?} uri='{}'",
             update.pose.position.x,
@@ -83,7 +110,20 @@ fn run() -> ExampleResult {
             update.state,
             update.content_uri
         );
+        last_printed = Some(update);
     }
+    if received_count == 0 {
+        println!(
+            "No update of the panel arrived within {} s of the changes.",
+            FIRST_UPDATE_TIMEOUT.as_secs()
+        );
+    }
+    let skipped_repeats = if printed_count < received_count {
+        ": the others matched the update printed before them"
+    } else {
+        ""
+    };
+    println!("Received {received_count} updates, printed {printed_count}{skipped_repeats}.");
     // ANCHOR_END: receive
 
     // ANCHOR: list
@@ -108,5 +148,8 @@ fn run() -> ExampleResult {
     panels.close(panel_id)?;
     println!("qar_gui_panels_close_panel: SUCCESS");
     // ANCHOR_END: close
+    if received_count == 0 {
+        return Err("no update of the panel arrived".into());
+    }
     Ok(())
 }

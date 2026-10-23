@@ -9,8 +9,9 @@ description: Get or create the 3D box your app renders into, move your content i
 ## What you build
 
 A small program that gets or creates an app volume, the named box in the room that holds your
-rendered content. It moves and shrinks the content inside the box, prints the volume updates its
-subscription reports, reads the volume's latest transforms and lists every volume in the session.
+rendered content. It moves and shrinks the content inside the box, prints the distinct updates of
+its volume that its subscription delivers, reads the volume's latest transforms and lists every
+volume in the session.
 
 What you will learn:
 
@@ -60,9 +61,10 @@ Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
 Loaded .../target/debug/libqaros_stub.dylib
 qar_runtime_create: SUCCESS
 qar_runtime_onboard: SUCCESS
-Created app volume with id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D
-Update: app position(0.00, -0.25, 0.00) app scale 1.00 lifetime=Active
-Update: app position(0.00, -0.25, 0.00) app scale 0.50 lifetime=Active
+App volume id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D
+Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 1.00 lifetime=Active
+Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 0.50 lifetime=Active
+Received 2 updates of this volume, printed 2.
 Latest: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 0.50
 - Volume id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D name='Tutorial Volume' size(1.00 x 1.00 x 1.00) position(0.00, 0.00, -1.00)
 ```
@@ -70,7 +72,16 @@ Latest: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0
 The stub reports one update per change, before the call returns. A real Hub delivers updates
 asynchronously, reports your own changes back to you, repeats them, and can deliver them out of
 order: the last update can carry app scale 1.00 after 0.50 was set, while the `Latest:` line
-still reads 0.50. The example renders nothing, so against a Hub the box stays empty.
+still reads 0.50. That is why the program prints only an update that differs from the last one it
+printed, and why it takes the current values from the latest getters, not from an update. When
+some updates repeated the one before them, the `Received` line goes on:
+`printed <m>: the others matched the update printed before them.` The example renders nothing, so
+against a Hub the box stays empty.
+
+When no update of the volume arrives within 10 s of the changes, the line
+`No update of the volume arrived within 10 s of the changes.` replaces the `Update:` lines, the
+steps after the `Received` line are left out, and the program ends with
+`error: no update of the volume arrived` and exit code 1.
 
 ## Walkthrough
 
@@ -119,8 +130,13 @@ config.size = AppVolumeSize {
     height: 1.0,
 };
 let volume_id = volumes.get_or_create(&config)?;
-println!("Created app volume with id: {volume_id}");
+println!("App volume id: {volume_id}");
 ```
+
+`get_or_create` returns the existing volume of that common name, or a new one when there is none,
+and the API does not say which. This example leaves its volume open, so after the first run it
+gets the volume an earlier run created, with the same id; the program prints the id, not whether
+the volume is new.
 
 - `pose` is the pose of the box's **center** in room space (a panel's pose is its top-edge
   midpoint).
@@ -142,13 +158,19 @@ you when.
 
 ```rust
 let (forward_update, volume_updates) = qaros::channel();
-let subscription = volumes.subscribe(forward_update)?;
+// subscribe reports every volume of the session: forward only this one's updates.
+let subscription = volumes.subscribe(move |update| {
+    if update.id == volume_id {
+        forward_update(update);
+    }
+})?;
 ```
 
 `subscribe` reports changes to **every** volume in the session; there is no per-volume form for
-volumes. The callback runs on a library thread, so it is `Send + Sync + 'static`, and the example
-forwards each `AppVolumeInfo` snapshot into a `std::sync::mpsc` channel with `qaros::channel()`
-(the "Callback threading" warning under
+volumes. The callback runs on a library thread, so it is `Send + Sync + 'static`. The example's
+callback compares the id and forwards only the `AppVolumeInfo` snapshots of its own volume into a
+`std::sync::mpsc` channel, through the forwarding half of `qaros::channel()` (the "Callback
+threading" warning under
 [Blocking / async pairs](/docs/developer-guide/api-conventions#4-blocking--async-pairs)).
 
 ### 4. Move your content inside the box
@@ -173,25 +195,71 @@ closed. Call `get_or_create` again if your app still needs it.
 
 ### 5. Receive the updates
 
+The example waits up to 10 s for the first update of its volume, then reads the channel until no
+update of it has arrived for half a second. The Hub can take a few seconds to deliver the first
+update, so a quiet period alone could end before anything arrived. Since the callback forwards
+only this volume's updates, updates of other volumes neither end the wait nor prolong it. When no
+update comes within 10 s, the example says so, skips the remaining steps and exits with 1. The
+wait is `updates_until_quiet` from the examples' shared library, shown in
+[GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels#5-receive-the-updates).
+
 ```rust
-while let Ok(update) = volume_updates.recv_timeout(UPDATE_QUIET_PERIOD) {
-    if update.id != volume_id {
+let mut received_count = 0;
+let mut printed_count = 0;
+let mut last_printed: Option<AppVolumeInfo> = None;
+for update in updates_until_quiet(&volume_updates) {
+    received_count += 1;
+    // The Hub repeats updates; print only one that differs from the last one printed.
+    if last_printed
+        .as_ref()
+        .is_some_and(|last| same_volume_update(last, &update))
+    {
         continue;
     }
+    printed_count += 1;
+    print_volume_update(&update);
+    last_printed = Some(update);
+}
+if received_count == 0 {
     println!(
-        "Update: app position({:.2}, {:.2}, {:.2}) app scale {:.2} lifetime={:?}",
-        update.app_pose.position.x,
-        update.app_pose.position.y,
-        update.app_pose.position.z,
-        update.app_scale,
-        update.lifetime
+        "No update of the volume arrived within {} s of the changes.",
+        FIRST_UPDATE_TIMEOUT.as_secs()
     );
+}
+let skipped_repeats = if printed_count < received_count {
+    ": the others matched the update printed before them"
+} else {
+    ""
+};
+println!(
+    "Received {received_count} updates of this volume, printed {printed_count}{skipped_repeats}."
+);
+if received_count == 0 {
+    return Err("no update of the volume arrived".into());
 }
 ```
 
-The example skips updates of other volumes and reads until the channel has been quiet for half a
-second. A real application reads the channel from its own loop with `try_recv` or `try_iter`.
-`lifetime` tells an `Active` volume from a `Closed` one.
+The example prints an update only when it differs from the last one it printed. A repeat need not
+be equal to the bit: its floats can differ from the earlier report below any precision you print,
+so the example compares the poses, the size and the scale at the tolerances of `same_pose`, and
+the lifetime exactly:
+
+```rust
+/// Whether two updates show the same volume: poses, size and scale at the precision of
+/// `same_pose`, the lifetime exactly.
+fn same_volume_update(first: &AppVolumeInfo, second: &AppVolumeInfo) -> bool {
+    same_pose(&first.pose, &second.pose)
+        && nearly_equal(first.size.width, second.size.width, SAME_LENGTH_METERS)
+        && nearly_equal(first.size.length, second.size.length, SAME_LENGTH_METERS)
+        && nearly_equal(first.size.height, second.size.height, SAME_LENGTH_METERS)
+        && same_pose(&first.app_pose, &second.app_pose)
+        && nearly_equal(first.app_scale, second.app_scale, SAME_FACTOR)
+        && first.lifetime == second.lifetime
+}
+```
+
+A real application does not wait for a quiet period: it reads the channel from its own loop with
+`try_recv` or `try_iter`. `lifetime` tells an `Active` volume from a `Closed` one.
 
 ### 6. Read the latest values
 
@@ -312,6 +380,8 @@ not `Send`: keep `library`, `runtime`, `session` and `volumes` on one thread.
 | `RENDERING_APP_VOLUME_UNRESOLVED` from `begin_frame` | The volume does not resolve yet where the stream is received, or it was closed | Keep calling; recreate a volume you closed ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
 | The content appears at the wrong size or offset | `app_pose` or `app_scale` set by a user's gesture or another peer | Read `latest_app_pose` and `latest_app_scale` again after each update |
 | The program hangs in `cancel()` or at the end of a scope | A callback is waiting for a lock the cancelling thread holds | Release the lock before ending the subscription |
+| `No update of the volume arrived within 10 s of the changes.`, exit code 1 | The Hub delivered no update of the volume within 10 s after the changes | Check that the Hub is still running and run again. In your app, read updates as they come instead of waiting for them a fixed time |
+| The last `Update:` line differs from `Latest:` | Updates arrive repeated and out of order | Read the latest getters after each update |
 
 ## From C
 

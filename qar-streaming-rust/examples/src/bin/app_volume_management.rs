@@ -10,18 +10,47 @@
 
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Duration;
 
-use qaros::{AppVolumeConfig, AppVolumeSize, Pose, Vec3};
+use qaros::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, Pose, Vec3};
 use qaros_examples::{
-    Arguments, ExampleResult, create_runtime, join_session, load_library, report,
+    Arguments, ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS,
+    create_runtime, join_session, load_library, nearly_equal, report, same_pose,
+    updates_until_quiet,
 };
-
-/// How long the update loop waits for one more update before it moves on.
-const UPDATE_QUIET_PERIOD: Duration = Duration::from_millis(500);
 
 fn main() -> ExitCode {
     report(run())
+}
+
+// ANCHOR: same_update
+/// Whether two updates show the same volume: poses, size and scale at the precision of
+/// `same_pose`, the lifetime exactly.
+fn same_volume_update(first: &AppVolumeInfo, second: &AppVolumeInfo) -> bool {
+    same_pose(&first.pose, &second.pose)
+        && nearly_equal(first.size.width, second.size.width, SAME_LENGTH_METERS)
+        && nearly_equal(first.size.length, second.size.length, SAME_LENGTH_METERS)
+        && nearly_equal(first.size.height, second.size.height, SAME_LENGTH_METERS)
+        && same_pose(&first.app_pose, &second.app_pose)
+        && nearly_equal(first.app_scale, second.app_scale, SAME_FACTOR)
+        && first.lifetime == second.lifetime
+}
+// ANCHOR_END: same_update
+
+fn print_volume_update(update: &AppVolumeInfo) {
+    println!(
+        "Update: center({:.2}, {:.2}, {:.2}) size({:.2} x {:.2} x {:.2}) app position({:.2}, {:.2}, {:.2}) app scale {:.2} lifetime={:?}",
+        update.pose.position.x,
+        update.pose.position.y,
+        update.pose.position.z,
+        update.size.width,
+        update.size.length,
+        update.size.height,
+        update.app_pose.position.x,
+        update.app_pose.position.y,
+        update.app_pose.position.z,
+        update.app_scale,
+        update.lifetime
+    );
 }
 
 fn run() -> ExampleResult {
@@ -49,12 +78,17 @@ fn run() -> ExampleResult {
         height: 1.0,
     };
     let volume_id = volumes.get_or_create(&config)?;
-    println!("Created app volume with id: {volume_id}");
+    println!("App volume id: {volume_id}");
     // ANCHOR_END: create
 
     // ANCHOR: subscribe
     let (forward_update, volume_updates) = qaros::channel();
-    let subscription = volumes.subscribe(forward_update)?;
+    // subscribe reports every volume of the session: forward only this one's updates.
+    let subscription = volumes.subscribe(move |update| {
+        if update.id == volume_id {
+            forward_update(update);
+        }
+    })?;
     // ANCHOR_END: subscribe
 
     // ANCHOR: transforms
@@ -63,18 +97,38 @@ fn run() -> ExampleResult {
     // ANCHOR_END: transforms
 
     // ANCHOR: receive
-    while let Ok(update) = volume_updates.recv_timeout(UPDATE_QUIET_PERIOD) {
-        if update.id != volume_id {
+    let mut received_count = 0;
+    let mut printed_count = 0;
+    let mut last_printed: Option<AppVolumeInfo> = None;
+    for update in updates_until_quiet(&volume_updates) {
+        received_count += 1;
+        // The Hub repeats updates; print only one that differs from the last one printed.
+        if last_printed
+            .as_ref()
+            .is_some_and(|last| same_volume_update(last, &update))
+        {
             continue;
         }
+        printed_count += 1;
+        print_volume_update(&update);
+        last_printed = Some(update);
+    }
+    if received_count == 0 {
         println!(
-            "Update: app position({:.2}, {:.2}, {:.2}) app scale {:.2} lifetime={:?}",
-            update.app_pose.position.x,
-            update.app_pose.position.y,
-            update.app_pose.position.z,
-            update.app_scale,
-            update.lifetime
+            "No update of the volume arrived within {} s of the changes.",
+            FIRST_UPDATE_TIMEOUT.as_secs()
         );
+    }
+    let skipped_repeats = if printed_count < received_count {
+        ": the others matched the update printed before them"
+    } else {
+        ""
+    };
+    println!(
+        "Received {received_count} updates of this volume, printed {printed_count}{skipped_repeats}."
+    );
+    if received_count == 0 {
+        return Err("no update of the volume arrived".into());
     }
     // ANCHOR_END: receive
 
