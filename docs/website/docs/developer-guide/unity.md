@@ -171,6 +171,24 @@ content root.
 - Never apply the app volume's pose or scale on top: the Unity world already is the app content
   space.
 
+## Transparency
+
+`QarDeviceBehaviour` declares what its color's alpha means with the stream, through **Alpha Mode**
+in the Inspector. The mixer composites the stream by it
+([Transparency](/docs/developer-guide/rendering-streams#transparency)).
+
+| Alpha Mode | Use when |
+|---|---|
+| `Premultiplied` (default) | The cameras clear to transparent black, so translucent materials, soft edges and glow are composited over what is behind the app volume |
+| `Straight` | Your color is not multiplied by its alpha (for example a custom pass writes straight alpha). QAROS premultiplies it before sending |
+| `Opaque` | Post-processing or a custom pass overwrites the alpha channel. With `Premultiplied` such content would turn transparent |
+| `Unspecified` | Declares nothing: the mixer draws the stream opaque unless the operator enables alpha for undeclared streams |
+
+- Unity's transparent materials write no depth. They show at the middle of the app volume along
+  each view ray, so they occlude there and move without parallax.
+- Opaque materials must leave alpha at 1. A shader that writes a lower alpha on an opaque surface
+  makes it translucent in the mixer.
+
 ## MRTK 3
 
 `QarStreamingMRTK` puts QAROS behind MRTK 3: the QAROS head pose drives the MRTK rig and the QAROS

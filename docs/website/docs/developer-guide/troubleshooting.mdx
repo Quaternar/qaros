@@ -110,6 +110,7 @@ is not yet compiled from a published sample project.
 - **Zero-initializing init structs by hand.** Always use `qar_*_default()` — it stamps `header.type`, without which calls fail.
 - **Mismatched projection metadata.** If streamed content "swims" or sits at the wrong depth, your `show_frame` near/far or per-view poses don't match what you actually rendered with. This is a metadata bug, not a network problem — see [Rendering Streams](/docs/developer-guide/rendering-streams#the-frame-loop).
 - **Confusing panel and volume pose conventions.** Panel pose = midpoint of the top edge; volume pose = cuboid center.
+- **A depth format the sender cannot take.** `qar_render_sender_create` fails with `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED` when the graphics API refuses the format (D24S8 and D32S8 on CPU and D3D11) or the GPU cannot create it. Use `QAR_PIXEL_FORMAT_D32_FLOAT`, which works everywhere — see [Choosing a depth format](/docs/developer-guide/rendering-streams#choosing-a-depth-format).
 - **Destroying the runtime while async operations run.** Cancel (and wait for the exactly-once result callback) before teardown.
 
 ## Where to look

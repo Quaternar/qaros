@@ -24,9 +24,17 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   status table lists `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` and
   `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` with what to tell the user.
 
+- **Docs:** *Rendering Streams* has a *Choosing a depth format* section: the depth formats each
+  graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
+  D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
+  depth-stencil texture. *Troubleshooting* lists the refused format as an integration mistake.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
+- **Docs:** transparency, in the next version's docs: a sender's alpha mode in Rendering Streams
+  (C and C#), straight alpha included, `Alpha Mode` on the Unity page, and how the mixer blends by
+  it. Rendering Streams also states the color encoding a sender must send, sRGB, and how to declare
+  linear color instead.
 - **Docs:** *Working with Peers* explains what a peer is (role, category, device id, family and
   name) with their C getters and C# properties, how to show each target's name, pick a Unity model
   by device, and declare or refine your own device with `QarPeerDeviceIdentity` and
@@ -80,6 +88,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Onboarding and Sessions*, also in the 0.9.0 docs, no longer says a target requests a
+  render stream by itself and no longer links to a missing *Accepting render stream requests*
+  section: your application picks its targets and creates their senders, as *Finding rendering
+  targets* describes.
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
   current pairing code, instead of describing no such screen and the code only in the Hub log, and
   covers the one-time codes an onboarded application can request.
