@@ -1,0 +1,59 @@
+---
+title: Fixture Guide Page
+description: A fixture developer guide page for the guide tests.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+
+# Fixture Guide Page
+
+A first group with a C and a C# tab.
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+/* the fixture's C tab */
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+// the fixture's C# tab
+```
+
+</Lang>
+</CodeTabs>
+
+A group without a C tab gets no Rust tab.
+
+<CodeTabs>
+<Lang value="csharp">
+
+C# only.
+
+</Lang>
+</CodeTabs>
+
+A code block that shows the markup is not a group:
+
+```text
+<CodeTabs>
+</CodeTabs>
+```
+
+A second group with a C and a C# tab.
+
+<CodeTabs>
+<Lang value="c">
+
+The fixture's second C tab.
+
+</Lang>
+<Lang value="csharp">
+
+The fixture's second C# tab.
+
+</Lang>
+</CodeTabs>
