@@ -151,6 +151,39 @@ A sender declares what its color's alpha means, and the mixer composites the str
 - Color **brighter than its alpha** — glow, bloom, additive particles, even with alpha 0 — adds light over what is behind it.
 - Alpha crosses the network for a `Premultiplied` stream, at half resolution, so hard edges are slightly softer than on one machine. Both ends must run the same QAROS version.
 - **Straight** costs one GPU pass per frame in your process, even when the frame would otherwise be copied unchanged. If your renderer can produce premultiplied color directly, declare `Premultiplied` instead.
+- **Depth format** — the format of the depth textures the sender creates for you. Pick the one your renderer already draws depth in; see [Choosing a depth format](#choosing-a-depth-format).
+
+## Choosing a depth format
+
+The sender creates its depth textures in `depth_format` (C# `DepthFormat`), so render straight into them in your renderer's own format. Receivers always get 32-bit float depth: D16 and D24 are widened before the frame leaves your application, and the stencil of a depth-stencil format is dropped.
+
+| `depth_format` | CPU | D3D11 | OpenGL, Vulkan |
+|---|---|---|---|
+| `QAR_PIXEL_FORMAT_R32_FLOAT`, `QAR_PIXEL_FORMAT_D32_FLOAT` | yes | yes | yes |
+| `QAR_PIXEL_FORMAT_D16_UNORM` | yes | yes | yes |
+| `QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT`, `QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT` | no | no | yes, if the GPU can create it |
+
+- **D3D11 has no depth-stencil formats.** A D3D11 sender's textures are shared with QAROS through a keyed-mutex handle, and D3D11 cannot share a D24S8 or D32S8 texture. A D3D11 renderer with a D24S8 target copies or converts its depth to D16, D32 or R32.
+- **D32 works everywhere.** Some GPUs cannot create D24S8 at all (AMD has no `D24_UNORM_S8_UINT` in Vulkan).
+- **CPU frames:** a D16 texel is 2 bytes, but rows keep the frame's `pitch`, which is at least 4 bytes a pixel.
+
+A format the graphics API or the GPU cannot take fails `qar_render_sender_create` at once with `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, before any receiver is waited for. Trying your renderer's own format first therefore costs nothing:
+
+```c
+init.depth_format = QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT;
+QarResult r = qar_render_sender_create(session, &init, NULL, &sender);
+if (qar_result_has_code(&r, QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED))
+{
+    /* This GPU cannot create D24S8: render depth into D32 instead. */
+    init.depth_format = QAR_PIXEL_FORMAT_D32_FLOAT;
+    r = qar_render_sender_create(session, &init, NULL, &sender);
+}
+```
+
+To render into a depth-stencil texture, attach it as a depth-stencil target:
+
+- **Vulkan** — the image has depth-stencil attachment usage. Its layout barriers name `VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT`, including the release to `VK_QUEUE_FAMILY_EXTERNAL` before `show_frame`. Hand the frame back as for any format: set each texture's `layout` and `queue_family_index` and signal `synchronization.semaphore`.
+- **OpenGL** — attach the texture at `GL_DEPTH_STENCIL_ATTACHMENT`; it is a `GL_TEXTURE_2D_ARRAY`, so use `glFramebufferTextureLayer`.
 
 ## The frame loop
 
