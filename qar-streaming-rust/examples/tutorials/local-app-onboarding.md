@@ -70,7 +70,7 @@ Joined QAROS.
 {{#include ../src/bin/local_app_onboarding.rs:timeout}}
 ```
 
-The wrapper takes `Option<Duration>`: `None` is the Hub's default. It refuses `Some(Duration::ZERO)` with `Error::InvalidArgument`, because the C API reads a zero timeout as "the default" and a zero you meant literally would silently become 120 s. So the example turns `0` into `None` itself. Text that is not a number is refused with exit code 1, where the C sample would read it as 0.
+The wrapper takes `Option<Duration>`: `None` is the Hub's default. It refuses `Some(Duration::ZERO)` with `Error::InvalidArgument`, because the C API reads a zero timeout as "the default" and a zero you meant literally would silently become 120 s. So the example turns `0` into `None` itself. Text that is not a number is refused with exit code 1, as in the C sample.
 
 ### 2. Load the installed runtime
 
@@ -165,7 +165,7 @@ More in [Troubleshooting: Joining QAROS as a local app](/docs/developer-guide/tr
 
 ## From C
 
-There is no C tutorial page for this sample; its source is [`local_app_onboarding.c`](https://github.com/Quaternar/qaros/blob/main/qar-streaming-c/examples/local_app_onboarding.c), and the Rust port keeps its output, messages and exit codes.
+The C tutorial is [Local App Onboarding](/docs/developer-guide/tutorials/c/local-app-onboarding). The Rust port keeps its exit codes and what its messages tell the user; the wording differs in places, the 1802 message among them.
 
 | C | Rust |
 |---|---|
@@ -176,7 +176,7 @@ There is no C tutorial page for this sample; its source is [`local_app_onboardin
 | a progress callback and its state pointer | `BlockingOptions { progress: Some(sender), .. }`, reports as `Progress { severity, percent, message }` |
 | `qar_result_has_code(result, QAR_STATUS_ONBOARDING_...)` | `error.has_code(StatusCode::ONBOARDING_...)` |
 | `qar_session_handle_destroy`, `qar_runtime_handle_destroy`, `qar_library_destroy` and `qar_library_unload` | drop the values; the library is destroyed, not unloaded |
-| `strtoul` on the argument | parsed and refused when it is not a number |
+| `strtoull` on the argument, refused when it is not a whole number of milliseconds | parsed and refused when it is not a number |
 
 ## Next
 

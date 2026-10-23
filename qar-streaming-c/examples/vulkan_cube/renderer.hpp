@@ -43,8 +43,8 @@ private:
 };
 
 // Index in `frame.texture_views` of the view showing `type` for `eye`, or -1.
-// The sender lays the frame out itself, so its views need not follow the order
-// QarRenderSenderInit::frame_views asked for: find views by what they show.
+// Finding views by what they show keeps the renderer independent of the order
+// QarRenderSenderInit::frame_views declares them in.
 int FindFrameView(
 	const QarVideoFrameVulkan& frame, QarVideoFrameViewEye eye, QarVideoFrameViewType type
 );

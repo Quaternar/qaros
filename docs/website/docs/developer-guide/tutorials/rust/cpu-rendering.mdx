@@ -184,7 +184,7 @@ let volume = session.app_volumes().get_or_create(&volume_config)?;
 
 ### 4. Follow the target apps in the peer list
 
-Your application decides which targets it renders for; QAROS does not choose for it ([Rendering Streams](/docs/developer-guide/rendering-streams#finding-rendering-targets)). This example serves every running target app. The C tutorial waits for a render request instead, but a target requests your content only once it is attached to your app volume, and a sender is what attaches it. So a new application that waits for requests waits forever.
+Your application decides which targets it renders for; QAROS does not choose for it ([Rendering Streams](/docs/developer-guide/rendering-streams#finding-rendering-targets)). This example serves every running target app. Do not wait for render requests to find targets: a target requests your content only once it is attached to your app volume, and a sender is what attaches it. So a new application that waits for requests waits forever.
 
 ```rust
 /// One target app and the sender rendering for it.
@@ -521,21 +521,22 @@ The C tutorial is [CPU Rendering with a Visualizer](/docs/developer-guide/tutori
 
 | C | Rust |
 | --- | --- |
-| `qar_library_load`, `qar_library_init` | `Library::load_default`, `Library::load` |
-| `qar_runtime_create` | `Library::create_runtime` |
-| `example_obtain_session` (rejoin, else code) | `join_session` in `examples/src/lib.rs` (rejoin, else code, else local app) |
+| `example_load_library`: `qar_library_load`, `qar_library_init` | `Library::load_default`, `Library::load` |
+| `example_create_runtime`: `qar_runtime_create` | `Library::create_runtime` |
+| `example_join_session` (rejoin, else code, else local app) | `join_session` in `examples/src/lib.rs` (rejoin, else code, else local app) |
 | `qar_app_volumes_get_or_create` | `session.app_volumes().get_or_create` |
-| `qar_render_sender_subscribe_requests` | not used: `session.subscribe_peer_updates` and `session.peers()` |
+| `qar_peer_subscribe_updates`, `qar_query_peer_specs` | `session.subscribe_peer_updates`, `session.peers()` |
+| `example_is_running_target`: role `QAR_PEER_ROLE_TARGET`, presence `ONLINE` or `UNKNOWN` | `is_running_target`: `PeerInfo::is_target_app` and `AppState::Running`, the deprecated app state computed from the presence, so the same targets |
 | `qar_render_sender_create` with `QAR_GRAPHICS_API_CPU` | `Session::create_render_sender` |
-| `qar_render_sender_begin_frame` | `RenderSender::try_begin_owned_frame` (non-blocking), or `begin_frame` / `begin_owned_frame` (blocking) |
+| `qar_render_sender_try_begin_frame` | `RenderSender::try_begin_owned_frame` (non-blocking); `begin_frame` / `begin_owned_frame` block |
 | `qar_render_frame_info_get_view_pose`, `_get_view_fov` | `OwnedFrame::view`, one `ViewPose` |
 | `qar_render_sender_frame_cpu` | `OwnedFrame::cpu_frame` |
 | `qar_render_sender_show_frame` | `OwnedFrame::show` |
 | `qar_render_frame_info_handle_destroy`, `qar_render_stream_handle_destroy` | drop |
-| `qar_session_handle_destroy`, `qar_runtime_handle_destroy`, `qar_library_destroy` | drop the values; the library is destroyed, not unloaded |
-| `qar_result_has_code` | `Error::has_cause` |
+| `qar_session_handle_destroy`, `qar_runtime_handle_destroy`, `example_unload_library` (`qar_library_destroy`, `qar_library_unload`) | drop the values; the library is destroyed, not unloaded |
+| `example_is_waiting` with `qar_result_has_code` | `is_waiting` with `Error::has_cause` |
 
-The Rust example also differs in what it does: without a code it joins as a local app, it finds its targets in the peer list, serves all of them, declares its views, renders from each frame's poses with depth, and keeps senders through waiting statuses. The C example waits for one render request and writes a gradient into three frames.
+The two programs do the same thing: join, find the targets in the peer list, serve all of them, declare the views, render the sphere from each frame's poses with depth, and keep senders through waiting statuses. The C program renders on one thread; the Rust example splits the rows across all cores.
 
 ## Next
 
