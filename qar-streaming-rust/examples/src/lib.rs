@@ -10,12 +10,13 @@
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 use qaros::qaros_sys::LookupStep;
 use qaros::{
     BlockingOptions, Library, LibraryConfig, OnboardMethod, OnboardingId, PeerInfo,
-    PeerPresentation, Progress, Runtime, RuntimeConfig, Session, StatusCode,
+    PeerPresentation, Pose, Progress, Runtime, RuntimeConfig, Session, StatusCode,
 };
 
 pub type ExampleResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -453,6 +454,56 @@ pub fn is_waiting(error: &qaros::Error) -> bool {
 }
 // ANCHOR_END: is_waiting
 
+// ANCHOR: updates_until_quiet
+/// The Hub delivers the first update on its own schedule, which can take a few seconds after the
+/// subscription. Ten seconds leaves room for that and still ends a run in which no update comes.
+pub const FIRST_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
+/// After the first update, how long the wait lasts without one more.
+pub const UPDATE_QUIET_PERIOD: Duration = Duration::from_millis(500);
+
+/// The updates `updates` receives: the first within [`FIRST_UPDATE_TIMEOUT`], then each next one
+/// until none has arrived for [`UPDATE_QUIET_PERIOD`]. Empty when no update arrived in time.
+pub fn updates_until_quiet<Update>(
+    updates: &Receiver<Update>,
+) -> impl Iterator<Item = Update> + '_ {
+    let mut deadline = Instant::now() + FIRST_UPDATE_TIMEOUT;
+    std::iter::from_fn(move || {
+        let update = updates
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .ok()?;
+        deadline = Instant::now() + UPDATE_QUIET_PERIOD;
+        Some(update)
+    })
+}
+// ANCHOR_END: updates_until_quiet
+
+// ANCHOR: same_pose
+/// The Hub reports a value back that can differ from the one you set, and from its own earlier
+/// report, below the precision anyone sees. Compared exactly, such an echo looks like a change.
+/// So compare at the precision your app cares about. These examples print centimeters; a
+/// millimeter is far below what a viewer notices.
+pub const SAME_LENGTH_METERS: f32 = 0.001;
+/// For each component of a unit quaternion: 0.0001 is about a hundredth of a degree.
+pub const SAME_ROTATION: f32 = 0.0001;
+/// For a factor such as a scale: one part in a thousand.
+pub const SAME_FACTOR: f32 = 0.001;
+
+pub fn nearly_equal(first: f32, second: f32, tolerance: f32) -> bool {
+    (first - second).abs() <= tolerance
+}
+
+/// Whether two poses are the same at the precision above.
+pub fn same_pose(first: &Pose, second: &Pose) -> bool {
+    nearly_equal(first.position.x, second.position.x, SAME_LENGTH_METERS)
+        && nearly_equal(first.position.y, second.position.y, SAME_LENGTH_METERS)
+        && nearly_equal(first.position.z, second.position.z, SAME_LENGTH_METERS)
+        && nearly_equal(first.orientation.x, second.orientation.x, SAME_ROTATION)
+        && nearly_equal(first.orientation.y, second.orientation.y, SAME_ROTATION)
+        && nearly_equal(first.orientation.z, second.orientation.z, SAME_ROTATION)
+        && nearly_equal(first.orientation.w, second.orientation.w, SAME_ROTATION)
+}
+// ANCHOR_END: same_pose
+
 /// Prints `main`'s error and exits non-zero: with a [`LocalAppRefusal`]'s own code, else 1.
 pub fn report(result: ExampleResult) -> std::process::ExitCode {
     match result {
@@ -493,7 +544,13 @@ fn install_stderr_logger() {
 
 #[cfg(test)]
 mod tests {
-    use super::Arguments;
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    use qaros::{Pose, Quat, Vec3};
+
+    use super::{Arguments, UPDATE_QUIET_PERIOD, same_pose, updates_until_quiet};
 
     fn parsed(command_line: &[&str]) -> Arguments {
         Arguments::from_arguments(command_line.iter().map(ToString::to_string))
@@ -533,5 +590,51 @@ mod tests {
         let arguments = parsed(&["123456", "--frames", "60"]);
         assert_eq!(arguments.flag_value("--frames"), Some("60"));
         assert_eq!(arguments.pairing_code.as_deref(), Some("123456"));
+    }
+
+    #[test]
+    fn the_first_update_may_come_later_than_the_quiet_period() {
+        let (sender, receiver) = mpsc::channel();
+        let late_sender = thread::spawn(move || {
+            thread::sleep(UPDATE_QUIET_PERIOD + Duration::from_millis(300));
+            sender.send("first").ok();
+            sender.send("second").ok();
+            thread::sleep(UPDATE_QUIET_PERIOD * 3);
+        });
+        let delivered_updates: Vec<&str> = updates_until_quiet(&receiver).collect();
+        assert_eq!(delivered_updates, ["first", "second"]);
+        late_sender.join().ok();
+    }
+
+    #[test]
+    fn a_closed_channel_ends_the_updates() {
+        let (sender, receiver) = mpsc::channel::<u32>();
+        drop(sender);
+        assert_eq!(updates_until_quiet(&receiver).count(), 0);
+    }
+
+    #[test]
+    fn poses_within_a_millimeter_are_the_same() {
+        let pose = Pose::from_position(Vec3::new(0.2, 1.6, -1.0));
+        let echo = Pose::from_position(Vec3::new(0.2004, 1.6, -1.0009));
+        let moved = Pose::from_position(Vec3::new(0.202, 1.6, -1.0));
+        assert!(same_pose(&pose, &echo));
+        assert!(!same_pose(&pose, &moved));
+    }
+
+    #[test]
+    fn a_rotation_beyond_the_tolerance_is_a_change() {
+        let pose = Pose::default();
+        let mut turned = pose;
+        turned.orientation = Quat {
+            x: 0.0,
+            y: 0.001,
+            z: 0.0,
+            w: 1.0,
+        };
+        let mut echo = pose;
+        echo.orientation.y = 0.00005;
+        assert!(!same_pose(&pose, &turned));
+        assert!(same_pose(&pose, &echo));
     }
 }

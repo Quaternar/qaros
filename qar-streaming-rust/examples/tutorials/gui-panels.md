@@ -7,7 +7,7 @@ description: Create a shared web panel from Rust, move and navigate it, follow i
 ## What you build
 
 A small program that puts a web panel into the shared QAROS room, moves, resizes, minimizes and
-navigates it, and prints each change as the panel's update subscription reports it. It then lists
+navigates it, and prints each distinct update the panel's subscription delivers. It then lists
 every panel in the session and closes its own.
 
 What you will learn:
@@ -15,6 +15,7 @@ What you will learn:
 - how a panel's common name makes creation idempotent,
 - how to subscribe to a panel's updates with `qaros::channel`, and why the callback runs on a
   library thread,
+- why an update tells you that the panel changed, and how to skip the Hub's repeats,
 - when it is safe to end a subscription, and the one rule that keeps ending it from deadlocking,
 - what the Rust wrapper releases for you, and in which order.
 
@@ -62,20 +63,30 @@ Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
 Loaded .../target/debug/libqaros_stub.dylib
 qar_runtime_create: SUCCESS
 qar_runtime_onboard: SUCCESS
-Created GUI panel with id: D9:AF:F4:85:71:EE:15:15:16:24:07:A6:2E:F3:0D:42
+GUI panel id: D9:AF:F4:85:71:EE:15:15:16:24:07:A6:2E:F3:0D:42
 Update: position(0.20, 1.60, -1.00) size(1.20 x 0.70) state=Visible uri=''
 Update: position(0.20, 1.60, -1.00) size(1.00 x 0.60) state=Visible uri=''
 Update: position(0.20, 1.60, -1.00) size(1.00 x 0.60) state=Minimized uri=''
 Update: position(0.20, 1.60, -1.00) size(1.00 x 0.60) state=Minimized uri='https://example.com/tutorial'
+Received 4 updates, printed 4.
 - Panel id: D9:AF:F4:85:71:EE:15:15:16:24:07:A6:2E:F3:0D:42 name='Tutorial Panel' size(1.00 x 0.60) position(0.20, 1.60, -1.00) state=Minimized uri='https://example.com/tutorial'
 qar_gui_panels_close_panel: SUCCESS
 ```
 
 The stub reports one update per change, in order, before each call returns. A real Hub delivers
 updates asynchronously, on its own schedule, and reports your own changes back to you, often
-several times: a few changes can arrive as dozens of updates, most of them identical, and an
-update can carry an older state than the one you set. Against a Hub you would see the panel
-appear in the room, move, shrink and minimize, then disappear when the program closes it.
+several times: a few changes can arrive as dozens of updates, most of them the same to the
+millimeter, and an update can carry an older state than the one you set. That is why the program
+prints only an update that differs from the last one it printed, and why the `Update:` lines need
+not match the calls one to one. When some updates repeated the one before them, the `Received`
+line goes on: `printed <m>: the others matched the update printed before them.` Against a Hub you
+would see the panel appear in the room, move, shrink and minimize, then disappear when the program
+closes it.
+
+When no update arrives within 10 s of the changes, the line
+`No update of the panel arrived within 10 s of the changes.` replaces the `Update:` lines. The
+program still lists and closes the panel, then ends with `error: no update of the panel arrived`
+and exit code 1.
 
 ## Walkthrough
 
@@ -117,6 +128,10 @@ from the name. Use a DNS-style, app-scoped name and keep it stable across versio
 ```rust
 {{#include ../src/bin/gui_panel_operations.rs:create}}
 ```
+
+The call does not say whether it created the panel or found it, so the program prints the id
+only. It closes its panel at the end, so a normal run creates it; after a run that ended early, it
+finds the one left behind.
 
 The pose is the **midpoint of the panel's top edge** in room space, not its center; the surface
 hangs below it and faces room -Z with the identity orientation
@@ -170,17 +185,47 @@ peer closed it. Call `get_or_create` again if your app still needs it.
 
 ### 5. Receive the updates
 
-The example reads the channel until it has been quiet for half a second.
+The example waits up to 10 s for the first update, then reads the channel until no update has
+arrived for half a second. The Hub can take a few seconds to deliver the first update, so a quiet
+period alone could end before anything arrived. When no update comes within 10 s, the example says
+so and, after closing the panel, exits with 1: a program that follows updates and sees none should
+not report success.
 
 ```rust
 {{#include ../src/bin/gui_panel_operations.rs:receive}}
 ```
 
-A real application reads the channel from its own loop (a UI frame, a render loop) with
-`try_recv` or `try_iter`, and never blocks a callback waiting for it. Expect your own changes to
-come back, repeated: skip a snapshot equal to the last one you handled, and do not treat an
-update as a user's action, since it may be the echo of your own call. The channel stays connected
-until the session ends, not when the subscription ends; see step 7.
+The wait is `updates_until_quiet` in the examples' shared library, which
+[App Volumes](/docs/developer-guide/tutorials/rust/app-volumes) uses too:
+
+```rust
+{{#include ../src/lib.rs:updates_until_quiet}}
+```
+
+The example prints an update only when it differs from the last one it printed: the Hub repeats
+updates, and a repeat tells you nothing new. A repeat need not be equal to the bit. Its pose and
+size can differ from the earlier report below any precision you print or see, so `==`, which
+compares the floats exactly, takes most repeats for changes. Compare at the precision your app
+cares about. The example allows a millimeter for pose and size, and compares the state and the
+address exactly:
+
+```rust
+{{#include ../src/bin/gui_panel_operations.rs:same_update}}
+```
+
+The tolerances are in the shared library too:
+
+```rust
+{{#include ../src/lib.rs:same_pose}}
+```
+
+A real application does not wait for a quiet period. It reads the channel from its own loop (a UI
+frame, a render loop) with `try_recv` or `try_iter`, and never blocks a callback waiting for it.
+Treat an update as news that the panel changed, not as an instruction. Expect your own changes to
+come back, repeated and sometimes older than what you set: skip an update that matches the last
+one you handled at the precision you care about, and do not take an update for a user's action,
+since it may be the echo of your own call. The channel stays connected until the session ends, not
+when the subscription ends; see step 7.
 
 ### 6. List the panels
 
@@ -264,7 +309,8 @@ What it does not guarantee:
 | `QAR_STATUS_GUI_PANEL_INVALID_ID` from a setter | The panel was closed, possibly by another peer | `get_or_create` again |
 | `get_or_create` fails for a name with accents or other non-ASCII text | Common names must be ASCII | Keep the name ASCII; put the text in `display_name` |
 | The program hangs in `cancel()` or at the end of a scope | A callback is waiting for a lock the cancelling thread holds | Release the lock before ending the subscription |
-| No `Update:` lines | No update arrived within the half-second quiet period | The Hub reports your own changes back on its own schedule; in your app, read the channel continuously instead of for a fixed time |
+| `No update of the panel arrived within 10 s of the changes.`, exit code 1 | The Hub delivered no update of the panel within 10 s after the changes | Check that the Hub is still running and run again. In your app, read updates as they come instead of waiting for them a fixed time |
+| Many more updates received than printed | The Hub reports your own changes back, repeated | Expected; skip repeats as the example does |
 | A runtime cannot be loaded | Default lookup found nothing | Install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
 
 ## From C
