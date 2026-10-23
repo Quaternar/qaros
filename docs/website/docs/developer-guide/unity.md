@@ -26,8 +26,9 @@ needs nothing else installed.
 
 - Unity **2022.3** or newer. Tested with 2022.3 and 6000.4.
 - **Windows x64.** The native runtime is built for Windows x64 only.
-- **Direct3D 11.** In *Project Settings > Player > Other Settings*, turn off **Auto Graphics API
-  for Windows** and put Direct3D11 first in the list. Other graphics APIs are not supported yet.
+- **Direct3D 11 or Vulkan.** In *Project Settings > Player > Other Settings*, turn off **Auto
+  Graphics API for Windows** and put Direct3D11 or Vulkan first in the list. Direct3D 12 and
+  OpenGL are not supported. See [Graphics APIs](#graphics-apis) for how the two differ.
 - The built-in render pipeline or URP.
 - A running **QAROS Hub** (see [Installation](/docs/operator-guide/installation)). The app
   joins it, and streams to the target apps in its session.
@@ -190,7 +191,17 @@ hands become MRTK hands.
 A player build copies the native runtime next to the executable, under `lib/windows-x64`. Ship
 that folder with the player.
 
-:::info
-The package logs a warning if the project runs with a graphics API other than Direct3D 11. It
-does not stop, but streaming is only supported with Direct3D 11.
-:::
+## Graphics APIs
+
+The package streams under Direct3D 11 and under Vulkan, in the Editor and in player builds.
+
+- **Any other graphics API is refused.** Under Direct3D 12 or OpenGL the runtime does not start:
+  it throws a `NotSupportedException` that names the API, and nothing streams.
+- **Vulkan needs `QarUnityGraphics.dll`**, which the package ships in `lib/windows-x64`. It is the
+  one native plugin Unity loads itself, at startup, so that it can prepare Unity's Vulkan device
+  for sharing frames. Keep **Load on startup** set in its import settings. Without it a Vulkan
+  player cannot stream, and the runtime refuses to start with a `NotSupportedException` that says
+  why.
+- **Under Vulkan a frame reaches the stream one Unity frame later** than under Direct3D 11, and
+  somewhat fewer frames per second are handed over: about 20 where Direct3D 11 reaches 24 in the
+  same scene.
