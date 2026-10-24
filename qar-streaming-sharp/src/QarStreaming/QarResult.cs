@@ -75,6 +75,8 @@ namespace Quaternar.Qaros
         OnboardingRePairRequired = 1809,
         /// <summary>The hub refused to renew the certificate: the renewal did not prove it holds the key of the certificate it renews. This SDK makes the proof itself, so the stored identity is damaged: pair the device again. An SDK older than the hub cannot renew there; update the app or device, pairing again is not enough.</summary>
         OnboardingRenewalPossessionUnproven = 1810,
+        /// <summary>The hub refused <c>Session.RequestOnboardingInvite</c>: it mints a co-process invite only for a local app it enrolled on its own PC or a process its launcher started. A device, or an app that joined with a code or an invite, gets none. Final; nothing was minted.</summary>
+        OnboardingInviteRefused = 1812,
         /// <summary>
         /// The hub has no target app it can launch for the device family the connection string
         /// names. Nothing was invited; which devices can be invited is the hub's decision.

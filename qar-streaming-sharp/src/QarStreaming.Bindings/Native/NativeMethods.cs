@@ -126,9 +126,6 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_session_request_onboarding_invite_async(IntPtr session, ref RequestInviteInitNative init, SessionRequestInviteResultCallback resultCallback, ProgressCallback? updateCallback, IntPtr userState, IntPtr cancel);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern ResultNative qar_impl_session_request_onboarding_codes(IntPtr session, ref RequestOnboardingCodesInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel, [Out] IntPtr[] outInvites);
-
-        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_onboarding_invite_get_code(IntPtr invite, [Out] byte[]? outBuffer, UIntPtr bufferSize, out UIntPtr outLength);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

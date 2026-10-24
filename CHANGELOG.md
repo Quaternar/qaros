@@ -18,6 +18,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
+  several API instances, co-process, remote app through a member hub, code pairing on a PC without
+  a hub, launched by QAROS), what each stores, how long its credentials and bootstrap secrets live,
+  whether the peer id survives a restart, and the rules no app can bypass. One compiled C tutorial
+  per mode under *C Examples*: the new `api_instances_in_one_process.c`, `remote_app_onboarding.c`
+  and `launched_app_onboarding.c`, and the reworked `local_app_onboarding.c`,
+  `co_process_onboarding.c` and `onboarding_and_rejoin.c` (now *Code Pairing and Rejoin*: a camera
+  that reads the code from the console and passes the hub's address). *Onboarding and Sessions*
+  documents remote apps through a member hub. *Managing Devices* and *Security Deep Dive* no longer
+  say applications request one-time codes.
 - **Docs:** the minimum SDK for certificate renewal and the migration steps: a hub renews only a
   renewal that proves it holds the certificate's key, so apps and devices on an older SDK are
   updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
@@ -51,6 +61,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Onboarding and Sessions* explains app tags (several instances of one local app, each
+  keeping its peer id across restarts), several API instances in one process sharing one session,
+  and co-process invites with in-memory storage, with C and C# snippets; *What apps no longer do*
+  replaces the sibling-invite and one-time-code sections. The `onboarding_and_rejoin.c` example no
+  longer onboards a sibling, `local_app_onboarding.c` sets an app tag, and the new
+  `co_process_onboarding.c` example hands a co-process invite over stdin. *Managing Devices* says
+  further one-time codes are minted only for operators.
 - **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
   presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for

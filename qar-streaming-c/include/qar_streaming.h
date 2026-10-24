@@ -435,6 +435,11 @@ typedef enum QarStatusCode
 	 * SDK older than the hub never makes the proof and cannot renew there;
 	 * update the app or device, pairing again is not enough. */
 	QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN = 1810,
+	/** The hub refused qar_session_request_onboarding_invite: it mints a
+	 * co-process invite only for a local app it enrolled on its own PC (local
+	 * enrollment) or a process its launcher started. A device, or an app that
+	 * joined with a code or an invite, gets none. Final; nothing was minted. */
+	QAR_STATUS_ONBOARDING_INVITE_REFUSED = 1812,
 	/** The hub has no target app it can launch for the requested device (an
 	 * unknown connection-string scheme family, or a device kind that is never
 	 * invited, such as a camera). Nothing was invited; pick another target. */
@@ -1379,7 +1384,10 @@ typedef struct QarAppVolumeControllerRayStyle
  * Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
  * 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
  * 0x2002 (PEER_SPEC_INIT), 0x100B (RUNTIME_MEMBER_JOIN_REQUEST_INIT),
- * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT). The never-released
+ * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT), 0x2005 (the untagged
+ * SESSION_REQUEST_INVITE_INIT, refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED
+ * "app tag required"), 0x2008 (SESSION_REQUEST_ONBOARDING_CODES_INIT, removed
+ * with qar_session_request_onboarding_codes). The never-released
  * SESSION_SPONSOR_MEMBER_INIT shared 0x2009 by mistake; 0x2009 stays
  * PEER_DEVICE_IDENTITY.
  */
@@ -1398,9 +1406,14 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
 	QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT = 0x100D,
 	QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT = 0x100E,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT = 0x100F,
+	QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT = 0x1010,
+	QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT = 0x1011,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT = 0x1012,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
-	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
-	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
+	/// 0x2005 before the invite took a required app tag; the old value is
+	/// refused, so an old caller's struct is never read past its end.
+	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x200A,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
@@ -1562,6 +1575,39 @@ typedef struct QarRuntimeInit
 	/// `%LOCALAPPDATA%\Quaternar\QarOS`. UTF-8 (see @ref qar_text_encoding).
 	const char* storage_folder_path;
 } QarRuntimeInit;
+
+/**
+ * @brief Extension: keep this runtime's identities in memory only.
+ *
+ * Chain into QarRuntimeInit.header.next. For a process that must leave
+ * nothing on disk, typically a co-process joining with a co-process invite
+ * (see QarRequestInviteInit): the identity it onboards with lives in an
+ * in-memory secure store and is gone when the runtime is.
+ *
+ * - qar_runtime_onboard writes nothing under the storage root, and
+ *   out_onboarding_id is the zero id. A non-zero QarOnboardInit.onboarding_id
+ *   is refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Certificate renewal
+ *   works as usual.
+ * - The identity is forgotten when its session handle is destroyed.
+ * - qar_runtime_rejoin and qar_runtime_forget return
+ *   QAR_STATUS_ARGUMENT_NOT_SUPPORTED: there is no persisted slot. A restarted
+ *   process onboards again (a fresh co-process invite from its parent).
+ * - Only identities are kept off disk. Logs still go to
+ *   QarLibraryInit.log_folder_path and carry no key or invite secret. A crash
+ *   dump (its `crashes` subfolder, or QAR_CRASH_DUMP_DIR) holds process memory
+ *   and may hold the in-memory key, which is good until its certificate
+ *   expires (30 minutes for a co-process).
+ * - QarOnboardLocalAppExt is stateless already and is unaffected.
+ * - A runtime older than this extension skips it like any unknown chained
+ *   struct and stores the identity on disk. Before relying on it, check
+ *   QarRuntimeInfo::version (qar_runtime_info) against the version whose
+ *   changelog introduces it. The same holds for QarOnboardLocalAppTagExt.
+ */
+typedef struct QarRuntimeEphemeralStorageExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT */
+} QarRuntimeEphemeralStorageExt;
 
 // ============================================================================
 // ONBOARDING TYPES
@@ -1856,6 +1902,45 @@ typedef struct QarOnboardLocalAppExt
 	uint32_t approval_timeout_ms;
 } QarOnboardLocalAppExt;
 
+/** @brief Longest app tag in bytes (QarOnboardLocalAppTagExt::app_tag,
+ * QarRequestInviteInit::app_tag). */
+#define QAR_MAX_APP_TAG_LENGTH 256
+
+/**
+ * @brief Extension: the app tag of a local source app, telling several
+ * instances of one approved app apart.
+ *
+ * Chain into QarOnboardInit.header.next next to QarOnboardLocalAppExt; it is
+ * refused with any other mode (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ *
+ * The hub remembers a peer id per approval and tag: the next start of the app
+ * with the same tag gets the same peer id while no other live process holds
+ * it, and a one-off id otherwise. Absent, the app has the default tag, which
+ * is remembered the same way. The hub keeps at most 64 tags per approval,
+ * dropping the least recently used, forgets a tag unused for 30 days, and
+ * forgets all of them when the approval is revoked or narrowed.
+ *
+ * An app tag is an identity key, treated like the common name of an app
+ * volume or GUI panel:
+ * - non-empty printable ASCII (0x20-0x7E, no control characters), no space
+ *   at either end, at most QAR_MAX_APP_TAG_LENGTH bytes; anything else is
+ * refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Put non-ASCII text in
+ *   QarPeerPresentation::display_name.
+ * - never starting with `member/`, which the hub keeps for the apps of its
+ *   member hubs (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ * - compared exactly (case-sensitive) and kept constant across versions of
+ *   the app.
+ * - a DNS-style name scoped by the app is recommended, e.g.
+ *   `left.terraexplorer.skyline`.
+ */
+typedef struct QarOnboardLocalAppTagExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT */
+	/// Required; the app tag (rules above). Copied before the call returns.
+	const char* app_tag;
+} QarOnboardLocalAppTagExt;
+
 /**
  * @brief What the loaded qar-streaming-c reports about itself
  * (qar_runtime_info).
@@ -1871,38 +1956,38 @@ typedef struct QarRuntimeInfo
 } QarRuntimeInfo;
 
 /**
- * @brief Mint an invite to hand to a sibling instance (session-scoped).
+ * @brief Mint a co-process invite: a one-time invite for a process this app
+ * starts on the same PC (a companion in another language, a helper process).
  *
- * Deliberately empty: the invite is always requested from the hub this
- * session onboarded through, and nothing else is configurable today. The
- * header keeps it an ABI-safe growth point (new fields or header.next).
+ * The hub binds the invite to the peer id it remembers for this session's
+ * approval and app_tag (see QarOnboardLocalAppTagExt), so the co-process joins
+ * as the same peer on every start while no other live process holds that id.
+ *
+ * - Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
+ *   process the QAROS launcher started, may request one.
+ * - Single use, valid for 60 s (set by the hub), redeemable only from the
+ *   hub's PC.
+ * - The co-process gets the short local certificate profile under this app's
+ *   approval; its certificate renews only while the requesting session is
+ *   still in the session, and revoking the approval revokes both.
+ * - The co-process should chain QarRuntimeEphemeralStorageExt so it writes
+ *   nothing to disk.
+ *
+ * An invite for another PC, or for a new device, is not available to apps:
+ * pairing codes and unbound invites are minted by the hub's operators.
+ *
+ * The structure type changed with app_tag (0x2005 before): a struct with the
+ * old value is refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED, "app tag
+ * required".
  */
 typedef struct QarRequestInviteInit
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT */
+	/// Required; the co-process's app tag. Same rules as
+	/// QarOnboardLocalAppTagExt::app_tag. Copied before the call returns.
+	const char* app_tag;
 } QarRequestInviteInit;
-
-/**
- * @brief Ask the hub for a new set of one-time onboarding codes.
- *
- * Every request mints codes of its own: codes other callers hold and the
- * code on the hub's onboarding screen stay valid, and none of the new ones is
- * announced or displayed. Each code works once and lapses after its
- * lifetime.
- */
-typedef struct QarRequestOnboardingCodesInit
-{
-	QarStructureHeader header; /**<
-		QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT */
-	/// How many codes, 1 to 64. Also the length of the caller's out array.
-	uint32_t count;
-	/// Seconds each code stays valid; 0 -> 120. At most 600.
-	uint32_t lifetime_seconds;
-	/// Zero -> any device may use the codes. Otherwise a device pairing with
-	/// one of them can only join under this peer id (QarOnboardPeerIdExt).
-	QarPeerId planned_peer_id;
-} QarRequestOnboardingCodesInit;
 
 /**
  * @brief Ask this machine's hub to start a target app for one AR device.
@@ -2039,6 +2124,62 @@ typedef struct QarMemberHubInvitationInit
 	/// primary hub's visualizer next to the invitation.
 	const char* label;
 } QarMemberHubInvitationInit;
+
+/**
+ * @brief Extension: the invitation also grants one remote app on the joining
+ * PC, chained into QarMemberHubInvitationInit.header.next.
+ *
+ * The grant is bound to the calling app's approval and `app_tag`. On a member
+ * hub of this primary, the first executable that onboards as a local app with
+ * the invitation chained (QarOnboardRemoteAppGrantExt) is approved there
+ * without a prompt, recorded by its publisher or image hash. Later starts of
+ * that executable onboard with no invitation and no prompt, and the primary
+ * gives them the same peer id while no other live process holds it (the peer
+ * is remembered under the grant's tag). A different executable is refused the
+ * grant once it is redeemed, also with a later invitation of the same app and
+ * tag.
+ *
+ * - One grant admits one app on one member PC, however many hubs the
+ *   invitation's max_uses lets join; issue one tag per remote app.
+ * - With a grant the calling app's own approval is not extended to the member
+ *   hub (it is without one).
+ * - Revoking the calling app's approval, or the granted one, on the primary
+ *   revokes the granted app and forgets its peer id.
+ * - `app_tag` follows the app tag rules of QarOnboardLocalAppTagExt;
+ *   QAR_STATUS_ARGUMENT_NOT_SUPPORTED otherwise.
+ */
+typedef struct QarMemberHubInvitationAppGrantExt
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT */
+	/// Required; the grant's app tag. Copied before the call returns.
+	const char* app_tag;
+} QarMemberHubInvitationAppGrantExt;
+
+/**
+ * @brief Extension: redeem a remote-app grant while onboarding as a local app
+ * on another PC, chained into QarOnboardInit.header.next next to
+ * QarOnboardLocalAppExt (with any other mode:
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ *
+ * The hub on this PC must already be a member of the invitation's primary
+ * (qar_runtime_join_hub_as_member). When no approval admits this executable
+ * there yet, the primary records it as the app the invitation's grant admits,
+ * without a prompt; once redeemed by another executable the onboarding fails
+ * with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
+ * it, the invitation is not used. The app tag of the grant applies; a
+ * QarOnboardLocalAppTagExt is not needed.
+ */
+typedef struct QarOnboardRemoteAppGrantExt
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT */
+	/// Required; the invitation the primary's app created with
+	/// QarMemberHubInvitationAppGrantExt, as
+	/// qar_member_hub_invitation_deserialize returned it. Borrowed for the
+	/// duration of the call.
+	const QarMemberHubInvitation* invitation;
+} QarOnboardRemoteAppGrantExt;
 
 /**
  * @brief Join the QAROS hub on this PC to a primary hub as its member
@@ -2785,6 +2926,10 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
  * empty, it defaults to the folder the loaded qar-streaming-c came from: the
  * installed QAROS `bin/` for every distributed application.
  *
+ * Chain QarRuntimeEphemeralStorageExt to keep every identity in memory only:
+ * nothing is written under storage_folder_path, onboarding returns the zero
+ * id, and qar_runtime_rejoin / qar_runtime_forget are refused.
+ *
  * @param init Runtime initialization parameters.
  * @param out_runtime Out pointer receiving the created runtime handle.
  * @return QarResult Success or error code.
@@ -2841,12 +2986,12 @@ static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
 /** @brief Default init for QarOnboardLocalAppExt (hub default approval
  * timeout). */
 static inline QarOnboardLocalAppExt qar_onboard_local_app_ext_default(void);
-/** @brief Default init for QarRequestInviteInit. */
+/** @brief Default init for QarOnboardLocalAppTagExt (app_tag NULL; set it).
+ */
+static inline QarOnboardLocalAppTagExt
+qar_onboard_local_app_tag_ext_default(void);
+/** @brief Default init for QarRequestInviteInit (app_tag NULL; set it). */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
-/** @brief Default init for QarRequestOnboardingCodesInit (one code, hub
- * default lifetime, any device). */
-static inline QarRequestOnboardingCodesInit
-qar_request_onboarding_codes_init_default(void);
 /** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
@@ -2907,12 +3052,15 @@ static inline QarResult qar_runtime_rejoin_async(
  *
  * Chain one of:
  * - QarOnboardCodeExt: PAKE code shown on the hub onboarding screen
- * - QarOnboardInviteExt: full invite blob from a sibling instance
+ * - QarOnboardInviteExt: a co-process invite blob from the app that started
+ *   this process (on an ephemeral runtime), or a launch invite
  *
  * QarOnboardHostExt is optional and only applies when QarOnboardCodeExt is
  * chained.
  *
  * Optional, alongside the mode extension:
+ * - QarOnboardLocalAppTagExt (with QarOnboardLocalAppExt only): the app tag
+ *   the hub remembers this instance's peer id by.
  * - QarOnboardPeerIdExt: join under a caller-chosen peer id instead of a fresh
  *   one; the id is persisted with the slot and kept by every later rejoin.
  * - QarGraphicsDeviceId: create the session's GPU devices on this adapter.
@@ -2953,31 +3101,27 @@ static inline QarResult qar_runtime_onboard_async(
 );
 
 /**
- * @brief Onboard from a complete invite (init->invite) received from a
- * sibling instance.
+ * @brief Ask the hub this session onboarded through for a co-process invite:
+ * a one-time invite for a process this app starts on the same PC.
  *
- * The method (PAKE or password) is auto-detected from the invite. No
- * discovery, no GUI.
+ * See QarRequestInviteInit for who may ask, what the hub binds the invite to
+ * and how long it lasts. The hub peer is resolved internally from the
+ * session. Serialize the delivered invite with
+ * qar_onboarding_invite_serialize and send the bytes to the co-process over
+ * IPC / shared memory / a pipe; it onboards with QarOnboardInviteExt.
  *
- * @param out_onboarding_id Required; receives the generated (or re-enrolled)
- *   id. Persist it.
- * @retval QAR_STATUS_PAKE_ERROR the invite handshake was rejected or the
- *   invite expired — mint a fresh invite on the sibling and retry.
- */
-
-/**
- * @brief Ask the hub this session onboarded through for a fresh onboarding
- * invite to hand to another instance.
- *
- * The hub peer is resolved internally from the session — nothing to
- * configure. Serialize the delivered invite with
- * qar_onboarding_invite_serialize and send the bytes to the sibling over
- * IPC / shared memory / a pipe.
- *
+ * @param init Required; init->app_tag names the co-process.
  * @param out_invite Receives the minted invite handle; owned by the caller
  *   (release with qar_onboarding_invite_handle_destroy).
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the hub peer could not be
- *   resolved from this session (e.g. the hub is not connected right now).
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init has the structure type of
+ *   the old untagged struct ("app tag required"), app_tag is missing, empty,
+ *   not printable ASCII or longer than QAR_MAX_APP_TAG_LENGTH.
+ * @retval QAR_STATUS_ONBOARDING_INVITE_REFUSED the hub mints co-process
+ *   invites only for a local app it enrolled on its PC (QarOnboardLocalAppExt)
+ *   or a process its launcher started; this session is neither (a device, or
+ *   an app that joined with a code or an invite). Final.
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE the session names no hub to
+ *   ask yet (e.g. the hub is not connected right now); retry.
  */
 static inline QarResult qar_session_request_onboarding_invite(
 	QarSession* session,
@@ -2988,7 +3132,9 @@ static inline QarResult qar_session_request_onboarding_invite(
 	QarOnboardingInvite** out_invite
 );
 
-/** @brief Async variant of qar_session_request_onboarding_invite. */
+/** @brief Async variant of qar_session_request_onboarding_invite. The init is
+ * validated (and app_tag copied) before the call returns; a refused init
+ * returns the error and the callback does not fire. */
 static inline QarResult qar_session_request_onboarding_invite_async(
 	QarSession* session,
 	const QarRequestInviteInit* init,
@@ -2996,38 +3142,6 @@ static inline QarResult qar_session_request_onboarding_invite_async(
 	qar_progress_callback_t update_callback,
 	void* user_state,
 	QarCancelToken* cancel
-);
-
-/**
- * @brief Ask the hub this session onboarded through for a new set of
- * one-time onboarding codes, for several devices to onboard at once.
- *
- * Every call mints codes of its own. Codes other callers hold and the code
- * on the hub's onboarding screen stay valid, and none of the new codes is
- * announced or displayed. Each works once, for init->lifetime_seconds. Hand
- * a device either the invite itself (qar_onboarding_invite_serialize, then
- * QarOnboardInviteExt) or its code text (qar_onboarding_invite_get_code, then
- * QarOnboardCodeExt). Blocks until the hub answers.
- *
- * @param init Required; count, lifetime and optional planned peer id.
- * @param on_progress Optional progress callback.
- * @param progress_state Passed to on_progress.
- * @param cancel Optional cancel token.
- * @param out_invites Required; an array of init->count handles, filled on
- *   success. Each is owned by the caller (release with
- *   qar_onboarding_invite_handle_destroy). Untouched entries are NULL on
- *   failure.
- * @return Success, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED count is 0 or above 64, the
- *   lifetime is above 600 s, or the hub peer could not be resolved.
- */
-static inline QarResult qar_session_request_onboarding_codes(
-	QarSession* session,
-	const QarRequestOnboardingCodesInit* init,
-	qar_progress_callback_t on_progress,
-	void* progress_state,
-	QarCancelToken* cancel,
-	QarOnboardingInvite** out_invites
 );
 
 /**
@@ -3067,8 +3181,8 @@ static inline QarResult qar_onboarding_invite_serialized_size(
 );
 
 /**
- * @brief Serialize the invite to wire bytes so the blob can be handed to a
- * sibling instance.
+ * @brief Serialize the invite to wire bytes so the blob can be handed to the
+ * co-process over a private channel (stdin, never a command line).
  *
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small —
  *   *out_bytes_written is still set to the required size; resize and retry.
@@ -3154,6 +3268,14 @@ qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
  * rejoin and bring devices). */
 static inline QarMemberHubInvitationInit
 qar_member_hub_invitation_init_default(void);
+/** @brief Default init for QarMemberHubInvitationAppGrantExt (app_tag NULL;
+ * set it). */
+static inline QarMemberHubInvitationAppGrantExt
+qar_member_hub_invitation_app_grant_ext_default(void);
+/** @brief Default init for QarOnboardRemoteAppGrantExt (invitation NULL; set
+ * it). */
+static inline QarOnboardRemoteAppGrantExt
+qar_onboard_remote_app_grant_ext_default(void);
 /** @brief Default init for QarJoinHubAsMemberInit (set init.invitation; the
  * timeouts default to 60 s and 120 s). */
 static inline QarJoinHubAsMemberInit qar_join_hub_as_member_init_default(void);
@@ -5309,6 +5431,10 @@ qar_render_sender_color_encoding_ext_default(void);
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
 static inline QarRuntimeInit qar_runtime_init_default(void);
+/** @brief Default init for QarRuntimeEphemeralStorageExt; chain it on
+ * QarRuntimeInit::header.next. */
+static inline QarRuntimeEphemeralStorageExt
+qar_runtime_ephemeral_storage_ext_default(void);
 #if 0 // Obsolete pre-onboarding session API.
 /** @brief Default init for QarRuntimeJoinInit. */
 static inline QarRuntimeJoinInit qar_runtime_join_init_default(void);
@@ -6607,6 +6733,15 @@ qar_runtime_init_default(void)
 	return init;
 }
 
+static inline QarRuntimeEphemeralStorageExt
+qar_runtime_ephemeral_storage_ext_default(void)
+{
+	QarRuntimeEphemeralStorageExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT, NULL } // header
+	};
+	return ext;
+}
+
 static inline QarOnboardingId
 qar_onboarding_id_default(void)
 {
@@ -6712,23 +6847,23 @@ qar_onboard_local_app_ext_default(void)
 	return ext;
 }
 
+static inline QarOnboardLocalAppTagExt
+qar_onboard_local_app_tag_ext_default(void)
+{
+	QarOnboardLocalAppTagExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT,
+		  NULL }, // header
+		NULL	  // app_tag (required, caller must set)
+	};
+	return ext;
+}
+
 static inline QarRequestInviteInit
 qar_request_invite_init_default(void)
 {
 	QarRequestInviteInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL } // header
-	};
-	return init;
-}
-
-static inline QarRequestOnboardingCodesInit
-qar_request_onboarding_codes_init_default(void)
-{
-	QarRequestOnboardingCodesInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT, NULL },
-		1,					  // count
-		0,					  // lifetime_seconds -> hub default
-		qar_peer_id_default() // planned_peer_id -> any device
+		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL }, // header
+		NULL // app_tag (required, caller must set)
 	};
 	return init;
 }
@@ -6755,6 +6890,28 @@ qar_member_hub_invitation_init_default(void)
 		NULL	  // label
 	};
 	return init;
+}
+
+static inline QarMemberHubInvitationAppGrantExt
+qar_member_hub_invitation_app_grant_ext_default(void)
+{
+	QarMemberHubInvitationAppGrantExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT,
+		  NULL }, // header
+		NULL	  // app_tag (required, caller must set)
+	};
+	return ext;
+}
+
+static inline QarOnboardRemoteAppGrantExt
+qar_onboard_remote_app_grant_ext_default(void)
+{
+	QarOnboardRemoteAppGrantExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT,
+		  NULL }, // header
+		NULL	  // invitation (required, caller must set)
+	};
+	return ext;
 }
 
 static inline QarJoinHubAsMemberInit
@@ -7377,16 +7534,6 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  onboarding_invite_handle_destroy,                                        \
 	  (QarOnboardingInvite * invite),                                          \
 	  (invite))                                                                \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_request_onboarding_codes,                                        \
-	  (QarSession * session,                                                   \
-	   const QarRequestOnboardingCodesInit* init,                              \
-	   qar_progress_callback_t on_progress,                                    \
-	   void* progress_state,                                                   \
-	   QarCancelToken* cancel,                                                 \
-	   QarOnboardingInvite** out_invites),                                     \
-	  (session, init, on_progress, progress_state, cancel, out_invites))       \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  onboarding_invite_get_code,                                              \

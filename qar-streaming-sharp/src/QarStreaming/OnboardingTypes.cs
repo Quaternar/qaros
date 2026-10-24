@@ -177,8 +177,9 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Onboards from a full invite: one a sibling instance obtained with
-        /// <see cref="Session.RequestOnboardingInvite"/>, or the launch invite QAROS writes as the
+        /// Onboards from a full invite: a co-process invite the parent app obtained with
+        /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>
+        /// (pair it with <see cref="RuntimeOptions.EphemeralStorage"/>), or the launch invite QAROS writes as the
         /// first stdin line of an API app it starts where local enrollment is not available (not
         /// Windows; <see cref="OnboardingInvite.Deserialize"/>).
         /// No discovery, no code.
@@ -293,31 +294,48 @@ namespace Quaternar.Qaros
         public OnboardingInvite Invite { get; }
     }
 
+    /// <summary>
+    /// Arguments of <see cref="Session.RequestOnboardingInvite(RequestOnboardingInviteOptions, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>
+    /// (C <c>QarRequestInviteInit</c>): a co-process invite for one app tag.
+    /// </summary>
     public sealed class RequestOnboardingInviteOptions
     {
+        private string _appTag;
+
+        /// <summary>Creates the options for the co-process tagged <paramref name="appTag"/>.</summary>
+        /// <exception cref="ArgumentNullException"><paramref name="appTag"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="appTag"/> breaks the rules of <see cref="AppTag"/>.</exception>
+        public RequestOnboardingInviteOptions(string appTag)
+        {
+            _appTag = AppTagRules.Validate(appTag, nameof(appTag));
+        }
+
+        /// <summary>
+        /// Required: the app tag of the co-process the invite is for. The hub binds the invite to
+        /// the peer id it remembers for this session's approval and this tag, so the co-process
+        /// joins as the same peer on every start while no other live process holds that id.
+        /// </summary>
+        /// <remarks>
+        /// Same rules as <see cref="OnboardLocalApp.Tag"/>: non-empty printable ASCII, no space at
+        /// either end, at most 256 bytes, compared exactly; an identity key like an app volume's
+        /// common name, for example <c>companion.terraexplorer.skyline</c>.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">The value is null.</exception>
+        /// <exception cref="ArgumentException">The value breaks the rules above (checked as a courtesy; the runtime checks too).</exception>
+        public string AppTag
+        {
+            get { return _appTag; }
+            set { _appTag = AppTagRules.Validate(value, nameof(value)); }
+        }
+
         internal Structure? Extension { get; private set; }
 
+        /// <summary>Chains an extension structure onto the request.</summary>
         public RequestOnboardingInviteOptions WithExtension(Structure extension)
         {
             Extension = StructureChainBuilder.Append(Extension, extension);
             return this;
         }
-    }
-
-    /// <summary>
-    /// A request for a new set of one-time onboarding codes. Every request gets codes of its own;
-    /// codes other callers hold and the hub's onboarding screen code stay valid.
-    /// </summary>
-    public sealed class RequestOnboardingCodesOptions
-    {
-        /// <summary>How many codes, 1 to 64.</summary>
-        public uint Count { get; set; } = 1;
-
-        /// <summary>How long each code stays valid; zero takes the hub default (120 s). At most 600 s.</summary>
-        public TimeSpan Lifetime { get; set; } = TimeSpan.Zero;
-
-        /// <summary>When set, a device pairing with one of these codes can only join under this peer id.</summary>
-        public PeerId? PlannedPeerId { get; set; }
     }
 
     public sealed class ForgetOptions

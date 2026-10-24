@@ -66,8 +66,12 @@ namespace Quaternar.Qaros.Tests
             { typeof(OnboardInviteExtNative), 24 },
             { typeof(OnboardPeerIdExtNative), 32 },
             { typeof(OnboardLocalAppExtNative), 24 },
+            { typeof(OnboardLocalAppTagExtNative), 24 },
+            { typeof(RuntimeEphemeralStorageExtNative), 16 },
+            { typeof(OnboardRemoteAppGrantExtNative), 24 },
+            { typeof(MemberHubInvitationAppGrantExtNative), 24 },
             { typeof(RuntimeInfoNative), 24 },
-            { typeof(RequestInviteInitNative), 16 },
+            { typeof(RequestInviteInitNative), 24 },
             { typeof(SessionInviteTargetAppInitNative), 24 },
             { typeof(ForgetInitNative), 32 },
             { typeof(LuidNative), 8 },
@@ -162,6 +166,10 @@ namespace Quaternar.Qaros.Tests
             { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceName), 40 },
             { typeof(OnboardPeerIdExtNative), nameof(OnboardPeerIdExtNative.PeerId), 16 },
             { typeof(OnboardLocalAppExtNative), nameof(OnboardLocalAppExtNative.ApprovalTimeoutMs), 16 },
+            { typeof(OnboardLocalAppTagExtNative), nameof(OnboardLocalAppTagExtNative.AppTag), 16 },
+            { typeof(OnboardRemoteAppGrantExtNative), nameof(OnboardRemoteAppGrantExtNative.Invitation), 16 },
+            { typeof(MemberHubInvitationAppGrantExtNative), nameof(MemberHubInvitationAppGrantExtNative.AppTag), 16 },
+            { typeof(RequestInviteInitNative), nameof(RequestInviteInitNative.AppTag), 16 },
             { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.Flavor), 8 },
             { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.CApi), 16 },
             { typeof(SessionInviteTargetAppInitNative), nameof(SessionInviteTargetAppInitNative.ConnectionString), 16 },
@@ -258,6 +266,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
             Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
             Assert.Equal(1810, (int)StatusCode.OnboardingRenewalPossessionUnproven);
+            Assert.Equal(1812, (int)StatusCode.OnboardingInviteRefused);
             Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
             Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
             Assert.Equal(3300, (int)StatusCode.HubLifecycleOperationRunning);
@@ -286,7 +295,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(57, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(58, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -296,8 +305,16 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x100A, (int)StructureType.RuntimeOnboardLocalAppExt);
             Assert.Equal(0x100D, (int)StructureType.RuntimeCreateMemberHubInvitationInit);
             Assert.Equal(0x100E, (int)StructureType.RuntimeJoinHubAsMemberInit);
+            Assert.Equal(0x100F, (int)StructureType.RuntimeOnboardLocalAppTagExt);
+            Assert.Equal(0x1010, (int)StructureType.RuntimeEphemeralStorageExt);
+            Assert.Equal(0x1011, (int)StructureType.RuntimeMemberHubInvitationAppGrantExt);
+            Assert.Equal(0x1012, (int)StructureType.RuntimeOnboardRemoteAppGrantExt);
             Assert.False(Enum.IsDefined(typeof(StructureType), 0x100B));
             Assert.False(Enum.IsDefined(typeof(StructureType), 0x100C));
+            // The untagged request-invite init and the removed onboarding-codes init are retired.
+            Assert.Equal(0x200A, (int)StructureType.SessionRequestInviteInit);
+            Assert.False(Enum.IsDefined(typeof(StructureType), 0x2005));
+            Assert.False(Enum.IsDefined(typeof(StructureType), 0x2008));
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
             Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);

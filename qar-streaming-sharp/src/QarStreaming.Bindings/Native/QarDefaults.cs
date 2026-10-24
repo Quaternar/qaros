@@ -159,22 +159,12 @@ namespace Quaternar.Qaros.Interop
             };
         }
 
-        internal static RequestInviteInitNative RequestInvite(RequestOnboardingInviteOptions options, IntPtr next)
+        internal static RequestInviteInitNative RequestInvite(RequestOnboardingInviteOptions options, NativeMemoryScope scope, IntPtr next)
         {
             return new RequestInviteInitNative
             {
-                Header = NativeDefaults.Header(StructureType.SessionRequestInviteInit, next)
-            };
-        }
-
-        internal static RequestOnboardingCodesInitNative RequestOnboardingCodes(RequestOnboardingCodesOptions options, IntPtr next)
-        {
-            return new RequestOnboardingCodesInitNative
-            {
-                Header = NativeDefaults.Header(StructureType.SessionRequestOnboardingCodesInit, next),
-                Count = options.Count,
-                LifetimeSeconds = (uint)Math.Max(0, Math.Ceiling(options.Lifetime.TotalSeconds)),
-                PlannedPeerId = options.PlannedPeerId.HasValue ? options.PlannedPeerId.Value.ToNative() : PeerIdNative.CreateDefault()
+                Header = NativeDefaults.Header(StructureType.SessionRequestInviteInit, next),
+                AppTag = scope.AllocUtf8(options.AppTag)
             };
         }
 

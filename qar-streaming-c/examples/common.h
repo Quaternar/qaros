@@ -36,6 +36,52 @@ log_result(const char* label, QarResult r)
 	}
 }
 
+//! [example_own_peer_id]
+/** \brief Read the peer id this session joined under. The hub picks it (for a
+ *  local app: the id it remembers for the app's approval and tag). Returns
+ *  false and logs the reason when it cannot be read. */
+static bool
+example_get_own_peer_id(QarSession* session, QarPeerId* out_peer_id)
+{
+	QarPeerSpec* spec = NULL;
+	QarResult got_spec = qar_session_get_my_spec(session, &spec);
+	if(qar_result_is_error(got_spec) || spec == NULL)
+	{
+		log_result("qar_session_get_my_spec", got_spec);
+		return false;
+	}
+	memset(out_peer_id, 0, sizeof(*out_peer_id));
+	QarResult got_id = qar_peer_spec_get_id(spec, out_peer_id);
+	qar_peer_spec_handle_destroy(spec);
+	if(qar_result_is_error(got_id))
+	{
+		log_result("qar_peer_spec_get_id", got_id);
+		return false;
+	}
+	return true;
+}
+
+/** \brief Print "<who> joined as peer <uuid>". A peer id is not a secret. */
+static bool
+example_print_own_peer_id(const char* who, QarSession* session)
+{
+	QarPeerId peer_id;
+	char text[64] = { 0 };
+	if(!example_get_own_peer_id(session, &peer_id))
+	{
+		return false;
+	}
+	QarResult formatted = qar_uuid_to_string(peer_id.data, text, sizeof(text));
+	if(qar_result_is_error(formatted))
+	{
+		log_result("qar_uuid_to_string", formatted);
+		return false;
+	}
+	printf("%s joined as peer %s\n", who, text);
+	return true;
+}
+//! [example_own_peer_id]
+
 //! [example_onboarding_persistence]
 /** \brief Load a persisted onboarding id (UUID text) from a small state file.
  *  Returns false when the file does not exist yet (first run). */

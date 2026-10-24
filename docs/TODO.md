@@ -123,7 +123,7 @@ guarantees in the meantime):
   remote device (HoloLens/Android) receives its provisioned key - page only covers
   Hub-launched processes; (d) resolved: the gateway clamps `certLifetimeHours` to the profile maximum (24 h) and the
   in-process CA bounds it again; step-ca is gone (#253).
-- T10 blacklist drift: resolved by ADR-0254 (hub publishes its revocation list; peers that read
+- T10 blacklist drift: resolved (hub publishes its revocation list; peers that read
   it refuse the device, others accept it until expiry); `managing-devices` and
   `security-deep-dive` rewritten to match.
 - There is no production online renewal (gateway renewal binding unwired), so

@@ -36,7 +36,7 @@ namespace Quaternar.Qaros
         {
             options = options ?? new RuntimeOptions();
             using (var scope = new NativeMemoryScope())
-            using (var chain = NativeStructureChain.From(options.Extension))
+            using (var chain = NativeStructureChain.From(options.EphemeralStorage ? new RuntimeEphemeralStorage() : null, options.Extension))
             {
                 var native = new RuntimeInitNative
                 {
@@ -64,7 +64,8 @@ namespace Quaternar.Qaros
         /// Expected failures: <see cref="StatusCode.OnboardingSessionNotFound"/> means this slot has
         /// nothing persisted here, fall back to <see cref="Onboard"/>.
         /// <see cref="StatusCode.ArgumentNotSupported"/> means the onboarding id is
-        /// <see cref="OnboardingId.Default"/>.
+        /// <see cref="OnboardingId.Default"/>, or the runtime was created with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/>, which persists no slot.
         /// </para>
         /// <para>
         /// <paramref name="progress"/> is reported from a library thread while this call blocks.
@@ -160,8 +161,15 @@ namespace Quaternar.Qaros
         /// invite. <see cref="StatusCode.OnboardingHubUnreachable"/> means no hub answered: check
         /// that it runs and pass its host and port with <see cref="OnboardOptions.WithHost"/>.
         /// <see cref="StatusCode.ArgumentNotSupported"/> means a zero
-        /// <see cref="OnboardOptions.WithPeerId"/> id, a host port of 0, or a GPU the session
-        /// cannot create its devices on.
+        /// <see cref="OnboardOptions.WithPeerId"/> id, a host port of 0, an
+        /// <see cref="OnboardLocalApp.Tag"/> the runtime refuses, an invalid
+        /// <see cref="OnboardLocalApp.RemoteAppGrant"/>, or a GPU the session cannot create its
+        /// devices on. <see cref="StatusCode.OnboardingApprovalDenied"/> with a remote-app grant
+        /// means another executable already redeemed it.
+        /// </para>
+        /// <para>
+        /// With <see cref="RuntimeOptions.EphemeralStorage"/> nothing is persisted and the returned
+        /// id is <see cref="OnboardingId.Default"/>; so it is for <see cref="OnboardOptions.UseLocalApp"/>.
         /// </para>
         /// <para>
         /// <paramref name="progress"/> is reported from a library thread while this call blocks.
@@ -259,7 +267,9 @@ namespace Quaternar.Qaros
         /// <remarks>
         /// Fails with <see cref="StatusCode.OnboardingSessionStillActive"/> while a session of the
         /// slot is alive: dispose it first. A slot with nothing persisted fails with
-        /// <see cref="StatusCode.OnboardingSessionNotFound"/>.
+        /// <see cref="StatusCode.OnboardingSessionNotFound"/>. A runtime created with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/> has no slots and fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>.
         /// </remarks>
         public Result<Unit> Forget(ForgetOptions options)
         {
@@ -287,7 +297,8 @@ namespace Quaternar.Qaros
         /// <see cref="StatusCode.OnboardingApprovalDenied"/>,
         /// <see cref="StatusCode.MemberSponsorNotAllowed"/>,
         /// <see cref="StatusCode.MemberSponsorQuotaExceeded"/>,
-        /// <see cref="StatusCode.ArgumentNotSupported"/> (an option out of range). The caller owns
+        /// <see cref="StatusCode.ArgumentNotSupported"/> (an option out of range, or a
+        /// <see cref="MemberHubInvitationOptions.AppTag"/> the runtime refuses). The caller owns
         /// and disposes the invitation. Windows only.
         /// </remarks>
         public Result<MemberHubInvitation> CreateMemberHubInvitation(MemberHubInvitationOptions options, CancellationToken cancellationToken = default(CancellationToken))

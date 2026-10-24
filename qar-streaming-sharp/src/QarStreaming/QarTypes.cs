@@ -381,12 +381,17 @@ namespace Quaternar.Qaros
         // 0x100B and 0x100C (the retired member join request and complete inits) are never reused.
         RuntimeCreateMemberHubInvitationInit = 0x100D,
         RuntimeJoinHubAsMemberInit = 0x100E,
+        RuntimeOnboardLocalAppTagExt = 0x100F,
+        RuntimeEphemeralStorageExt = 0x1010,
+        RuntimeMemberHubInvitationAppGrantExt = 0x1011,
+        RuntimeOnboardRemoteAppGrantExt = 0x1012,
         SessionGraphicsDeviceId = 0x2004,
-        SessionRequestInviteInit = 0x2005,
+        // 0x2005 was the untagged request-invite init; the runtime refuses it ("app tag required").
+        SessionRequestInviteInit = 0x200A,
         PeerPresentation = 0x2006,
         PeerDeviceIdentity = 0x2009,
         SessionInviteTargetAppInit = 0x2007,
-        SessionRequestOnboardingCodesInit = 0x2008,
+        // 0x2008 (the removed request-onboarding-codes init) is never reused.
         RenderingStreamSenderInit = 0x3000,
         RenderingBeginFrame = 0x3001,
         RenderingEndFrame = 0x3002,
@@ -805,6 +810,8 @@ namespace Quaternar.Qaros
     /// </summary>
     public sealed class OnboardLocalApp : Structure
     {
+        private string? _tag;
+
         public OnboardLocalApp()
             : base(StructureType.RuntimeOnboardLocalAppExt)
         {
@@ -812,6 +819,100 @@ namespace Quaternar.Qaros
 
         /// <summary>Max wait for the user's first-time approval; zero takes the hub default (120 s).</summary>
         public TimeSpan ApprovalTimeout { get; set; } = TimeSpan.Zero;
+
+        /// <summary>
+        /// The app tag telling several instances of one approved app apart (C
+        /// <c>QarOnboardLocalAppTagExt</c>); null, the default, is the app's default tag.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The hub remembers a peer id per approval and tag: the next start with the same tag gets
+        /// the same peer id while no other live process holds it, and a one-off id otherwise. A
+        /// second onboard with the same tag in this process shares the first one's session (same
+        /// peer); different tags are different peers.
+        /// </para>
+        /// <para>
+        /// An identity key like an app volume's common name: non-empty printable ASCII, no space at
+        /// either end, at most 256 bytes, compared exactly, not starting with the reserved
+        /// <c>member/</c> prefix, kept constant across versions of the
+        /// app. Recommended: a DNS-style name scoped by the app, such as
+        /// <c>left.terraexplorer.skyline</c>. Put non-ASCII text in
+        /// <see cref="PeerPresentationOptions.DisplayName"/>.
+        /// </para>
+        /// <para>
+        /// A runtime older than the tag ignores it and joins with the default tag.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentException">The value breaks the rules above (checked as a courtesy; the runtime checks too).</exception>
+        public string? Tag
+        {
+            get { return _tag; }
+            set { _tag = value == null ? null : AppTagRules.Validate(value, nameof(value)); }
+        }
+
+        /// <summary>
+        /// Optional remote-app grant to redeem while onboarding (C
+        /// <c>QarOnboardRemoteAppGrantExt</c>): a <see cref="MemberHubInvitation"/> the primary's
+        /// app created with <see cref="MemberHubInvitationOptions.AppTag"/> set, as
+        /// <see cref="MemberHubInvitation.Deserialize"/> returned it. Null, the default, redeems
+        /// none.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The hub on this PC must already be a member of the invitation's primary
+        /// (<see cref="Runtime.JoinHubAsMember"/>). When no approval admits this executable there
+        /// yet, the primary approves it as the app the grant admits, without a prompt, and later
+        /// starts onboard with no grant and no prompt. The first executable that redeems the grant
+        /// wins: once another one has, the onboarding fails with
+        /// <see cref="StatusCode.OnboardingApprovalDenied"/>. When an approval already admits this
+        /// executable, the invitation is not used.
+        /// </para>
+        /// <para>
+        /// The grant's app tag applies; <see cref="Tag"/> is not needed. Only the local-app mode
+        /// takes a grant.
+        /// </para>
+        /// <para>
+        /// The invitation is a secret bearer credential: receive it only over a private channel and
+        /// never log it. It is borrowed, not owned: the caller keeps ownership and disposes it, and
+        /// the binding holds a reference on it for the duration of the onboard call, so disposing
+        /// it meanwhile takes effect once the call is done.
+        /// </para>
+        /// </remarks>
+        public MemberHubInvitation? RemoteAppGrant { get; set; }
+    }
+
+    /// <summary>
+    /// Client-side check of an app tag against the C API rules (<c>qar::ValidateAppTag</c>), so a
+    /// mistake fails at the line that made it. The runtime checks again and stays authoritative.
+    /// </summary>
+    internal static class AppTagRules
+    {
+        /// <summary>Returns <paramref name="tag"/> when it is valid; the message never echoes the tag.</summary>
+        internal static string Validate(string tag, string paramName)
+        {
+            if (tag == null)
+                throw new ArgumentNullException(paramName);
+            if (tag.Length == 0)
+                throw new ArgumentException("An app tag must not be empty.", paramName);
+            if (tag.Length > NativeConstants.MaxAppTagLength)
+                throw new ArgumentException("An app tag is at most " + NativeConstants.MaxAppTagLength + " bytes.", paramName);
+            foreach (var c in tag)
+            {
+                if (c < ' ' || c > '~')
+                    throw new ArgumentException("An app tag must be printable ASCII; put other text in the display name.", paramName);
+            }
+            if (tag[0] == ' ' || tag[tag.Length - 1] == ' ')
+                throw new ArgumentException("An app tag must not start or end with a space.", paramName);
+            if (tag.StartsWith(ReservedPrefix, StringComparison.Ordinal))
+                throw new ArgumentException("App tags starting with \"" + ReservedPrefix + "\" are reserved for the primary hub's member apps.", paramName);
+            return tag;
+        }
+
+        /// <summary>
+        /// The prefix the primary hub keeps for the tags it remembers its member hubs' apps under
+        /// (<c>qar::kReservedAppTagPrefix</c>); an app passing one would select a member PC's peer.
+        /// </summary>
+        internal const string ReservedPrefix = "member/";
     }
 
     /// <summary>
@@ -1100,12 +1201,48 @@ namespace Quaternar.Qaros
         /// application data folder, on Windows <c>%LOCALAPPDATA%\Quaternar\QarOS</c>.
         /// </summary>
         public string? StorageFolderPath { get; set; }
+
+        /// <summary>
+        /// Keep the identity this runtime onboards with in memory only (C
+        /// <c>QarRuntimeEphemeralStorageExt</c>), for a process that must leave nothing on disk:
+        /// typically a co-process joining with an invite from
+        /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>.
+        /// Defaults to false.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="Runtime.Onboard"/> writes nothing under the storage folder and returns
+        /// <see cref="OnboardingId.Default"/>; certificate renewal works as usual. The identity is
+        /// gone with the runtime, so a restarted process onboards again with a fresh invite.
+        /// <see cref="Runtime.Rejoin"/> and <see cref="Runtime.Forget"/> fail with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>: there is no persisted slot.
+        /// <see cref="OnboardOptions.UseLocalApp"/> is stateless already and unaffected.
+        /// </para>
+        /// <para>
+        /// A runtime older than this option ignores it and stores the identity on disk; check
+        /// <see cref="RuntimeInfo.Version"/> before relying on it.
+        /// </para>
+        /// </remarks>
+        public bool EphemeralStorage { get; set; }
+
         internal Structure? Extension { get; private set; }
 
         public RuntimeOptions WithExtension(Structure extension)
         {
             Extension = StructureChainBuilder.Append(Extension, extension);
             return this;
+        }
+    }
+
+    /// <summary>
+    /// The native <c>QarRuntimeEphemeralStorageExt</c> behind
+    /// <see cref="RuntimeOptions.EphemeralStorage"/>; never chained by hand.
+    /// </summary>
+    internal sealed class RuntimeEphemeralStorage : Structure
+    {
+        internal RuntimeEphemeralStorage()
+            : base(StructureType.RuntimeEphemeralStorageExt)
+        {
         }
     }
 

@@ -19,7 +19,7 @@ The Hub continuously mints short-lived pairing codes:
 
 Security comes from this handling - single-use, short TTL, one-failure-max - not from the length of the code. The code never crosses any transport; it is only ever read by a human and typed into a device.
 
-**Requested codes.** An onboarded application can also ask the Hub for one-time codes of its own, to onboard several devices at once (see [One-time codes](/docs/developer-guide/onboarding-and-sessions#onboarding-several-devices-at-once-one-time-codes)). Each is single-use like the shown code, lives 120 seconds by default and at most 600, and never replaces the code the Visualizer shows. They are never shown in the Visualizer: the application hands them to its devices.
+**Requested codes.** Further one-time codes, to onboard several devices at once, are minted only for the Hub's operators (its own Visualizer and peers configured as operators); applications cannot request codes. Each is single-use like the shown code, lives 120 seconds by default and at most 600, and never replaces the code the Visualizer shows.
 
 ## The two onboarding paths
 
@@ -59,4 +59,4 @@ For push onboarding you do not need the code. For pull onboarding, open the Conn
 
 Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Add device** > **Other devices** shows the large QR code for them.
 
-- **Several devices at once:** have an onboarded application request one-time codes (see [Requested codes](#how-pairing-codes-are-minted)) instead of racing the rotation.
+- **Several devices at once:** have the Hub's operator mint one-time codes (see [Requested codes](#how-pairing-codes-are-minted)) instead of racing the rotation.

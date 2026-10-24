@@ -17,9 +17,9 @@ language-neutral; only the name table at the end is paired C <-> C#.
   at startup and tear it down last. It owns no session state; it is the entry
   point that makes every other call valid.
 - **Runtime** - your process's QAROS context: its identity store, its connection
-  to a Hub, and the factory for sessions. One runtime per logical QAROS instance
-  (see [sibling onboarding](/docs/developer-guide/onboarding-and-sessions#sibling-onboarding-one-app-several-api-instances)
-  when you need more than one in the same process).
+  to a Hub, and the factory for sessions. One runtime per logical QAROS instance;
+  local-app instances in one process with the same app tag share one session (see
+  [several API instances in one process](/docs/developer-guide/onboarding-and-sessions#several-api-instances-in-one-process)).
 - **Session** - the developer/runtime representation of a Hub's Shared Space, always obtained
   through [onboarding](/docs/developer-guide/onboarding-and-sessions), never
   created directly. Everything you do in the room hangs off the session: peers,
@@ -77,7 +77,7 @@ functions.
 | Library init/logging | `qar_library_*` | `Library` (static) | [Getting Started](/docs/developer-guide/getting-started) |
 | Process context | `QarRuntime*` | `Runtime : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions) |
 | Room membership | `QarSession*` | `Session : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions) |
-| Onboarding invite | `QarOnboardingInvite*` | `OnboardingInvite : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions#sibling-onboarding-one-app-several-api-instances) |
+| Onboarding invite | `QarOnboardingInvite*` | `OnboardingInvite : IDisposable` | [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts) |
 | Participant snapshot | `QarPeerSpec*` | `PeerSpec` (DTO); ops via `session.Peers` | [Peers](/docs/developer-guide/peers) |
 | Shared 2-D panel | `QarGuiPanel*` | `GuiPanel` (DTO); ops via `session.GuiPanels` | [GUI Panels](/docs/developer-guide/gui-panels) |
 | Application's 3-D box | `QarAppVolume*` | `AppVolume` (DTO); ops via `session.AppVolumes` | [App Volumes](/docs/developer-guide/app-volumes) |

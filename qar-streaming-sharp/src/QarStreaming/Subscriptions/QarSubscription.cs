@@ -103,7 +103,7 @@ namespace Quaternar.Qaros.Interop
         /// <summary>
         /// Ends delivery. When this returns, a handler call running on another
         /// thread has finished and no further one starts: the native cancel
-        /// waits for it (ADR-0283), and only then are the registry entry and
+        /// waits for it, and only then are the registry entry and
         /// the callback delegate released. Called from inside this
         /// subscription's own handler it cannot wait for that call: it returns
         /// at once, the handler finishes and no further call starts. Do not
@@ -634,6 +634,8 @@ namespace Quaternar.Qaros.Interop
 
     internal sealed class RequestInviteAsyncState : AsyncStateBase<Result<OnboardingInvite>>
     {
+        private readonly NativeMemoryScope _scope = new NativeMemoryScope();
+
         private readonly IProgress<ActionProgress>? _progress;
 
         private NativeStructureChain? _chain;
@@ -652,7 +654,7 @@ namespace Quaternar.Qaros.Interop
         public RequestInviteInitNative CreateNative(RequestOnboardingInviteOptions options)
         {
             _chain = NativeStructureChain.From(options.Extension);
-            return NativeInit.RequestInvite(options, _chain.Head);
+            return NativeInit.RequestInvite(options, _scope, _chain.Head);
         }
 
         private static void OnResult(ResultNative status, IntPtr invite, IntPtr userState)
@@ -687,6 +689,7 @@ namespace Quaternar.Qaros.Interop
         protected override void Cleanup()
         {
             _chain?.Dispose();
+            _scope.Dispose();
             base.Cleanup();
         }
     }

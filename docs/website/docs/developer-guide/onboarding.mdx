@@ -1,0 +1,85 @@
+---
+sidebar_position: 4.5
+title: Choosing an Onboarding Mode
+description: Which onboarding mode an app uses - same PC, several instances, co-process, another PC, no hub, launched by QAROS - what each stores, how long its credentials live, whether the peer id survives a restart, and the rules no app can bypass.
+---
+
+# Choosing an Onboarding Mode
+
+Every session is obtained through onboarding. The mode depends on **where your app runs relative to the QAROS hub** and **who starts it**. Each mode has a compiled C tutorial; the API details are on [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions).
+
+## Which mode
+
+```text
+Did QAROS start your app (Source Applications)? ───────yes──> Launched by QAROS
+   │ no
+Did your local app start this process? ────────────────yes──> Co-process
+   │ no
+Does your app run on the PC of the session's hub? ─────yes──> Local app
+   │ no                                                       (a tag per instance; API instances
+   │                                                        in one process share one session)
+Did an app on the hub's PC send you a remote-app
+grant, and is QAROS installed on your PC? ─────────────yes──> Remote app
+   │ no
+Code pairing with a code from the hub's operator, then rejoin
+```
+
+| Your app | Mode | The user or operator does | Tutorial |
+|---|---|---|---|
+| runs on the QAROS PC | [local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code), with an app tag per instance | clicks **Allow** once | [Local App Onboarding](/docs/developer-guide/tutorials/c/local-app-onboarding) |
+| uses the API from several places in one process (C, C#, a plug-in) | [local app in each](/docs/developer-guide/onboarding-and-sessions#several-api-instances-in-one-process), same tag: one shared session | nothing more | [Several API Instances in One Process](/docs/developer-guide/tutorials/c/api-instances-in-one-process) |
+| is a process your local app starts (a companion, a helper) | [co-process invite](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts), in-memory storage | nothing | [Co-Process Onboarding](/docs/developer-guide/tutorials/c/co-process-onboarding) |
+| runs on another PC with QAROS installed, and an app on the primary's PC grants it | [remote-app grant](/docs/developer-guide/onboarding-and-sessions#remote-app-through-a-member-hub) through a member hub | the operator allows the granting app to bring in member hubs, once | [Remote App on Another PC](/docs/developer-guide/tutorials/c/remote-app-onboarding) |
+| runs on a PC or device without a hub (a camera PC, a capture box) | [code pairing](/docs/developer-guide/onboarding-and-sessions#onboarding-code-a-hub-on-another-pc), then rejoin | the operator hands out a code, once | [Code Pairing and Rejoin](/docs/developer-guide/tutorials/c/onboarding-and-rejoin) |
+| is started and stopped by QAROS (added in Source Applications) | [local app, under the planned peer id](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps) | adds the app once; **Allow** on its first start | [App Launched by QAROS](/docs/developer-guide/tutorials/c/launched-app-onboarding) |
+
+- A source app normally runs on the QAROS PC: start with the local app mode.
+- Target apps (the players on headsets) are QAROS's own apps. Your app brings one in with `qar_session_invite_target_app`; it does not onboard it.
+
+## What is stored, and how long credentials live
+
+| Mode | On disk for your app | Credential | Lifetime | Renewal |
+|---|---|---|---|---|
+| Local app, several instances, launched by QAROS | nothing; onboarding id is zero | key in process memory + certificate | 30 min | by the runtime while the session lives |
+| Co-process | nothing (`QarRuntimeEphemeralStorageExt`) | key in memory + certificate under your app's approval | 30 min | only while the app that minted the invite is in the session |
+| Remote app | nothing | key in memory + certificate, as a local app of its PC | 30 min | by the runtime while the session lives |
+| Code pairing | the onboarding id (a UUID, not secret) | key and certificate in the QAROS secure store, for this user | 24 h | at 75 % while running; a rejoin renews up to 7 days after expiry, later the device pairs again |
+
+The secrets that bootstrap a mode are short-lived and single-purpose:
+
+| Secret | Who makes it | Valid |
+|---|---|---|
+| Pairing code on the Visualizer's onboarding screen | the hub, for its operators | about 10 s, then the next one |
+| One-time code an operator mints | the hub, for its operators | once, 2 min by default, at most 10 min |
+| Co-process invite | the hub, on your local app's request | once, 60 s, from the hub's PC only |
+| Member-hub invitation with a remote-app grant | the primary hub, on an allowed app's request | 24 h and one hub by default (at most 7 days, 64 hubs); the grant admits one app |
+| Launch invite on stdin (no local enrollment) | QAROS, for an app it starts | once, 2 min, this start only |
+
+Never log these, never put them on a command line or in an environment variable, and hand them over a private channel (a pipe to a child process, your own encrypted channel between PCs).
+
+## Peer id across restarts
+
+| Mode | Same peer id after a restart | Who picks it |
+|---|---|---|
+| Local app | yes: remembered per approval and app tag | the hub |
+| Several API instances | yes, as the local app; one peer for all handles with the same tag | the hub |
+| Co-process | yes: remembered per your app's approval and the co-process's tag | the hub |
+| Remote app | yes: remembered on the primary under the grant's tag | the primary hub |
+| Code pairing | yes: stored with the identity, kept by every rejoin | the runtime, at the first pairing |
+| Launched by QAROS | yes: the id QAROS planned for the app | the hub |
+
+- A remembered id is reused only while no other live process holds it; otherwise the newcomer gets a one-off id that is not remembered. Give instances that run together different tags.
+- The hub keeps at most 64 tags per approval (least recently used dropped first) and forgets a tag unused for 30 days.
+- Revoking or narrowing an approval revokes its running instances and forgets all its remembered peer ids.
+
+## Rules no app can bypass
+
+- **Apps cannot mint pairing codes or unbound invites.** Codes and invites for a new device or another PC come from the hub's operators. `qar_session_request_onboarding_invite` mints only co-process invites.
+- **A local app is identified by Windows, not by what it says.** The hub checks the executable, its signature or file hash and the Windows user; the display name is only shown as the app's own claim. A moved, copied or re-signed app is refused until the operator revokes the old approval.
+- **The hub picks peer ids.** A local app cannot choose one (`QarOnboardPeerIdExt` is refused with it); an app tag only selects among the ids of its own approval.
+- **Co-process invites stay on the hub's PC and under the parent.** Only a local app of that hub, or an app QAROS started, may request one; it works once, within 60 s, only from the hub's PC, and the co-process's certificate stops renewing once the parent leaves.
+- **A remote-app grant admits exactly one executable.** The first one that redeems it is recorded; any other executable is refused, also with a later invitation of the same tag. Only an app the operator allowed to bring in member hubs, with quota left, can create one, and the joining PC must trust the primary.
+- **The runtime must be the installed QAROS.** A local app loads the installed runtime; the hub refuses a private copy of another version or flavor, and the runtime refuses a hub that is not the installed, signed QAROS.
+- **Renewal proves the key.** A certificate is renewed only by a request signed with its own key; a stolen certificate alone renews nothing.
+
+The security model behind these rules is described in [Security Model](/docs/operator-guide/security-model).

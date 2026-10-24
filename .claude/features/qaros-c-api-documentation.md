@@ -109,8 +109,9 @@ example programs so samples can never silently go stale.
   tokens + progress callback, count-then-fetch, ownership/threading rules;
   device kinds appear only in invite connection strings. DONE.
 - `onboarding-and-sessions.mdx` (3) — canonical rejoin→onboard flow (C tab
-  verified against header; C# tab TODO), sibling invites
-  (serialize/deserialize), inviting devices, leave vs forget table. Links to
+  verified against header; C# tab TODO), app tags, several API instances per
+  process, co-process invites (#268; sibling invites and app-minted codes
+  removed), inviting devices, leave vs forget table. Links to
   compiled tutorial. DONE.
 - `peers.md` (4) — presentation, enumeration, app_state/room_tag, subscribe. DONE.
 - `gui-panels.mdx` (5) — idempotent get_or_create by common_name, mutations,
@@ -146,7 +147,24 @@ Reworked (all now pass `clang -fsyntax-only -std=c11` against the new
   (rejoin → SESSION_NOT_FOUND → onboard_with_code → persist id) shared helper.
 - `session_create_and_join.c` → **renamed** `onboarding_and_rejoin.c`; new
   `\page qar_c_tutorial_onboarding` covering args, persistence, rejoin/onboard,
-  sibling-invite mint+serialize, leave/forget (`--forget` flag).
+  leave/forget (`--forget` flag). No sibling invite since #268: a code-paired
+  session mints none. `qar_c_tutorial_co_process_onboarding`
+  (`co_process_onboarding.c`): local app with a tag mints a co-process invite,
+  hands it over the child's stdin, child joins with `QarRuntimeEphemeralStorageExt`.
+  `local_app_onboarding.c` chains `QarOnboardLocalAppTagExt`.
+- One compiled tutorial per onboarding mode (#268), each with a `tutorials/c/*.mdx`
+  wrapper and an overview page `developer-guide/onboarding.mdx` (Choosing an
+  Onboarding Mode): `local_app_onboarding.c` (A1, exit codes used by the VM
+  install tests, optional `[app-tag]`), `api_instances_in_one_process.c` (A2),
+  `co_process_onboarding.c` (A3), `remote_app_onboarding.c` (A4, roles
+  issue/join/start, invitation only on a redirected stdout),
+  `onboarding_and_rejoin.c` (A5, "Code Pairing and Rejoin": camera device
+  identity, `--host`, code read from the console, re-pair on 1809/1810),
+  `launched_app_onboarding.c` (A6, QAROS API app; async onboard cancelled when
+  stdin closes; launch invite path off Windows). `common.h` has
+  `example_get_own_peer_id` / `example_print_own_peer_id`. Root Quaternar
+  CMake builds them as `qaros-example-<name>` (not installed).
+- No internal ADR references anywhere in qaros (`qaros/AGENTS.md`).
 - `app_volume_management.c`, `gui_panel_operations.c`,
   `cpu_rendering_visualizer.c` — ported to the helper; `add_*` →
   `get_or_create` with required `common_name`; `qar_session_destroy` →

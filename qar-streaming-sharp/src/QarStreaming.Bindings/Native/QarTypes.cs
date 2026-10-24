@@ -21,6 +21,8 @@ namespace Quaternar.Qaros.Interop
         internal const int MaxAppVolumeGestureMappingRules = 16;
         internal const int GpuUuidLength = 16;
         internal const uint AppVolumeGestureModeDefault = 0;
+        /// <summary>QAR_MAX_APP_TAG_LENGTH: the longest app tag in bytes.</summary>
+        internal const int MaxAppTagLength = 256;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -535,6 +537,35 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct OnboardLocalAppTagExtNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr AppTag;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RuntimeEphemeralStorageExtNative
+    {
+        public StructureHeaderNative Header;
+    }
+
+    /// <summary>C <c>QarOnboardRemoteAppGrantExt</c>; the invitation handle is borrowed for the call.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct OnboardRemoteAppGrantExtNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr Invitation;
+    }
+
+    /// <summary>C <c>QarMemberHubInvitationAppGrantExt</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MemberHubInvitationAppGrantExtNative
+    {
+        public StructureHeaderNative Header;
+        public IntPtr AppTag;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct RuntimeInfoNative
     {
         public IntPtr Version;
@@ -546,15 +577,7 @@ namespace Quaternar.Qaros.Interop
     internal struct RequestInviteInitNative
     {
         public StructureHeaderNative Header;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct RequestOnboardingCodesInitNative
-    {
-        public StructureHeaderNative Header;
-        public uint Count;
-        public uint LifetimeSeconds;
-        public PeerIdNative PlannedPeerId;
+        public IntPtr AppTag;
     }
 
     [StructLayout(LayoutKind.Sequential)]

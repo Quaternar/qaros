@@ -94,7 +94,7 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 | Code | Lifetime | Shown / announced |
 |---|---|---|
 | Onboarding screen code | ~10 s, rotates | Yes, the only one |
-| Codes an onboarded app requests (1-64 per request, optionally bound to a planned peer id) | 2 min default, 10 min max | No |
+| Codes minted for the Hub's operators (1-64 per request, optionally bound to a planned peer id); applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 
 - A request never invalidates codes others hold or the screen code.

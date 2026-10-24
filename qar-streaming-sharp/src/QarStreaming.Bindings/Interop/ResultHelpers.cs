@@ -81,6 +81,8 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly List<IntPtr> _allocations = new List<IntPtr>();
 
+        private readonly List<SafeHandle> _borrowed = new List<SafeHandle>();
+
         /// <summary>
         /// A NUL-terminated UTF-8 copy of a UTF-16 string, freed with the scope: every <c>char*</c>
         /// of the C API is UTF-8, whatever the ANSI code page. Null for null.
@@ -141,8 +143,26 @@ namespace Quaternar.Qaros.Interop
             return ptr;
         }
 
+        /// <summary>
+        /// The raw value of <paramref name="handle"/>, kept alive until the scope is disposed: the
+        /// reference taken here stops a finalizer or a concurrent <c>Dispose</c> from releasing the
+        /// native object while a native call still borrows it.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The handle is already closed.</exception>
+        public IntPtr Borrow(SafeHandle handle)
+        {
+            var added = false;
+            handle.DangerousAddRef(ref added);
+            if (added)
+                _borrowed.Add(handle);
+            return handle.DangerousGetHandle();
+        }
+
         public void Dispose()
         {
+            for (var i = _borrowed.Count - 1; i >= 0; i--)
+                _borrowed[i].DangerousRelease();
+            _borrowed.Clear();
             for (var i = _allocations.Count - 1; i >= 0; i--)
                 Marshal.FreeHGlobal(_allocations[i]);
             _allocations.Clear();
@@ -234,10 +254,20 @@ namespace Quaternar.Qaros.Interop
         public static NativeStructureChain From(params Structure?[] heads)
         {
             var chain = new NativeStructureChain();
-            IntPtr previous = IntPtr.Zero;
-            foreach (var head in heads)
-                previous = chain.Build(head, previous);
-            return chain;
+            try
+            {
+                IntPtr previous = IntPtr.Zero;
+                foreach (var head in heads)
+                    previous = chain.Build(head, previous);
+                return chain;
+            }
+            catch
+            {
+                // Frees what was copied and releases every borrowed handle; the caller never gets
+                // the chain to dispose.
+                chain.Dispose();
+                throw;
+            }
         }
 
         private IntPtr Build(Structure? head, IntPtr previous)
@@ -249,7 +279,7 @@ namespace Quaternar.Qaros.Interop
                     Head = currentPtr;
                 else
                     NativeExtensions.SetNextPointer(previous, currentPtr);
-                previous = currentPtr;
+                previous = NativeExtensions.Tail(currentPtr);
             }
             return previous;
         }
@@ -265,7 +295,10 @@ namespace Quaternar.Qaros.Interop
     {
         /// <summary>
         /// Allocates the exact C layout of one managed extension in
-        /// <paramref name="scope"/>, with header.next zero.
+        /// <paramref name="scope"/>. Most map to one native struct with header.next zero; an
+        /// <see cref="OnboardLocalApp"/> with a tag or a remote-app grant maps to two or three,
+        /// already chained, so the caller
+        /// links what follows after <see cref="Tail"/>.
         /// </summary>
         internal static IntPtr AllocateNativeCopy(Structure structure, NativeMemoryScope scope)
         {
@@ -352,7 +385,7 @@ namespace Quaternar.Qaros.Interop
                 case OnboardLocalApp onboardLocalApp:
                     return scope.AllocStruct(new OnboardLocalAppExtNative
                     {
-                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppExt),
+                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppExt, AllocateLocalAppTag(onboardLocalApp.Tag, AllocateRemoteAppGrant(onboardLocalApp.RemoteAppGrant, scope), scope)),
                         ApprovalTimeoutMs = (uint)Math.Min(Math.Max(onboardLocalApp.ApprovalTimeout.TotalMilliseconds, 0.0), uint.MaxValue)
                     });
                 case GraphicsDeviceId graphicsDeviceId:
@@ -366,9 +399,50 @@ namespace Quaternar.Qaros.Interop
                         DeviceFamily = scope.AllocUtf8(identity.DeviceFamily),
                         DeviceName = scope.AllocUtf8(identity.DeviceName)
                     });
+                case RuntimeEphemeralStorage _:
+                    return scope.AllocStruct(new RuntimeEphemeralStorageExtNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.RuntimeEphemeralStorageExt)
+                    });
                 default:
                     throw new NotSupportedException("Unsupported QAR extension structure type: " + structure.Type);
             }
+        }
+
+        // QarOnboardLocalAppTagExt, chained right after QarOnboardLocalAppExt and followed by
+        // `next`; none for the default tag, which then links `next` directly.
+        private static IntPtr AllocateLocalAppTag(string? tag, IntPtr next, NativeMemoryScope scope)
+        {
+            if (tag == null)
+                return next;
+            return scope.AllocStruct(new OnboardLocalAppTagExtNative
+            {
+                Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppTagExt, next),
+                AppTag = scope.AllocUtf8(tag)
+            });
+        }
+
+        // QarOnboardRemoteAppGrantExt, chained after the local-app (and tag) ext; none without a
+        // grant. The scope holds a reference on the invitation until the native call is done.
+        private static IntPtr AllocateRemoteAppGrant(MemberHubInvitation? invitation, NativeMemoryScope scope)
+        {
+            if (invitation == null)
+                return IntPtr.Zero;
+            return scope.AllocStruct(new OnboardRemoteAppGrantExtNative
+            {
+                Header = NativeDefaults.Header(StructureType.RuntimeOnboardRemoteAppGrantExt),
+                Invitation = invitation.BorrowHandle(scope)
+            });
+        }
+
+        /// <summary>The last struct of the native chain starting at <paramref name="structurePtr"/>.</summary>
+        internal static IntPtr Tail(IntPtr structurePtr)
+        {
+            var offset = Marshal.OffsetOf(typeof(StructureHeaderNative), nameof(StructureHeaderNative.Next)).ToInt32();
+            var tail = structurePtr;
+            for (var next = Marshal.ReadIntPtr(tail, offset); next != IntPtr.Zero; next = Marshal.ReadIntPtr(tail, offset))
+                tail = next;
+            return tail;
         }
 
         internal static void SetNextPointer(IntPtr structurePtr, IntPtr next)

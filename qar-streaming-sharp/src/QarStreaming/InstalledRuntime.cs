@@ -8,7 +8,7 @@ namespace Quaternar.Qaros
 {
     /// <summary>
     /// Finds and loads the QAROS runtime, <c>qar-streaming-c.dll</c>, the same way as the C
-    /// header's <c>qar_library_load(NULL)</c> and every other QAROS binding (ADR-0339). The first
+    /// header's <c>qar_library_load(NULL)</c> and every other QAROS binding. The first
     /// match wins:
     /// <list type="number">
     /// <item>(step 0) a <c>qar-streaming-c.dll</c> already loaded in the process: nothing is

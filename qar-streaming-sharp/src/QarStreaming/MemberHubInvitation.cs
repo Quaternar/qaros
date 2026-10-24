@@ -18,6 +18,7 @@ namespace Quaternar.Qaros
     public sealed class MemberHubInvitation : IDisposable
     {
         private readonly MemberHubInvitationSafeHandle _handle;
+        private volatile bool _disposed;
 
         internal MemberHubInvitation(MemberHubInvitationSafeHandle handle)
         {
@@ -25,6 +26,14 @@ namespace Quaternar.Qaros
         }
 
         internal IntPtr DangerousHandle { get { ThrowIfDisposed(); return _handle.DangerousGetHandle(); } }
+
+        /// <summary>The native handle, referenced by <paramref name="scope"/> until it is disposed.</summary>
+        /// <exception cref="ObjectDisposedException">The invitation is disposed.</exception>
+        internal IntPtr BorrowHandle(NativeMemoryScope scope)
+        {
+            ThrowIfDisposed();
+            return scope.Borrow(_handle);
+        }
 
         /// <summary>
         /// The invitation as bytes for your channel (UTF-8 JSON, at most 16 KiB); the other PC turns
@@ -67,12 +76,15 @@ namespace Quaternar.Qaros
 
         public void Dispose()
         {
+            // A native call borrowing the handle defers its release, so the handle may stay open
+            // after this; the flag makes the invitation unusable from here on all the same.
+            _disposed = true;
             _handle.Dispose();
         }
 
         private void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
+            if (_disposed || _handle.IsClosed || _handle.IsInvalid)
                 throw new ObjectDisposedException(nameof(MemberHubInvitation));
         }
     }
@@ -105,8 +117,47 @@ namespace Quaternar.Qaros
         /// <summary>What it permits. <see cref="MemberHubInvitationPermissions.None"/>: the defaults.</summary>
         public MemberHubInvitationPermissions Permissions { get; set; }
 
+        private string? _appTag;
+
         /// <summary>Optional UTF-8 label of at most 64 bytes, shown in the primary's visualizer.</summary>
         public string? Label { get; set; }
+
+        /// <summary>
+        /// Optional remote-app grant (C <c>QarMemberHubInvitationAppGrantExt</c>): set, the
+        /// invitation also admits one app on the joining PC, bound to this app's approval and this
+        /// tag. Null, the default, makes a plain member-hub invitation.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// On a member hub of this primary, the first executable that onboards as a local app with
+        /// the invitation as <see cref="OnboardLocalApp.RemoteAppGrant"/> is approved without a
+        /// prompt, recorded by its publisher or image hash, and every later start of that executable
+        /// onboards with no invitation and no prompt under the same peer id while no other live
+        /// process holds it. The first executable that redeems the grant wins: any other one is
+        /// refused it afterwards, also with a later invitation of the same app and tag.
+        /// </para>
+        /// <para>
+        /// One grant admits one app on one member PC however many hubs <see cref="MaxUses"/> lets
+        /// join: issue one tag per remote app. With a grant this app's own approval is not extended
+        /// to the member hub. Revoking this app's approval, or the granted one, on the primary
+        /// revokes the granted app and forgets its peer id.
+        /// </para>
+        /// <para>
+        /// The invitation then also is a bearer credential for that app slot: whoever redeems it
+        /// first owns it. Hand it over privately, to the app it is meant for only, and never log it.
+        /// </para>
+        /// <para>
+        /// Same rules as <see cref="OnboardLocalApp.Tag"/>: non-empty printable ASCII, no space at
+        /// either end, at most 256 bytes, compared exactly, and not starting with the reserved
+        /// <c>member/</c> prefix.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentException">The value breaks the rules above (checked as a courtesy; the runtime checks too).</exception>
+        public string? AppTag
+        {
+            get { return _appTag; }
+            set { _appTag = value == null ? null : AppTagRules.Validate(value, nameof(value)); }
+        }
     }
 
     /// <summary>What <see cref="Runtime.JoinHubAsMember"/> hands to the hub on this PC.</summary>
@@ -139,12 +190,24 @@ namespace Quaternar.Qaros.Interop
         {
             return new MemberHubInvitationInitNative
             {
-                Header = NativeDefaults.Header(StructureType.RuntimeCreateMemberHubInvitationInit),
+                Header = NativeDefaults.Header(StructureType.RuntimeCreateMemberHubInvitationInit, AppGrant(options.AppTag, scope)),
                 LifetimeSeconds = Seconds(options.Lifetime, nameof(options.Lifetime)),
                 MaxUses = options.MaxUses,
                 Permissions = (uint)options.Permissions,
                 Label = scope.AllocUtf8(options.Label)
             };
+        }
+
+        // QarMemberHubInvitationAppGrantExt in the init's chain; none without a tag.
+        private static IntPtr AppGrant(string? appTag, NativeMemoryScope scope)
+        {
+            if (appTag == null)
+                return IntPtr.Zero;
+            return scope.AllocStruct(new MemberHubInvitationAppGrantExtNative
+            {
+                Header = NativeDefaults.Header(StructureType.RuntimeMemberHubInvitationAppGrantExt),
+                AppTag = scope.AllocUtf8(appTag)
+            });
         }
 
         internal static JoinHubAsMemberInitNative Join(JoinHubAsMemberOptions options)

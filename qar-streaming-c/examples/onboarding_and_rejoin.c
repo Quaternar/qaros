@@ -1,63 +1,115 @@
 /** \file onboarding_and_rejoin.c
- *  \brief Obtains a session via rejoin-or-onboard, onboards a sibling runtime
- *  from a shared invite, and demonstrates destroy/forget teardown.
+ *  \brief A camera app on a PC without a QAROS hub pairs once with a code from
+ *  the hub's operator, keeps its identity in the secure store and rejoins
+ *  silently on every later start.
  *  \example onboarding_and_rejoin.c
  */
 
-/** \page qar_c_tutorial_onboarding Onboarding and Rejoin
+/** \page qar_c_tutorial_onboarding Code Pairing and Rejoin
  * \tableofcontents
  *
- * \section onboarding_overview Overview
- * Every QarOS session is obtained through onboarding - there is no direct
- * create/join. This tutorial shows the canonical startup flow:
- * - Reuse dynamic loading from the previous tutorial
+ * \section onboarding_overview What You Will Learn
+ * Every QAROS session is obtained through onboarding; there is no direct
+ * create or join. An app on a PC that has no hub of its own (a camera PC, a
+ * capture box, a laptop next to the QAROS PC) cannot be identified by the
+ * hub's Windows, so it pairs with a code once and keeps an identity:
  * - Try a silent rejoin with the persisted onboarding id
- * - Fall back to onboarding with the pairing code shown by the hub
- * - Persist the returned onboarding id for the next run
- * - Mint a serialized invite for a sibling API instance
- * - Start a second runtime instance and onboard it from that invite
- * - Tear down by destroying the session handle (and optionally forget)
+ * - Fall back to onboarding with a code from the hub's operator, read from
+ *   the console, never from the command line
+ * - Reach a hub on another PC with \ref QarOnboardHostExt
+ * - Describe the app as a camera (\ref QarPeerDeviceIdentity)
+ * - Persist the returned onboarding id for the next start
+ * - Tear down by destroying the session handle, and forget only to un-pair
+ *
+ * \section onboarding_when When to Use It
+ * The app runs on a PC or device where QAROS is installed (the app loads its
+ * runtime) but no QAROS hub runs, or the hub it should join runs on another
+ * PC. On the hub's own PC, join as a local app instead
+ * (\ref qar_c_tutorial_local_app_onboarding): no code, nothing stored.
  *
  * \section onboarding_prereq Prerequisites
- * - Complete the \ref qar_c_tutorial_dynamic_loading tutorial
- * - A running QarOS hub on this machine (or reachable on the network)
- * - For the first run: the pairing code from the hub's onboarding screen
+ * - The \ref qar_c_tutorial_dynamic_loading tutorial
+ * - The QAROS hub on the other PC reachable over the network, and its host
+ *   name or IP and onboarding port (shown with its pairing code)
+ * - For the first start: a pairing code from the hub's operator (the code on
+ *   the Visualizer's onboarding screen, or a one-time code the operator
+ *   mints). Apps cannot mint codes.
  *
  * \section onboarding_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target onboarding_and_rejoin
  * ./build/x64-windows/Debug/onboarding_and_rejoin.exe
- * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
- * [--forget]
+ *   <installed|path-to-qar-streaming-c.dll> [--host <host>:<port>] [--forget]
  * \endcode
+ * The first start asks for the code on the console. Later starts rejoin with
+ * no input. `--forget` un-pairs on exit.
  *
- * \section onboarding_args Parse Arguments
+ * \section onboarding_args Step 1: Parse Arguments
+ * Only the hub's address is an argument, used when pairing; a rejoin reaches
+ * the hub the stored identity was paired with. The pairing code is a short-lived
+ * secret: a command line is visible to other processes and ends up in shell
+ * history, so the example reads it from the console.
  * \snippet onboarding_and_rejoin.c onboarding_args
  *
- * \section onboarding_persistence Persisting the Onboarding Id
- * The onboarding id is the only thing an application must store. These
- * shared helpers keep it in a small text file as a UUID string:
+ * \section onboarding_persistence Step 2: Persist the Onboarding Id
+ * The onboarding id is the only thing the app stores itself. It names the
+ * identity slot; it is not a secret and grants nothing on its own:
  * \snippet common.h example_onboarding_persistence
  *
- * \section onboarding_obtain Rejoin or Onboard
- * The canonical flow - rejoin silently when a persisted id exists, otherwise
- * onboard with the code and persist the returned id:
- * \snippet common.h example_obtain_session
+ * \section onboarding_rejoin Step 3: Rejoin With the Stored Identity
+ * \snippet onboarding_and_rejoin.c onboarding_rejoin
  *
- * Which is used from main like this:
+ * - The identity (key and certificate) lives in the QAROS secure store under
+ *   \ref QarRuntimeInit::storage_folder_path (default: the user's QAROS data
+ *   folder), protected for this Windows user. The app never sees the key.
+ * - The certificate lives 24 hours. While the session runs, the runtime
+ *   renews it in the background at 75 % of its life. A device that was off
+ *   longer rejoins too: within 7 days after expiry, the rejoin renews it.
+ * - The peer id is stored with the slot: every rejoin is the same peer.
+ * - `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is expected control flow (no
+ *   slot for the id here): onboard instead.
+ * - `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` (1809): the certificate expired
+ *   beyond the renewal window, was revoked, or its hub no longer renews it.
+ *   Retrying does not help; pair again with a new code.
+ * - `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (1810): the hub
+ *   refused a renewal that did not prove the key. With this SDK the stored
+ *   identity is damaged: pair again. An SDK older than the hub cannot renew
+ *   there at all: update the app.
+ *
+ * \section onboarding_code Step 4: Pair With a Code
+ * \snippet onboarding_and_rejoin.c onboarding_code
+ *
+ * - The code runs a password-authenticated key exchange with the hub: neither
+ *   side sends the code, and a wrong or expired code fails with
+ *   `QAR_STATUS_PAKE_ERROR` (the screen code changes about every 10 s).
+ *   Re-prompt the user.
+ * - Without \ref QarOnboardHostExt the runtime only finds a hub of this user
+ *   on this PC (`QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` on a PC without one).
+ *   Pass the host and port; port 0 is refused. A one-time code the operator
+ *   minted (`qar-code:...`, 2 minutes by default) needs them too.
+ * - Re-pairing after 1809 or 1810 passes the stored onboarding id: the slot is
+ *   re-enrolled instead of a second identity being created.
+ * - An app joins with the source role. As a camera it chains
+ *   \ref QarPeerDeviceIdentity so viewers show a camera, not a desktop PC.
+ *
+ * \section onboarding_obtain Step 5: Put It Together
  * \snippet onboarding_and_rejoin.c onboarding_obtain
  *
- * \section onboarding_invite Share an Invite with a Second API Instance
- * A second API instance in the same application (another process, or a C#
- * binding next to native code) must not pair with a code again. The primary
- * onboarded instance requests an invite, serializes it, and the sibling
- * instance consumes it with qar_runtime_onboard:
- * \snippet onboarding_and_rejoin.c onboarding_invite
+ * \section onboarding_stored What Is Stored, and for How Long
+ * - The app: the onboarding id (a UUID, not secret), until un-paired.
+ * - The secure store: key, 24-hour certificate and peer id; renewed while
+ *   running, and by a rejoin up to 7 days after expiry.
+ * - The hub: the device's entry, until the operator revokes it.
  *
- * \section onboarding_teardown Destroy and Forget
- * Destroying the session handle keeps the persisted identity so the next run
- * can rejoin. Forget erases it - only do that for an explicit "un-pair this
- * device" action:
+ * \section onboarding_other_instances Other API Instances and Processes
+ * A code-paired app requests no invite or code for another process or PC.
+ * Each device pairs with its own code from the operator.
+ *
+ * \section onboarding_teardown Step 6: Destroy and Forget
+ * Destroying the session handle keeps the stored identity, so the next start
+ * rejoins. Forget erases it: only for an explicit "un-pair this device"
+ * action, and only after the session was left
+ * (`QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` otherwise):
  * \snippet onboarding_and_rejoin.c onboarding_teardown
  */
 
@@ -70,40 +122,211 @@
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
+#define ID_FILE "onboarding_and_rejoin.onboarding-id.txt"
+/* Long enough for a short screen code and a minted qar-code:... code. */
+#define MAX_CODE_LENGTH 1024
+
 static void
 print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "onboarding_and_rejoin";
 	printf(
 		"Usage: %s <installed|path-to-qar-streaming-c-library> "
-		"[runtime-binaries-dir] "
-		"[pairing-code] [--forget]\n",
+		"[--host <host>:<port>] [--forget]\n",
 		name
 	);
 	printf(
-		"The pairing code is required on the first run only; later runs "
-		"rejoin with the persisted onboarding id.\n"
+		"The first start asks for the pairing code on the console; later "
+		"starts rejoin with the stored identity.\n"
 	);
-	printf("Pass --forget to erase the persisted identity on exit.\n");
+	printf("Pass --forget to un-pair on exit.\n");
 }
 
-static QarRuntime*
-create_runtime_or_null(const char* runtime_dir, const char* storage_dir)
+/* Parses "<host>:<port>" into host_buffer and *out_port. */
+static bool
+parse_host_port(const char* text, char* host_buffer, size_t host_buffer_size, uint16_t* out_port)
 {
-	QarRuntime* runtime = NULL;
-	QarRuntimeInit runtime_init = qar_runtime_init_default();
-	runtime_init.runtime_binaries_folder_path = runtime_dir;
-	runtime_init.storage_folder_path = storage_dir;
-
-	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
-	log_result("qar_runtime_create", runtime_result);
-	if(qar_result_is_error(runtime_result) || runtime == NULL)
+	const char* colon = strrchr(text, ':');
+	if(colon == NULL || colon == text || (size_t)(colon - text) >= host_buffer_size)
 	{
-		return NULL;
+		return false;
+	}
+	char* end = NULL;
+	const unsigned long port = strtoul(colon + 1, &end, 10);
+	if(end == colon + 1 || *end != '\0' || port == 0 || port > 65535)
+	{
+		return false;
+	}
+	memcpy(host_buffer, text, (size_t)(colon - text));
+	host_buffer[colon - text] = '\0';
+	*out_port = (uint16_t)port;
+	return true;
+}
+
+/* Asks for the pairing code on the console. The caller clears the buffer. */
+static bool
+prompt_for_code(char* code, size_t code_size)
+{
+	printf("Enter the pairing code from the QAROS hub's operator: ");
+	fflush(stdout);
+	if(fgets(code, (int)code_size, stdin) == NULL)
+	{
+		return false;
+	}
+	code[strcspn(code, "\r\n")] = '\0';
+	return code[0] != '\0';
+}
+
+/* How this app describes itself: a camera, not the default desktop PC. */
+static QarPeerPresentation
+camera_presentation(QarPeerDeviceIdentity* device)
+{
+	*device = qar_peer_device_identity_default();
+	device->category = QAR_DEVICE_CATEGORY_CAMERA;
+	device->device_id = "ExampleCamera"; /* open string; viewers fall back */
+	device->device_name = "Example camera";
+	QarPeerPresentation presentation = qar_peer_presentation_default();
+	presentation.display_name = "Onboarding and Rejoin Example";
+	presentation.header.next = &device->header;
+	return presentation;
+}
+
+//! [onboarding_rejoin]
+/* Rejoins with the stored identity. */
+static QarResult
+rejoin(QarRuntime* runtime, const QarOnboardingId* saved_id, QarSession** out_session)
+{
+	QarPeerDeviceIdentity device;
+	QarRejoinInit init = qar_rejoin_init_default();
+	init.onboarding_id = *saved_id;
+	init.presentation = camera_presentation(&device);
+	return qar_runtime_rejoin(runtime, &init, NULL, NULL, NULL, out_session);
+}
+//! [onboarding_rejoin]
+
+//! [onboarding_code]
+/* Pairs with a code. `slot_id` zero creates a new identity; a stored id
+ * re-enrolls that slot. Receives the id to persist in *out_id. */
+static QarResult
+pair_with_code(
+	QarRuntime* runtime,
+	const char* code,
+	const char* hub_host, /* NULL: a hub of this user on this PC */
+	uint16_t hub_port,
+	const QarOnboardingId* slot_id,
+	QarOnboardingId* out_id,
+	QarSession** out_session
+)
+{
+	QarPeerDeviceIdentity device;
+	QarOnboardInit init = qar_onboard_init_default();
+	init.onboarding_id = *slot_id;
+	init.presentation = camera_presentation(&device);
+	QarOnboardCodeExt code_ext = qar_onboard_code_ext_default();
+	code_ext.code = code; /* copied before the call returns */
+	init.header.next = &code_ext.header;
+	QarOnboardHostExt host = qar_onboard_host_ext_default();
+	if(hub_host != NULL)
+	{
+		host.hostname = hub_host;
+		host.port = hub_port;
+		code_ext.header.next = &host.header;
+	}
+	return qar_runtime_onboard(runtime, &init, NULL, NULL, NULL, out_id, out_session);
+}
+//! [onboarding_code]
+
+/* Explains a pairing or rejoin failure in plain words. */
+static void
+explain(const char* label, QarResult result)
+{
+	log_result(label, result);
+	if(qar_result_has_code(result, QAR_STATUS_PAKE_ERROR))
+	{
+		printf("The code was wrong or expired. Ask for the current code.\n");
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
+	{
+		printf("No hub answered. Pass --host <host>:<port> of the QAROS hub.\n");
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED))
+	{
+		printf("This device must be paired again with a new code.\n");
+	}
+	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN))
+	{
+		printf("The stored identity could not renew. Update the app, or pair again.\n");
+	}
+}
+
+//! [onboarding_obtain]
+/* Rejoin when an identity is stored; otherwise, or when it must be paired
+ * again, pair with a code read from the console and persist the id. */
+static bool
+obtain_session(
+	QarRuntime* runtime,
+	const char* hub_host,
+	uint16_t hub_port,
+	QarOnboardingId* out_id,
+	QarSession** out_session
+)
+{
+	QarOnboardingId saved_id = qar_onboarding_id_default();
+	QarOnboardingId slot_id = qar_onboarding_id_default(); /* zero: new identity */
+	if(load_onboarding_id(ID_FILE, &saved_id))
+	{
+		QarResult rejoined = rejoin(runtime, &saved_id, out_session);
+		if(qar_result_is_success(rejoined))
+		{
+			*out_id = saved_id; /* the normal path: no input, same peer */
+			return true;
+		}
+		const bool re_pair =
+			qar_result_has_code(rejoined, QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED)
+			|| qar_result_has_code(rejoined, QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN);
+		if(!re_pair && !qar_result_has_code(rejoined, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
+		{
+			explain("qar_runtime_rejoin", rejoined); /* e.g. hub unreachable: retry later */
+			return false;
+		}
+		if(!re_pair)
+		{
+			/* Expected control flow, not an error: no slot for the id here. */
+			printf("No stored identity for this id; pairing with a code.\n");
+		}
+		else
+		{
+			explain("qar_runtime_rejoin", rejoined);
+			slot_id = saved_id; /* re-enroll the stored slot */
+		}
 	}
 
-	return runtime;
+	char code[MAX_CODE_LENGTH] = { 0 };
+	bool joined = false;
+	if(prompt_for_code(code, sizeof(code)))
+	{
+		QarOnboardingId new_id = qar_onboarding_id_default();
+		QarResult paired =
+			pair_with_code(runtime, code, hub_host, hub_port, &slot_id, &new_id, out_session);
+		if(qar_result_is_success(paired))
+		{
+			save_onboarding_id(ID_FILE, &new_id); /* the ticket for every rejoin */
+			*out_id = new_id;
+			joined = true;
+		}
+		else
+		{
+			explain("qar_runtime_onboard", paired);
+		}
+	}
+	else
+	{
+		printf("No pairing code entered.\n");
+	}
+	memset(code, 0, sizeof(code)); /* the code is a secret until it expires */
+	return joined;
 }
+//! [onboarding_obtain]
 
 int
 main(int argc, char** argv)
@@ -114,31 +337,27 @@ main(int argc, char** argv)
 		print_usage(argv[0]);
 		return 1;
 	}
-
 	const char* library_path = library_path_argument(argv[1]);
-	const char* runtime_dir = NULL;
-	char runtime_dir_buffer[1024] = { 0 };
-	const char* pairing_code = NULL;
+	char host_buffer[256] = { 0 };
+	const char* hub_host = NULL;
+	uint16_t hub_port = 0;
 	bool forget_on_exit = false;
-
-	if(argc >= 3)
-	{
-		runtime_dir = argv[2];
-	}
-	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
-	{
-		runtime_dir = runtime_dir_buffer;
-	}
-
-	for(int i = 3; i < argc; ++i)
+	for(int i = 2; i < argc; ++i)
 	{
 		if(strcmp(argv[i], "--forget") == 0)
 		{
 			forget_on_exit = true;
 		}
+		else if(strcmp(argv[i], "--host") == 0 && i + 1 < argc
+				&& parse_host_port(argv[i + 1], host_buffer, sizeof(host_buffer), &hub_port))
+		{
+			hub_host = host_buffer;
+			++i;
+		}
 		else
 		{
-			pairing_code = argv[i];
+			print_usage(argv[0]);
+			return 1;
 		}
 	}
 	//! [onboarding_args]
@@ -148,9 +367,7 @@ main(int argc, char** argv)
 		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
-
 	QarLibraryInit library_init = qar_library_init_default();
-	library_init.enable_console_logging = true;
 	QarResult library_result = qar_library_init(&library_init);
 	if(qar_result_is_error(library_result))
 	{
@@ -159,185 +376,54 @@ main(int argc, char** argv)
 		return 3;
 	}
 
-	QarRuntime* primary_runtime =
-		create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.primary-state");
-	if(primary_runtime == NULL)
+	/* The runtime binaries folder is the one the library came from (NULL for
+	 * the installed QAROS). storage_folder_path NULL: this user's QAROS data
+	 * folder, where the secure store keeps the identity. */
+	char runtime_dir[1024] = { 0 };
+	QarRuntimeInit runtime_init = qar_runtime_init_default();
+	if(library_path != NULL)
 	{
-		qar_library_destroy();
+		runtime_init.runtime_binaries_folder_path =
+			get_dir_from_path(library_path, runtime_dir, sizeof(runtime_dir));
+	}
+	QarRuntime* runtime = NULL;
+	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
+	if(qar_result_is_error(runtime_result))
+	{
+		log_result("qar_runtime_create", runtime_result);
+		log_result("qar_library_destroy", qar_library_destroy());
 		qar_library_unload();
 		return 4;
 	}
 
-	//! [onboarding_obtain]
-	QarOnboardingId primary_onboarding_id = qar_onboarding_id_default();
-	QarOnboardingId sibling_onboarding_id = qar_onboarding_id_default();
-	bool sibling_onboarded = false;
-	QarSession* primary_session = NULL;
-	if(example_obtain_session(
-		   primary_runtime,
-		   pairing_code,
-		   "onboarding_and_rejoin.primary-onboarding-id.txt",
-		   "Primary Tutorial Peer",
-		   &primary_onboarding_id,
-		   &primary_session
-	   ) != 0
-	   || primary_session == NULL)
+	int exit_code = 5;
+	QarOnboardingId onboarding_id = qar_onboarding_id_default();
+	QarSession* session = NULL;
+	if(obtain_session(runtime, hub_host, hub_port, &onboarding_id, &session))
 	{
-		qar_runtime_handle_destroy(primary_runtime);
-		qar_library_destroy();
-		qar_library_unload();
-		return 5;
-	}
+		exit_code = example_print_own_peer_id("This camera", session) ? 0 : 5;
 
-	char primary_id_text[64] = { 0 };
-	if(qar_result_is_success(
-		   qar_uuid_to_string(primary_onboarding_id.data, primary_id_text, sizeof(primary_id_text))
-	   ))
-	{
-		printf("Primary session obtained with onboarding id %s\n", primary_id_text);
-	}
-	//! [onboarding_obtain]
-
-	//! [onboarding_invite]
-	QarRequestInviteInit request_init = qar_request_invite_init_default();
-	QarOnboardingInvite* primary_invite = NULL;
-	QarResult invite_result = qar_session_request_onboarding_invite(
-		primary_session, &request_init, NULL, NULL, NULL, &primary_invite
-	);
-	log_result("qar_session_request_onboarding_invite", invite_result);
-	if(qar_result_is_success(invite_result) && primary_invite != NULL)
-	{
-		size_t serialized_size = 0;
-		QAR_ASSUME_SUCCESS(qar_onboarding_invite_serialized_size(primary_invite, &serialized_size));
-
-		uint8_t* blob = (uint8_t*)calloc(1, serialized_size);
-		if(blob != NULL)
+		//! [onboarding_teardown]
+		/* Leaves the session and keeps the stored identity: the next start
+		 * rejoins silently. */
+		qar_session_handle_destroy(session);
+		if(forget_on_exit)
 		{
-			size_t bytes_written = 0;
-			QAR_ASSUME_SUCCESS(qar_onboarding_invite_serialize(
-				primary_invite, blob, serialized_size, &bytes_written
-			));
-
-			int64_t expires_unix = 0;
-			QAR_ASSUME_SUCCESS(
-				qar_onboarding_invite_get_expires_unix(primary_invite, &expires_unix)
-			);
-			printf(
-				"Minted sibling invite (%zu bytes, expires at unix %lld).\n",
-				bytes_written,
-				(long long)expires_unix
-			);
-
-			QarRuntime* sibling_runtime =
-				create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.sibling-state");
-			if(sibling_runtime != NULL)
+			/* Un-pair: erase the identity. The next start needs a new code. */
+			QarForgetInit forget_init = qar_forget_init_default();
+			forget_init.onboarding_id = onboarding_id;
+			QarResult forgotten = qar_runtime_forget(runtime, &forget_init);
+			log_result("qar_runtime_forget", forgotten);
+			if(qar_result_is_success(forgotten) && remove(ID_FILE) != 0)
 			{
-				QarOnboardingInvite* sibling_invite = NULL;
-				QarResult deserialize_result =
-					qar_onboarding_invite_deserialize(blob, bytes_written, &sibling_invite);
-				log_result("qar_onboarding_invite_deserialize", deserialize_result);
-				if(qar_result_is_success(deserialize_result) && sibling_invite != NULL)
-				{
-					QarOnboardInit sibling_init = qar_onboard_init_default();
-					QarOnboardInviteExt sibling_mode = qar_onboard_invite_ext_default();
-					sibling_init.presentation.display_name = "Sibling Tutorial Peer";
-					sibling_mode.invite = sibling_invite;
-					sibling_init.header.next = &sibling_mode.header;
-
-					/* Fills the outer sibling_onboarding_id: the forget at the
-					 * end of the example needs it. */
-					QarSession* sibling_session = NULL;
-					QarResult sibling_result = qar_runtime_onboard(
-						sibling_runtime,
-						&sibling_init,
-						NULL,
-						NULL,
-						NULL,
-						&sibling_onboarding_id,
-						&sibling_session
-					);
-					log_result("qar_runtime_onboard", sibling_result);
-					if(qar_result_is_success(sibling_result) && sibling_session != NULL)
-					{
-						char sibling_id_text[64] = { 0 };
-						if(qar_result_is_success(qar_uuid_to_string(
-							   sibling_onboarding_id.data, sibling_id_text, sizeof(sibling_id_text)
-						   )))
-						{
-							printf(
-								"Sibling runtime onboarded with onboarding id "
-								"%s\n",
-								sibling_id_text
-							);
-						}
-
-						save_onboarding_id(
-							"onboarding_and_rejoin.sibling-onboarding-id.txt",
-							&sibling_onboarding_id
-						);
-						sibling_onboarded = true;
-						printf(
-							"Destroying sibling session handle keeps its "
-							"persisted onboarding state for rejoin.\n"
-						);
-						qar_session_handle_destroy(sibling_session);
-					}
-
-					qar_onboarding_invite_handle_destroy(sibling_invite);
-				}
-
-				qar_runtime_handle_destroy(sibling_runtime);
+				printf("Could not delete '%s'.\n", ID_FILE);
 			}
-
-			free(blob);
 		}
-
-		qar_onboarding_invite_handle_destroy(primary_invite);
+		//! [onboarding_teardown]
 	}
-	//! [onboarding_invite]
 
-	//! [onboarding_teardown]
-	/* Destroying the handle leaves the session and keeps persisted identity,
-	 * so the next run can rejoin silently. */
-	printf(
-		"Destroying primary session handle keeps its persisted onboarding "
-		"state for rejoin.\n"
-	);
-	qar_session_handle_destroy(primary_session);
-
-	if(forget_on_exit)
-	{
-		/* Full un-pair: erase the identity slot. The next run needs a fresh
-		 * pairing code. Must happen after the session was left. */
-		if(sibling_onboarded)
-		{
-			QarRuntime* sibling_runtime =
-				create_runtime_or_null(runtime_dir, "onboarding_and_rejoin.sibling-state");
-			if(sibling_runtime != NULL)
-			{
-				QarForgetInit sibling_forget_init = qar_forget_init_default();
-				sibling_forget_init.onboarding_id = sibling_onboarding_id;
-				log_result(
-					"qar_runtime_forget(sibling)",
-					qar_runtime_forget(sibling_runtime, &sibling_forget_init)
-				);
-				qar_runtime_handle_destroy(sibling_runtime);
-			}
-			remove("onboarding_and_rejoin.sibling-onboarding-id.txt");
-		}
-
-		QarForgetInit forget_init = qar_forget_init_default();
-		forget_init.onboarding_id = primary_onboarding_id;
-		log_result(
-			"qar_runtime_forget(primary)", qar_runtime_forget(primary_runtime, &forget_init)
-		);
-		remove("onboarding_and_rejoin.primary-onboarding-id.txt");
-	}
-	//! [onboarding_teardown]
-
-	qar_runtime_handle_destroy(primary_runtime);
-	QarResult destroy_result = qar_library_destroy();
-	log_result("qar_library_destroy", destroy_result);
+	qar_runtime_handle_destroy(runtime);
+	log_result("qar_library_destroy", qar_library_destroy());
 	qar_library_unload();
-	return 0;
+	return exit_code;
 }

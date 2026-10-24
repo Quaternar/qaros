@@ -66,30 +66,66 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Asks the hub this session onboarded through for a fresh invite, to onboard another API
-        /// instance (a helper process, a plugin sandbox) without a code. Blocks until the hub
+        /// Asks the hub for a co-process invite: one companion process on this PC (a C# helper of a
+        /// native app, a plugin sandbox) joins with it, without a code, as the peer the hub
+        /// remembers for this app's approval and <paramref name="appTag"/>. Blocks until the hub
         /// answers.
         /// </summary>
         /// <remarks>
-        /// The caller owns and disposes the invite. Hand it over with
-        /// <see cref="OnboardingInvite.Serialize"/>; the other instance, with a runtime and storage
-        /// folder of its own, onboards with <see cref="OnboardingInvite.Deserialize"/> and
-        /// <see cref="OnboardOptions.UseInvite"/>. Invites expire: mint one when it is needed.
-        /// Fails with <see cref="StatusCode.ArgumentNotSupported"/> when the hub cannot be resolved
-        /// from this session, for example while it is not connected.
+        /// <para>
+        /// Only a session that joined by <see cref="OnboardOptions.UseLocalApp"/>, or a process the
+        /// QAROS launcher started, may ask; the hub refuses any other. The invite works once, for
+        /// 60 s (set by the hub), and only from the hub's PC. The co-process gets the short local
+        /// certificate under this app's approval; its certificate renews only while this app's peer is
+        /// still in the session, and revoking the approval revokes both.
+        /// </para>
+        /// <para>
+        /// The caller owns and disposes the invite. Hand it to the co-process over a private
+        /// channel (for example its stdin, never a command line) with
+        /// <see cref="OnboardingInvite.Serialize"/>; the co-process creates its runtime with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/>, so it writes nothing to disk, and onboards
+        /// with <see cref="OnboardingInvite.Deserialize"/> and <see cref="OnboardOptions.UseInvite"/>.
+        /// A restarted co-process needs a fresh invite: mint one when it is needed.
+        /// </para>
+        /// <para>
+        /// There is no invite for another PC or for a new device: pairing codes and unbound
+        /// invites are minted by the hub's operators. Fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/> for a tag the runtime refuses, or when the
+        /// hub cannot be resolved from this session, for example while it is not connected. A
+        /// runtime older than app tags refuses the request (its structure type changed with the
+        /// tag); check <see cref="RuntimeInfo.Version"/> when you may load one.
+        /// </para>
         /// </remarks>
-        public Result<OnboardingInvite> RequestOnboardingInvite(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <param name="appTag">The co-process's app tag; rules in <see cref="RequestOnboardingInviteOptions.AppTag"/>.</param>
+        /// <param name="progress">Optional progress reports.</param>
+        /// <param name="cancellationToken">Cancels the request; the call then returns a failure.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="appTag"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="appTag"/> is not a valid app tag.</exception>
+        public Result<OnboardingInvite> RequestOnboardingInvite(string appTag, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingInviteOptions();
+            return RequestOnboardingInvite(new RequestOnboardingInviteOptions(appTag), progress, cancellationToken);
+        }
+
+        /// <summary>
+        /// <see cref="RequestOnboardingInvite(string, IProgress{ActionProgress}?, CancellationToken)"/>
+        /// with the full request options.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+        public Result<OnboardingInvite> RequestOnboardingInvite(RequestOnboardingInviteOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            _context.ThrowIfDisposed();
             var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
             if (!cancellationResult.IsSuccess)
                 return Result<OnboardingInvite>.Failure(cancellationResult.Info);
+            using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
             using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
-                var native = NativeInit.RequestInvite(options, chain.Head);
+                var native = NativeInit.RequestInvite(options, scope, chain.Head);
                 IntPtr invite;
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_invite(
                     _context.DangerousHandle,
@@ -103,54 +139,27 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Ask the hub for a new set of one-time onboarding codes, for several devices to onboard at once.
-        /// Codes other callers hold and the hub's onboarding screen code stay valid. The caller owns and
-        /// disposes every returned invite.
+        /// Async <see cref="RequestOnboardingInvite(string, IProgress{ActionProgress}?, CancellationToken)"/>.
+        /// Canceling <paramref name="cancellationToken"/> cancels the task.
         /// </summary>
-        /// <remarks>
-        /// Blocks until the hub answers. Each code works once (a failed attempt also uses it up) and
-        /// is never shown on the hub's screen. Hand a device either its text
-        /// (<see cref="OnboardingInvite.GetCode"/>, for <see cref="OnboardOptions.UseCode"/>) or the
-        /// serialized invite (for <see cref="OnboardOptions.UseInvite"/>). Fails with
-        /// <see cref="StatusCode.ArgumentNotSupported"/> for a count or lifetime out of range, or
-        /// when the hub cannot be resolved from this session.
-        /// </remarks>
-        public Result<IReadOnlyList<OnboardingInvite>> RequestOnboardingCodes(RequestOnboardingCodesOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="ArgumentNullException"><paramref name="appTag"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="appTag"/> is not a valid app tag.</exception>
+        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(string appTag, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingCodesOptions();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
-            if (!cancellationResult.IsSuccess)
-                return Result<IReadOnlyList<OnboardingInvite>>.Failure(cancellationResult.Info);
-            using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
-            {
-                var native = NativeInit.RequestOnboardingCodes(options, IntPtr.Zero);
-                var handles = new IntPtr[Math.Max(1u, options.Count)];
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_codes(
-                    _context.DangerousHandle,
-                    ref native,
-                    progressState.Callback,
-                    progressState.UserState,
-                    cancellation.Handle,
-                    handles));
-                if (!info.IsSuccess)
-                    return Result<IReadOnlyList<OnboardingInvite>>.Failure(info);
-                var invites = new List<OnboardingInvite>(handles.Length);
-                foreach (var handle in handles)
-                    invites.Add(new OnboardingInvite(new OnboardingInviteSafeHandle(handle)));
-                return Result<IReadOnlyList<OnboardingInvite>>.Success(info, invites);
-            }
+            return RequestOnboardingInviteAsync(new RequestOnboardingInviteOptions(appTag), progress, cancellationToken);
         }
 
         /// <summary>
-        /// Async <see cref="RequestOnboardingInvite"/>. Canceling
-        /// <paramref name="cancellationToken"/> cancels the task.
+        /// Async <see cref="RequestOnboardingInvite(RequestOnboardingInviteOptions, IProgress{ActionProgress}?, CancellationToken)"/>.
+        /// Canceling <paramref name="cancellationToken"/> cancels the task.
         /// </summary>
-        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(RequestOnboardingInviteOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingInviteOptions();
             var state = new RequestInviteAsyncState(progress);
             var cancelHandle = state.UseStandardCancellation(cancellationToken);
             if (!cancelHandle.IsSuccess)

@@ -18,7 +18,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal("bin", Path.GetFileName(folder));
         }
 
-        // Step 1 wins over the installed QAROS (ADR-0339): the test output folder holds the
+        // Step 1 wins over the installed QAROS: the test output folder holds the
         // runtime under test, so that is the copy the process runs against.
         [Fact]
         public void TheRuntimeBesideTheBindingIsLoadedFirst()
@@ -30,9 +30,7 @@ namespace Quaternar.Qaros.Tests
                 InstalledRuntime.LibraryFileName);
             if (!File.Exists(beside))
                 return;
-
             var loaded = InstalledRuntime.Load();
-
             Assert.True(loaded.IsSuccess, loaded.Info.Message);
             Assert.Equal(Path.GetFullPath(beside), loaded.Value, StringComparer.OrdinalIgnoreCase);
         }
@@ -62,6 +60,7 @@ namespace Quaternar.Qaros.Tests
             var mode = Assert.IsType<OnboardLocalApp>(options.Mode);
             Assert.Equal(StructureType.RuntimeOnboardLocalAppExt, mode.Type);
             Assert.Equal(TimeSpan.Zero, mode.ApprovalTimeout);
+            Assert.Null(mode.Tag);
         }
 
         [Fact]

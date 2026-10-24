@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using Quaternar.Qaros;
+using Quaternar.Qaros.Interop;
 using Xunit;
 
 namespace Quaternar.Qaros.Tests
@@ -84,6 +86,63 @@ namespace Quaternar.Qaros.Tests
             Assert.Throws<ArgumentNullException>(() => runtime.CreateMemberHubInvitation(null!));
             Assert.Throws<ArgumentNullException>(() => runtime.JoinHubAsMember(null!));
             Assert.Throws<ArgumentNullException>(() => new JoinHubAsMemberOptions(null!));
+        }
+
+        // #268 A4: a remote-app grant chains after the local-app ext and its tag, before what follows.
+        [Fact]
+        public void ARemoteAppGrantChainsAfterTheLocalAppAndItsTag()
+        {
+            using var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var local = new OnboardLocalApp { Tag = "left.sharp-tests", RemoteAppGrant = invitation };
+            using (var chain = NativeStructureChain.From(local, new GraphicsDeviceId()))
+            {
+                var native = Marshal.PtrToStructure<OnboardLocalAppExtNative>(chain.Head);
+                Assert.Equal(StructureType.RuntimeOnboardLocalAppExt, native.Header.Type);
+                var tag = Marshal.PtrToStructure<OnboardLocalAppTagExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RuntimeOnboardLocalAppTagExt, tag.Header.Type);
+                var grant = Marshal.PtrToStructure<OnboardRemoteAppGrantExtNative>(tag.Header.Next);
+                Assert.Equal(StructureType.RuntimeOnboardRemoteAppGrantExt, grant.Header.Type);
+                Assert.Equal(0x1012, (int)grant.Header.Type);
+                Assert.Equal(invitation.DangerousHandle, grant.Invitation);
+                var after = Marshal.PtrToStructure<StructureHeaderNative>(grant.Header.Next);
+                Assert.Equal(StructureType.SessionGraphicsDeviceId, after.Type);
+            }
+        }
+
+        [Fact]
+        public void ARemoteAppGrantWithoutATagFollowsTheLocalAppDirectly()
+        {
+            using var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            using (var chain = NativeStructureChain.From(new OnboardLocalApp { RemoteAppGrant = invitation }, null))
+            {
+                var native = Marshal.PtrToStructure<OnboardLocalAppExtNative>(chain.Head);
+                var grant = Marshal.PtrToStructure<OnboardRemoteAppGrantExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RuntimeOnboardRemoteAppGrantExt, grant.Header.Type);
+                Assert.Equal(invitation.DangerousHandle, grant.Invitation);
+                Assert.Equal(IntPtr.Zero, grant.Header.Next);
+            }
+        }
+
+        [Fact]
+        public void ADisposedRemoteAppGrantIsRefusedWhenMarshalled()
+        {
+            var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var local = new OnboardLocalApp { RemoteAppGrant = invitation };
+            invitation.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => NativeStructureChain.From(local, null));
+        }
+
+        // The chain holds a reference on the handle: disposing the invitation while a call borrows
+        // it defers the native release until the chain is done, so the pointer never dangles.
+        [Fact]
+        public void TheChainKeepsTheGrantAliveUntilItIsDisposed()
+        {
+            var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var chain = NativeStructureChain.From(new OnboardLocalApp { RemoteAppGrant = invitation }, null);
+            invitation.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => invitation.Serialize());
+            chain.Dispose();
+            chain.Dispose();
         }
 
         [Fact]

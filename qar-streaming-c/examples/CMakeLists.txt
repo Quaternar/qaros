@@ -5,7 +5,11 @@ if(BUILD_CORE_EXAMPLES)
       app_volume_management
       gui_panel_operations
       cpu_rendering_visualizer
-      local_app_onboarding)
+      local_app_onboarding
+      api_instances_in_one_process
+      co_process_onboarding
+      remote_app_onboarding
+      launched_app_onboarding)
 
   foreach(sample ${QAR_DYNAMIC_EXAMPLES})
     add_executable(${sample} ${sample}.c)
