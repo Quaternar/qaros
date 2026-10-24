@@ -24,6 +24,31 @@ The tray always adds `startupTarget` and `startupTargetPath` (see [Hub interconn
 - Unknown keys are ignored.
 - "Default" below is the value used when the key is **omitted**. The shipped `qar-runtime-launcher.jsonc` sets some keys differently; those are noted.
 
+## Starting a background Hub without the visualizer
+
+Applications that start the tray supervisor without opening or prewarming the visualizer must set all three flags in a dedicated configuration file:
+
+```json
+{
+  "schema_version": 3,
+  "autoLaunchVisualizer": false,
+  "openVisualizerOnStartup": false,
+  "prewarmVisualizer": false
+}
+```
+
+`autoLaunchVisualizer` controls the launcher's visible window, `openVisualizerOnStartup` controls the tray's separate startup request, and `prewarmVisualizer` controls the hidden visualizer process. Turning off only the first flag does not override the tray's other defaults.
+
+Pass the file's absolute path as the tray's first argument; do not modify the installed, shared configuration:
+
+```powershell
+$qarosInstall = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Quaternar\QAROS').InstallFolder
+$configPath = 'C:\MyApp\qaros-background.jsonc'
+& (Join-Path $qarosInstall 'bin\qaros-hub-service.exe') $configPath
+```
+
+Leave an existing Hub for the same Windows user and data root running. Starting the tray again with that root replaces it; supplying a background configuration does not reconfigure an already running Hub in place. See [Running several Hubs](/docs/operator-guide/running-the-hub#running-several-hubs-on-one-pc) before deliberately starting another root. The user can still open the visualizer from the tray later.
+
 ## Schema version
 
 | Key | Type | Default | Effect |

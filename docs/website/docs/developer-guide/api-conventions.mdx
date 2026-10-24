@@ -52,7 +52,9 @@ qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
 
 - **Opaque handles** are `SafeHandle`-backed classes implementing `IDisposable`:
   `Runtime`, `Session`, `OnboardingInvite`, `RenderSender`, `RenderFrameInfo`.
-  `Dispose()` (or a `using` block) releases the handle.
+  `Dispose()` (or a `using` block) releases the handle. `Runtime.Dispose()` calls
+  `qar_runtime_handle_destroy`: it releases the application's runtime handle and
+  leaves the shared Hub running for other applications.
 - **Value IDs** are `readonly struct`s — `PeerId`, `SessionId`, `GuiPanelId`,
   `AppVolumeId`, `StreamId` — with `ToString()`, `Parse`/`TryParse`,
   `ToByteArray()`, and equality **by byte content**. (`PeerId`, `SessionId`, and
@@ -289,7 +291,9 @@ callback, and teardown runs in reverse of setup.
 <Lang value="csharp">
 
 - Every handle type is `IDisposable` — use `using`, or dispose explicitly. The
-  underlying `SafeHandle.ReleaseHandle` calls the matching native destroy.
+  underlying `SafeHandle.ReleaseHandle` calls the matching native handle release.
+  In particular, `Runtime.Dispose()` releases only the runtime handle; application
+  cleanup must not request shutdown of the shared Hub.
 - **Subscriptions are `IDisposable`**: disposing one stops native delivery.
 - Values handed to you inside an event/callback are already **immutable DTO
   snapshots** (`PeerSpec`, `GuiPanel`, `AppVolume`) — safe to keep; there is no

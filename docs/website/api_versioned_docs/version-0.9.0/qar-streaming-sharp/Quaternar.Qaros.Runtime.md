@@ -35,7 +35,7 @@ and the runtime before [`Library.Destroy`](Quaternar.Qaros.Library.md#destroy).
 | [Onboard(OnboardOptions, IProgress&lt;ActionProgress&gt;?, CancellationToken)](#onboard) | Runs full onboarding with the mode chosen by [`OnboardOptions.UseCode`](Quaternar.Qaros.OnboardOptions.md#usecode) or [`OnboardOptions.UseInvite`](Quaternar.Qaros.OnboardOptions.md#useinvite), and blocks until it succeeded or failed. Persist the returned [`OnboardSession.OnboardingId`](Quaternar.Qaros.OnboardSession.md#onboardingid): it is the ticket for every later [`Runtime.Rejoin`](#rejoin) and [`Runtime.Forget`](#forget). |
 | [OnboardAsync(OnboardOptions, IProgress&lt;ActionProgress&gt;?, CancellationToken)](#onboardasync) | Async [`Runtime.Onboard`](#onboard): returns at once and keeps the UI responsive; the task completes with the same results. Canceling `cancellationToken` cancels the task. |
 | [Forget(ForgetOptions)](#forget) | Erases everything stored for an identity slot: certificate, persisted peer id and session state. Afterwards only a full [`Runtime.Onboard`](#onboard) gets back in. Needs no session, so it also serves a "forget this hub" action while disconnected. |
-| [Dispose()](#dispose) | Releases the runtime. Dispose its sessions first. |
+| [Dispose()](#dispose) | Releases this process's runtime handle. Dispose its sessions first. Does not shut down the shared Hub or other applications using it. |
 
 ### Create {#create}
 
@@ -190,7 +190,7 @@ slot is alive: dispose it first. A slot with nothing persisted fails with
 
 ### Dispose {#dispose}
 
-Releases the runtime. Dispose its sessions first.
+Releases this process's runtime handle. Dispose its sessions first. Does not shut down the shared Hub or other applications using it.
 
 ```csharp
 public void Dispose()

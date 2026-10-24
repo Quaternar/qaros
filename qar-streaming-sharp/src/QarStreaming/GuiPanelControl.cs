@@ -58,7 +58,8 @@ namespace Quaternar.Qaros
         /// same panel in every session, from every peer and after a restart: call this on every
         /// start instead of persisting the id. The common name is the identity key and must be
         /// ASCII; put user-facing text, which may be any UTF-8, in
-        /// <see cref="GuiPanelOptions.DisplayName"/>.
+        /// <see cref="GuiPanelOptions.DisplayName"/>. Set a non-empty DisplayName when
+        /// creating or reopening a panel; CommonName does not supply a default label.
         /// </para>
         /// <para>
         /// When an open panel of that name exists, the rest of <paramref name="options"/> is

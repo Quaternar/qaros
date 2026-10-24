@@ -381,11 +381,7 @@ namespace Quaternar.Qaros.Interop
 
         protected AsyncStateBase()
         {
-#if NET8_0_OR_GREATER
             Completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-#else
-            Completion = new TaskCompletionSource<T>();
-#endif
             _selfHandle = GCHandle.Alloc(this);
             UserState = GCHandle.ToIntPtr(_selfHandle);
         }
@@ -531,7 +527,10 @@ namespace Quaternar.Qaros.Interop
             _progress = progress;
             _returnsOnboardSession = returnsOnboardSession;
             if (!returnsOnboardSession)
-                _sessionCompletion = new TaskCompletionSource<Result<Session>>();
+                // Callers may dispose the runtime after a failed rejoin. Never
+                // run that continuation on the native callback's own worker:
+                // runtime disposal joins the native background tasks.
+                _sessionCompletion = new TaskCompletionSource<Result<Session>>(TaskCreationOptions.RunContinuationsAsynchronously);
             ResultCallback = new RuntimeOnboardResultCallback(OnResult);
             ProgressCallback = new ProgressCallback(OnProgress);
         }

@@ -365,7 +365,10 @@ namespace Quaternar.Qaros
             }
         }
 
-        /// <summary>Releases the runtime. Dispose its sessions first.</summary>
+        /// <summary>
+        /// Releases this process's runtime handle. Dispose its sessions first.
+        /// Does not shut down the shared Hub or other applications using it.
+        /// </summary>
         public void Dispose()
         {
             _handle.Dispose();
