@@ -168,7 +168,7 @@ app ──onboard──> QAROS identifies the process from Windows (path, file h
 | `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1808) | the app no longer matches its approval (moved, copied, re-signed, tampered) | "This app changed since it was approved. Revoke it in QAROS and start it again." | after the user revoked it |
 | `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` (1809) | the device's certificate expired, was revoked or is no longer renewed by its hub, and the code given did not replace it | "This device must be paired again. Ask for a new code from the QAROS hub." | no, pair again |
 | `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (1810) | the hub refused to renew the certificate because the renewal did not prove it holds the certificate's key | "This app or device could not renew its QAROS certificate. Update the app or device to the current QAROS SDK; if it is up to date, pair it again with a new code." | no, update or pair again |
-| `qar_library_load(NULL)` returns `false` | No runtime beside the executable, `QAROS_RUNTIME_DIR` not set, QAROS not installed, and none on `PATH` | "QAROS is not installed on this PC." | no |
+| `qar_library_load(NULL)` returns `false` | No runtime beside the executable, `QAR_INSTANCE` not set (or naming an instance with no runtime), QAROS not installed, and none on `PATH` | "QAROS is not installed on this PC." | no |
 
 C#: `StatusCode.OnboardingHubUnreachable`, `OnboardingApprovalDenied`, `OnboardingApprovalTimeout`, `OnboardingHubNotAuthentic`, `OnboardingAppIdentityMismatch`, `OnboardingRePairRequired`, `OnboardingRenewalPossessionUnproven`. The [Vulkan cube](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube/main.cpp) (`ExplainOnboardingFailure`) handles each of them.
 

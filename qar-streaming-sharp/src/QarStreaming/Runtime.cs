@@ -19,6 +19,7 @@ namespace Quaternar.Qaros
     public sealed class Runtime : IDisposable
     {
         private readonly RuntimeSafeHandle _handle;
+        private volatile bool _disposed;
 
         internal Runtime(RuntimeSafeHandle handle)
         {
@@ -93,7 +94,7 @@ namespace Quaternar.Qaros
                 var native = NativeInit.Rejoin(options, scope, chain.Head, presentationChain.Head);
                 IntPtr session;
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_rejoin(
-                    _handle.DangerousGetHandle(),
+                    scope.Borrow(_handle),
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -200,7 +201,7 @@ namespace Quaternar.Qaros
                 OnboardingIdNative onboardingId;
                 IntPtr session;
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_onboard(
-                    _handle.DangerousGetHandle(),
+                    scope.Borrow(_handle),
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -286,7 +287,7 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Member-hub invitation, on the primary hub's PC: asks the QAROS hub on this PC, the
         /// session's primary, for an invitation that joins the hub on another PC as its member. Carry
-        /// its <see cref="MemberHubInvitation.Serialize"/> bytes to your app on that PC, which calls
+        /// its <see cref="MemberHubInvitation.Serialize()"/> bytes to your app on that PC, which calls
         /// <see cref="JoinHubAsMember"/>. Blocks until the hub answers. Needs no session.
         /// </summary>
         /// <remarks>
@@ -314,7 +315,7 @@ namespace Quaternar.Qaros
             {
                 var native = MemberHubInvitationNative.Create(options, scope);
                 IntPtr invitation;
-                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_create_member_hub_invitation(_handle.DangerousGetHandle(), ref native, cancellation.Handle, out invitation));
+                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_create_member_hub_invitation(scope.Borrow(_handle), ref native, cancellation.Handle, out invitation));
                 return Results.FromHandle(info, invitation, MemberHubInvitationNative.FromHandle);
             }
         }
@@ -352,12 +353,13 @@ namespace Quaternar.Qaros
             var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
+            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
-                var native = MemberHubInvitationNative.Join(options);
+                var native = MemberHubInvitationNative.Join(options, scope);
                 return Results.FromNative(NativeMethods.qar_impl_runtime_join_hub_as_member(
-                    _handle.DangerousGetHandle(),
+                    scope.Borrow(_handle),
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -371,12 +373,15 @@ namespace Quaternar.Qaros
         /// </summary>
         public void Dispose()
         {
+            // A blocking call borrowing the handle (Onboard, Rejoin, JoinHubAsMember) defers its
+            // release until it returns; the flag makes the runtime unusable from here on all the same.
+            _disposed = true;
             _handle.Dispose();
         }
 
         private void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
+            if (_disposed || _handle.IsClosed || _handle.IsInvalid)
                 throw new ObjectDisposedException(nameof(Runtime));
         }
     }

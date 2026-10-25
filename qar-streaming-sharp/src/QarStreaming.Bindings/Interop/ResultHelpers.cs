@@ -371,10 +371,11 @@ namespace Quaternar.Qaros.Interop
                         Port = onboardHost.Port
                     });
                 case OnboardInvite onboardInvite:
+                    // The scope holds a reference on the invite until the native onboard is done.
                     return scope.AllocStruct(new OnboardInviteExtNative
                     {
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardInviteExt),
-                        Invite = onboardInvite.Invite == null ? IntPtr.Zero : onboardInvite.Invite.DangerousHandle
+                        Invite = onboardInvite.Invite == null ? IntPtr.Zero : onboardInvite.Invite.BorrowHandle(scope)
                     });
                 case OnboardPeerId onboardPeerId:
                     return scope.AllocStruct(new OnboardPeerIdExtNative

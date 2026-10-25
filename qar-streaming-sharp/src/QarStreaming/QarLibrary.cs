@@ -17,7 +17,8 @@ namespace Quaternar.Qaros
     {
         /// <summary>
         /// Loads the QAROS runtime (<see cref="InstalledRuntime"/>: beside the binding, else the
-        /// folder <c>QAROS_RUNTIME_DIR</c> names, else the installed QAROS, else on <c>PATH</c>) and
+        /// runtime of the instance <c>QAR_INSTANCE</c> names, else the installed QAROS, else on
+        /// <c>PATH</c>) and
         /// initializes the library once per process, from a
         /// single thread. Calling it again without a <see cref="Destroy"/> in between may fail. Fails
         /// with a "QAROS is not installed" result when no runtime is found, instead of a

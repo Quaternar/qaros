@@ -7,7 +7,7 @@ namespace Quaternar.Qaros
     /// A member-hub invitation: a primary hub's signed invitation that joins the QAROS hub on
     /// another PC to its session as a member. Created on the primary's PC with
     /// <see cref="Runtime.CreateMemberHubInvitation"/>, carried by your own channel as
-    /// <see cref="Serialize"/> bytes, and used on the joining PC with
+    /// <see cref="Serialize()"/> bytes, and used on the joining PC with
     /// <see cref="Runtime.JoinHubAsMember"/>.
     /// </summary>
     /// <remarks>
@@ -25,9 +25,11 @@ namespace Quaternar.Qaros
             _handle = handle ?? throw new ArgumentNullException(nameof(handle));
         }
 
-        internal IntPtr DangerousHandle { get { ThrowIfDisposed(); return _handle.DangerousGetHandle(); } }
-
-        /// <summary>The native handle, referenced by <paramref name="scope"/> until it is disposed.</summary>
+        /// <summary>
+        /// The native handle, referenced by <paramref name="scope"/> until it is disposed: every
+        /// native call that takes the invitation borrows it this way, so neither a concurrent
+        /// <see cref="Dispose"/> nor the finalizer can free it while the call still reads it.
+        /// </summary>
         /// <exception cref="ObjectDisposedException">The invitation is disposed.</exception>
         internal IntPtr BorrowHandle(NativeMemoryScope scope)
         {
@@ -41,14 +43,19 @@ namespace Quaternar.Qaros
         /// </summary>
         public Result<byte[]> Serialize()
         {
-            ThrowIfDisposed();
+            using (var scope = new NativeMemoryScope())
+                return Serialize(BorrowHandle(scope));
+        }
+
+        private static Result<byte[]> Serialize(IntPtr handle)
+        {
             UIntPtr size;
-            var sizeInfo = Results.ToInfo(NativeMethods.qar_impl_member_hub_invitation_serialized_size(_handle.DangerousGetHandle(), out size));
+            var sizeInfo = Results.ToInfo(NativeMethods.qar_impl_member_hub_invitation_serialized_size(handle, out size));
             if (!sizeInfo.IsSuccess)
                 return Result<byte[]>.Failure(sizeInfo);
             var buffer = new byte[NativeConvert.ToInt32(size)];
             UIntPtr written;
-            var info = Results.ToInfo(NativeMethods.qar_impl_member_hub_invitation_serialize(_handle.DangerousGetHandle(), buffer, (UIntPtr)buffer.Length, out written));
+            var info = Results.ToInfo(NativeMethods.qar_impl_member_hub_invitation_serialize(handle, buffer, (UIntPtr)buffer.Length, out written));
             if (!info.IsSuccess)
                 return Result<byte[]>.Failure(info);
             var count = NativeConvert.ToInt32(written);
@@ -60,7 +67,7 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Parses an invitation from <see cref="Serialize"/> bytes. Strict: bytes with an unknown or
+        /// Parses an invitation from <see cref="Serialize()"/> bytes. Strict: bytes with an unknown or
         /// missing field, of another kind or version, out of bounds or over 16 KiB fail with
         /// <see cref="StatusCode.MemberInvitationInvalid"/>. The signature is checked by
         /// <see cref="Runtime.JoinHubAsMember"/>, not here.
@@ -210,12 +217,14 @@ namespace Quaternar.Qaros.Interop
             });
         }
 
-        internal static JoinHubAsMemberInitNative Join(JoinHubAsMemberOptions options)
+        // The scope holds a reference on the invitation until the native join is done: the join
+        // blocks for minutes, and the caller may keep no other reference to the invitation.
+        internal static JoinHubAsMemberInitNative Join(JoinHubAsMemberOptions options, NativeMemoryScope scope)
         {
             return new JoinHubAsMemberInitNative
             {
                 Header = NativeDefaults.Header(StructureType.RuntimeJoinHubAsMemberInit),
-                Invitation = options.Invitation.DangerousHandle,
+                Invitation = options.Invitation.BorrowHandle(scope),
                 HubStartTimeoutMs = Milliseconds(options.HubStartTimeout, nameof(options.HubStartTimeout)),
                 RestartTimeoutMs = Milliseconds(options.RestartTimeout, nameof(options.RestartTimeout))
             };

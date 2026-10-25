@@ -54,10 +54,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
   targets.
 - **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
-  binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, installed QAROS,
-  `PATH`), how candidates
+  binding follows (already loaded, beside the binding, the runtime of the instance `QAR_INSTANCE`
+  names, installed QAROS, `PATH`), how candidates
   load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
-  Troubleshooting and Onboarding describe the new fallback.
+  Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
 
@@ -124,6 +124,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Getting Started* and *Troubleshooting* say that every QAROS Hub sets `QAR_INSTANCE`
+  for the apps it and the Visualizer start (`default` for the installed QAROS), so only an app
+  started by hand needs it.
 - **Docs:** *Getting Started* (Developer Guide) walks from the installer to a cube on a viewer as
   it happens: the demo setup name, the SmartScreen step for preview builds, no Vulkan SDK needed,
   the console lines in their real order, the approval window title (`qar-vulkan-source`) and that it

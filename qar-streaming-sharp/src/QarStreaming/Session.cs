@@ -169,7 +169,7 @@ namespace Quaternar.Qaros
         /// <para>
         /// The caller owns and disposes the invite. Hand it to the co-process over a private
         /// channel (for example its stdin, never a command line) with
-        /// <see cref="OnboardingInvite.Serialize"/>; the co-process creates its runtime with
+        /// <see cref="OnboardingInvite.Serialize()"/>; the co-process creates its runtime with
         /// <see cref="RuntimeOptions.EphemeralStorage"/>, so it writes nothing to disk, and onboards
         /// with <see cref="OnboardingInvite.Deserialize"/> and <see cref="OnboardOptions.UseInvite"/>.
         /// A restarted co-process needs a fresh invite: mint one when it is needed.

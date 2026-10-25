@@ -163,7 +163,7 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Onboards with a pairing code: the short code on the hub's onboarding screen, or the text
-        /// of any code the hub minted (<see cref="OnboardingInvite.GetCode"/>). Without
+        /// of any code the hub minted (<see cref="OnboardingInvite.GetCode()"/>). Without
         /// <see cref="WithHost"/> it finds this user's hub on this PC by itself.
         /// </summary>
         /// <remarks>

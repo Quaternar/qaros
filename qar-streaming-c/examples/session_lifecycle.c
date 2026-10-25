@@ -265,7 +265,7 @@ main(int argc, char** argv)
 		fprintf(
 			stderr,
 			"Could not load the QAROS runtime (reason above): install QAROS, or fix "
-			"QAROS_RUNTIME_DIR.\n"
+			"QAR_INSTANCE.\n"
 		);
 		return 2;
 	}

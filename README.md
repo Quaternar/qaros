@@ -18,7 +18,7 @@ winget install --id LLVM.LLVM ---exact
 
 Install QAROS on the PC with `QAROS-Setup-<version>.exe` (per machine, one administrator prompt). The examples load its runtime at run time (`qar_library_load(NULL)`); this repository needs no runtime download. Step by step: Developer Guide, *Getting Started* (`docs/website/docs/developer-guide/getting-started.mdx`).
 
-Every example loads the installed QAROS with `qar_library_load(NULL)` and ships no copy of the runtime. `dynamic_loading` alone also takes the path of a `qar-streaming-c.dll`, for development builds of QAROS itself; to run any example against another runtime, set `QAROS_RUNTIME_DIR` to its folder.
+Every example loads the installed QAROS with `qar_library_load(NULL)` and ships no copy of the runtime. `dynamic_loading` alone also takes the path of a `qar-streaming-c.dll`, for development builds of QAROS itself; to run any example against the runtime of a QAROS development hub, set `QAR_INSTANCE` to that hub's instance name.
 
 ## Documentation
 

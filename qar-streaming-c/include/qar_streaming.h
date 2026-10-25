@@ -29,10 +29,15 @@
  * 1. `qar-streaming-c.dll` beside the module that calls it: the executable, or
  *    the plugin DLL that loads QAROS (a test binary, a development ZIP, an app
  *    built into a QAROS tree);
- * 2. the folder named by the `QAROS_RUNTIME_DIR` environment variable, which a
- *    QAROS development build sets for the processes it starts; when the
- *    variable is set, a runtime missing there is an error, not a reason to go
- *    on;
+ * 2. when the `QAR_INSTANCE` environment variable names a QAROS instance,
+ *    that instance's runtime folder: `default` is the installed QAROS, any
+ *    other name the folder recorded as `RuntimeFolder` under
+ *    `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a QAROS development hub
+ *    records its build output there and sets `QAR_INSTANCE` for the apps it
+ *    starts), else that record's `<InstallFolder>/bin`. When the variable is
+ * set, an unknown instance or a runtime that does not load there is an error,
+ * never a reason to load another instance's runtime. Windows only; Linux has no
+ * instance records;
  * 3. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll` (Windows
  *    only; Linux has no installation record); an installed copy that fails to
  *    load is an error;
@@ -2712,10 +2717,10 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
  * @param library_path NULL is the normal call: the one already loaded in the
- *        process, else the library beside the calling module, else the one in
- *        the folder `QAROS_RUNTIME_DIR` names, else the installed QAROS, else
- *        one on `PATH` (see "Prefer dynamic loading" above for the full
- * order). A non-NULL path names the library
+ *        process, else the library beside the calling module, else the
+ *        runtime of the QAROS instance `QAR_INSTANCE` names, else the
+ *        installed QAROS, else one on `PATH` (see "Prefer dynamic loading"
+ *        above for the full order). A non-NULL path names the library
  * **file** itself, absolute or relative to the current working directory, and
  * only that file is tried. The runtime's dependency libraries are resolved from
  * the library's own folder and System32. UTF-8, like every path in this API
@@ -8568,35 +8573,6 @@ qar_loadlib_beside_module(void)
 	return qar_loadlib_in_folder_w(folder);
 }
 
-/// Environment variable naming a folder that holds the runtime (step 2).
-#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
-#define QAR_RUNTIME_DIR_ENV_NAME_W L"QAROS_RUNTIME_DIR"
-
-/// The folder QAROS_RUNTIME_DIR names, wide. False when it is unset or empty.
-static inline bool
-qar_runtime_env_folder_w(wchar_t* out, DWORD capacity_chars)
-{
-	const DWORD length = GetEnvironmentVariableW(
-		QAR_RUNTIME_DIR_ENV_NAME_W, out, capacity_chars
-	);
-	return length > 0 && length < capacity_chars;
-}
-
-/// UTF-8 form of qar_runtime_env_folder_w.
-static inline bool
-qar_runtime_env_folder(char* out, size_t capacity)
-{
-	wchar_t folder[MAX_PATH];
-	if(!qar_runtime_env_folder_w(folder, MAX_PATH))
-	{
-		return false;
-	}
-	const int written = WideCharToMultiByte(
-		CP_UTF8, 0, folder, -1, out, (int)capacity, NULL, NULL
-	);
-	return written > 0;
-}
-
 /// Step 4 of the default lookup: every folder on PATH, in order. The current
 /// directory is not searched: a library planted there would be loaded.
 static inline HMODULE
@@ -8634,8 +8610,8 @@ qar_loadlib_on_path(void)
 	return handle;
 }
 
-/// Key the QAROS installer writes, per machine, under HKLM. An installation is
-/// never read from HKCU: every process of the user can write that hive.
+/// Key the QAROS installer writes, per machine, under HKLM: the default
+/// instance.
 #define QAR_INSTALL_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS"
 
 /// `<InstallFolder>\bin` of the installed QAROS, wide. False when QAROS is not
@@ -8684,16 +8660,234 @@ qar_installed_bin_folder(char* out, size_t capacity)
 	return written > 0;
 }
 
+/// Environment variable naming the QAROS instance an app belongs to: step 2 of
+/// the default lookup loads that instance's runtime, and the runtime enrols
+/// with that instance's hub. A development hub sets it for the apps it starts.
+#define QAR_INSTANCE_ENV_NAME_W L"QAR_INSTANCE"
+
+/// Name of the installed (HKLM) instance.
+#define QAR_DEFAULT_INSTANCE_NAME_W L"default"
+
+/// Longest instance name. A name is 1-64 characters of A-Z a-z 0-9 . _ -.
+#define QAR_INSTANCE_NAME_MAX_LENGTH 64
+
+/// Per-user instance records, under HKCU: the same records the runtime reads to
+/// pick the hub of a named instance.
+#define QAR_INSTANCES_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS\\Instances"
+
+/// Value of a per-user instance record naming the folder that holds that
+/// instance's runtime (a development hub records its build output there).
+#define QAR_INSTANCE_RUNTIME_FOLDER_VALUE L"RuntimeFolder"
+
+/// Whether `name` is a QAROS instance name: 1-64 of A-Z a-z 0-9 . _ -.
+static inline bool
+qar_is_valid_instance_name_w(const wchar_t* name)
+{
+	size_t length = 0;
+	for(; name[length] != L'\0'; ++length)
+	{
+		const wchar_t c = name[length];
+		const bool allowed =
+			(c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z')
+			|| (c >= L'0' && c <= L'9') || c == L'.' || c == L'_' || c == L'-';
+		if(!allowed || length >= QAR_INSTANCE_NAME_MAX_LENGTH)
+		{
+			return false;
+		}
+	}
+	return length > 0;
+}
+
+/// Whether `folder` is a fully qualified path: `X:\...` or a UNC
+/// `\\server\...`. A relative or drive-relative folder would load against the
+/// current directory, which the lookup never searches.
+static inline bool
+qar_is_absolute_folder_w(const wchar_t* folder)
+{
+	const bool drive = ((folder[0] >= L'A' && folder[0] <= L'Z')
+						|| (folder[0] >= L'a' && folder[0] <= L'z'))
+					   && folder[1] == L':'
+					   && (folder[2] == L'\\' || folder[2] == L'/');
+	const bool unc = folder[0] == L'\\' && folder[1] == L'\\';
+	return drive || unc;
+}
+
+/// The instance QAR_INSTANCE names, wide. False when it is unset or empty.
+/// True with an empty `out` when it is set to something longer than
+/// `capacity_chars - 1`: that is no valid name, and the lookup reports it.
+static inline bool
+qar_requested_instance_w(wchar_t* out, DWORD capacity_chars)
+{
+	out[0] = L'\0';
+	const DWORD length =
+		GetEnvironmentVariableW(QAR_INSTANCE_ENV_NAME_W, out, capacity_chars);
+	if(length >= capacity_chars)
+	{
+		out[0] = L'\0';
+		return true;
+	}
+	return length > 0;
+}
+
+/// Reads the folder in value `value` of the per-user record `key` (HKCU), wide.
+/// False when it is missing, does not fit, or is not a fully qualified path.
+static inline bool
+qar_read_instance_folder_w(
+	const wchar_t* key, const wchar_t* value, wchar_t* out, DWORD capacity_chars
+)
+{
+	DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
+	const LSTATUS status = RegGetValueW(
+		HKEY_CURRENT_USER, key, value, RRF_RT_REG_SZ, NULL, out, &size
+	);
+	return status == ERROR_SUCCESS && qar_is_absolute_folder_w(out);
+}
+
+/// The folder holding the runtime of instance `instance`, wide: for "default"
+/// the installed QAROS's `<InstallFolder>\bin` (HKLM); for any other name the
+/// value RuntimeFolder of HKCU\SOFTWARE\Quaternar\QAROS\Instances\<instance>,
+/// else that record's `<InstallFolder>\bin` (a registered named instance).
+/// False when the name is not valid or no fully qualified folder is recorded.
+///
+/// HKCU is writable by every process of the user, like the environment that
+/// QAR_INSTANCE comes from: a per-user record carries the same trust as an
+/// environment variable naming a folder, and is read only when QAR_INSTANCE
+/// names that instance. No step of the lookup checks the runtime's signature
+/// before loading it.
+static inline bool
+qar_instance_runtime_folder_w(
+	const wchar_t* instance, wchar_t* out, DWORD capacity_chars
+)
+{
+	if(!qar_is_valid_instance_name_w(instance))
+	{
+		return false;
+	}
+	if(wcscmp(instance, QAR_DEFAULT_INSTANCE_NAME_W) == 0)
+	{
+		return qar_installed_bin_folder_w(out, capacity_chars);
+	}
+	wchar_t
+		key[sizeof(QAR_INSTANCES_REGISTRY_KEY) / sizeof(wchar_t) + 1
+			+ QAR_INSTANCE_NAME_MAX_LENGTH];
+	wcscpy_s(key, sizeof(key) / sizeof(wchar_t), QAR_INSTANCES_REGISTRY_KEY);
+	wcscat_s(key, sizeof(key) / sizeof(wchar_t), L"\\");
+	wcscat_s(key, sizeof(key) / sizeof(wchar_t), instance);
+	if(qar_read_instance_folder_w(
+		   key, QAR_INSTANCE_RUNTIME_FOLDER_VALUE, out, capacity_chars
+	   ))
+	{
+		return true;
+	}
+	if(!qar_read_instance_folder_w(key, L"InstallFolder", out, capacity_chars)
+	   || wcslen(out) + 5 >= capacity_chars)
+	{
+		return false;
+	}
+	wcscat_s(out, capacity_chars, L"\\bin");
+	return true;
+}
+
+/// Step 2 of the default lookup: the runtime of the instance QAR_INSTANCE
+/// names. NULL, with a printed reason, when the name is not valid, no runtime
+/// folder is recorded for it, or the runtime there does not load; never another
+/// instance's runtime.
+static inline HMODULE
+qar_loadlib_requested_instance(const wchar_t* instance)
+{
+	if(!qar_is_valid_instance_name_w(instance))
+	{
+		printf(
+			"QAR_INSTANCE is not a QAROS instance name "
+			"(1-%d of A-Z a-z 0-9 . _ -); no runtime is loaded.\n",
+			QAR_INSTANCE_NAME_MAX_LENGTH
+		);
+		return NULL;
+	}
+	wchar_t folder[MAX_PATH];
+	if(!qar_instance_runtime_folder_w(instance, folder, MAX_PATH))
+	{
+		if(wcscmp(instance, QAR_DEFAULT_INSTANCE_NAME_W) == 0)
+		{
+			printf(
+				"QAR_INSTANCE is 'default', but QAROS is not installed (no "
+				"InstallFolder under HKLM\\SOFTWARE\\Quaternar\\QAROS).\n"
+			);
+		}
+		else
+		{
+			printf(
+				"QAR_INSTANCE is '%ls', but no runtime folder is recorded "
+				"for that instance (no full-path RuntimeFolder or InstallFolder "
+				"under HKCU\\SOFTWARE\\Quaternar\\QAROS\\Instances\\%ls). Start "
+				"its hub, or unset QAR_INSTANCE.\n",
+				instance,
+				instance
+			);
+		}
+		return NULL;
+	}
+	HMODULE handle = qar_loadlib_in_folder_w(folder);
+	if(handle == NULL)
+	{
+		printf(
+			"QAR_INSTANCE is '%ls', but no loadable qar-streaming-c.dll "
+			"is in its runtime folder '%ls'.\n",
+			instance,
+			folder
+		);
+	}
+	return handle;
+}
+
+/// Steps 2-4 of the default lookup, after the runtime already in the process
+/// and the one beside the calling module.
+static inline HMODULE
+qar_loadlib_by_instance(void)
+{
+	wchar_t instance[QAR_INSTANCE_NAME_MAX_LENGTH + 2];
+	if(qar_requested_instance_w(instance, QAR_INSTANCE_NAME_MAX_LENGTH + 2))
+	{
+		return qar_loadlib_requested_instance(instance);
+	}
+	wchar_t folder[MAX_PATH];
+	if(qar_installed_bin_folder_w(folder, MAX_PATH))
+	{
+		HMODULE installed = qar_loadlib_in_folder_w(folder);
+		if(installed == NULL)
+		{
+			printf(
+				"The installed QAROS runtime in '%ls' could not be loaded. "
+				"Repair or reinstall QAROS.\n",
+				folder
+			);
+		}
+		return installed;
+	}
+	HMODULE handle = qar_loadlib_on_path();
+	if(handle == NULL)
+	{
+		printf(
+			"qar-streaming-c.dll is not beside this module, QAR_INSTANCE "
+			"is not set, QAROS is not installed (no InstallFolder under "
+			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and it is not on PATH.\n"
+		);
+	}
+	return handle;
+}
+
 /// qar_library_load(NULL): the runtime lookup every QAROS binding follows
 /// (docs: authoring a binding). The first match wins:
 ///   0. a qar-streaming-c.dll already loaded in this process: nothing is
 ///   loaded;
 ///   1. the folder of the module this header is compiled into (the
 ///      executable, or the plugin DLL that loads QAROS);
-///   2. the folder named by QAROS_RUNTIME_DIR; when it is set, a runtime
-///      missing there or failing to load is an error;
-///   3. the installed QAROS, `<InstallFolder>\bin` from HKLM; when installed, a
-///      copy failing to load there is an error;
+///   2. when QAR_INSTANCE is set, the runtime folder of that instance
+///      (qar_instance_runtime_folder_w); an invalid or unknown instance, or a
+///      runtime there that does not load, is an error, never a reason to load
+///      another instance's runtime;
+///   3. the installed QAROS (the default instance), `<InstallFolder>\bin` from
+///      HKLM; when installed, a copy failing to load there is an error;
 ///   4. every folder on PATH, in order.
 /// Each candidate loads from its absolute path, with its dependencies from its
 /// own folder and System32 only.
@@ -8711,45 +8905,7 @@ qar_loadlib_default(void)
 	{
 		return handle;
 	}
-	wchar_t folder[MAX_PATH];
-	if(qar_runtime_env_folder_w(folder, MAX_PATH))
-	{
-		handle = qar_loadlib_in_folder_w(folder);
-		if(handle == NULL)
-		{
-			printf(
-				"QAROS_RUNTIME_DIR is '%ls', but no loadable "
-				"qar-streaming-c.dll "
-				"is there.\n",
-				folder
-			);
-		}
-		return handle;
-	}
-	if(qar_installed_bin_folder_w(folder, MAX_PATH))
-	{
-		handle = qar_loadlib_in_folder_w(folder);
-		if(handle == NULL)
-		{
-			printf(
-				"The installed QAROS runtime in '%ls' could not be loaded. "
-				"Repair or reinstall QAROS.\n",
-				folder
-			);
-		}
-		return handle;
-	}
-	handle = qar_loadlib_on_path();
-	if(handle == NULL)
-	{
-		printf(
-			"qar-streaming-c.dll is not beside this module, QAROS_RUNTIME_DIR "
-			"is "
-			"not set, QAROS is not installed (no InstallFolder under "
-			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and it is not on PATH.\n"
-		);
-	}
-	return handle;
+	return qar_loadlib_by_instance();
 }
 
 static inline void
@@ -8798,9 +8954,6 @@ qar_loadlib(const char* path)
 }
 
 #define QAR_RUNTIME_LIBRARY_FILE_NAME "libqar-streaming-c.so"
-
-/// Environment variable naming a folder that holds the runtime (step 2).
-#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
 
 /// Loads `<folder>/libqar-streaming-c.so` when the file exists there. NULL
 /// when it is not there, or (with a printed reason) when it fails to load.
@@ -8865,24 +9018,11 @@ qar_loadlib_beside_module(void)
 	return handle;
 }
 
-/// The folder QAROS_RUNTIME_DIR names. False when it is unset or empty.
-static inline bool
-qar_runtime_env_folder(char* out, size_t capacity)
-{
-	const char* folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
-	if(folder == NULL || folder[0] == '\0' || strlen(folder) >= capacity)
-	{
-		return false;
-	}
-	snprintf(out, capacity, "%s", folder);
-	return true;
-}
-
-/// qar_library_load(NULL) on Linux: the Windows lookup without step 3 (there is
-/// no installation record yet). 0. already loaded in this process; 1. the
-/// folder of the module this header is compiled into; 2. QAROS_RUNTIME_DIR;
-/// 4. the dynamic linker's own search (LD_LIBRARY_PATH, runpath, ld.so cache),
-/// its counterpart of PATH.
+/// qar_library_load(NULL) on Linux: the Windows lookup without steps 2 and 3
+/// (there are no instance or installation records yet, so QAR_INSTANCE is not
+/// read). 0. already loaded in this process; 1. the folder of the module this
+/// header is compiled into; 4. the dynamic linker's own search
+/// (LD_LIBRARY_PATH, runpath, ld.so cache), its counterpart of PATH.
 static inline void*
 qar_loadlib_default(void)
 {
@@ -8898,27 +9038,12 @@ qar_loadlib_default(void)
 	{
 		return handle;
 	}
-	const char* env_folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
-	if(env_folder != NULL && env_folder[0] != '\0')
-	{
-		handle = qar_loadlib_in_folder(env_folder, strlen(env_folder));
-		if(handle == NULL)
-		{
-			printf(
-				"QAROS_RUNTIME_DIR is '%s', but no loadable %s is there.\n",
-				env_folder,
-				QAR_RUNTIME_LIBRARY_FILE_NAME
-			);
-		}
-		return handle;
-	}
 	handle = dlopen(QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL);
 	if(handle == NULL)
 	{
 		printf(
-			"%s is not beside this module, QAROS_RUNTIME_DIR is not set, and "
-			"it "
-			"is not on the library search path: %s\n",
+			"%s is not beside this module and not on the library search path: "
+			"%s\n",
 			QAR_RUNTIME_LIBRARY_FILE_NAME,
 			dlerror()
 		);
@@ -9048,7 +9173,7 @@ qar_library_load(const char* library_path)
 		return true;
 	}
 
-	// NULL: the default lookup (qar_loadlib_default), installed QAROS first.
+	// NULL: the default lookup (qar_loadlib_default).
 	g_qar_dynamic_library_handle = library_path != NULL
 									   ? qar_loadlib(library_path)
 									   : qar_loadlib_default();

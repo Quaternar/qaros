@@ -15,8 +15,14 @@ namespace Quaternar.Qaros
     /// loaded;</item>
     /// <item>beside this binding: the folder of the <c>Quaternar.Qaros</c> assembly, then the
     /// application's base directory (a test project's output folder, a development ZIP);</item>
-    /// <item>the folder named by the <c>QAROS_RUNTIME_DIR</c> environment variable; when it is
-    /// set, a runtime missing there is an error;</item>
+    /// <item>when the <c>QAR_INSTANCE</c> environment variable names a QAROS instance, that
+    /// instance's runtime folder (<see cref="TryGetInstanceRuntimeFolder"/>): <c>default</c> is
+    /// the installed QAROS, any other name the folder recorded as <c>RuntimeFolder</c> under
+    /// <c>HKCU\SOFTWARE\Quaternar\QAROS\Instances\&lt;name&gt;</c>, which a QAROS development hub
+    /// writes for the apps it starts (else a registered instance's <c>&lt;InstallFolder&gt;\bin</c>).
+    /// When the variable is set, an invalid or unknown instance or
+    /// a runtime missing there is an error, never a reason to load another instance's
+    /// runtime;</item>
     /// <item>the installed QAROS: <c>&lt;InstallFolder&gt;\bin</c>, read from <c>HKLM</c>
     /// <c>SOFTWARE\Quaternar\QAROS</c>, value <c>InstallFolder</c>; an installed copy that fails
     /// to load is an error;</item>
@@ -34,11 +40,22 @@ namespace Quaternar.Qaros
 
         private const string RegistryKey = @"SOFTWARE\Quaternar\QAROS";
         private const string InstallFolderValue = "InstallFolder";
-        /// <summary>Environment variable naming a folder that holds the runtime (step 2).</summary>
-        public const string RuntimeDirEnvironmentVariable = "QAROS_RUNTIME_DIR";
+        private const string InstancesRegistryKey = @"SOFTWARE\Quaternar\QAROS\Instances";
+        private const string RuntimeFolderValue = "RuntimeFolder";
+        private const int MaxInstanceNameLength = 64;
+        private const int MaxRuntimeFolderLength = 260 - 2 - 19; // MAX_PATH, separator, NUL, LibraryFileName
+
+        /// <summary>
+        /// Environment variable naming the QAROS instance the application belongs to (step 2):
+        /// the runtime is loaded from that instance's folder, and enrols with its hub.
+        /// </summary>
+        public const string InstanceEnvironmentVariable = "QAR_INSTANCE";
+
+        /// <summary>Name of the installed (HKLM) instance.</summary>
+        public const string DefaultInstanceName = "default";
 
         private const string NotFoundMessage =
-            @"qar-streaming-c.dll is not beside the application, QAROS_RUNTIME_DIR is not set, QAROS is not installed (no InstallFolder under HKLM\SOFTWARE\Quaternar\QAROS), and it is not on PATH. Install QAROS to run this application.";
+            @"qar-streaming-c.dll is not beside the application, QAR_INSTANCE is not set, QAROS is not installed (no InstallFolder under HKLM\SOFTWARE\Quaternar\QAROS), and it is not on PATH. Install QAROS to run this application.";
 
         private static readonly object s_lock = new object();
         private static IntPtr s_handle = IntPtr.Zero;
@@ -70,10 +87,11 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Loads the runtime by the lookup described on <see cref="InstalledRuntime"/>: already
-        /// loaded, else beside the binding, else <c>QAROS_RUNTIME_DIR</c>, else the installed QAROS,
-        /// else on <c>PATH</c>. Returns the loaded file's path. Fails with
-        /// <see cref="StatusCode.LogicError"/> when nothing is found, or when the copy that
-        /// <c>QAROS_RUNTIME_DIR</c> or the installation names is missing or does not load.
+        /// loaded, else beside the binding, else the instance <c>QAR_INSTANCE</c> names, else the
+        /// installed QAROS, else on <c>PATH</c>. Returns the loaded file's path. Fails with
+        /// <see cref="StatusCode.LogicError"/> when nothing is found, when <c>QAR_INSTANCE</c>
+        /// names an invalid or unknown instance, or when the copy that instance or the
+        /// installation names is missing or does not load.
         /// </summary>
         public static Result<string> Load()
         {
@@ -130,10 +148,10 @@ namespace Quaternar.Qaros
             var beside = FirstExisting(BindingFolders());
             if (beside != null)
                 return LoadLocked(beside);
-            // 2. QAROS_RUNTIME_DIR; when set, it is the only copy considered.
-            var envFolder = TryGetRuntimeDirFromEnvironment();
-            if (envFolder != null)
-                return LoadLocked(Path.GetFullPath(Path.Combine(envFolder, LibraryFileName)));
+            // 2. The instance QAR_INSTANCE names; when set, it is the only copy considered.
+            var instance = TryGetRequestedInstance();
+            if (instance != null)
+                return LoadRequestedInstanceLocked(instance);
             // 3. The installed QAROS; an installed copy that fails to load is an error.
             var binFolder = TryGetBinFolder();
             if (binFolder != null)
@@ -146,12 +164,102 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// The folder <c>QAROS_RUNTIME_DIR</c> names, or null when it is unset or empty.
+        /// The instance <c>QAR_INSTANCE</c> names, exactly as set, or null when it is unset or
+        /// empty.
         /// </summary>
-        public static string? TryGetRuntimeDirFromEnvironment()
+        public static string? TryGetRequestedInstance()
         {
-            var folder = Environment.GetEnvironmentVariable(RuntimeDirEnvironmentVariable);
-            return string.IsNullOrWhiteSpace(folder) ? null : folder!.Trim().Trim('"');
+            var instance = Environment.GetEnvironmentVariable(InstanceEnvironmentVariable);
+            return string.IsNullOrEmpty(instance) ? null : instance;
+        }
+
+        /// <summary>Whether <paramref name="name"/> is a QAROS instance name: 1-64 of A-Z a-z 0-9 . _ -.</summary>
+        public static bool IsValidInstanceName(string? name)
+        {
+            if (string.IsNullOrEmpty(name) || name!.Length > MaxInstanceNameLength)
+                return false;
+            foreach (var c in name)
+            {
+                var allowed = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                    || c == '.' || c == '_' || c == '-';
+                if (!allowed)
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The folder holding the runtime of instance <paramref name="instance"/>: for
+        /// <c>default</c> the installed QAROS's <c>bin</c> (<see cref="TryGetBinFolder"/>), for any
+        /// other name the value <c>RuntimeFolder</c> of
+        /// <c>HKCU\SOFTWARE\Quaternar\QAROS\Instances\&lt;name&gt;</c>, else that record's
+        /// <c>&lt;InstallFolder&gt;\bin</c> (a registered named instance). Null when the name is not
+        /// valid, no fully qualified folder is recorded, or the platform is not Windows. HKCU is writable by every
+        /// process of the user, like the environment <c>QAR_INSTANCE</c> comes from: the record
+        /// carries the same trust as an environment variable naming a folder, and is read only
+        /// when <c>QAR_INSTANCE</c> names that instance.
+        /// </summary>
+        public static string? TryGetInstanceRuntimeFolder(string instance)
+        {
+            if (instance == null)
+                throw new ArgumentNullException(nameof(instance));
+            if (!IsWindows() || !IsValidInstanceName(instance))
+                return null;
+            if (instance == DefaultInstanceName)
+                return TryGetBinFolder();
+            var key = InstancesRegistryKey + @"\" + instance;
+            var folder = ReadRegistryString(RegistryRoots.CurrentUser, key, RuntimeFolderValue);
+            if (IsFullyQualifiedFolder(folder))
+                return folder;
+            // A registered named instance (InstallFolder) without a RuntimeFolder: its bin.
+            var installFolder = ReadRegistryString(RegistryRoots.CurrentUser, key, InstallFolderValue);
+            if (!IsFullyQualifiedFolder(installFolder))
+                return null;
+            var bin = Path.Combine(installFolder!, "bin");
+            return IsFullyQualifiedFolder(bin) ? bin : null;
+        }
+
+        /// <summary>
+        /// <c>X:\...</c> or a UNC <c>\\server\...</c>. A relative or drive-relative folder would
+        /// load against the current directory, which the lookup never searches.
+        /// </summary>
+        private static bool IsFullyQualifiedFolder(string? folder)
+        {
+            // The C loader builds <folder>\qar-streaming-c.dll in a MAX_PATH buffer: a longer folder
+            // fails there, so it counts as none here too.
+            if (folder == null || folder.Length < 3 || folder.Length > MaxRuntimeFolderLength)
+                return false;
+            var letter = folder[0];
+            var drive = ((letter >= 'A' && letter <= 'Z') || (letter >= 'a' && letter <= 'z'))
+                && folder[1] == ':' && (folder[2] == '\\' || folder[2] == '/');
+            var unc = folder[0] == '\\' && folder[1] == '\\';
+            return drive || unc;
+        }
+
+        private static Result<string> LoadRequestedInstanceLocked(string instance)
+        {
+            var library = ResolveInstanceLibrary(instance);
+            return library.IsSuccess ? LoadLocked(library.Value) : library;
+        }
+
+        /// <summary>
+        /// Step 2 without loading: the full path of <c>qar-streaming-c.dll</c> in the runtime
+        /// folder of <paramref name="instance"/>, or a failure naming the instance.
+        /// </summary>
+        internal static Result<string> ResolveInstanceLibrary(string instance)
+        {
+            if (!IsValidInstanceName(instance))
+                return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0,
+                    "QAR_INSTANCE='" + instance + "' is not a QAROS instance name (1-64 of A-Z a-z 0-9 . _ -); no runtime is loaded."));
+            var folder = TryGetInstanceRuntimeFolder(instance);
+            if (folder == null)
+            {
+                var reason = instance == DefaultInstanceName
+                    ? @"QAR_INSTANCE is 'default', but QAROS is not installed (no InstallFolder under HKLM\SOFTWARE\Quaternar\QAROS)."
+                    : "QAR_INSTANCE is '" + instance + @"', but no runtime folder is recorded for that instance (no full-path RuntimeFolder or InstallFolder under HKCU\SOFTWARE\Quaternar\QAROS\Instances\" + instance + "). Start its hub, or unset QAR_INSTANCE.";
+                return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0, reason));
+            }
+            return Result<string>.Success(SuccessInfo(), Path.GetFullPath(Path.Combine(folder, LibraryFileName)));
         }
 
         private static string? FirstExisting(System.Collections.Generic.IEnumerable<string> folders)
@@ -200,7 +308,7 @@ namespace Quaternar.Qaros
                 return Result<string>.Failure(new ResultInfo(StatusCode.NotImplemented, 0, "Loading the installed QAROS runtime is supported on Windows only."));
             if (!File.Exists(fullPath))
                 return Result<string>.Failure(new ResultInfo(StatusCode.LogicError, 0,
-                    "QAROS runtime library not found at '" + fullPath + "'. Check QAROS_RUNTIME_DIR, or repair or reinstall QAROS."));
+                    "QAROS runtime library not found at '" + fullPath + "'. Check QAR_INSTANCE, or repair or reinstall QAROS."));
             // Absolute path; dependencies from the library's own folder and System32 only,
             // never from the application's folder (same rule as the C loader).
             var handle = Kernel32.LoadLibraryExW(fullPath, IntPtr.Zero, Kernel32.LoadLibrarySearchDllLoadDir | Kernel32.LoadLibrarySearchSystem32);
@@ -255,13 +363,18 @@ namespace Quaternar.Qaros
 
         private static string? ReadInstallFolder(IntPtr root)
         {
+            return ReadRegistryString(root, RegistryKey, InstallFolderValue);
+        }
+
+        private static string? ReadRegistryString(IntPtr root, string subKey, string valueName)
+        {
             uint size = 0;
             uint type;
-            var status = Advapi32.RegGetValueW(root, RegistryKey, InstallFolderValue, Advapi32.RrfRtRegSz, out type, null, ref size);
+            var status = Advapi32.RegGetValueW(root, subKey, valueName, Advapi32.RrfRtRegSz, out type, null, ref size);
             if (status != 0 || size == 0)
                 return null;
             var buffer = new char[(size / 2) + 1];
-            status = Advapi32.RegGetValueW(root, RegistryKey, InstallFolderValue, Advapi32.RrfRtRegSz, out type, buffer, ref size);
+            status = Advapi32.RegGetValueW(root, subKey, valueName, Advapi32.RrfRtRegSz, out type, buffer, ref size);
             if (status != 0)
                 return null;
             var text = new string(buffer);
@@ -279,6 +392,7 @@ namespace Quaternar.Qaros
         private static class RegistryRoots
         {
             internal static readonly IntPtr LocalMachine = new IntPtr(unchecked((int)0x80000002));
+            internal static readonly IntPtr CurrentUser = new IntPtr(unchecked((int)0x80000001));
         }
 
         private static class Advapi32

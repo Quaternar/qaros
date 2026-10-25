@@ -32,12 +32,15 @@
  *
  * \section dynamic_loading_load Load the Runtime
  * \ref qar_library_load with NULL takes the first of: a \c qar-streaming-c
- * already loaded in the process, one beside the calling module, the folder the
- * `QAROS_RUNTIME_DIR` environment variable names, the installed QAROS
- * (`<InstallFolder>\bin` under `HKLM\SOFTWARE\Quaternar\QAROS`), and `PATH`.
- * The current directory is never searched. With nothing found it prints where
- * it looked and returns false, so the application can run without AR/VR. To
- * run against another runtime without changing code, set `QAROS_RUNTIME_DIR`.
+ * already loaded in the process, one beside the calling module, the runtime of
+ * the QAROS instance the `QAR_INSTANCE` environment variable names, the
+ * installed QAROS (`<InstallFolder>\bin` under `HKLM\SOFTWARE\Quaternar\QAROS`),
+ * and `PATH`. The current directory is never searched. With nothing found it
+ * prints where it looked and returns false, so the application can run without
+ * AR/VR. A QAROS development hub sets `QAR_INSTANCE` for the apps it starts, so
+ * they run its runtime; set the same value to start one by hand against it. A
+ * set `QAR_INSTANCE` naming no known instance is an error, never a fall-back to
+ * the installed runtime.
  * \snippet dynamic_loading.c dynamic_load
  *
  * \section dynamic_loading_init Initialize and Shutdown

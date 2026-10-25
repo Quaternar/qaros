@@ -207,7 +207,10 @@ hands become MRTK hands.
 
 A player build carries no native runtime: like the Editor, it loads the runtime of the QAROS
 installed on the PC where it runs. Install QAROS there; do not copy a `qar-streaming-c.dll` next to
-the player, since a copy beside the binding would be loaded instead of the installed one.
+the player, since a copy beside the binding would be loaded instead of the installed one. A
+player or Editor started with `QAR_INSTANCE` set (a QAROS development hub sets it for the apps it
+starts) loads the runtime of that instance instead, and fails to load when that instance has none;
+the lookup is the one in [Authoring a Language Binding](/docs/developer-guide/authoring-a-binding#the-default-lookup).
 
 :::info
 The package logs a warning if the project runs with a graphics API other than Direct3D 11. It

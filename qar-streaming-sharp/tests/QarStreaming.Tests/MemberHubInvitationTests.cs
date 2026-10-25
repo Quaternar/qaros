@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Quaternar.Qaros;
@@ -103,7 +104,7 @@ namespace Quaternar.Qaros.Tests
                 var grant = Marshal.PtrToStructure<OnboardRemoteAppGrantExtNative>(tag.Header.Next);
                 Assert.Equal(StructureType.RuntimeOnboardRemoteAppGrantExt, grant.Header.Type);
                 Assert.Equal(0x1012, (int)grant.Header.Type);
-                Assert.Equal(invitation.DangerousHandle, grant.Invitation);
+                Assert.Equal(NativeHandles.Of(invitation).DangerousGetHandle(), grant.Invitation);
                 var after = Marshal.PtrToStructure<StructureHeaderNative>(grant.Header.Next);
                 Assert.Equal(StructureType.SessionGraphicsDeviceId, after.Type);
             }
@@ -118,7 +119,7 @@ namespace Quaternar.Qaros.Tests
                 var native = Marshal.PtrToStructure<OnboardLocalAppExtNative>(chain.Head);
                 var grant = Marshal.PtrToStructure<OnboardRemoteAppGrantExtNative>(native.Header.Next);
                 Assert.Equal(StructureType.RuntimeOnboardRemoteAppGrantExt, grant.Header.Type);
-                Assert.Equal(invitation.DangerousHandle, grant.Invitation);
+                Assert.Equal(NativeHandles.Of(invitation).DangerousGetHandle(), grant.Invitation);
                 Assert.Equal(IntPtr.Zero, grant.Header.Next);
             }
         }
@@ -138,11 +139,70 @@ namespace Quaternar.Qaros.Tests
         public void TheChainKeepsTheGrantAliveUntilItIsDisposed()
         {
             var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var handle = NativeHandles.Of(invitation);
             var chain = NativeStructureChain.From(new OnboardLocalApp { RemoteAppGrant = invitation }, null);
             invitation.Dispose();
+            Assert.False(handle.IsClosed);
             Assert.Throws<ObjectDisposedException>(() => invitation.Serialize());
             chain.Dispose();
+            Assert.True(handle.IsClosed);
             chain.Dispose();
+        }
+
+        // Hub G49: the join blocks for minutes, so its native struct borrows the invitation through
+        // the call's scope; disposing the invitation meanwhile defers the native release.
+        [Fact]
+        public void TheJoinHoldsTheInvitationUntilTheCallIsDone()
+        {
+            var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var handle = NativeHandles.Of(invitation);
+            using (var scope = new NativeMemoryScope())
+            {
+                var native = MemberHubInvitationNative.Join(new JoinHubAsMemberOptions(invitation), scope);
+                Assert.Equal(StructureType.RuntimeJoinHubAsMemberInit, native.Header.Type);
+                Assert.Equal(handle.DangerousGetHandle(), native.Invitation);
+                invitation.Dispose();
+                Assert.False(handle.IsClosed);
+                Assert.Throws<ObjectDisposedException>(() => invitation.Serialize());
+            }
+            Assert.True(handle.IsClosed);
+        }
+
+        // The single-threaded case: `new JoinHubAsMemberOptions(MemberHubInvitation.Deserialize(..))`
+        // leaves no reference to the invitation but the join's own, which keeps the finalizer off it.
+        [Fact]
+        public void TheJoinKeepsAnUnreferencedInvitationFromTheFinalizer()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var handle = JoinOfAnUnreferencedInvitation(scope);
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                Assert.True(handle.IsAlive);
+                Assert.False(((SafeHandle)handle.Target!).IsClosed);
+            }
+        }
+
+        [Fact]
+        public void ADisposedInvitationIsRefusedBeforeTheJoin()
+        {
+            var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow();
+            var options = new JoinHubAsMemberOptions(invitation);
+            invitation.Dispose();
+            using (var scope = new NativeMemoryScope())
+                Assert.Throws<ObjectDisposedException>(() => MemberHubInvitationNative.Join(options, scope));
+            using var runtime = CreateRuntime();
+            Assert.Throws<ObjectDisposedException>(() => runtime.JoinHubAsMember(options));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference JoinOfAnUnreferencedInvitation(NativeMemoryScope scope)
+        {
+            var options = new JoinHubAsMemberOptions(MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson())).ValueOrThrow());
+            var handle = new WeakReference(NativeHandles.Of(options.Invitation));
+            _ = MemberHubInvitationNative.Join(options, scope);
+            return handle;
         }
 
         [Fact]
