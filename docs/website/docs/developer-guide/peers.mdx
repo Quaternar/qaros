@@ -100,7 +100,7 @@ Useful fields:
   | `RETIRED` | it left for good; query results no longer list it |
   | `UNKNOWN` | the hub has not reconciled it yet (an older hub that never reports presence, or one that just started); nothing says it is gone, so treat it like `ONLINE` |
 
-- **app state** (deprecated) — `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` still work and are computed from the presence, but every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
+- **app state** — do not use it: `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` are computed from the presence, and every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
 - **room tag** — which physical room the peer is in; lets multi-room deployments group peers.
 - **`qar_session_get_my_spec`** — your own peer's spec (e.g. to learn your assigned peer ID).
 
@@ -162,7 +162,7 @@ An application is always a **source** (`QAR_PEER_ROLE_SOURCE`): it describes its
 
 - `category` must be `QAR_DEVICE_CATEGORY_DESKTOP_PC`, `QAR_DEVICE_CATEGORY_SERVER` or `QAR_DEVICE_CATEGORY_CAMERA`. Anything else fails with `QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED` and changes nothing.
 - `device_id` is required. `device_family` and `device_name` are optional. An id the Hub's device catalog does not know is fine: the visualizer shows it by family or category, with your name.
-- Chain the same extension on `QarRejoinInit` to keep it across restarts.
+- Nothing is kept for you between starts: chain it on every onboard, and on `QarRejoinInit` when a code-paired app rejoins.
 
 ### A source app that is a camera
 

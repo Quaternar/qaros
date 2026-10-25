@@ -629,6 +629,29 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct SessionLifecycleInfoNative
+    {
+        public StructureHeaderNative Header;
+        public SessionLifecycleState State;
+        public SessionChangeCause Cause;
+        public SessionIdNative SessionId;
+        public SessionIdNative PreviousSessionId;
+        [MarshalAs(UnmanagedType.I1)]
+        public bool HasPreviousSession;
+        public IntPtr Reason;
+
+        public static SessionLifecycleInfoNative CreateDefault()
+        {
+            return new SessionLifecycleInfoNative
+            {
+                Header = NativeDefaults.Header(StructureType.SessionLifecycleInfo),
+                SessionId = SessionIdNative.CreateDefault(),
+                PreviousSessionId = SessionIdNative.CreateDefault()
+            };
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct ForgetInitNative
     {
         public StructureHeaderNative Header;

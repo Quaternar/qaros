@@ -48,10 +48,11 @@ How these relate in space (room -> volume -> content -> panels) is the subject o
 The User Guide keeps these details high-level. For integration work, the
 important concrete rules are:
 
-- **Peers** have stable IDs and persisted onboarding state. Rejoin works because
-  your application keeps the onboarding identity returned by the first
-  successful onboard. See
-  [Onboarding & Sessions](/docs/developer-guide/onboarding-and-sessions).
+- **Peers** have stable IDs. A local app on the QAROS PC gets its peer ID back
+  on every start: the hub remembers it per approval and app tag, and the app
+  stores nothing. An app that paired with a code keeps the onboarding ID its
+  first onboard returned and rejoins with it. See
+  [Choosing an Onboarding Mode](/docs/developer-guide/onboarding).
 - **App volumes** and **GUI panels** are identified by stable common names and
   are created idempotently by those names. See
   [App Volumes](/docs/developer-guide/app-volumes) and

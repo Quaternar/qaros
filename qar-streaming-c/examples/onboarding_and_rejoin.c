@@ -31,15 +31,13 @@
  * - The \ref qar_c_tutorial_dynamic_loading tutorial
  * - The QAROS hub on the other PC reachable over the network, and its host
  *   name or IP and onboarding port (shown with its pairing code)
- * - For the first start: a pairing code from the hub's operator (the code on
- *   the Visualizer's onboarding screen, or a one-time code the operator
- *   mints). Apps cannot mint codes.
+ * - For the first start: a pairing code from the hub's operator, the code on
+ *   the Visualizer's onboarding screen. Apps cannot mint codes.
  *
  * \section onboarding_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target onboarding_and_rejoin
- * ./build/x64-windows/Debug/onboarding_and_rejoin.exe
- *   <installed|path-to-qar-streaming-c.dll> [--host <host>:<port>] [--forget]
+ * ./build/x64-windows/Debug/onboarding_and_rejoin.exe [--host <host>:<port>] [--forget]
  * \endcode
  * The first start asks for the code on the console. Later starts rejoin with
  * no input. `--forget` un-pairs on exit.
@@ -72,9 +70,8 @@
  *   beyond the renewal window, was revoked, or its hub no longer renews it.
  *   Retrying does not help; pair again with a new code.
  * - `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (1810): the hub
- *   refused a renewal that did not prove the key. With this SDK the stored
- *   identity is damaged: pair again. An SDK older than the hub cannot renew
- *   there at all: update the app.
+ *   refused a renewal that did not prove the key. Pair again with a new
+ *   code; an app built with an SDK older than the hub must be updated first.
  *
  * \section onboarding_code Step 4: Pair With a Code
  * \snippet onboarding_and_rejoin.c onboarding_code
@@ -85,8 +82,8 @@
  *   Re-prompt the user.
  * - Without \ref QarOnboardHostExt the runtime only finds a hub of this user
  *   on this PC (`QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` on a PC without one).
- *   Pass the host and port; port 0 is refused. A one-time code the operator
- *   minted (`qar-code:...`, 2 minutes by default) needs them too.
+ *   Pass the host and port; port 0 is refused. A code text that carries an
+ *   invitation id (`qar-code:...`) needs them too.
  * - Re-pairing after 1809 or 1810 passes the stored onboarding id: the slot is
  *   re-enrolled instead of a second identity being created.
  * - An app joins with the source role. As a camera it chains
@@ -123,18 +120,14 @@
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 #define ID_FILE "onboarding_and_rejoin.onboarding-id.txt"
-/* Long enough for a short screen code and a minted qar-code:... code. */
+/* Room for any code text the hub hands out. */
 #define MAX_CODE_LENGTH 1024
 
 static void
 print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "onboarding_and_rejoin";
-	printf(
-		"Usage: %s <installed|path-to-qar-streaming-c-library> "
-		"[--host <host>:<port>] [--forget]\n",
-		name
-	);
+	printf("Usage: %s [--host <host>:<port>] [--forget]\n", name);
 	printf(
 		"The first start asks for the pairing code on the console; later "
 		"starts rejoin with the stored identity.\n"
@@ -332,17 +325,11 @@ int
 main(int argc, char** argv)
 {
 	//! [onboarding_args]
-	if(argc < 2)
-	{
-		print_usage(argv[0]);
-		return 1;
-	}
-	const char* library_path = library_path_argument(argv[1]);
 	char host_buffer[256] = { 0 };
 	const char* hub_host = NULL;
 	uint16_t hub_port = 0;
 	bool forget_on_exit = false;
-	for(int i = 2; i < argc; ++i)
+	for(int i = 1; i < argc; ++i)
 	{
 		if(strcmp(argv[i], "--forget") == 0)
 		{
@@ -362,9 +349,15 @@ main(int argc, char** argv)
 	}
 	//! [onboarding_args]
 
-	if(!qar_library_load(library_path))
+	/* The runtime of the QAROS installed on this PC, even though no hub runs
+	 * here. */
+	if(!qar_library_load(NULL))
 	{
-		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
+		fprintf(
+			stderr,
+			"Could not load the QAROS runtime (reason above): install QAROS, or fix "
+			"QAROS_RUNTIME_DIR.\n"
+		);
 		return 2;
 	}
 	QarLibraryInit library_init = qar_library_init_default();
@@ -376,16 +369,9 @@ main(int argc, char** argv)
 		return 3;
 	}
 
-	/* The runtime binaries folder is the one the library came from (NULL for
-	 * the installed QAROS). storage_folder_path NULL: this user's QAROS data
-	 * folder, where the secure store keeps the identity. */
-	char runtime_dir[1024] = { 0 };
+	/* storage_folder_path NULL: this user's QAROS data folder, where the
+	 * secure store keeps the identity. */
 	QarRuntimeInit runtime_init = qar_runtime_init_default();
-	if(library_path != NULL)
-	{
-		runtime_init.runtime_binaries_folder_path =
-			get_dir_from_path(library_path, runtime_dir, sizeof(runtime_dir));
-	}
 	QarRuntime* runtime = NULL;
 	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
 	if(qar_result_is_error(runtime_result))

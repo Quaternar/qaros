@@ -7,29 +7,25 @@
  * \tableofcontents
  *
  * \section gui_panels_overview Overview
- * - Obtain a session (rejoin, or onboard with the hub pairing code)
+ * - Join the QAROS on this PC as a local app
  * - Get-or-create a GUI panel by its stable common name
  * - Adjust pose, size, state, and navigate to content
  * - Enumerate GUI panels to inspect current values
  *
  * \section gui_panels_prereq Prerequisites
  * - Complete the \ref qar_c_tutorial_app_volumes tutorial
- * - A running QarOS hub (for the first run, read the pairing code off its
- *   onboarding screen)
+ * - QAROS installed and running on this PC
  *
  * \section gui_panels_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target gui_panel_operations
  * ./build/x64-windows/Debug/gui_panel_operations.exe
- * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
- *
- * \section gui_panels_args Parse Arguments
- * \snippet gui_panel_operations.c gui_args
+ * The first run asks once in QAROS whether the app may join.
  *
  * \section gui_panels_setup Set Up the Session
- * The session is obtained with the shared rejoin-or-onboard helper described
- * in the \ref qar_c_tutorial_onboarding tutorial.
+ * The installed runtime is loaded and the app joins as a local app with the
+ * shared helper of the \ref qar_c_tutorial_app_volumes tutorial.
  * \snippet gui_panel_operations.c gui_setup
  *
  * \section gui_panels_create Create and Update the Panel
@@ -48,52 +44,17 @@
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
-static void
-print_usage(const char* program_name)
-{
-	const char* name = program_name ? program_name : "gui_panel_operations";
-	printf(
-		"Usage: %s <installed|path-to-qar-streaming-c-library> "
-		"[runtime-binaries-dir] "
-		"[pairing-code]\n",
-		name
-	);
-	printf(
-		"The pairing code is required on the first run only; later runs "
-		"rejoin with the persisted onboarding id.\n"
-	);
-}
-
 int
-main(int argc, char** argv)
+main(void)
 {
-	//! [gui_args]
-	if(argc < 2)
-	{
-		print_usage(argv[0]);
-		return 1;
-	}
-
-	const char* library_path = library_path_argument(argv[1]);
-	const char* runtime_dir = NULL;
-	char runtime_dir_buffer[1024] = { 0 };
-
-	if(argc >= 3)
-	{
-		runtime_dir = argv[2];
-	}
-	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
-	{
-		runtime_dir = runtime_dir_buffer;
-	}
-
-	const char* pairing_code = (argc >= 4) ? argv[3] : NULL;
-	//! [gui_args]
-
 	//! [gui_setup]
-	if(!qar_library_load(library_path))
+	if(!qar_library_load(NULL)) /* NULL: the installed QAROS runtime */
 	{
-		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
+		fprintf(
+			stderr,
+			"Could not load the QAROS runtime (reason above): install QAROS, or fix "
+			"QAROS_RUNTIME_DIR.\n"
+		);
 		return 2;
 	}
 
@@ -109,7 +70,6 @@ main(int argc, char** argv)
 
 	QarRuntime* runtime = NULL;
 	QarRuntimeInit runtime_init = qar_runtime_init_default();
-	runtime_init.runtime_binaries_folder_path = runtime_dir;
 	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
 	if(qar_result_is_error(runtime_result) || runtime == NULL)
 	{
@@ -119,15 +79,9 @@ main(int argc, char** argv)
 		return 4;
 	}
 
-	QarOnboardingId onboarding_id = qar_onboarding_id_default();
 	QarSession* session = NULL;
-	if(example_obtain_session(
-		   runtime,
-		   pairing_code,
-		   "gui_panel_operations.onboarding-id.txt",
-		   "GUI Panel Peer",
-		   &onboarding_id,
-		   &session
+	if(example_join_as_local_app(
+		   runtime, "GUI Panel Example", "main.gui-panel-operations.examples.quaternar", &session
 	   ) != 0
 	   || session == NULL)
 	{

@@ -7,8 +7,8 @@ description: Install the QAROS Unity packages, onboard a Unity app with the Hub,
 # Unity
 
 QAROS ships two Unity packages that stream a Unity scene to AR/VR devices. They carry the
-[C# binding](/docs/developer-guide/language-bindings) and the native runtime, so a Unity project
-needs nothing else installed.
+[C# binding](/docs/developer-guide/language-bindings), not the native runtime: the Editor and every
+player load the runtime of the QAROS installed on the PC, like any other source app.
 
 | Package | Folder | Install when | Depends on |
 |---|---|---|---|
@@ -16,8 +16,8 @@ needs nothing else installed.
 | `com.quaternar.streaming.mrtk` | `QarStreamingMRTK` | Only in MRTK 3 projects | `com.quaternar.streaming`, Unity Input System `1.7.0`, XR Core Utils `2.2.3`, MRTK Core `4.0.0-pre.1`, MRTK Input `4.0.0-pre.1`, MRTK UX Components `4.0.0-pre.1`, MRTK Extended Assets `3.0.3` |
 
 - **`QarStreaming`** is the integration: the `QarStreaming` and `QarDevice` prefabs, stereo
-  camera capture for the built-in render pipeline and URP, a sample scene, the C# binding and the
-  Windows x64 native runtime in `lib/windows-x64`.
+  camera capture for the built-in render pipeline and URP, a sample scene and the C# binding in
+  `lib/windows-x64`.
 - **`QarStreamingMRTK`** extends it, never replaces it: an MRTK XR rig prefab, MRTK
   profile and configuration assets, QAROS hands as an MRTK hand subsystem, the QAROS head pose
   driving the `XROrigin`, and an MRTK sample scene.
@@ -25,12 +25,13 @@ needs nothing else installed.
 ## Requirements
 
 - Unity **2022.3** or newer. Tested with 2022.3 and 6000.4.
-- **Windows x64.** The native runtime is built for Windows x64 only.
+- **Windows x64.** The QAROS runtime is built for Windows x64 only.
 - **Direct3D 11.** In *Project Settings > Player > Other Settings*, turn off **Auto Graphics API
   for Windows** and put Direct3D11 first in the list. Other graphics APIs are not supported yet.
 - The built-in render pipeline or URP.
-- A running **QAROS Hub** (see [Installation](/docs/operator-guide/installation)). The app
-  joins it, and streams to the target apps in its session.
+- **QAROS installed** on the PC, release or demo (see [Installation](/docs/operator-guide/installation)).
+  The app loads its runtime, joins its Hub and streams to the target apps in its session. Without
+  it, joining fails with "QAROS is not installed".
 
 ## Installation
 
@@ -68,10 +69,9 @@ to that file. With the unzipped folder next to the Unity project:
 
 ### Release and demo
 
-`QAROS Unity <version>.zip` and `QAROS Unity Demo <version>.zip` carry the same package names, so
-a project has one of them. The demo packages' display names end in "(Demo)", which shows in the
-Package Manager which runtime is installed. To switch, remove the package in the Package Manager
-and add the other one.
+One `QAROS Unity <version>.zip` serves both flavors: the packages load whichever QAROS is installed
+on the PC, release or demo. Switching flavors means installing the other QAROS, not changing the
+packages.
 
 ## The sample scene
 
@@ -88,7 +88,7 @@ prefab and a **Connect** button that calls `QarMultiUserStreamingBehaviour.Join`
 
 | Prefab | Role | Contains |
 |---|---|---|
-| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour` (onboarding, which targets to stream to, render and gesture settings, the device prefab, runtime settings such as `DllFolder` and `EnableMixer`) and `QarTargetPickerOverlay` (the in-game target list) |
+| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour` (onboarding, which targets to stream to, render and gesture settings, the device prefab, runtime settings such as `EnableMixer`, and `DllFolder`, which only development builds of QAROS use when no QAROS is installed) and `QarTargetPickerOverlay` (the in-game target list) |
 | `QarDevice` | One target's view | `QarDeviceBehaviour`, a left-eye and a right-eye camera, and optional hand and head visualizers |
 
 `QarMultiUserStreamingBehaviour` creates a child `QarDevice` for each target it streams to, named
@@ -205,8 +205,9 @@ hands become MRTK hands.
 
 ## Player builds
 
-A player build copies the native runtime next to the executable, under `lib/windows-x64`. Ship
-that folder with the player.
+A player build carries no native runtime: like the Editor, it loads the runtime of the QAROS
+installed on the PC where it runs. Install QAROS there; do not copy a `qar-streaming-c.dll` next to
+the player, since a copy beside the binding would be loaded instead of the installed one.
 
 :::info
 The package logs a warning if the project runs with a graphics API other than Direct3D 11. It

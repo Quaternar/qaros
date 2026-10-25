@@ -162,6 +162,36 @@ namespace Quaternar.Qaros.Interop
         }
     }
 
+    internal sealed class SessionLifecycleSubscription : NativeSubscription
+    {
+        private readonly EventHandler<SessionLifecycleChangedEventArgs> _handler;
+
+        public SessionLifecycleCallback Callback { get; }
+
+        private SessionLifecycleSubscription(CancelToken token, bool ownsToken, EventHandler<SessionLifecycleChangedEventArgs> handler) : base(token, ownsToken)
+        {
+            _handler = handler;
+            Callback = OnLifecycleChanged;
+        }
+
+        public static SessionLifecycleSubscription Create(CancelToken token, bool ownsToken, EventHandler<SessionLifecycleChangedEventArgs> handler) { return new SessionLifecycleSubscription(token, ownsToken, handler); }
+
+        private static void OnLifecycleChanged(IntPtr info, IntPtr userState)
+        {
+            try
+            {
+                if (!NativeCallbackRegistry.TryGet(userState, out SessionLifecycleSubscription sub))
+                    return;
+                if (sub.IsDisposed) return;
+                if (info != IntPtr.Zero) sub._handler(sub, SessionLifecycleChangedEventArgs.FromNativePointer(info));
+                GC.KeepAlive(sub);
+            }
+            catch
+            {
+            }
+        }
+    }
+
     internal sealed class GuiPanelUpdateSubscription : NativeSubscription
     {
         private readonly EventHandler<GuiPanelUpdatedEventArgs> _handler;

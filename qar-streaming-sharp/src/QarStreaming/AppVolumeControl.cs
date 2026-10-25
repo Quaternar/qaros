@@ -77,6 +77,14 @@ namespace Quaternar.Qaros
         /// (<see cref="Close"/>) is reopened with <paramref name="options"/>.
         /// </para>
         /// <para>
+        /// An existing volume is taken over by this session (a previous run of the app may have
+        /// left it) and carried into the hub's next session like one this session created. Call
+        /// GetOrCreate again for every common name the app owns when the session id changes and
+        /// after onboarding again on <see cref="SessionLifecycleState.RePairRequired"/>
+        /// (<see cref="Session.SubscribeLifecycle(EventHandler{SessionLifecycleChangedEventArgs})"/>):
+        /// it returns the same id and re-creates the volume when it is missing.
+        /// </para>
+        /// <para>
         /// A gesture configuration whose rule could never work fails with
         /// <see cref="StatusCode.AppVolumeGestureConfigurationInvalid"/>.
         /// </para>

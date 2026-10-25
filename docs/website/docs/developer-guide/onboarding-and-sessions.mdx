@@ -19,7 +19,9 @@ In QAROS you never "create" or "join" a session directly: **every session is obt
 - [Remote app](#remote-app-through-a-member-hub) on another PC, through a member hub
 - [Launched by QAROS](#launched-by-qaros-qaros-api-apps)
 
-An app cannot obtain credentials for an arbitrary PC or a new device: pairing codes come from the hub's operators ([below](#what-apps-no-longer-do)). The security behind these calls is described in [Security Model](/docs/operator-guide/security-model); the API hides it.
+After onboarding, [the session follows its hub](#when-the-hubs-session-changes) through a new session or a join to another hub; only a hub that no longer admits the app requires onboarding again.
+
+An app cannot obtain credentials for an arbitrary PC or a new device: pairing codes come from the hub's operators ([below](#what-apps-cannot-do)). The security behind these calls is described in [Security Model](/docs/operator-guide/security-model); the API hides it.
 
 ## Local app: on the QAROS PC, no code
 
@@ -99,10 +101,11 @@ var onboard = runtime.Onboard(new OnboardOptions()
 </Lang>
 </CodeTabs>
 
-- **An identity key, like the common name of an app volume.** Printable ASCII (0x20-0x7E), no space at either end, at most 256 bytes (`QAR_MAX_APP_TAG_LENGTH`), compared exactly. Anything else fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. Text for people, any UTF-8, goes in `display_name`.
+- **An identity key, like the common name of an app volume.** Printable ASCII (0x20-0x7E), no space at either end, at most 256 bytes (`QAR_MAX_APP_TAG_LENGTH`), compared exactly. The prefix `member/` is reserved for the hub. Anything else fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` (C# `OnboardLocalApp.Tag` throws `ArgumentException`). Text for people, any UTF-8, goes in `display_name`.
 - **Keep it constant across versions** of your app: a new tag is a new peer. A DNS-style name scoped by your app is recommended, such as `left.terraexplorer.skyline`.
 - **No tag is the default tag**, remembered the same way. An app that runs one instance needs none.
 - **Same tag, two live instances:** both run; the second gets a one-off peer id that is not remembered. Give instances that run together distinct tags.
+- **Restart right after a crash:** a crashed app announces no leave, so the session shows its peer for a few more seconds. A start in that window gets a one-off peer id; the next start after the old peer is gone gets the remembered one back.
 - The hub keeps at most **64 tags per approval**, dropping the least recently used first, and forgets a tag unused for **30 days**. Revoking the app's approval forgets all of them.
 - A tag is not a secret and not a permission: it only selects among the peer ids of your app's own approval.
 - Only with `QarOnboardLocalAppExt`; with any other mode it fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. A runtime older than the tag skips the extension and joins with the default tag: check `qar_runtime_info` before relying on it.
@@ -111,8 +114,11 @@ var onboard = runtime.Onboard(new OnboardOptions()
 
 A process that uses QAROS from more than one place (native code and a C# plug-in, two libraries) onboards as a local app in each. A second onboard with the same tag in the same process returns a **new handle to the same session**: one approval, one peer, one enrollment.
 
+- One session per hub and tag in the process: the key is the hub the onboard enrolls with and the app tag.
 - Each handle is released on its own with `qar_session_handle_destroy` (C# `Dispose`); the session ends when the last one is released.
 - Onboards with different tags are different peers, each with a session of its own.
+- An onboard while another one with the same tag is still waiting for its approval waits for it, at most the approval timeout plus 2 minutes, then fails with `QAR_STATUS_TIMEOUT`. If that first enrollment fails, the waiting onboard enrolls on its own.
+- A session whose renewal the hub refused (for example after the operator revoked the app) stays shared until its last handle is released. Release every handle, then onboard again.
 - No invite is involved and nothing is written to disk.
 - The first onboard's presentation and `QarGraphicsDeviceId` win; a sharing onboard applies neither, reports one INFO progress message and returns the zero onboarding id.
 - Compiled tutorial: [Several API Instances in One Process](/docs/developer-guide/tutorials/c/api-instances-in-one-process).
@@ -170,12 +176,10 @@ C#: `StatusCode.OnboardingHubUnreachable`, `OnboardingApprovalDenied`, `Onboardi
 
 A hub renews a certificate only for an app or device whose renewal proves it holds that certificate's key. Every renewal sends a signature by the current key over the new request; a stolen certificate without its key renews nothing.
 
-- **Minimum SDK.** The first release after 0.9.0 (the one that lists `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` in its changelog) and every later one. The runtime library, the C# package and the Unity package all make the proof themselves.
-- **An older SDK cannot renew at an updated hub.** The hub refuses its renewal and the app or device stops at its certificate's end (at most 24 hours later, plus a 7-day grace in which an updated SDK can still renew it). Pairing it again with a code does not help: its next renewal fails the same way.
-- **Migration.**
-  1. Update every app and device that loads the QAROS runtime to the current SDK: the `qar_streaming` runtime beside the executable or the installed QAROS, the `Quaternar.Qaros` NuGet package, the Unity package and the device players.
-  2. Update the hub. Apps the hub launches itself and apps on the hub's PC pick up the runtime of the installed QAROS.
-  3. An app or device that already reports `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` after the update has an identity that cannot prove its key: pair it again with a new code from the hub.
+- **The runtime makes the proof.** The runtime library, and with it the C# binding and the Unity package, signs every renewal itself. An app on the hub's PC that loads the installed runtime (`qar_library_load(NULL)`) renews with the hub's own version.
+- **An SDK that does not make the proof cannot renew.** The hub refuses its renewal (`QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN`) and the app or device stops at its certificate's end, at most 24 hours later plus a 7-day grace. Pairing it again with a code does not help until it is updated.
+- **Update apps and devices before, or together with, the hub.** Device players, apps on other PCs and member hubs run the QAROS of their own device or PC: update them first, so none is left on an SDK the updated hub refuses.
+- An app or device that still reports `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` once it is up to date has an identity that cannot prove its key: pair it again with a new code from the hub.
 
 ## Onboarding code: a hub on another PC
 
@@ -207,7 +211,7 @@ static QarResult obtain_session(
     who.display_name = "My CAD Tool";
     who.app_version = "2.4.0";
 
-    if (not qar_onboarding_id_is_zero(io_saved_id))
+    if (!qar_onboarding_id_is_zero(io_saved_id))
     {
         QarRejoinInit rejoin = qar_rejoin_init_default();
         rejoin.onboarding_id = *io_saved_id;
@@ -217,7 +221,7 @@ static QarResult obtain_session(
             runtime, &rejoin, NULL, NULL, NULL, out_session);
         if (qar_result_is_success(r))
             return r; /* silent reconnect: the normal path */
-        if (not qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
+        if (!qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
             return r; /* real error (hub unreachable, ...) */
         /* no persisted slot -> fall through to onboarding */
     }
@@ -385,7 +389,7 @@ What the hub enforces:
 
 | Rule | Consequence for your app |
 |---|---|
-| Only a session joined as a local app, or an app the QAROS launcher started, may request one | a code-paired app, a device or another PC's app is refused |
+| Only a session joined as a local app, or an app the QAROS launcher started, may request one | a code-paired app, a device, a co-process or another PC's app is refused with `QAR_STATUS_ONBOARDING_INVITE_REFUSED` (C# `StatusCode.OnboardingInviteRefused`); it is final, nothing was minted |
 | Bound to the peer id the hub remembers for your app's approval and this tag | the co-process joins as the same peer on every start, as long as no other live process holds it |
 | Single use, valid for **60 s**, set by the hub | request it when you start the co-process, hand it over at once, never store it |
 | Redeemable only from the hub's PC | handing it to another PC does not work |
@@ -393,7 +397,7 @@ What the hub enforces:
 
 - **In-memory storage.** With `QarRuntimeEphemeralStorageExt` nothing is written under the storage folder, the returned onboarding id is zero, and `qar_runtime_rejoin` / `qar_runtime_forget` fail with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. A restarted co-process asks your app for a new invite and gets its peer id back. A runtime older than the extension skips it and stores the identity on disk: check `qar_runtime_info` before relying on it.
 - **Give the co-process a tag of its own**, not one your app's instances use: a tag a live process holds gets a one-off peer id.
-- **The tag is required.** A missing, empty or non-ASCII `app_tag` fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as does a `QarRequestInviteInit` built from an older header ("app tag required"): rebuild against the current header.
+- **The tag is required.** A missing, empty or non-ASCII `app_tag`, or one starting with the reserved `member/`, fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as does a `QarRequestInviteInit` built from an older header ("app tag required"): rebuild against the current header.
 - **The invite is a secret** until it is used: do not log it or pass it on a command line.
 - The compiled tutorial [Co-Process Onboarding](/docs/developer-guide/tutorials/c/co-process-onboarding) starts itself as its co-process and hands the invite over stdin.
 
@@ -444,14 +448,14 @@ r = qar_runtime_onboard(runtime, &onboard, NULL, NULL, NULL, &unused_id, &sessio
 - Without a grant, an invitation joins the hub and extends the issuing app's own approval to it, as described under the member-hub functions in the [API reference](/api/qar-streaming-c/groups/qar-c-onboarding/).
 - The compiled tutorial [Remote App on Another PC](/docs/developer-guide/tutorials/c/remote-app-onboarding) runs both sides.
 
-## What apps no longer do
+## What apps cannot do
 
 Apps cannot obtain credentials for an arbitrary new peer:
 
-- **No pairing codes.** `qar_session_request_onboarding_codes` (C# `Session.RequestOnboardingCodes`) is gone. Codes are minted by the hub's operators: the code on the Visualizer's onboarding screen, or further one-time codes the operator mints there. Ask the operator for a code for each device.
+- **No pairing codes.** No API mints a pairing code. Codes come from the hub's operators: the code on the Visualizer's onboarding screen, which the hub replaces with a new one every few seconds. Ask the operator for a code for each device.
 - **No unbound invites.** `qar_session_request_onboarding_invite` mints only [co-process invites](#co-process-a-process-your-app-starts). An invite for another PC or a new device is minted only for the hub's operators.
 - **An app on another PC** pairs with a code from the operator and then [rejoins](#onboarding-code-a-hub-on-another-pc) with its stored identity on every start, or, when that PC runs a QAROS hub, joins through a [remote-app grant](#remote-app-through-a-member-hub) from an app on the primary's PC.
-- **A camera on a PC without a hub** pairs once with a code (or a QR code) from the operator, keeps its identity in the secure store and rejoins with it, also after its certificate has expired within the renewal window.
+- **A camera on a PC without a hub** pairs once with a code from the operator, keeps its identity in the secure store and rejoins with it, also after its certificate has expired within the renewal window.
 
 ## Choosing the GPU
 
@@ -506,7 +510,7 @@ Where local enrollment is not available (not Windows), QAROS writes a **launch i
 - One line of JSON starting with `{`, newline-terminated: the Hub's IP, its onboarding port, a one-time pairing code, the CA fingerprint and, when the target advertised one, its GPU. Pass it unchanged to `qar_onboarding_invite_deserialize`; do not parse it yourself.
 - Never on the command line, never logged, never shown on the Hub's onboarding screen.
 - Onboarding with it and no chained `QarGraphicsDeviceId` creates the session on the target's GPU.
-- Valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one. Apps written against the earlier contract, which read the line as a code, must accept the JSON invite.
+- Valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one.
 - Anything not starting with `{` is a code typed by hand (when someone runs your app from a console): use `QarOnboardCodeExt`, which finds that user's Hub.
 
 ```c
@@ -534,7 +538,93 @@ The code on the Hub's onboarding screen is separate and does not change when QAR
 
 Every peer reaches the session by running its own onboard or rejoin flow (this page) against the hub: as a local app, as a [co-process](#co-process-a-process-your-app-starts) of one, or with a pairing code from the hub's operator. Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers). Your application decides which targets it renders for and creates a sender for each; that sender is what makes the target ask for your content — see [Finding rendering targets](/docs/developer-guide/rendering-streams#finding-rendering-targets).
 
-To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"` for a HoloLens, `"headset:<host>"` for any other headset (Meta Quest, Android glasses), which reports its exact model itself once it runs. `"quest:<host>"` and `"android:<host>"` are older spellings of `"headset:<host>"` and still work. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
+To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"` for a HoloLens, `"headset:<host>"` for any other headset (Meta Quest, Android glasses), which reports its exact model itself once it runs. `"quest:<host>"` and `"android:<host>"` are accepted as aliases of `"headset:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
+
+## When the hub's session changes
+
+A session follows its hub by itself. When the hub's operator starts a new session, or the hub joins another hub as its member, your `QarSession` moves into the new session in place:
+
+| What | After the move |
+|---|---|
+| The session handle and every handle obtained from it, your subscriptions, your peer id | Kept: nothing to do |
+| App volumes, GUI panels and rooms your app created, or took over with `get_or_create` | Kept: proposed again in the new session |
+| Render and video senders | Kept: they renegotiate and frames pause for a few seconds. Create them with reconnects (`enable_auto_reconnects`, `enable_reconnects`), or recreate them after the move |
+| Objects owned by other peers | Gone until their owners have moved too |
+| The session id (`qar_session_get_id`) | The new one: whatever your app keyed by the old id belongs to the old session |
+
+The session ends for good with `QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED` (C# `SessionLifecycleState.RePairRequired`): the hub was reset to a new install, your app's approval was revoked, or the app missed too many rotations. Nothing is retried. Destroy the session, onboard again and recreate what your app owns.
+
+Subscribe to the lifecycle to learn about each step. The first callback carries the current state; `qar_session_get_lifecycle_state` (C# `Session.GetLifecycleState()`) reads it without a subscription.
+
+| State | Means | Do |
+|---|---|---|
+| `CONNECTED` | In the hub's current session | React when the session id differs from the last one you saw |
+| `MIGRATING` | Moving into another session; still the old id | Nothing: frames resume after the move |
+| `HUB_UNREACHABLE` | The hub has not answered for a while | Show it if you like; the session keeps trying |
+| `RE_PAIR_REQUIRED` | The hub no longer admits this app | Destroy, onboard again, recreate |
+
+- **Key on a change of the session id, not on one state.** A move reports `MIGRATING`, then `CONNECTED` with the new id, the previous id and a cause. A move whose new session answers late reports `HUB_UNREACHABLE` with the new id first, and a callback that falls behind sees only the newest state.
+- **The cause is informational.** `QAR_SESSION_CHANGE_CAUSE_ROTATED` (the hub started a new session) and `QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY` (the hub joined another hub) need the same handling, and a join may be reported as `ROTATED`.
+- **Keep the callback short.** It runs on a library thread: copy the state and do any reinitialization on your app's own thread. Never destroy the session or the library from the callback.
+- **Get or create what you own again.** On a new session id, and after onboarding again on `RE_PAIR_REQUIRED`, call `qar_app_volumes_get_or_create` and `qar_gui_panels_get_or_create` (C# `AppVolumes.GetOrCreate`, `GuiPanels.GetOrCreate`) again for every common name your app owns. The calls are idempotent: each returns the same id, takes the object over when it is there and re-creates it when it is missing. After a re-pair this is the only way your objects come back.
+- **A restarted app takes its objects over.** An object your app's previous run created is still in the session under its common name. `get_or_create` returns it and from then on your session carries it into the next session like one it created; until you call it, nobody does.
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+static void on_lifecycle(const QarSessionLifecycleInfo* info, void* user_state)
+{
+    /* Library thread: copy and return. info->reason is valid only now. */
+    post_to_app_thread(user_state, info->state, &info->session_id);
+}
+
+QarCancelToken* token = NULL; /* owns the subscription */
+QarResult r = qar_cancel_token_create(&token);
+if(qar_result_is_success(r))
+    r = qar_session_subscribe_lifecycle(session, on_lifecycle, app, token);
+if(qar_result_is_error(r))
+    return fail(r); /* without it the app never learns of RE_PAIR_REQUIRED */
+
+/* On the app's thread, for each posted state: */
+if(memcmp(posted_id.data, last_id.data, sizeof last_id.data) != 0)
+{
+    last_id = posted_id; /* re-read whatever you keyed by the session id */
+    get_or_create_owned_objects(session); /* qar_app_volumes_get_or_create, ... per common name */
+}
+if(posted_state == QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED)
+{
+    qar_cancel_token_handle_destroy(token); /* ends the subscription */
+    qar_session_handle_destroy(session);
+    /* onboard again, then get_or_create_owned_objects() and recreate your senders */
+}
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+SessionId lastId = session.GetId().ValueOrThrow();
+using IDisposable lifecycle = session.SubscribeLifecycle((sender, e) =>
+{
+    // Library thread: hand the snapshot to the app's own thread.
+    appQueue.Post(() =>
+    {
+        if (e.SessionId != lastId)
+        {
+            lastId = e.SessionId; // re-read whatever you keyed by the session id
+            GetOrCreateOwnedObjects(session); // AppVolumes.GetOrCreate, ... per common name
+        }
+        if (e.State == SessionLifecycleState.RePairRequired)
+            Reinitialize(); // dispose the session, onboard again, GetOrCreateOwnedObjects
+    });
+}).ValueOrThrow();
+```
+
+</Lang>
+</CodeTabs>
+
+The C# `Session.LifecycleChanged` event delivers the same states while a subscription from `Session.SubscribeLifecycle()` is alive. Compiled tutorial: [Session Lifecycle](/docs/developer-guide/tutorials/c/session-lifecycle).
 
 ## Teardown: destroy vs. forget
 
@@ -563,4 +653,5 @@ These pages are backed by compiled examples, one per mode:
 - [Remote App on Another PC](/docs/developer-guide/tutorials/c/remote-app-onboarding) (`remote_app_onboarding.c`): a remote-app grant through a member hub.
 - [Code Pairing and Rejoin](/docs/developer-guide/tutorials/c/onboarding-and-rejoin) (`onboarding_and_rejoin.c`): a camera on a PC without a hub pairs with a code, persists the onboarding id, rejoins, destroys and forgets.
 - [App Launched by QAROS](/docs/developer-guide/tutorials/c/launched-app-onboarding) (`launched_app_onboarding.c`): a QAROS API app.
+- [Session Lifecycle](/docs/developer-guide/tutorials/c/session-lifecycle) (`session_lifecycle.c`): a local app follows its session through a move, gets or creates its app volume again on each new session id, and onboards again on `RE_PAIR_REQUIRED`.
 - [Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading) for the DLL bootstrap used by the examples

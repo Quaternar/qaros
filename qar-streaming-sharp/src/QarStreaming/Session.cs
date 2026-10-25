@@ -66,6 +66,93 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
+        /// Raised for every lifecycle state, but only while a subscription from
+        /// <see cref="SubscribeLifecycle()"/> is alive: attaching a handler alone delivers nothing.
+        /// </summary>
+        /// <remarks>Raised on a library thread, like every subscription handler.</remarks>
+        public event EventHandler<SessionLifecycleChangedEventArgs>? LifecycleChanged;
+
+        /// <summary>
+        /// The session's current lifecycle state: <see cref="SessionLifecycleState.Connected"/> in the
+        /// session <see cref="GetId"/> names, unless it is moving, cannot reach its hub, or has been
+        /// refused for good. Its <see cref="SessionLifecycleChangedEventArgs.Reason"/> is empty.
+        /// </summary>
+        public Result<SessionLifecycleChangedEventArgs> GetLifecycleState()
+        {
+            _context.ThrowIfDisposed();
+            var native = SessionLifecycleInfoNative.CreateDefault();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_lifecycle_state(_context.DangerousHandle, ref native));
+            return info.IsSuccess
+                ? Result<SessionLifecycleChangedEventArgs>.Success(info, SessionLifecycleChangedEventArgs.FromNative(native))
+                : Result<SessionLifecycleChangedEventArgs>.Failure(info);
+        }
+
+        /// <summary>
+        /// Starts delivering lifecycle states to <see cref="LifecycleChanged"/> until the returned
+        /// subscription is disposed.
+        /// </summary>
+        public Result<IDisposable> SubscribeLifecycle()
+        {
+            return SubscribeLifecycle(RaiseLifecycleChanged);
+        }
+
+        /// <summary>
+        /// Calls <paramref name="handler"/> with the session's lifecycle state, the current one first,
+        /// then every change, until the returned subscription is disposed: how an app learns that
+        /// its hub started a new session, joined another hub, or no longer admits it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The session follows its hub by itself, in place: when the hub starts a new session or
+        /// joins another hub as its member, this <see cref="Session"/>, every object obtained from
+        /// it, the app volumes, GUI panels and rooms the app created or took over with
+        /// <c>GetOrCreate</c>, its subscriptions and its peer id stay; senders created with reconnects renegotiate (frames stop for a few seconds), and
+        /// objects of other peers come back once their owners have moved too. A move reports
+        /// <see cref="SessionLifecycleState.Migrating"/>, then <see cref="SessionLifecycleState.Connected"/>
+        /// with the new <see cref="SessionLifecycleChangedEventArgs.SessionId"/>, the previous one
+        /// and the <see cref="SessionLifecycleChangedEventArgs.Cause"/>. A move whose new session
+        /// answers late reports <see cref="SessionLifecycleState.HubUnreachable"/> first, so react to a
+        /// change of the session id rather than to one state: re-read whatever the app keyed by it.
+        /// </para>
+        /// <para>
+        /// <see cref="SessionLifecycleState.RePairRequired"/> is terminal: nothing is retried. Dispose
+        /// the session (not from the handler), onboard again and recreate what the app owns.
+        /// </para>
+        /// <para>
+        /// Recommended: on a new session id, and after onboarding again, call
+        /// <see cref="AppVolumeControl.GetOrCreate"/> and <see cref="GuiPanelControl.GetOrCreate"/>
+        /// again for every common name the app owns. Each call returns the same id, takes the
+        /// object over when it is there and re-creates it when it is missing; after a re-pair it is
+        /// the only way back.
+        /// </para>
+        /// <para>
+        /// The handler runs on a library thread: keep it short and do the reinitialization on a
+        /// thread of your own. An exception it throws is swallowed. When <c>Dispose</c> of the
+        /// subscription returns, a handler call running on another thread has finished and no
+        /// further one starts; never dispose while holding a lock the handler takes.
+        /// </para>
+        /// </remarks>
+        public Result<IDisposable> SubscribeLifecycle(EventHandler<SessionLifecycleChangedEventArgs> handler)
+        {
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+            _context.ThrowIfDisposed();
+            var tokenResult = CancelToken.Create();
+            if (!tokenResult.IsSuccess)
+                return Result<IDisposable>.Failure(tokenResult.Info);
+            var subscription = SessionLifecycleSubscription.Create(tokenResult.Value, true, handler);
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_subscribe_lifecycle(_context.DangerousHandle, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
+            return Results.SubscriptionResult(info, subscription);
+        }
+
+        private void RaiseLifecycleChanged(object? sender, SessionLifecycleChangedEventArgs args)
+        {
+            var handler = LifecycleChanged;
+            if (handler != null)
+                handler(this, args);
+        }
+
+        /// <summary>
         /// Asks the hub for a co-process invite: one companion process on this PC (a C# helper of a
         /// native app, a plugin sandbox) joins with it, without a code, as the peer the hub
         /// remembers for this app's approval and <paramref name="appTag"/>. Blocks until the hub
@@ -92,8 +179,8 @@ namespace Quaternar.Qaros
         /// invites are minted by the hub's operators. Fails with
         /// <see cref="StatusCode.ArgumentNotSupported"/> for a tag the runtime refuses, or when the
         /// hub cannot be resolved from this session, for example while it is not connected. A
-        /// runtime older than app tags refuses the request (its structure type changed with the
-        /// tag); check <see cref="RuntimeInfo.Version"/> when you may load one.
+        /// runtime without app tags refuses the request; check <see cref="RuntimeInfo.Version"/>
+        /// when you may load one.
         /// </para>
         /// </remarks>
         /// <param name="appTag">The co-process's app tag; rules in <see cref="RequestOnboardingInviteOptions.AppTag"/>.</param>

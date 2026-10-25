@@ -131,7 +131,7 @@ QAR_IMPLEMENT_DYNAMIC_LOADING() // exactly once per application
 
 int main(int argc, char** argv)
 {
-    if (not qar_library_load(NULL)) // the installed QAROS
+    if (!qar_library_load(NULL)) // the installed QAROS
     {
         // QAROS not installed: run without AR/VR features
         return 1;
@@ -149,8 +149,8 @@ Functions are loaded *by symbol name* into tables your application owns, so newe
 ```powershell
 cmake --preset x64-windows
 cmake --build --preset x64-windows-debug
-# "installed" loads the installed QAROS; a path loads that qar-streaming-c.dll instead
-.\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe installed
+# loads the installed QAROS; the other examples do too, and join it as a local app
+.\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe
 ```
 
 </Lang>
@@ -159,13 +159,12 @@ cmake --build --preset x64-windows-debug
 The C# binding wraps the C API in the `Quaternar.Qaros` namespace with `SafeHandle`s, `IDisposable` and a `Result<T>` return type: no manual pointers, no exceptions for expected native failures.
 
 - **NuGet package**: multi-targets `netstandard2.0`, `netstandard2.1` and `net8.0`, so it works in Unity and modern .NET alike.
-- **Native library**: the managed assembly calls into `qar-streaming-c`. The NuGet package carries the native runtime and copies it next to your application on build and publish.
+- **Native library**: the package is the binding only. `Library.Init` loads `qar-streaming-c` from the QAROS installed on the PC (`InstalledRuntime`, the same lookup as `qar_library_load(NULL)` in C), release or demo, and fails with a "QAROS is not installed" result when there is none. Ship no copy of the runtime with your app.
 
 ```xml
 <!-- your .csproj -->
 <ItemGroup>
   <PackageReference Include="Quaternar.Qaros" Version="0.*" />
-  <!-- demo runtime: Quaternar.Qaros.Demo -->
 </ItemGroup>
 ```
 
@@ -173,8 +172,8 @@ The C# binding wraps the C API in the `Quaternar.Qaros` namespace with `SafeHand
 The C# snippets in this guide follow the shipping binding but are illustrative: no compiled C# example project is published in this repository yet. See [Language Bindings](/docs/developer-guide/language-bindings).
 :::
 
-Unity projects get this binding, with the runtime, from the QAROS Unity packages instead; see
-[Unity](/docs/developer-guide/unity).
+Unity projects get this binding from the QAROS Unity packages instead, and load the installed
+runtime the same way; see [Unity](/docs/developer-guide/unity).
 
 </Lang>
 </CodeTabs>
@@ -187,10 +186,17 @@ Unity projects get this binding, with the runtime, from the QAROS Unity packages
 <Lang value="c">
 
 ```c
+#define QAR_ENABLE_DYNAMIC_LOADING
 #include <qar_streaming.h>
+
+QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 int main(void)
 {
+    // 0. Load the installed runtime
+    if (!qar_library_load(NULL))
+        return 1;
+
     // 1. Library init (process-wide, once)
     QarLibraryInit lib_init = qar_library_init_default();
     lib_init.enable_console_logging = true;
@@ -209,6 +215,7 @@ int main(void)
     // 5. Teardown, in reverse
     qar_runtime_handle_destroy(runtime);
     qar_result_log_if_error(qar_library_destroy());
+    qar_library_unload();
     return 0;
 }
 ```

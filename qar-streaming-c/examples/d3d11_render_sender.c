@@ -1,5 +1,6 @@
 /** \file d3d11_render_sender.c
- *  \brief Streams D3D11-rendered frames to a peer that requests them.
+ *  \brief Streams D3D11-rendered frames to a target app picked from the peer
+ *  list.
  *  \example d3d11_render_sender.c
  */
 
@@ -7,9 +8,11 @@
  * \tableofcontents
  *
  * \section d3d11_rendering_overview Overview
- * - Obtain a session as in earlier tutorials (rejoin or onboard)
+ * - Join the QAROS on this PC as a local app, as in the
+ *   \ref qar_c_tutorial_app_volumes tutorial
  * - Create the app volume the stream is displayed in
- * - Wait for a peer (e.g. a Visualizer) to request a render stream
+ * - Pick a target app (a headset, or a receiver in the Visualizer) from the
+ *   session's peer list
  * - Create a D3D11 device, chain it into the render sender with
  *   QarStreamParamsD3D11, and clear each colour view of the sender's shared
  *   textures directly on the GPU - no CPU copy
@@ -18,22 +21,28 @@
  * - Complete the \ref qar_c_tutorial_cpu_rendering tutorial; this one differs
  *   only in the graphics backend
  * - Windows with a D3D11.1-capable GPU
- * - A running QarOS hub (for the first run, read the pairing code off its
- *   onboarding screen), with a peer that requests a render stream from this
- *   application once it is running
+ * - QAROS installed and running on this PC, with a target app in its session:
+ *   a connected headset, or a receiver opened in the QAROS Visualizer
  *
  * \section d3d11_rendering_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target d3d11_render_sender
  * ./build/x64-windows/Debug/d3d11_render_sender.exe
- * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
+ * The first run asks once in QAROS whether the app may join.
  *
  * \section d3d11_rendering_setup Library, Runtime, Session, and App Volume
- * Argument parsing and session setup match the \ref
+ * Loading the installed runtime and joining as a local app match the \ref
  * qar_c_tutorial_cpu_rendering tutorial. A render sender is displayed in an
  * app volume, so one is created before the sender.
  * \snippet d3d11_render_sender.c d3d11_volume
+ *
+ * \section d3d11_rendering_target Pick a Target
+ * The target comes from the session's peer list, with the shared helper the
+ * \ref qar_c_tutorial_cpu_rendering tutorial explains: a peer whose role is
+ * QAR_PEER_ROLE_TARGET and whose presence is QAR_PEER_PRESENCE_ONLINE or
+ * QAR_PEER_PRESENCE_UNKNOWN.
+ * \snippet d3d11_render_sender.c d3d11_target
  *
  * \section d3d11_rendering_device Create the D3D11 Device
  * The sender needs the ID3D11Device1 / ID3D11DeviceContext1 interfaces, so the
@@ -71,45 +80,6 @@
 #ifdef QAR_ENABLE_D3D11
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
-
-static void
-print_usage(const char* program_name)
-{
-	const char* name = program_name ? program_name : "d3d11_render_sender";
-	printf(
-		"Usage: %s <installed|path-to-qar-streaming-c-library> "
-		"[runtime-binaries-dir] "
-		"[pairing-code]\n",
-		name
-	);
-	printf(
-		"The pairing code is required on the first run only; later runs "
-		"rejoin with the persisted onboarding id.\n"
-	);
-}
-
-typedef struct RenderRequestState
-{
-	volatile bool has_request;
-	QarPeerId target_peer_id;
-} RenderRequestState;
-
-static void
-on_render_request(QarRenderStreamRequest* request, void* user_state)
-{
-	RenderRequestState* state = (RenderRequestState*)user_state;
-
-	QarPeerId target_peer_id = qar_peer_id_default();
-	QarResult peer_result = qar_render_request_get_target_peer_id(request, &target_peer_id);
-	log_result("qar_render_request_get_target_peer_id", peer_result);
-	if(qar_result_is_success(peer_result) && !state->has_request)
-	{
-		state->target_peer_id = target_peer_id;
-		state->has_request = true;
-	}
-
-	qar_render_request_handle_destroy(request);
-}
 
 typedef struct D3D11Objects
 {
@@ -232,30 +202,15 @@ teardown(QarRuntime* runtime, QarSession* session)
 }
 
 int
-main(int argc, char** argv)
+main(void)
 {
-	if(argc < 2)
+	if(!qar_library_load(NULL)) /* NULL: the default lookup, normally the installed QAROS */
 	{
-		print_usage(argv[0]);
-		return 1;
-	}
-
-	const char* library_path = library_path_argument(argv[1]);
-	const char* runtime_dir = NULL;
-	char runtime_dir_buffer[1024] = { 0 };
-	if(argc >= 3)
-	{
-		runtime_dir = argv[2];
-	}
-	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
-	{
-		runtime_dir = runtime_dir_buffer;
-	}
-	const char* pairing_code = (argc >= 4) ? argv[3] : NULL;
-
-	if(!qar_library_load(library_path))
-	{
-		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
+		fprintf(
+			stderr,
+			"Could not load the QAROS runtime (reason above): install QAROS, or fix "
+			"QAROS_RUNTIME_DIR.\n"
+		);
 		return 2;
 	}
 
@@ -271,7 +226,6 @@ main(int argc, char** argv)
 
 	QarRuntime* runtime = NULL;
 	QarRuntimeInit runtime_init = qar_runtime_init_default();
-	runtime_init.runtime_binaries_folder_path = runtime_dir;
 	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
 	if(qar_result_is_error(runtime_result) || runtime == NULL)
 	{
@@ -281,15 +235,9 @@ main(int argc, char** argv)
 		return 4;
 	}
 
-	QarOnboardingId onboarding_id = qar_onboarding_id_default();
 	QarSession* session = NULL;
-	if(example_obtain_session(
-		   runtime,
-		   pairing_code,
-		   "d3d11_render_sender.onboarding-id.txt",
-		   "D3D11 Renderer",
-		   &onboarding_id,
-		   &session
+	if(example_join_as_local_app(
+		   runtime, "D3D11 Rendering Example", "main.d3d11-rendering.examples.quaternar", &session
 	   ) != 0
 	   || session == NULL)
 	{
@@ -315,20 +263,17 @@ main(int argc, char** argv)
 	}
 	//! [d3d11_volume]
 
-	RenderRequestState request_state = { false, qar_peer_id_default() };
-	QarResult subscribe_result =
-		qar_render_sender_subscribe_requests(session, on_render_request, &request_state, NULL);
-	log_result("qar_render_sender_subscribe_requests", subscribe_result);
-	if(qar_result_is_error(subscribe_result))
+	//! [d3d11_target]
+	/* The application picks its targets from the peer list; waiting for a
+	 * render stream request would wait forever, because a target requests an
+	 * app's content only after a sender has attached it to the app's volume. */
+	QarPeerId target_peer_id = qar_peer_id_default();
+	if(!example_wait_for_target(session, 120000, &target_peer_id))
 	{
 		teardown(runtime, session);
 		return 7;
 	}
-	printf("Waiting for a peer to request a render stream ...\n");
-	while(!request_state.has_request)
-	{
-		Sleep(50);
-	}
+	//! [d3d11_target]
 
 	D3D11Objects d3d = { NULL, NULL };
 	if(!create_d3d11(&d3d))
@@ -347,7 +292,7 @@ main(int argc, char** argv)
 
 	QarRenderSenderInit sender_init = qar_render_sender_init_default();
 	sender_init.graphics_api = QAR_GRAPHICS_API_D3D11;
-	sender_init.peer_id = request_state.target_peer_id;
+	sender_init.peer_id = target_peer_id; /* who receives the frames */
 	sender_init.app_volume_id = &volume_id;
 	sender_init.header.next = &d3d11_params.header;
 

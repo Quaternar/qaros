@@ -94,7 +94,7 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 | Code | Lifetime | Shown / announced |
 |---|---|---|
 | Onboarding screen code | ~10 s, rotates | Yes, the only one |
-| Codes minted for the Hub's operators (1-64 per request, optionally bound to a planned peer id); applications cannot request them | 2 min default, 10 min max | No |
+| Codes minted for peers configured as the Hub's operators (1-64 per request, optionally bound to a planned peer id); the Visualizer offers no screen for them and applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 
 - A request never invalidates codes others hold or the screen code.
@@ -264,8 +264,6 @@ Ranked by severity. These are current, known engineering items.
 | L19 | Low | **A member follows a new session by restarting.** | Its local apps and headsets are interrupted briefly. |
 | L16 | Low | Same-machine checks (revoke, allow, rotation) trust the machine name a peer states about itself. | A remote operator peer could pass for local. |
 | L17 | Low | Zenoh keeps the TLS key in its own memory unscrubbed while the session runs. | Memory read access to a running process reveals its session key. |
-
-Closed since 0.9.0: plaintext secrets at rest (L5 now covers only the same-user case), the Windows-only CA bootstrap (L11, the CA is now in process), the merged multi-CA trust bundle (old L15, one CA per session), unsigned trust-bundle updates (L1), self-asserted peer identity and the blacklist bypass (L2, L3), no identity check at connect (L4, now the session access control), no online renewal (L6), no rate limits and no gateway lifetime cap (L8, L10), in-process admin (L9), loose discovery input (L12), non-constant-time tag compares (L13).
 
 ## Roadmap
 

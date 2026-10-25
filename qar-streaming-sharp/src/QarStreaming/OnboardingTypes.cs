@@ -225,8 +225,8 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Join the session under <paramref name="peerId"/> instead of a fresh id;
         /// it is persisted with the slot and kept by every later rejoin. For a
-        /// process whose peer id was planned by someone else, such as the runtime
-        /// launcher.
+        /// process whose peer id was planned by someone else. Not with
+        /// <see cref="UseLocalApp"/>: the hub picks a local app's peer id.
         /// </summary>
         public OnboardOptions WithPeerId(PeerId peerId)
         {

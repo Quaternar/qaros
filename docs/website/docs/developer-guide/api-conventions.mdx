@@ -53,8 +53,8 @@ qar_result_log_if_error(qar_runtime_forget(runtime, &forget));
 - **Opaque handles** are `SafeHandle`-backed classes implementing `IDisposable`:
   `Runtime`, `Session`, `OnboardingInvite`, `RenderSender`, `RenderFrameInfo`.
   `Dispose()` (or a `using` block) releases the handle. `Runtime.Dispose()` calls
-  `qar_runtime_handle_destroy`: it releases the application's runtime handle and
-  leaves the shared Hub running for other applications.
+  `qar_runtime_handle_destroy`: it releases this process's runtime handle; the
+  Hub and the other applications in its session keep running.
 - **Value IDs** are `readonly struct`s — `PeerId`, `SessionId`, `GuiPanelId`,
   `AppVolumeId`, `StreamId` — with `ToString()`, `Parse`/`TryParse`,
   `ToByteArray()`, and equality **by byte content**. (`PeerId`, `SessionId`, and
@@ -115,7 +115,7 @@ if (!r.IsSuccess)
 using var session = r.ValueOrThrow();
 
 // Or assert success on a void-like call:
-runtime.Forget(id).EnsureSuccess();
+runtime.Forget(new ForgetOptions(savedOnboardingId)).EnsureSuccess();
 ```
 
 </Lang>
@@ -141,8 +141,9 @@ QarOnboardInit init = qar_onboard_init_default();
 QarOnboardCodeExt code = qar_onboard_code_ext_default();
 QarOnboardHostExt host = qar_onboard_host_ext_default();
 
-code.code = "ABCD-EFGH";
+code.code = code_from_user;        // read from the user, never a command line
 host.hostname = "192.168.1.50";
+host.port = hub_port;              // required: shown with the hub's code
 code.header.next = &host.header;   // chain code -> host
 init.header.next = &code.header;   // chain init -> code
 ```
@@ -159,8 +160,8 @@ unmanaged memory afterwards:
 
 ```csharp
 var options = new OnboardOptions()
-    .UseCode("ABCD-EFGH")
-    .WithHost("192.168.1.50");
+    .UseCode(codeFromUser)
+    .WithHost("192.168.1.50", hubPort); // the port is required
 ```
 
 </Lang>
@@ -292,8 +293,8 @@ callback, and teardown runs in reverse of setup.
 
 - Every handle type is `IDisposable` — use `using`, or dispose explicitly. The
   underlying `SafeHandle.ReleaseHandle` calls the matching native handle release.
-  In particular, `Runtime.Dispose()` releases only the runtime handle; application
-  cleanup must not request shutdown of the shared Hub.
+  In particular, `Runtime.Dispose()` releases only this process's runtime handle;
+  the Hub outlives your app.
 - **Subscriptions are `IDisposable`**: disposing one stops native delivery.
 - Values handed to you inside an event/callback are already **immutable DTO
   snapshots** (`PeerSpec`, `GuiPanel`, `AppVolume`) — safe to keep; there is no

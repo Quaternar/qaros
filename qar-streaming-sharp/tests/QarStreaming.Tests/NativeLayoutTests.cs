@@ -76,6 +76,7 @@ namespace Quaternar.Qaros.Tests
             { typeof(ForgetInitNative), 32 },
             { typeof(LuidNative), 8 },
             { typeof(GraphicsDeviceIdNative), 48 },
+            { typeof(SessionLifecycleInfoNative), 72 },
             { typeof(GuiPanelInitNative), 88 },
             { typeof(GuiPanelStreamIdExtNative), 32 },
             { typeof(GuiPanelUrlExtNative), 24 },
@@ -176,6 +177,12 @@ namespace Quaternar.Qaros.Tests
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.IdType), 16 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.Luid), 20 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.Uuid), 28 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.State), 16 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.Cause), 20 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.SessionId), 24 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.PreviousSessionId), 40 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.HasPreviousSession), 56 },
+            { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.Reason), 64 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.CommonName), 16 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.DisplayName), 24 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.Pose), 32 },
@@ -318,6 +325,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
             Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);
+            Assert.Equal(0x200B, (int)StructureType.SessionLifecycleInfo);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);
             Assert.Equal(0x4003, (int)StructureType.StreamOpenGlEglParamsExt);
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);
@@ -351,6 +359,13 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(2, (int)PeerPresence.Offline);
             Assert.Equal(3, (int)PeerPresence.Leaving);
             Assert.Equal(4, (int)PeerPresence.Retired);
+            Assert.Equal(0, (int)SessionLifecycleState.Connected);
+            Assert.Equal(1, (int)SessionLifecycleState.Migrating);
+            Assert.Equal(2, (int)SessionLifecycleState.HubUnreachable);
+            Assert.Equal(3, (int)SessionLifecycleState.RePairRequired);
+            Assert.Equal(0, (int)SessionChangeCause.None);
+            Assert.Equal(1, (int)SessionChangeCause.Rotated);
+            Assert.Equal(2, (int)SessionChangeCause.JoinedPrimary);
             Assert.Equal(5, Enum.GetValues(typeof(PeerPresence)).Length);
         }
 

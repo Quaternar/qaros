@@ -164,6 +164,15 @@ Reworked (all now pass `clang -fsyntax-only -std=c11` against the new
   stdin closes; launch invite path off Windows). `common.h` has
   `example_get_own_peer_id` / `example_print_own_peer_id`. Root Quaternar
   CMake builds them as `qaros-example-<name>` (not installed).
+- `session_lifecycle.c` (`qar_c_tutorial_session_lifecycle`, wrapper
+  `tutorials/c/session-lifecycle.mdx`): local app subscribes to the session
+  lifecycle, keys on a change of session id, re-onboards and recreates its app
+  volume on RE_PAIR_REQUIRED. Built by both CMake lists. Guide section
+  "When the hub's session changes" in `onboarding-and-sessions.mdx`.
+- `cpu_rendering_visualizer.c`, `d3d11_render_sender.c` pick their target from
+  the peer list (`common.h` `example_wait_for_target`: subscribe, then list,
+  role TARGET + presence ONLINE/UNKNOWN); render stream requests never come for
+  a new app's volume.
 - No internal ADR references anywhere in qaros (`qaros/AGENTS.md`).
 - `app_volume_management.c`, `gui_panel_operations.c`,
   `cpu_rendering_visualizer.c` — ported to the helper; `add_*` →

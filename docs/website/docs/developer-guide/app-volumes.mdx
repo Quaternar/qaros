@@ -83,6 +83,9 @@ is not yet compiled from a published sample project.
 
 The `volume_id` is what you pass to the render sender (`QarRenderSenderInit.app_volume_id`) so your stream is composited inside this box — see [Rendering Streams](/docs/developer-guide/rendering-streams).
 
+- **A restart takes the volume over.** The id derives from the common name, so after a restart `get_or_create` returns the volume your previous run left, ignores the creation options, and from then on your session carries it into the hub's next session like one it created.
+- **Call it again when the session changes.** On a new session id, and after onboarding again on `RE_PAIR_REQUIRED`, call `get_or_create` again for every common name your app owns: it returns the same id and re-creates the volume when it is missing. See [When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes).
+
 ## The two transforms, in practice
 
 - **Volume in the room:** `qar_app_volumes_change_pose` / `_change_size` move and resize the box itself (users usually do this by grabbing the volume).
@@ -92,7 +95,7 @@ Because other peers (and gestures) can change these too, read the *live* values 
 
 ## World anchors
 
-To publish an Earth-fixed reference frame with a volume (ECEF WGS84; see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth)):
+To publish an Earth-fixed reference frame with a volume (ECEF WGS84; see [Coordinate Systems](/docs/developer-guide/coordinate-systems#world-space--a-geographic-reference)):
 
 ```c
 QarGeoAnchorFrame frame;
@@ -112,9 +115,9 @@ Keep the units separate:
 - `AppPose.Position` is a Euclidean offset in **volume meters**, relative to the box center. It is neither an ECEF position nor an Earth-frame offset, and `AppScale` does not scale this stored translation.
 - Render-sender view poses and gesture points use **app-content units**, after the inverse volume/app transforms and division by `AppScale`.
 
-If render-coordinate units differ from world meters, publish a separate application-specific conversion, such as `worldMetersPerAppUnit = S0`. Unit axes cannot encode that scale. A custom snapshot may group this value and the anchor under a name such as `appCoordinate`; that is an integration protocol, not an SDK property. Do not encode `S0` in non-unit axes or streaming `depth_scale`. A one-to-one local-Earth-meter interpretation requires actual world-meter app coordinates and a consumer-defined mapping to the anchor; the anchor alone does not establish that mapping. See [World space](/docs/developer-guide/coordinate-systems#world-space--pinning-the-room-to-the-earth).
+If render-coordinate units differ from world meters, publish a separate application-specific conversion, such as `worldMetersPerAppUnit = S0`. Unit axes cannot encode that scale. A custom snapshot may group this value and the anchor under a name such as `appCoordinate`; that is an integration protocol, not an SDK property. Do not encode `S0` in non-unit axes or streaming `depth_scale`. A one-to-one local-Earth-meter interpretation requires actual world-meter app coordinates and a consumer-defined mapping to the anchor; the anchor alone does not establish that mapping. See [World space](/docs/developer-guide/coordinate-systems#world-space--a-geographic-reference).
 
-The compiled tutorial builds a full east/up/south frame from a latitude/longitude: [Pin to the Earth with a World Anchor](/docs/developer-guide/tutorials/c/app-volume-management).
+The compiled tutorial builds a full east/up/south frame from a latitude/longitude: [Publish a World Anchor](/docs/developer-guide/tutorials/c/app-volume-management).
 
 ## Coordination between users
 

@@ -7,7 +7,7 @@
  * \tableofcontents
  *
  * \section app_volume_overview Overview
- * - Obtain a session (rejoin, or onboard with the hub pairing code)
+ * - Join the QAROS on this PC as a local app
  * - Get-or-create a single app volume by its stable common name
  * - Enumerate and inspect every app volume handle
  * - Customise the volume's gesture mapping rules
@@ -15,24 +15,22 @@
  * - Map a room-space point into app content space and hit-test the cuboid
  *
  * \section app_volume_prereq Prerequisites
- * - Complete the \ref qar_c_tutorial_onboarding tutorial
- * - A running QarOS hub (for the first run, read the pairing code off its
- *   onboarding screen)
+ * - Complete the \ref qar_c_tutorial_local_app_onboarding tutorial
+ * - QAROS installed and running on this PC
  *
  * \section app_volume_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target app_volume_management
  * ./build/x64-windows/Debug/app_volume_management.exe
- * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
+ * The first run asks once in QAROS whether the app may join.
  *
- * \section app_volume_args Parse Arguments
- * \snippet app_volume_management.c app_args
- *
- * \section app_volume_setup Load, Init, and Obtain a Session
- * The session is obtained with the shared rejoin-or-onboard helper described
- * in the \ref qar_c_tutorial_onboarding tutorial.
+ * \section app_volume_setup Load, Init, and Join
+ * `qar_library_load(NULL)` loads the runtime of the installed QAROS, and the
+ * app joins as a local app with the shared helper below (see the
+ * \ref qar_c_tutorial_local_app_onboarding tutorial).
  * \snippet app_volume_management.c app_setup
+ * \snippet common.h example_join_local_app
  *
  * \section app_volume_create Create and List
  * \snippet app_volume_management.c app_create
@@ -47,10 +45,13 @@
  * get-or-create ignores it when the volume already exists.
  * \snippet app_volume_management.c app_gestures
  *
- * \section app_volume_anchor Pin to the Earth with a World Anchor
- * A world anchor states where app volume space sits on the Earth, as an ECEF
- * WGS84 frame. Here the volume's +X points east, +Y up and +Z south of a
- * latitude/longitude, which keeps the frame right-handed.
+ * \section app_volume_anchor Publish a World Anchor
+ * A world anchor is geographic reference metadata the volume carries: an
+ * Earth-fixed frame in ECEF WGS84 meters with unit axes. The SDK stores and
+ * replicates it; it does not move the volume, change the app pose or scale, or
+ * transform render poses. Applications that read it apply their own mapping.
+ * Here the frame's +X points east, +Y up and +Z south of a latitude/longitude,
+ * which keeps it right-handed.
  * \snippet app_volume_management.c app_world_anchor
  *
  * \section app_volume_hit_test Room-Space Point to App Content Space
@@ -73,22 +74,6 @@
 #include <qar_streaming.h>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
-
-static void
-print_usage(const char* program_name)
-{
-	const char* name = program_name ? program_name : "app_volume_management";
-	printf(
-		"Usage: %s <installed|path-to-qar-streaming-c-library> "
-		"[runtime-binaries-dir] "
-		"[pairing-code]\n",
-		name
-	);
-	printf(
-		"The pairing code is required on the first run only; later runs "
-		"rejoin with the persisted onboarding id.\n"
-	);
-}
 
 //! [app_gestures]
 static void
@@ -158,7 +143,7 @@ geo_anchor_from_lat_lon(double lat_deg, double lon_deg, double height_m)
 }
 
 static void
-pin_and_unpin_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
+set_and_clear_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
 {
 	QarGeoAnchorFrame anchor = geo_anchor_from_lat_lon(50.0870, 14.4208, 200.0);
 	QarResult set_result = qar_app_volumes_change_app_world_anchor(session, volume_id, &anchor);
@@ -168,7 +153,8 @@ pin_and_unpin_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
 		return;
 	}
 
-	/* ... the volume is now pinned; clear it when it should float again. */
+	/* ... other peers now read the anchor with the volume; clear it when it no
+	 * longer applies. */
 	log_result(
 		"qar_app_volumes_clear_app_world_anchor",
 		qar_app_volumes_clear_app_world_anchor(session, volume_id)
@@ -261,35 +247,16 @@ hit_test_room_point(QarSession* session, const QarAppVolumeId* volume_id, QarVec
 //! [app_room_to_app]
 
 int
-main(int argc, char** argv)
+main(void)
 {
-	//! [app_args]
-	if(argc < 2)
-	{
-		print_usage(argv[0]);
-		return 1;
-	}
-
-	const char* library_path = library_path_argument(argv[1]);
-	const char* runtime_dir = NULL;
-	char runtime_dir_buffer[1024] = { 0 };
-
-	if(argc >= 3)
-	{
-		runtime_dir = argv[2];
-	}
-	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
-	{
-		runtime_dir = runtime_dir_buffer;
-	}
-
-	const char* pairing_code = (argc >= 4) ? argv[3] : NULL;
-	//! [app_args]
-
 	//! [app_setup]
-	if(!qar_library_load(library_path))
+	if(!qar_library_load(NULL)) /* NULL: the installed QAROS runtime */
 	{
-		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
+		fprintf(
+			stderr,
+			"Could not load the QAROS runtime (reason above): install QAROS, or fix "
+			"QAROS_RUNTIME_DIR.\n"
+		);
 		return 2;
 	}
 
@@ -305,8 +272,6 @@ main(int argc, char** argv)
 
 	QarRuntime* runtime = NULL;
 	QarRuntimeInit runtime_init = qar_runtime_init_default();
-	runtime_init.runtime_binaries_folder_path = runtime_dir;
-
 	QarResult runtime_result = qar_runtime_create(&runtime_init, &runtime);
 	if(qar_result_is_error(runtime_result) || runtime == NULL)
 	{
@@ -316,15 +281,9 @@ main(int argc, char** argv)
 		return 4;
 	}
 
-	QarOnboardingId onboarding_id = qar_onboarding_id_default();
 	QarSession* session = NULL;
-	if(example_obtain_session(
-		   runtime,
-		   pairing_code,
-		   "app_volume_management.onboarding-id.txt",
-		   "App Volume Peer",
-		   &onboarding_id,
-		   &session
+	if(example_join_as_local_app(
+		   runtime, "App Volume Example", "main.app-volume-management.examples.quaternar", &session
 	   ) != 0
 	   || session == NULL)
 	{
@@ -413,7 +372,7 @@ main(int argc, char** argv)
 	if(qar_result_is_success(create_result))
 	{
 		configure_gestures(session, &volume_id);
-		pin_and_unpin_world_anchor(session, &volume_id);
+		set_and_clear_world_anchor(session, &volume_id);
 
 		/* A room point 0.25 m above the volume's initial centre. */
 		QarVector3 room_point = qar_vector3_default();

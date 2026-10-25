@@ -26,6 +26,9 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 | `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1808) | the executable was moved, copied, re-signed or modified since its approval, or its signature is invalid | revoke the old approval ([Approved local apps](/docs/operator-guide/source-applications#approved-local-apps)) and start the app again. An invalid signature can never be approved: re-sign or rebuild. |
 | `QAR_STATUS_ONBOARDING_FAILED` (1801), message names a runtime version or flavor | the app loaded a `qar-streaming-c.dll` other than the installed one | load the installed runtime with `qar_library_load(NULL)`; do not ship a copy |
 | asked again after every build | the app is not code-signed, so its approval is for one exact file | expected during development; sign release builds ([The trust record](/docs/developer-guide/onboarding-and-sessions#the-trust-record)) |
+| `QAR_STATUS_ONBOARDING_INVITE_REFUSED` (1812) from `qar_session_request_onboarding_invite` | the session did not join as a local app (`QarOnboardLocalAppExt`) and was not started by QAROS: a code-paired app, a device or a co-process | final, do not retry; request the invite from the session of the local app that starts the co-process ([Co-process](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts)) |
+| the app stopped receiving after a hub reset, or after its approval was revoked | the session reached `QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED` (C# `SessionLifecycleState.RePairRequired`): the hub no longer admits the app, and nothing is retried | subscribe to the session lifecycle; on `RE_PAIR_REQUIRED` destroy the session, onboard again and recreate what the app owns ([When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes)) |
+| frames pause for a few seconds and other peers' objects vanish briefly after the operator starts a new session | the session moves into the new session in place, and senders renegotiate | nothing: the app's own objects are kept. React only where the app keyed something by the session id ([When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes)) |
 
 ## Choosing the GPU
 
@@ -105,7 +108,7 @@ is not yet compiled from a published sample project.
 
 ## Frequent integration mistakes
 
-- **Forgetting to persist the onboarding ID.** The ID returned by onboarding is the *only* key to the persisted identity. Losing it means pairing again.
+- **Forgetting to persist the onboarding ID** after code pairing. The ID returned by onboarding is the *only* key to the persisted identity. Losing it means pairing again. A local app and a co-process store nothing: their onboarding ID is zero.
 - **Calling API functions from inside callbacks.** Result/progress/update callbacks run on library threads; blocking API calls from there can deadlock. Queue to your own thread.
 - **Zero-initializing init structs by hand.** Always use `qar_*_default()` — it stamps `header.type`, without which calls fail.
 - **Mismatched projection metadata.** If streamed content "swims" or sits at the wrong depth, your `show_frame` near/far or per-view poses don't match what you actually rendered with. This is a metadata bug, not a network problem — see [Rendering Streams](/docs/developer-guide/rendering-streams#the-frame-loop).

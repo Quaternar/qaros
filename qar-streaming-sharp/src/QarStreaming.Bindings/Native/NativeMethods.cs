@@ -120,6 +120,12 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_session_get_graphics_device_id(IntPtr session, ref GraphicsDeviceIdNative outDeviceId, [MarshalAs(UnmanagedType.U1)] out bool outPresent);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_session_get_lifecycle_state(IntPtr session, ref SessionLifecycleInfoNative outInfo);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_session_subscribe_lifecycle(IntPtr session, SessionLifecycleCallback callback, IntPtr userState, IntPtr token);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_request_onboarding_invite(IntPtr session, ref RequestInviteInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel, out IntPtr outInvite);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

@@ -37,7 +37,7 @@ Conventions:
 
 The room origin itself is established by the underlying XR runtime and the platform's relocalization — it is not something applications set through the API. How multiple headsets co-locate to the same room origin is therefore a property of each device platform's relocalization, not of the QAROS API. The room-space axis convention is inherited from OpenXR (right-handed, Y-up, −Z forward) rather than restated normatively in the C headers.
 
-### World space — pinning the room to the Earth
+### World space — a geographic reference
 
 **World space** is an optional absolute geographic frame. An app volume can carry **world-anchor metadata** (`AppWorldAnchor`, containing a `QarGeoAnchorFrame`) that identifies an Earth-fixed reference frame in **ECEF WGS84 meters** (Earth-Centered, Earth-Fixed Cartesian coordinates):
 

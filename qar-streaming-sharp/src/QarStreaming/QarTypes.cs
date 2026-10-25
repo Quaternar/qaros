@@ -53,6 +53,47 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// Where a session stands in its hub's session lifecycle (C <c>QarSessionLifecycleState</c>);
+    /// see <see cref="Session.SubscribeLifecycle(EventHandler{SessionLifecycleChangedEventArgs})"/>.
+    /// Treat a value not named here as <see cref="HubUnreachable"/>.
+    /// </summary>
+    public enum SessionLifecycleState
+    {
+        /// <summary>In the hub's current session; traffic flows.</summary>
+        Connected = 0,
+        /// <summary>Moving into another session in place; traffic resumes once <see cref="Connected"/>.</summary>
+        Migrating = 1,
+        /// <summary>The hub has not answered for a while; the session keeps trying by itself.</summary>
+        HubUnreachable = 2,
+        /// <summary>
+        /// The hub no longer admits this app (its approval was revoked, it missed too many
+        /// rotations, or the hub was reset to a new install). Terminal: dispose the session,
+        /// onboard again and recreate what the app owns.
+        /// </summary>
+        RePairRequired = 3
+    }
+
+    /// <summary>
+    /// Why a session moved into another session id (C <c>QarSessionChangeCause</c>).
+    /// Informational: the move is the same. Treat a value not named here as <see cref="Rotated"/>.
+    /// </summary>
+    public enum SessionChangeCause
+    {
+        /// <summary>No move: a state change within the same session.</summary>
+        None = 0,
+        /// <summary>
+        /// The hub serves a new session of its own: its operator started a new session, a member hub
+        /// left its primary, or this app missed the announcement of a join.
+        /// </summary>
+        Rotated = 1,
+        /// <summary>
+        /// The hub this app paired with joined another hub as its member; the session moved into
+        /// that primary hub's session.
+        /// </summary>
+        JoinedPrimary = 2
+    }
+
+    /// <summary>
     /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
     /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
     /// </summary>
@@ -390,6 +431,7 @@ namespace Quaternar.Qaros
         SessionRequestInviteInit = 0x200A,
         PeerPresentation = 0x2006,
         PeerDeviceIdentity = 0x2009,
+        SessionLifecycleInfo = 0x200B,
         SessionInviteTargetAppInit = 0x2007,
         // 0x2008 (the removed request-onboarding-codes init) is never reused.
         RenderingStreamSenderInit = 0x3000,

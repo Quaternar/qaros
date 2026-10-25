@@ -15,13 +15,13 @@ namespace Quaternar.Qaros.Tests
         public void RuntimeHandleReleaseDoesNotDestroyTheSharedRuntime()
         {
             // Inspect the actual cleanup call target instead of loading a native runtime:
-            // calling the wrong destructor here would stop a user's shared Hub.
+            // disposing a Runtime releases only this process's handle, never the shared Hub.
             var release = typeof(RuntimeSafeHandle).GetMethod("ReleaseHandle", BindingFlags.Instance | BindingFlags.NonPublic)!;
             var nativeCalls = CalledMethods(release).Where(method => method.DeclaringType == typeof(NativeMethods)).ToArray();
             var call = Assert.Single(nativeCalls);
             Assert.Equal(nameof(NativeMethods.qar_impl_runtime_handle_destroy), call.Name);
             var dispose = typeof(Runtime).GetMethod(nameof(Runtime.Dispose))!;
-            Assert.DoesNotContain(CalledMethods(dispose), method => method.Name == nameof(NativeMethods.qar_impl_runtime_destroy));
+            Assert.DoesNotContain(CalledMethods(dispose), method => method.DeclaringType == typeof(NativeMethods));
         }
 
         private static IEnumerable<MethodBase> CalledMethods(MethodInfo method)

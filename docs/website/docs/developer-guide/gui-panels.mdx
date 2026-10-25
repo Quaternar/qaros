@@ -80,6 +80,9 @@ surface but are not yet compiled from a published sample project.
 Use a DNS-style, application-scoped name (`<panel>.<app>.<org>`) and keep it constant across versions. The panel's ID is derived deterministically from it — restarting your app reattaches to the same panel instead of spawning duplicates.
 :::
 
+- **A restart takes the panel over.** `get_or_create` returns the panel your previous run left, ignores the creation options, and from then on your session carries it into the hub's next session like one it created.
+- **Call it again when the session changes.** On a new session id, and after onboarding again on `RE_PAIR_REQUIRED`, call `get_or_create` again for every common name your app owns: it returns the same id and re-creates the panel when it is missing. See [When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes).
+
 ## Manipulating panels
 
 All mutations go through the session and the panel ID:

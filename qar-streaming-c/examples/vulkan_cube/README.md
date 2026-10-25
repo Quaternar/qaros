@@ -28,7 +28,7 @@ cmake --build --preset x64-windows-release --target qar-vulkan-source
 .\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
 ```
 
-1. The app loads the runtime with `qar_library_load(NULL)`, which finds it on its own: the installed QAROS, else the runtime beside the executable, else one on `PATH` (Developer Guide, *Authoring a language binding*). It then joins the QAROS on this PC as a local app (`QarOnboardLocalAppExt`). The app takes no arguments and looks for no file itself.
+1. The app loads the runtime with `qar_library_load(NULL)`, which finds it on its own: a `qar-streaming-c.dll` beside the executable, else the folder `QAROS_RUNTIME_DIR` names, else the installed QAROS, else one on `PATH` (Developer Guide, *Authoring a Language Binding*). Do not ship a copy of the runtime beside the app: it would win over the installed one. It then joins the QAROS on this PC as a local app (`QarOnboardLocalAppExt`). The app takes no arguments and looks for no file itself.
 2. First run: QAROS asks **"Allow qar-vulkan-source.exe to join QAROS?"**, in the Visualizer or as a tray window. Click **Allow** within 120 s. Meanwhile the console shows `Waiting for approval in QAROS hub`.
 3. `Connected. Waiting for rendering targets.` Open the cube's app volume on a viewer (Visualizer or headset). Each additional viewer gets its own stream and camera.
 4. Later runs join without a prompt while the executable is unchanged.
@@ -68,7 +68,7 @@ Any executable built on the QAROS C or C# API can be launched from the visualize
 
 - Preset is kept by the Hub on this PC and survives restarts; the executable path must stay reachable.
 - An app exiting within 10 s is restarted with backoff and reported as an error notification; its stdout/stderr are in the Hub's log folder.
-- Without registering: run the app from a console, as in [Run](#run-local-app-the-default).
+- Without registering: run the app from a console, as in [Run](#run).
 
 Details: Operator Guide, *Source Applications*, "Adding your own app".
 

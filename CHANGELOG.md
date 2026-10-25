@@ -102,16 +102,30 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   approve local apps again, join member Hubs again and activate the licence again.
 - **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
   Hub's local message router.
+- **Docs:** *Onboarding and Sessions* has a section *When the hub's session changes*: what a
+  session keeps when its Hub starts a new session or joins another Hub, subscribing to the session
+  lifecycle (`qar_session_subscribe_lifecycle`, C# `Session.SubscribeLifecycle`), reacting to a
+  changed session id rather than to one state, and onboarding again on `RE_PAIR_REQUIRED`. A new
+  compiled C tutorial, *Session Lifecycle* (`session_lifecycle.c`); *Troubleshooting* and the
+  glossary cover it.
+- **Docs:** *Onboarding and Sessions*, *App Volumes* and *GUI Panels* recommend calling
+  get_or_create again for every common name an app owns on each new session id and after
+  onboarding again, and say that a restarted app takes over the objects its previous run left,
+  which then follow it into the hub's next session. The *Session Lifecycle* tutorial
+  (`session_lifecycle.c`) does so on every new session id.
 
 ### Fixed
 
+- **Docs:** the CPU and D3D11 rendering examples and their tutorials pick their target app from
+  the session's peer list (role target, presence online) instead of waiting for a render stream
+  request, which never comes for a new app's volume. *Rendering Streams* no longer says to serve
+  targets discovered through the request subscription.
 - **Docs:** *Onboarding and Sessions*, also in the 0.9.0 docs, no longer says a target requests a
   render stream by itself and no longer links to a missing *Accepting render stream requests*
   section: your application picks its targets and creates their senders, as *Finding rendering
   targets* describes.
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
-  current pairing code, instead of describing no such screen and the code only in the Hub log, and
-  covers the one-time codes an onboarded application can request.
+  current pairing code, instead of describing no such screen and the code only in the Hub log.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
 - **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
@@ -127,6 +141,18 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
   with the same one-time approval; a launch invite on stdin remains only where local enrollment is
   not available.
+- **Docs:** every current guide, tutorial and example loads the installed runtime with
+  `qar_library_load(NULL)` and joins as a local app on the QAROS PC. The App Volume, GUI Panel, CPU
+  and D3D11 rendering examples join as local apps with an app tag instead of pairing with a code
+  from the command line, and take no runtime path or runtime folder arguments; *Dynamic Loading*
+  explains the lookup and leaves `runtime_binaries_folder_path` empty. *Getting Started* and the
+  Unity guide state that the NuGet and Unity packages carry the binding only and load the installed
+  QAROS, release or demo (no `Quaternar.Qaros.Demo` package, no runtime copied next to a player).
+  *Managing Devices* describes the one rotating code the Visualizer shows, without extra codes for
+  several devices. The API Conventions code example passes the required hub port. The world anchor
+  is described as geographic reference metadata in the glossary, the tutorial and the *World space*
+  heading of *Coordinate Systems* (new anchor `#world-space--a-geographic-reference`). Guides no
+  longer recount earlier behaviour.
 
 ## [0.9.0] - 2026-10-12
 

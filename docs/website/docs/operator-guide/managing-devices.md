@@ -19,13 +19,13 @@ The Hub continuously mints short-lived pairing codes:
 
 Security comes from this handling - single-use, short TTL, one-failure-max - not from the length of the code. The code never crosses any transport; it is only ever read by a human and typed into a device.
 
-**Requested codes.** Further one-time codes, to onboard several devices at once, are minted only for the Hub's operators (its own Visualizer and peers configured as operators); applications cannot request codes. Each is single-use like the shown code, lives 120 seconds by default and at most 600, and never replaces the code the Visualizer shows.
+**One code at a time.** The Visualizer shows only the current rotating code; it offers no list of further codes to hand out. Applications cannot request codes either: a source app on the Hub's PC joins without a code, after you allow it once ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)).
 
 ## The two onboarding paths
 
 **Push (operator-configured).** You add a device in the Visualizer's [Connection panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** > **Add device**), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
 
-**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. This is the path integrated applications use through the C API. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
+**Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. Integrated applications on a PC or device without a Hub use this path through the C API; on the Hub's PC they join as local apps instead. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
 
 ## Listing connected peers
 
@@ -59,4 +59,4 @@ For push onboarding you do not need the code. For pull onboarding, open the Conn
 
 Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Add device** > **Other devices** shows the large QR code for them.
 
-- **Several devices at once:** have the Hub's operator mint one-time codes (see [Requested codes](#how-pairing-codes-are-minted)) instead of racing the rotation.
+- **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. Headsets you can reach by address are easier with push onboarding (**Devices** > **Add device**), which needs no code.

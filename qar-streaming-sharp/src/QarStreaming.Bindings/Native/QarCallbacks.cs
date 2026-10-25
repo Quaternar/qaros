@@ -19,6 +19,9 @@ namespace Quaternar.Qaros.Interop
     internal delegate void PeerUpdateCallback(IntPtr handle, IntPtr userState);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void SessionLifecycleCallback(IntPtr info, IntPtr userState);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void RenderSenderCreateCallback(ResultNative status, IntPtr outStream, IntPtr userState);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

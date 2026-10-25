@@ -494,9 +494,10 @@ SessionAdapter(const QarSession* session)
 constexpr const char* kUsage =
 	"Usage: qar-vulkan-source\n"
 	"\n"
-	"Loads the QAROS runtime (qar_library_load(NULL): the installed QAROS, else\n"
-	"the runtime beside this executable, else one on PATH) and joins the QAROS on\n"
-	"this PC as a local app. The first run waits until you click Allow in QAROS.\n"
+	"Loads the QAROS runtime (qar_library_load(NULL): one beside this executable,\n"
+	"else the folder QAROS_RUNTIME_DIR names, else the installed QAROS, else one on\n"
+	"PATH) and joins the QAROS on this PC as a local app. The first run waits until\n"
+	"you click Allow in QAROS.\n"
 	"The cube renders on the GPU its session was created on.\n"
 	"Stop with Ctrl+C, or by closing stdin when it is a pipe.\n";
 

@@ -126,88 +126,276 @@ save_onboarding_id(const char* path, const QarOnboardingId* id)
 }
 //! [example_onboarding_persistence]
 
-//! [example_obtain_session]
-/** \brief Obtain a session the canonical way: rejoin with the persisted
- *  onboarding id when one exists, otherwise onboard with the pairing code
- *  currently shown on the hub's onboarding screen.
+//! [example_join_local_app]
+/** \brief Print the onboarding progress ("Waiting for approval in QAROS hub"
+ *  while the approval prompt is open). */
+static void
+example_print_progress(QarActionSeverity severity, float percent, const char* message, void* state)
+{
+	(void)severity;
+	(void)percent;
+	(void)state;
+	if(message != NULL && message[0] != '\0')
+	{
+		printf("%s\n", message);
+	}
+}
+
+/** \brief Join the QAROS hub on this PC as a local app: no code, the user
+ *  approves the app once in QAROS, and the app tag keeps the peer id across
+ *  restarts. Nothing is stored, so every start calls it again. See the
+ *  \ref qar_c_tutorial_local_app_onboarding tutorial.
  *
- *  Returns 0 on success; on success *out_session and *out_onboarding_id are
- *  set and the id has been persisted to id_file_path for the next run. */
+ *  Returns 0 on success, with *out_session set. */
 static int
-example_obtain_session(
-	QarRuntime* runtime,
-	const char* pairing_code, /* may be NULL when a persisted id exists */
-	const char* id_file_path,
-	const char* display_name,
-	QarOnboardingId* out_onboarding_id,
-	QarSession** out_session
+example_join_as_local_app(
+	QarRuntime* runtime, const char* display_name, const char* app_tag, QarSession** out_session
 )
 {
-	QarPeerPresentation presentation = qar_peer_presentation_default();
-	presentation.display_name = display_name;
+	QarOnboardInit init = qar_onboard_init_default();
+	init.presentation.display_name = display_name; /* any UTF-8 */
+	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+	QarOnboardLocalAppTagExt tag = qar_onboard_local_app_tag_ext_default();
+	tag.app_tag = app_tag;			  /* printable ASCII, constant across versions */
+	init.header.next = &local.header; /* the one mode extension */
+	local.header.next = &tag.header;
 
-	/* 1. Silent rejoin with the persisted identity — the normal path. */
-	QarOnboardingId saved_id = qar_onboarding_id_default();
-	if(load_onboarding_id(id_file_path, &saved_id))
+	QarOnboardingId unused = qar_onboarding_id_default(); /* stays zero */
+	/* A GUI app passes a QarCancelToken: the call can wait minutes for the
+	 * user's answer. */
+	QarResult joined = qar_runtime_onboard(
+		runtime, &init, example_print_progress, NULL, NULL, &unused, out_session
+	);
+	log_result("qar_runtime_onboard", joined);
+	if(qar_result_is_success(joined))
 	{
-		QarRejoinInit rejoin_init = qar_rejoin_init_default();
-		rejoin_init.onboarding_id = saved_id;
-		rejoin_init.presentation = presentation;
+		return 0;
+	}
+	/* What to tell the user: see the local_app_onboarding tutorial. */
+	if(qar_result_has_code(joined, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
+	{
+		printf("QAROS is not running on this PC. Start QAROS, then run again.\n");
+	}
+	else if(qar_result_has_code(joined, QAR_STATUS_ONBOARDING_APPROVAL_DENIED)
+			|| qar_result_has_code(joined, QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT))
+	{
+		printf("QAROS did not allow this app. Run again and click Allow in QAROS.\n");
+	}
+	else if(qar_result_has_code(joined, QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH))
+	{
+		printf("This app changed since it was approved. Revoke it in QAROS, then run again.\n");
+	}
+	return 1;
+}
+//! [example_join_local_app]
 
-		QarResult rejoin_result =
-			qar_runtime_rejoin(runtime, &rejoin_init, NULL, NULL, NULL, out_session);
-		log_result("qar_runtime_rejoin", rejoin_result);
-		if(qar_result_is_success(rejoin_result))
-		{
-			*out_onboarding_id = saved_id;
-			return 0;
-		}
-		if(!qar_result_has_code(rejoin_result, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
-		{
-			return 1; /* real error (hub unreachable, ...) */
-		}
-		/* No persisted slot for the id -> fall through to onboarding. */
+#ifdef _WIN32
+#include <windows.h>
+
+//! [example_find_target]
+/** \brief The first render target found in the session's peer list. The peer
+ *  subscription fills it on a library thread while main waits for it, so a
+ *  critical section guards it. */
+typedef struct ExampleTargetPicker
+{
+	CRITICAL_SECTION lock;
+	bool found;
+	QarPeerId peer_id;
+} ExampleTargetPicker;
+
+/** \brief True for a peer a source app renders for: a target app (a headset's
+ *  serving app, a Visualizer receiver, a camera's view in the Visualizer) that
+ *  the hub does not report as gone. Writes its id to *out_peer_id. */
+static bool
+example_peer_is_render_target(QarPeerSpec* peer, QarPeerId* out_peer_id)
+{
+	QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
+	QarResult got_role = qar_peer_spec_get_role(peer, &role);
+	if(qar_result_is_error(got_role))
+	{
+		log_result("qar_peer_spec_get_role", got_role);
+		return false;
+	}
+	/* Hubs, other source apps and pipeline infrastructure show no frames. */
+	if(role != QAR_PEER_ROLE_TARGET)
+	{
+		return false;
+	}
+	QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
+	QarResult got_presence = qar_peer_spec_get_presence(peer, &presence);
+	if(qar_result_is_error(got_presence))
+	{
+		log_result("qar_peer_spec_get_presence", got_presence);
+		return false;
+	}
+	/* OFFLINE, LEAVING and RETIRED peers are gone. UNKNOWN is a peer the hub
+	 * has not reconciled yet: nothing says it is gone, so it counts. */
+	if(presence != QAR_PEER_PRESENCE_ONLINE && presence != QAR_PEER_PRESENCE_UNKNOWN)
+	{
+		return false;
+	}
+	QarResult got_id = qar_peer_spec_get_id(peer, out_peer_id);
+	if(qar_result_is_error(got_id))
+	{
+		log_result("qar_peer_spec_get_id", got_id);
+		return false;
+	}
+	return true;
+}
+
+/** \brief Keep the peer when it is the first render target seen. */
+static void
+example_offer_peer(ExampleTargetPicker* picker, QarPeerSpec* peer)
+{
+	QarPeerId peer_id = qar_peer_id_default();
+	if(!example_peer_is_render_target(peer, &peer_id))
+	{
+		return;
+	}
+	EnterCriticalSection(&picker->lock);
+	const bool first = !picker->found;
+	if(first)
+	{
+		picker->found = true;
+		picker->peer_id = peer_id;
+	}
+	LeaveCriticalSection(&picker->lock);
+	if(!first)
+	{
+		return;
+	}
+	/* The device name is what a GUI shows the user to choose a target by. */
+	char name[128] = { 0 };
+	QarResult got_name = qar_peer_spec_get_device_name(peer, name, sizeof(name));
+	if(qar_result_is_error(got_name))
+	{
+		log_result("qar_peer_spec_get_device_name", got_name);
+	}
+	printf("Rendering for target '%s'\n", name[0] != '\0' ? name : "unnamed device");
+}
+
+/** \brief qar_peer_subscribe_updates() callback. The spec handle belongs to
+ *  the library: read it during the callback, do not destroy it. */
+static void
+example_on_peer_update(QarPeerSpec* peer, void* user_state)
+{
+	example_offer_peer((ExampleTargetPicker*)user_state, peer);
+}
+
+/** \brief Offer every peer already in the session. Right after onboarding the
+ *  list may still be empty; the subscription reports peers as they arrive. */
+static bool
+example_offer_current_peers(QarSession* session, ExampleTargetPicker* picker)
+{
+	size_t count = 0;
+	QarResult counted = qar_query_peer_specs_count(session, &count);
+	if(qar_result_is_error(counted))
+	{
+		log_result("qar_query_peer_specs_count", counted);
+		return false;
+	}
+	if(count == 0)
+	{
+		return true;
+	}
+	QarPeerSpec** peers = (QarPeerSpec**)calloc(count, sizeof(QarPeerSpec*));
+	if(peers == NULL)
+	{
+		printf("Out of memory listing %zu peers\n", count);
+		return false;
+	}
+	size_t written = 0;
+	QarResult listed = qar_query_peer_specs(session, peers, count, &written);
+	if(qar_result_is_error(listed))
+	{
+		log_result("qar_query_peer_specs", listed);
+	}
+	for(size_t i = 0; i < written; ++i)
+	{
+		example_offer_peer(picker, peers[i]);
+		qar_peer_spec_handle_destroy(peers[i]); /* listed handles are ours */
+	}
+	free(peers);
+	return qar_result_is_success(listed);
+}
+
+/** \brief Wait up to timeout_ms for a render target to be in the session and
+ *  write its id to *out_peer_id.
+ *
+ *  Which targets to serve is the application's decision; QAROS does not pick
+ *  them. This example takes the first one. A real application keeps the
+ *  subscription for its whole session, serves every target it chooses with a
+ *  sender of its own and stops a sender whose target turns OFFLINE, LEAVING or
+ *  RETIRED (the vulkan_cube example does).
+ *
+ *  Waiting for a render stream request instead would wait forever: a target
+ *  requests an app's content only once a sender has attached it to the app's
+ *  volume. */
+static bool
+example_wait_for_target(QarSession* session, DWORD timeout_ms, QarPeerId* out_peer_id)
+{
+	ExampleTargetPicker picker;
+	InitializeCriticalSection(&picker.lock);
+	picker.found = false;
+	picker.peer_id = qar_peer_id_default();
+
+	/* A subscription needs a cancel token: destroying it ends the
+	 * subscription and waits for a running callback, so `picker` may go out
+	 * of scope afterwards. */
+	QarCancelToken* subscription = NULL;
+	QarResult created = qar_cancel_token_create(&subscription);
+	if(qar_result_is_error(created) || subscription == NULL)
+	{
+		log_result("qar_cancel_token_create", created);
+		DeleteCriticalSection(&picker.lock);
+		return false;
+	}
+	/* Subscribe before listing the current peers, so a target joining in
+	 * between is not missed. */
+	QarResult subscribed =
+		qar_peer_subscribe_updates(session, example_on_peer_update, &picker, subscription);
+	bool ok = qar_result_is_success(subscribed);
+	if(!ok)
+	{
+		log_result("qar_peer_subscribe_updates", subscribed);
+	}
+	/* A failed listing is logged and not fatal: the subscription still
+	 * reports every peer as it changes. */
+	if(ok)
+	{
+		example_offer_current_peers(session, &picker);
 	}
 
-	/* 2. First connect: onboard with the code shown by the hub. */
-	if(!pairing_code)
+	if(ok)
 	{
 		printf(
-			"No persisted onboarding id in '%s'. Pass the pairing code shown "
-			"on the hub's onboarding screen.\n",
-			id_file_path
+			"Waiting for a target app in the session (a headset, or a receiver opened "
+			"in the QAROS Visualizer) ...\n"
 		);
-		return 1;
 	}
-
-	QarOnboardInit onboard_init = qar_onboard_init_default();
-	QarOnboardCodeExt onboard_code = qar_onboard_code_ext_default();
-	onboard_init.presentation = presentation;
-	onboard_code.code = pairing_code;
-	onboard_init.header.next = &onboard_code.header;
-
-	QarOnboardingId new_id = qar_onboarding_id_default();
-	QarResult onboard_result =
-		qar_runtime_onboard(runtime, &onboard_init, NULL, NULL, NULL, &new_id, out_session);
-	log_result("qar_runtime_onboard", onboard_result);
-	if(qar_result_is_error(onboard_result))
+	const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+	bool waiting = ok;
+	while(waiting && GetTickCount64() < deadline)
 	{
-		if(qar_result_has_code(onboard_result, QAR_STATUS_PAKE_ERROR))
-		{
-			printf(
-				"Pairing code rejected or expired — read the current code "
-				"off the hub screen and retry.\n"
-			);
-		}
-		return 1;
+		Sleep(100);
+		EnterCriticalSection(&picker.lock);
+		waiting = !picker.found;
+		LeaveCriticalSection(&picker.lock);
 	}
 
-	/* 3. Persist the id — it is the ticket for every later rejoin/forget. */
-	save_onboarding_id(id_file_path, &new_id);
-	*out_onboarding_id = new_id;
-	return 0;
+	qar_cancel_token_handle_destroy(subscription);
+	/* No callback runs any more: the picker can be read without the lock. */
+	const bool found = picker.found;
+	*out_peer_id = picker.peer_id;
+	DeleteCriticalSection(&picker.lock);
+	if(ok && !found)
+	{
+		printf("No target app joined within %lu s.\n", (unsigned long)(timeout_ms / 1000));
+	}
+	return found;
 }
-//! [example_obtain_session]
+//! [example_find_target]
+#endif /* _WIN32 */
 
 /** \brief Library path from the first argument. "installed" (what a shipped
  *  application does) returns NULL, so qar_library_load(NULL) loads the
@@ -225,36 +413,4 @@ static const char*
 describe_library(const char* library_path)
 {
 	return library_path != NULL ? library_path : "the installed QAROS runtime";
-}
-
-/** \brief Extract directory portion from a path (both '/' and '\\' on Windows).
- */
-static const char*
-get_dir_from_path(const char* path, char* out_dir, size_t out_sz)
-{
-	if(!path || !out_dir || out_sz == 0)
-	{
-		return NULL;
-	}
-	size_t n = strlen(path);
-	size_t i = n;
-	while(i > 0)
-	{
-		char c = path[i - 1];
-		if(c == '/' || c == '\\')
-		{
-			break;
-		}
-		--i;
-	}
-	if(i == 0)
-	{
-		// No separator found; use current directory
-		snprintf(out_dir, out_sz, ".");
-		return out_dir;
-	}
-	size_t dir_len = (i > out_sz - 1) ? (out_sz - 1) : i;
-	memcpy(out_dir, path, dir_len);
-	out_dir[dir_len] = '\0';
-	return out_dir;
 }

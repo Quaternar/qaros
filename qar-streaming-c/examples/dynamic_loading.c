@@ -7,31 +7,44 @@
  * \tableofcontents
  *
  * \section dynamic_loading_intro What You Will Learn
- * - Parse command-line arguments to locate the shared library
- * - Dynamically load \c qar-streaming-c at runtime
+ * - Load the \c qar-streaming-c runtime of the QAROS installed on this PC at
+ *   run time, with no link-time dependency on it
  * - Initialize and tear down the global library state
  *
  * \section dynamic_loading_prereq Prerequisites
- * - Build the SDK and locate the produced \c qar-streaming-c shared library
- * - Ensure runtime binaries sit next to the library (default assumption)
+ * - QAROS installed on this PC. The application ships no copy of
+ *   \c qar-streaming-c: a copy beside the executable would be loaded first.
  *
  * \section dynamic_loading_build Build and Run
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target dynamic_loading
- * ./build/x64-windows/Debug/dynamic_loading.exe <installed|path-to-qar-streaming-c.dll>
- * [runtime-dir]
+ * ./build/x64-windows/Debug/dynamic_loading.exe [installed|path-to-qar-streaming-c.dll]
  * \endcode
+ * With no argument, or `installed`, it loads the installed QAROS. A path loads
+ * that library file only, for development builds of QAROS itself.
  *
- * \section dynamic_loading_args Parse Arguments
- * Obtain the shared-library path and optional runtime directory.
- * \snippet dynamic_loading.c dynamic_args
+ * \section dynamic_loading_setup Enable Dynamic Loading
+ * Define `QAR_ENABLE_DYNAMIC_LOADING` before including the header, and put
+ * `QAR_IMPLEMENT_DYNAMIC_LOADING()` in exactly one translation unit. The API
+ * functions are then resolved by symbol name into tables the application
+ * owns, so a newer runtime keeps working with an application built against an
+ * older header.
  *
- * \section dynamic_loading_load Load the Shared Library
- * Use \ref qar_library_load to dynamically load the DLL/SO/Dylib.
+ * \section dynamic_loading_load Load the Runtime
+ * \ref qar_library_load with NULL takes the first of: a \c qar-streaming-c
+ * already loaded in the process, one beside the calling module, the folder the
+ * `QAROS_RUNTIME_DIR` environment variable names, the installed QAROS
+ * (`<InstallFolder>\bin` under `HKLM\SOFTWARE\Quaternar\QAROS`), and `PATH`.
+ * The current directory is never searched. With nothing found it prints where
+ * it looked and returns false, so the application can run without AR/VR. To
+ * run against another runtime without changing code, set `QAROS_RUNTIME_DIR`.
  * \snippet dynamic_loading.c dynamic_load
  *
  * \section dynamic_loading_init Initialize and Shutdown
- * Initialize global state with \ref qar_library_init, then destroy and unload when done.
+ * Initialize global state with \ref qar_library_init, then destroy and unload
+ * when done. Leave \ref QarRuntimeInit::runtime_binaries_folder_path empty
+ * when you create a runtime: it defaults to the folder the library was loaded
+ * from.
  * \snippet dynamic_loading.c dynamic_init
  */
 
@@ -44,39 +57,12 @@
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
-static void
-print_usage(const char* program_name)
-{
-	const char* name = program_name ? program_name : "dynamic_loading";
-	printf("Usage: %s <installed|path-to-qar-streaming-c-library> [runtime-binaries-dir]\n", name);
-	printf("Example: %s build/Debug/bin/qar-streaming-c.dll build/Debug/bin\n", name);
-}
-
 int
 main(int argc, char** argv)
 {
-	//! [dynamic_args]
-	if(argc < 2)
-	{
-		print_usage(argv[0]);
-		return 1;
-	}
-
-	const char* library_path = library_path_argument(argv[1]);
-	const char* runtime_dir = NULL;
-	char runtime_dir_buffer[1024] = { 0 };
-
-	if(argc >= 3)
-	{
-		runtime_dir = argv[2];
-	}
-	else if(get_dir_from_path(library_path, runtime_dir_buffer, sizeof(runtime_dir_buffer)))
-	{
-		runtime_dir = runtime_dir_buffer;
-	}
-	//! [dynamic_args]
-
 	//! [dynamic_load]
+	/* NULL (no argument, or "installed"): the installed QAROS runtime. */
+	const char* library_path = argc >= 2 ? library_path_argument(argv[1]) : NULL;
 	printf("Loading qar-streaming-c from: %s\n", describe_library(library_path));
 	if(!qar_library_load(library_path))
 	{
@@ -102,10 +88,17 @@ main(int argc, char** argv)
 		return 3;
 	}
 
-	printf(
-		"Library initialized. Runtime binaries directory: %s\n",
-		runtime_dir ? runtime_dir : "(folder of the loaded library)"
-	);
+	QarRuntimeInfo info;
+	memset(&info, 0, sizeof(info));
+	QarResult info_result = qar_runtime_info(&info);
+	if(qar_result_is_success(info_result))
+	{
+		printf("Loaded QAROS runtime %s (%s).\n", info.version, info.flavor);
+	}
+	else
+	{
+		log_result("qar_runtime_info", info_result);
+	}
 
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);

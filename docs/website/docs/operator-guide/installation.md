@@ -14,7 +14,7 @@ QAROS is installed on Windows by one signed installer, **per machine**: it needs
 |---|---|---|
 | **Installer** (`QAROS-Setup-<version>.exe`) | every QAROS PC | the Hub (tray, launcher, Visualizer), the runtime and C API library, the `qar-vulkan-source` example app, the C API header, the device player apps |
 | **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | the [Unity packages](/docs/developer-guide/unity) and `devices/` |
-| **C# NuGet** (`Quaternar.Qaros`, `Quaternar.Qaros.Demo`) | .NET developers | the C# binding |
+| **C# NuGet** (`Quaternar.Qaros`) | .NET developers | the C# binding; it loads the installed runtime, release or demo |
 
 Each release comes in two flavors, release and demo. One PC holds one QAROS installation in one flavor.
 
