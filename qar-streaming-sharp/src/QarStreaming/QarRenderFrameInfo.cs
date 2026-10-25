@@ -21,11 +21,11 @@ namespace Quaternar.Qaros
     /// </remarks>
     public sealed class RenderFrameInfo : IDisposable
     {
-        private readonly RenderFrameInfoSafeHandle _handle;
+        private readonly NativeHandleOwner _owner;
 
         internal RenderFrameInfo(RenderFrameInfoSafeHandle handle)
         {
-            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _owner = new NativeHandleOwner(handle, nameof(RenderFrameInfo));
         }
 
         /// <summary>
@@ -40,7 +40,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             PoseNative pose;
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_frame_info_get_view_pose(_handle.DangerousGetHandle(), (UIntPtr)viewIndex, out pose));
+            using var frame = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_frame_info_get_view_pose(frame.Handle, (UIntPtr)viewIndex, out pose));
             return info.IsSuccess ? Result<Pose>.Success(info, Pose.FromNative(pose)) : Result<Pose>.Failure(info);
         }
 
@@ -49,19 +50,19 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             FovNative fov;
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_frame_info_get_view_fov(_handle.DangerousGetHandle(), (UIntPtr)viewIndex, out fov));
+            using var frame = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_frame_info_get_view_fov(frame.Handle, (UIntPtr)viewIndex, out fov));
             return info.IsSuccess ? Result<Fov>.Success(info, Fov.FromNative(fov)) : Result<Fov>.Failure(info);
         }
 
         public void Dispose()
         {
-            _handle.Dispose();
+            _owner.Dispose();
         }
 
         private void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(RenderFrameInfo));
+            _owner.ThrowIfDisposed();
         }
     }
 }

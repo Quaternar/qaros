@@ -16,7 +16,9 @@ namespace Quaternar.Qaros
     /// persisted identity, so the next start can <see cref="Runtime.Rejoin"/> silently; erasing the
     /// identity is <see cref="Runtime.Forget"/>. Disposing ends every subscription of the session
     /// and waits for a handler running on another thread, so never dispose it from a QAROS
-    /// callback or event handler, nor while holding a lock a handler takes.
+    /// callback or event handler, nor while holding a lock a handler takes. A call running on
+    /// another thread at that moment defers the teardown until it returns (see
+    /// <see cref="Dispose"/>).
     /// </remarks>
     public sealed partial class Session : IDisposable
     {
@@ -39,12 +41,11 @@ namespace Quaternar.Qaros
 
         public PrimarylessVideoSenderControl PrimarylessVideoSenders { get; }
 
-        internal IntPtr DangerousHandle { get { return _context.DangerousHandle; } }
-
         public Result<SessionId> GetId()
         {
             var id = SessionIdNative.CreateDefault();
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_id(_context.DangerousHandle, ref id));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_id(session.Handle, ref id));
             return info.IsSuccess ? Result<SessionId>.Success(info, SessionId.FromNative(id)) : Result<SessionId>.Failure(info);
         }
 
@@ -59,7 +60,8 @@ namespace Quaternar.Qaros
             _context.ThrowIfDisposed();
             var native = new GraphicsDeviceId().ToNative();
             bool present;
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_graphics_device_id(_context.DangerousHandle, ref native, out present));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_graphics_device_id(session.Handle, ref native, out present));
             if (!info.IsSuccess)
                 return Result<GraphicsDeviceId?>.Failure(info);
             return Result<GraphicsDeviceId?>.Success(info, present ? GraphicsDeviceId.FromNative(native) : null);
@@ -81,7 +83,8 @@ namespace Quaternar.Qaros
         {
             _context.ThrowIfDisposed();
             var native = SessionLifecycleInfoNative.CreateDefault();
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_lifecycle_state(_context.DangerousHandle, ref native));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_lifecycle_state(session.Handle, ref native));
             return info.IsSuccess
                 ? Result<SessionLifecycleChangedEventArgs>.Success(info, SessionLifecycleChangedEventArgs.FromNative(native))
                 : Result<SessionLifecycleChangedEventArgs>.Failure(info);
@@ -141,8 +144,12 @@ namespace Quaternar.Qaros
             if (!tokenResult.IsSuccess)
                 return Result<IDisposable>.Failure(tokenResult.Info);
             var subscription = SessionLifecycleSubscription.Create(tokenResult.Value, true, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_subscribe_lifecycle(_context.DangerousHandle, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(subscription, StartLifecycle);
+        }
+
+        private static ResultNative StartLifecycle(SessionLifecycleSubscription subscription, IntPtr session, IntPtr token)
+        {
+            return NativeMethods.qar_impl_session_subscribe_lifecycle(session, subscription.Callback, subscription.UserState, token);
         }
 
         private void RaiseLifecycleChanged(object? sender, SessionLifecycleChangedEventArgs args)
@@ -204,18 +211,21 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<OnboardingInvite>.Failure(cancellationResult.Info);
+            // The scope first: it is registered on the session's Dispose, so nothing may throw
+            // between its creation and its using.
+            using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
-            using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = NativeInit.RequestInvite(options, scope, chain.Head);
                 IntPtr invite;
+                using var session = _context.Borrow();
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_invite(
-                    _context.DangerousHandle,
+                    session.Handle,
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -248,7 +258,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options));
             _context.ThrowIfDisposed();
             var state = new RequestInviteAsyncState(progress);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<OnboardingInvite>.Failure(cancelHandle.Info));
@@ -262,8 +272,10 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_invite_async(
-                    _context.DangerousHandle,
+                    session.Handle,
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -293,7 +305,8 @@ namespace Quaternar.Qaros
             using (var scope = new NativeMemoryScope())
             {
                 var peer = PeerIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(_context.DangerousHandle, scope.AllocUtf8(connection), ref peer));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(session.Handle, scope.AllocUtf8(connection), ref peer));
                 return info.IsSuccess ? Result<PeerId>.Success(info, PeerId.FromNative(peer)) : Result<PeerId>.Failure(info);
             }
         }
@@ -311,16 +324,17 @@ namespace Quaternar.Qaros
             if (connectionString == null)
                 throw new ArgumentNullException(nameof(connectionString));
             _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<PeerId>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
+            using (var scope = new NativeMemoryScope())
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = NativeInit.InviteTargetApp(connectionString, scope);
                 var peer = PeerIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app(_context.DangerousHandle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle, ref peer));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app(session.Handle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle, ref peer));
                 return info.IsSuccess ? Result<PeerId>.Success(info, PeerId.FromNative(peer)) : Result<PeerId>.Failure(info);
             }
         }
@@ -332,7 +346,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(connectionString));
             _context.ThrowIfDisposed();
             var state = new TargetAppAsyncState<PeerId>(progress, PeerIdFromPointer);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<PeerId>.Failure(cancelHandle.Info));
@@ -341,7 +355,9 @@ namespace Quaternar.Qaros
             try
             {
                 var native = NativeInit.InviteTargetApp(connectionString, state.Scope);
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app_async(_context.DangerousHandle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
                 if (!info.IsSuccess)
                     state.Complete(Result<PeerId>.Failure(info));
             }
@@ -360,14 +376,15 @@ namespace Quaternar.Qaros
         public Result<Unit> KillTargetApp(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
             using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = targetApp.ToNative();
-                return Results.FromNative(NativeMethods.qar_impl_session_kill_target_app(_context.DangerousHandle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_session_kill_target_app(session.Handle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle));
             }
         }
 
@@ -376,7 +393,7 @@ namespace Quaternar.Qaros
         {
             _context.ThrowIfDisposed();
             var state = new TargetAppAsyncState<Unit>(progress, peer => Unit.Value);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<Unit>.Failure(cancelHandle.Info));
@@ -385,7 +402,9 @@ namespace Quaternar.Qaros
             try
             {
                 var native = targetApp.ToNative();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_kill_target_app_async(_context.DangerousHandle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_kill_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
                 if (!info.IsSuccess)
                     state.Complete(Result<Unit>.Failure(info));
             }
@@ -406,6 +425,17 @@ namespace Quaternar.Qaros
         /// <see cref="Runtime.Rejoin"/>. Waits for subscription handlers running on other threads;
         /// do not call it from one.
         /// </summary>
+        /// <remarks>
+        /// Safe while another thread is inside a call on the session or one of its controls: the
+        /// session refuses new calls at once and cancels the calls that wait (render-sender
+        /// creation, target-app invite and kill, invite request, sync and async alike). It is torn
+        /// down, on a thread-pool thread, only when the running call returns, or for an async call
+        /// when its native completion fires; Dispose then returns without waiting for the
+        /// teardown, so subscription handlers may still run briefly. Dispose the subscriptions
+        /// first when that matters. The deferred teardown can also follow a
+        /// <see cref="Runtime.Dispose"/> or <see cref="Library.Destroy"/> made right after: end the
+        /// other threads' session calls before disposing the session when those come next.
+        /// </remarks>
         public void Dispose()
         {
             _context.Dispose();

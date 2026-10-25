@@ -41,15 +41,16 @@ namespace Quaternar.Qaros
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<RenderSender>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
+            using (var scope = new NativeMemoryScope())
             {
                 var native = NativeInit.RenderSender(options, scope);
                 IntPtr stream;
-                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_create(_context.DangerousHandle, ref native, cancellation.Handle, out stream));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_create(session.Handle, ref native, cancellation.Handle, out stream));
                 return Results.FromHandle(info, stream, h => new RenderSender(new RenderSenderSafeHandle(h)));
             }
         }
@@ -62,7 +63,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options));
             _context.ThrowIfDisposed();
             var state = new RenderSenderCreateAsyncState();
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<RenderSender>.Failure(cancelHandle.Info));
@@ -76,7 +77,9 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
-                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_create_async(_context.DangerousHandle, ref native, state.Callback, state.UserState, cancelHandle));
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_create_async(session.Handle, ref native, state.Callback, state.UserState, cancelHandle));
                 if (!info.IsSuccess)
                     state.Complete(Result<RenderSender>.Failure(info));
             }
@@ -112,24 +115,16 @@ namespace Quaternar.Qaros
         {
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
-            _context.ThrowIfDisposed();
-            var tokenResult = CancelToken.Create();
-            if (!tokenResult.IsSuccess)
-                return Result<IDisposable>.Failure(tokenResult.Info);
-            var token = tokenResult.Value;
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            if (cancellationToken.CanBeCanceled)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    token.Cancel();
-                else
-                    registration = cancellationToken.Register(state => ((CancelToken)state!).Cancel(), token);
-            }
-            var subscription = cancellationToken.CanBeCanceled
-                ? RenderRequestSubscription.Create(token, registration, handler)
-                : RenderRequestSubscription.Create(token, false, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_subscribe_requests(_context.DangerousHandle, subscription.Callback, subscription.UserState, token.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(
+                cancellationToken,
+                token => RenderRequestSubscription.Create(token, true, handler),
+                (token, registration) => RenderRequestSubscription.Create(token, registration, handler),
+                StartRequests);
+        }
+
+        private static ResultNative StartRequests(RenderRequestSubscription subscription, IntPtr session, IntPtr token)
+        {
+            return NativeMethods.qar_impl_render_sender_subscribe_requests(session, subscription.Callback, subscription.UserState, token);
         }
     }
 }

@@ -60,7 +60,8 @@ namespace Quaternar.Qaros
             {
                 var native = NativeInit.VideoSender(options, scope);
                 IntPtr sender;
-                var info = Results.ToInfo(NativeMethods.qar_impl_video_sender_create(_context.DangerousHandle, ref native, out sender));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_video_sender_create(session.Handle, ref native, out sender));
                 return Results.FromHandle(info, sender, h => new PrimarylessVideoSender(new VideoSenderSafeHandle(h)));
             }
         }

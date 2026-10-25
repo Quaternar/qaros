@@ -36,11 +36,11 @@ namespace Quaternar.Qaros
     /// </remarks>
     public sealed class RenderSender : IDisposable
     {
-        private readonly RenderSenderSafeHandle _handle;
+        private readonly NativeHandleOwner _owner;
 
         internal RenderSender(RenderSenderSafeHandle handle)
         {
-            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _owner = new NativeHandleOwner(handle, nameof(RenderSender));
         }
 
         /// <summary>
@@ -56,7 +56,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var native = NativeDefaults.VideoFrameLayout();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_layout(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_layout(sender.Handle, ref native));
             return info.IsSuccess ? Result<VideoFrameLayout>.Success(info, VideoFrameLayout.FromNative(native)) : Result<VideoFrameLayout>.Failure(info);
         }
 
@@ -64,7 +65,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             StreamIdNative native;
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_stream_id(_handle.DangerousGetHandle(), out native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_stream_id(sender.Handle, out native));
             return info.IsSuccess ? Result<StreamId>.Success(info, StreamId.FromNative(native)) : Result<StreamId>.Failure(info);
         }
 
@@ -84,7 +86,8 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(layout));
             ThrowIfDisposed();
             var native = layout.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_render_sender_change_layout(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_render_sender_change_layout(sender.Handle, ref native));
         }
 
         /// <summary>
@@ -96,7 +99,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var native = NativeDefaults.VideoFrameCpu();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_cpu(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_cpu(sender.Handle, ref native));
             return info.IsSuccess ? Result<VideoFrameCpu>.Success(info, VideoFrameCpu.FromNative(native)) : Result<VideoFrameCpu>.Failure(info);
         }
 
@@ -113,7 +117,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var native = NativeDefaults.VideoFrameD3D11();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_d3d11(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_d3d11(sender.Handle, ref native));
             return info.IsSuccess ? Result<VideoFrameD3D11>.Success(info, VideoFrameD3D11.FromNative(native)) : Result<VideoFrameD3D11>.Failure(info);
         }
 
@@ -145,13 +150,16 @@ namespace Quaternar.Qaros
         public Result<RenderFrameInfo> BeginFrame(CancellationToken cancellationToken = default(CancellationToken))
         {
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            // Linked to Dispose: disposing the sender ends a begin-frame waiting through a paused
+            // stream, which would otherwise keep the disposed sender alive.
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _owner);
             if (!cancellationResult.IsSuccess)
                 return Result<RenderFrameInfo>.Failure(cancellationResult.Info);
             IntPtr handle;
             using (var cancellation = cancellationResult.Value)
             {
-                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_begin_frame(_handle.DangerousGetHandle(), cancellation.Handle, out handle));
+                using var sender = _owner.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_begin_frame(sender.Handle, cancellation.Handle, out handle));
                 return Results.FromHandle(info, handle, h => new RenderFrameInfo(new RenderFrameInfoSafeHandle(h)));
             }
         }
@@ -165,7 +173,7 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var state = new BeginFrameAsyncState();
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<RenderFrameInfo>.Failure(cancelHandle.Info));
@@ -178,7 +186,11 @@ namespace Quaternar.Qaros
         {
             try
             {
-                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_begin_frame_async(_handle.DangerousGetHandle(), state.Callback, state.UserState, token));
+                // The scoped borrow covers the call itself: the completion may fire, and drop the
+                // state's borrow, before the call returns.
+                using var sender = _owner.Borrow();
+                state.HoldUntilCompletion(_owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_begin_frame_async(sender.Handle, state.Callback, state.UserState, token));
                 if (!info.IsSuccess)
                     state.Complete(Result<RenderFrameInfo>.Failure(info));
             }
@@ -203,7 +215,8 @@ namespace Quaternar.Qaros
         public Result<RenderFrameInfo?> TryBeginFrame()
         {
             ThrowIfDisposed();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_try_begin_frame(_handle.DangerousGetHandle(), out var handle, out var ready));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_try_begin_frame(sender.Handle, out var handle, out var ready));
             if (!info.IsSuccess)
                 return Result<RenderFrameInfo?>.Failure(info);
             if (!ready)
@@ -220,7 +233,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var native = NativeDefaults.VideoFrameOpenGl();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_opengl(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_opengl(sender.Handle, ref native));
             return info.IsSuccess ? Result<VideoFrameOpenGl>.Success(info, VideoFrameOpenGl.FromNative(native)) : Result<VideoFrameOpenGl>.Failure(info);
         }
 
@@ -241,7 +255,8 @@ namespace Quaternar.Qaros
         public Result<VideoFrameVulkan> GetVulkanFrame()
         {
             ThrowIfDisposed();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_vulkan(_handle.DangerousGetHandle(), out var frame));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_frame_vulkan(sender.Handle, out var frame));
             return Results.FromHandle(info, frame, VideoFrameVulkan.FromNativePointer);
         }
 
@@ -265,7 +280,8 @@ namespace Quaternar.Qaros
                     RenderedNearFar = frameShow.RenderedNearFar.ToNative(),
                     DepthScale = frameShow.DepthScale
                 };
-                return Results.FromNative(NativeMethods.qar_impl_render_sender_show_frame(_handle.DangerousGetHandle(), ref native));
+                using var sender = _owner.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_render_sender_show_frame(sender.Handle, ref native));
             }
         }
 
@@ -287,7 +303,8 @@ namespace Quaternar.Qaros
         {
             ThrowIfDisposed();
             var native = NativeDefaults.DeviceHandsWithJoints();
-            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_last_hands(_handle.DangerousGetHandle(), ref native));
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_last_hands(sender.Handle, ref native));
             return info.IsSuccess ? Result<DeviceHandsWithJoints>.Success(info, DeviceHandsWithJoints.FromNative(native)) : Result<DeviceHandsWithJoints>.Failure(info);
         }
 
@@ -295,15 +312,21 @@ namespace Quaternar.Qaros
         /// Ends the stream to the target. Every <see cref="RenderFrameInfo"/> this sender handed
         /// out becomes invalid.
         /// </summary>
+        /// <remarks>
+        /// Safe while another thread is inside a call on the sender: the sender refuses new calls at
+        /// once, a <see cref="BeginFrame"/> or <see cref="BeginFrameAsync(CancellationToken)"/>
+        /// waiting through a paused stream is cancelled and fails, and the native sender is
+        /// released, on a thread-pool thread, when the running call returns (an async one when its
+        /// native completion fires).
+        /// </remarks>
         public void Dispose()
         {
-            _handle.Dispose();
+            _owner.Dispose();
         }
 
         private void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(RenderSender));
+            _owner.ThrowIfDisposed();
         }
     }
 }

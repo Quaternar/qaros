@@ -60,6 +60,10 @@ namespace Quaternar.Qaros.Interop
 
         private readonly CancelToken _token;
 
+        // The native subscription keeps the token's handle until it is cancelled, so the
+        // subscription holds a reference on it for its whole lifetime (hub G56).
+        private readonly HandleBorrow _tokenBorrow;
+
         private readonly bool _ownsToken;
 
         private CancellationTokenRegistration _standardCancellationRegistration;
@@ -82,10 +86,14 @@ namespace Quaternar.Qaros.Interop
             _ownsToken = ownsToken;
             _standardCancellationRegistration = standardCancellationRegistration;
             _hasStandardCancellationRegistration = hasStandardCancellationRegistration;
+            _tokenBorrow = token.Borrow();
             UserState = NativeCallbackRegistry.Register(this);
         }
 
         public IntPtr UserState { get; }
+
+        /// <summary>The native cancel token to start the subscription with; held until it is disposed.</summary>
+        public IntPtr TokenHandle { get { return _tokenBorrow.Handle; } }
 
         protected bool IsDisposed { get { return Volatile.Read(ref _disposed) != 0; } }
 
@@ -96,6 +104,12 @@ namespace Quaternar.Qaros.Interop
             NativeCallbackRegistry.Unregister(UserState);
             if (_hasStandardCancellationRegistration)
                 _standardCancellationRegistration.Dispose();
+            ReleaseToken();
+        }
+
+        private void ReleaseToken()
+        {
+            _tokenBorrow.Dispose();
             if (_ownsToken)
                 _token.Dispose();
         }
@@ -114,13 +128,14 @@ namespace Quaternar.Qaros.Interop
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             // Blocks until no native callback of this subscription runs on
-            // another thread; after it, none starts.
-            _token.Cancel();
+            // another thread; after it, none starts. Cancels through the
+            // subscription's own reference, so it works even when the
+            // token's owner has disposed it meanwhile.
+            NativeMethods.qar_impl_cancel_token_cancel(_tokenBorrow.Handle);
             NativeCallbackRegistry.Unregister(UserState);
             if (_hasStandardCancellationRegistration)
                 _standardCancellationRegistration.Dispose();
-            if (_ownsToken)
-                _token.Dispose();
+            ReleaseToken();
         }
     }
 
@@ -405,9 +420,29 @@ namespace Quaternar.Qaros.Interop
 
         private CancelToken? _ownedCancellationToken;
 
+        // The owned token, referenced until the native completion fires.
+        private HandleBorrow _ownedCancellationBorrow;
+
         private CancellationTokenRegistration _ownedCancellationRegistration;
 
         private bool _hasOwnedCancellationRegistration;
+
+        // Cancels the owned token when the object the call was made on is disposed.
+        private CancellationTokenRegistration _ownerDisposedRegistration;
+
+        private bool _hasOwnerDisposedRegistration;
+
+        // The owner's shared dispose token, when the call carries no cancelable token of its own,
+        // referenced until the native completion fires.
+        private HandleBorrow _sharedCancellationBorrow;
+
+        private bool _holdsSharedCancellation;
+
+        // The handle the call was made on (a session or a sender), referenced until the native
+        // completion fires (hub G56).
+        private HandleBorrow _target;
+
+        private int _holdsTarget;
 
         protected AsyncStateBase()
         {
@@ -422,18 +457,99 @@ namespace Quaternar.Qaros.Interop
 
         public Task<T> Task { get { return Completion.Task; } }
 
-        public void Complete(T value) { Completion.TrySetResult(value); CleanupOnce(); }
+        public void Complete(T value) { ReleaseTarget(); Completion.TrySetResult(value); CleanupOnce(); }
 
-        public void Fault(Exception ex) { Completion.TrySetException(ex); CleanupOnce(); }
+        public void Fault(Exception ex) { ReleaseTarget(); Completion.TrySetException(ex); CleanupOnce(); }
+
+        /// <summary>
+        /// Borrows the handle of <paramref name="owner"/> for the async call until its native
+        /// completion fires, so a Dispose while the call runs defers the native release instead of
+        /// freeing the object under it. A task cancelled by its token completes at the cancel,
+        /// earlier: the borrow is held until the native completion all the same. Once per call.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        public IntPtr HoldUntilCompletion(NativeHandleOwner owner)
+        {
+            if (Volatile.Read(ref _holdsTarget) != 0)
+                throw new InvalidOperationException("An async call holds one handle.");
+            var borrow = owner.Borrow();
+            _target = borrow;
+            // Publishes the borrow before the native call can complete and release it.
+            Volatile.Write(ref _holdsTarget, 1);
+            return borrow.Handle;
+        }
+
+        /// <summary>
+        /// Drops the borrow when the native completion fires, before the task completes with its
+        /// result, so the caller's Dispose after the await releases the object on its own thread.
+        /// Released on the completion's thread only while the owner is not disposed: the final
+        /// release goes to the thread pool (NativeHandleOwner.Release).
+        /// </summary>
+        private void ReleaseTarget()
+        {
+            if (Interlocked.CompareExchange(ref _holdsTarget, 2, 1) != 1)
+                return;
+            _target.Dispose();
+        }
 
         public Result<IntPtr> UseStandardCancellation(CancellationToken cancellationToken)
         {
             if (!cancellationToken.CanBeCanceled)
                 return Result<IntPtr>.Success(new ResultInfo(StatusCode.Success, 0, string.Empty), IntPtr.Zero);
+            return UseOwnedCancellation(cancellationToken, null);
+        }
+
+        /// <summary>
+        /// <see cref="UseStandardCancellation(CancellationToken)"/> for an async call on
+        /// <paramref name="endedBy"/>: always a native token that the owner's Dispose cancels. The
+        /// call then fails through its native completion, which releases the borrow
+        /// <see cref="HoldUntilCompletion"/> took; the task is not cancelled early, so the result
+        /// reports the failure. Without a cancelable <paramref name="cancellationToken"/> it is the
+        /// owner's shared <see cref="NativeHandleOwner.DisposeToken"/>, borrowed until the
+        /// completion; with one, a token of the call's own, also linked to
+        /// <see cref="NativeHandleOwner.Disposing"/>.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        public Result<IntPtr> UseStandardCancellation(CancellationToken cancellationToken, NativeHandleOwner endedBy)
+        {
+            try
+            {
+                if (!cancellationToken.CanBeCanceled && endedBy.TryBorrowDisposeToken(out _, out var shared))
+                {
+                    _sharedCancellationBorrow = shared;
+                    _holdsSharedCancellation = true;
+                    return Result<IntPtr>.Success(new ResultInfo(StatusCode.Success, 0, string.Empty), shared.Handle);
+                }
+                endedBy.ThrowIfDisposed();
+                return UseOwnedCancellation(cancellationToken, endedBy.Disposing);
+            }
+            catch
+            {
+                // The caller gets the exception, never the task: free the state's rooting handle.
+                CleanupOnce();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="UseStandardCancellation(CancellationToken)"/> for an async call on an object
+        /// whose Dispose cancels <paramref name="endedBy"/>: always a native token of the call's
+        /// own, linked to both.
+        /// </summary>
+        public Result<IntPtr> UseStandardCancellation(CancellationToken cancellationToken, CancellationToken endedBy)
+        {
+            return UseOwnedCancellation(cancellationToken, endedBy);
+        }
+
+        // A native token of the call's own, cancelled by cancellationToken (which also cancels the
+        // task at once) and by endedBy, when given (the Dispose of the object the call is made on).
+        private Result<IntPtr> UseOwnedCancellation(CancellationToken cancellationToken, CancellationToken? endedBy)
+        {
             var tokenResult = CancelToken.Create();
             if (!tokenResult.IsSuccess)
                 return Result<IntPtr>.Failure(tokenResult.Info);
             _ownedCancellationToken = tokenResult.Value;
+            _ownedCancellationBorrow = _ownedCancellationToken.Borrow();
             if (cancellationToken.IsCancellationRequested)
             {
                 CancelFromStandardCancellation();
@@ -443,15 +559,28 @@ namespace Quaternar.Qaros.Interop
                 _ownedCancellationRegistration = cancellationToken.Register(OnStandardCancellation, this);
                 _hasOwnedCancellationRegistration = true;
             }
-            return Result<IntPtr>.Success(tokenResult.Info, _ownedCancellationToken.DangerousHandle);
+            if (endedBy.HasValue)
+                LinkToOwnerDispose(endedBy.Value);
+            return Result<IntPtr>.Success(tokenResult.Info, _ownedCancellationBorrow.Handle);
         }
 
-        private static void OnStandardCancellation(object? state)
+        private void LinkToOwnerDispose(CancellationToken disposing)
         {
-            ((AsyncStateBase<T>)state!).CancelFromStandardCancellation();
+            if (disposing.IsCancellationRequested)
+            {
+                CancelOwnedToken();
+                return;
+            }
+            _ownerDisposedRegistration = disposing.Register(OnOwnerDisposed, this);
+            _hasOwnerDisposedRegistration = true;
         }
 
-        private void CancelFromStandardCancellation()
+        private static void OnOwnerDisposed(object? state)
+        {
+            ((AsyncStateBase<T>)state!).CancelOwnedToken();
+        }
+
+        private void CancelOwnedToken()
         {
             try
             {
@@ -461,6 +590,16 @@ namespace Quaternar.Qaros.Interop
             catch (ObjectDisposedException)
             {
             }
+        }
+
+        private static void OnStandardCancellation(object? state)
+        {
+            ((AsyncStateBase<T>)state!).CancelFromStandardCancellation();
+        }
+
+        private void CancelFromStandardCancellation()
+        {
+            CancelOwnedToken();
             Completion.TrySetCanceled();
         }
 
@@ -473,15 +612,27 @@ namespace Quaternar.Qaros.Interop
 
         protected virtual void Cleanup()
         {
+            ReleaseTarget();
             if (_hasOwnedCancellationRegistration)
             {
                 _ownedCancellationRegistration.Dispose();
                 _hasOwnedCancellationRegistration = false;
             }
+            if (_hasOwnerDisposedRegistration)
+            {
+                _ownerDisposedRegistration.Dispose();
+                _hasOwnerDisposedRegistration = false;
+            }
             if (_ownedCancellationToken != null)
             {
+                _ownedCancellationBorrow.Dispose();
                 _ownedCancellationToken.Dispose();
                 _ownedCancellationToken = null;
+            }
+            if (_holdsSharedCancellation)
+            {
+                _holdsSharedCancellation = false;
+                _sharedCancellationBorrow.Dispose();
             }
             if (_selfHandle.IsAllocated)
                 _selfHandle.Free();
@@ -534,6 +685,11 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly NativeMemoryScope _scope = new NativeMemoryScope();
 
+        // The runtime borrowed for the call, held until the native completion fires.
+        private NativeMemoryScope? _runtimeBorrow;
+
+        private Runtime? _runtime;
+
         private NativeStructureChain? _chain;
 
         private NativeStructureChain? _presentationChain;
@@ -565,6 +721,47 @@ namespace Quaternar.Qaros.Interop
             ProgressCallback = new ProgressCallback(OnProgress);
         }
 
+        /// <summary>
+        /// Borrows <paramref name="runtime"/> until the native completion fires, so a
+        /// <see cref="Runtime.Dispose"/> while the call runs defers the native release instead of
+        /// freeing the runtime under it.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The runtime is disposed.</exception>
+        public IntPtr BorrowRuntime(Runtime runtime)
+        {
+            var borrow = new NativeMemoryScope();
+            try
+            {
+                var handle = runtime.BorrowHandle(borrow);
+                _runtime = runtime;
+                _runtimeBorrow = borrow;
+                return handle;
+            }
+            catch
+            {
+                borrow.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Drops the runtime borrow when the native completion fires, before the task completes with
+        /// its result (Runtime.ReleaseAsyncBorrow). A task cancelled by its token completes at the
+        /// cancel, earlier: the borrow is held until the native completion all the same.
+        /// </summary>
+        private void ReleaseRuntime()
+        {
+            var borrow = Interlocked.Exchange(ref _runtimeBorrow, null);
+            if (borrow == null)
+                return;
+            if (_runtime == null)
+            {
+                borrow.Dispose();
+                return;
+            }
+            _runtime.ReleaseAsyncBorrow(borrow);
+        }
+
         public RejoinInitNative CreateNative(RejoinOptions options)
         {
             _chain = NativeStructureChain.From(options.Extension);
@@ -581,6 +778,7 @@ namespace Quaternar.Qaros.Interop
 
         public void CompleteRejoin(Result<Session> result)
         {
+            ReleaseRuntime();
             if (_sessionCompletion != null)
                 _sessionCompletion.TrySetResult(result);
             CleanupOnce();
@@ -588,11 +786,13 @@ namespace Quaternar.Qaros.Interop
 
         public void CompleteOnboard(Result<OnboardSession> result)
         {
+            ReleaseRuntime();
             Complete(result);
         }
 
         public void FaultRejoin(Exception ex)
         {
+            ReleaseRuntime();
             if (_sessionCompletion != null)
                 _sessionCompletion.TrySetException(ex);
             CleanupOnce();
@@ -604,6 +804,7 @@ namespace Quaternar.Qaros.Interop
             try
             {
                 state = (RuntimeOnboardAsyncState)GCHandle.FromIntPtr(userState).Target!;
+                state.ReleaseRuntime();
                 var info = Results.ToInfo(status);
                 if (state._returnsOnboardSession)
                 {
@@ -654,6 +855,7 @@ namespace Quaternar.Qaros.Interop
 
         protected override void Cleanup()
         {
+            ReleaseRuntime();
             _presentationChain?.Dispose();
             _chain?.Dispose();
             _scope.Dispose();

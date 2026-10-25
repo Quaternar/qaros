@@ -7,26 +7,34 @@ namespace Quaternar.Qaros
 {
     internal sealed class SessionNativeContext : IDisposable
     {
-        private readonly SessionSafeHandle _handle;
+        private readonly NativeHandleOwner _owner;
 
         internal SessionNativeContext(SessionSafeHandle handle)
         {
-            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _owner = new NativeHandleOwner(handle, nameof(Session));
         }
 
-        internal IntPtr DangerousHandle
+        /// <summary>
+        /// The session handle for an async call to hold until its native completion
+        /// (AsyncStateBase.HoldUntilCompletion).
+        /// </summary>
+        internal NativeHandleOwner Owner { get { return _owner; } }
+
+        /// <summary>
+        /// The session handle, referenced until the returned borrow is disposed: every native call
+        /// that takes the session runs inside <c>using (var session = context.Borrow())</c>, so
+        /// neither a concurrent <see cref="Dispose"/> nor the finalizer frees the session while the
+        /// call still uses it (hub G56).
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The session is disposed.</exception>
+        internal HandleBorrow Borrow()
         {
-            get
-            {
-                ThrowIfDisposed();
-                return _handle.DangerousGetHandle();
-            }
+            return _owner.Borrow();
         }
 
         internal void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(Session));
+            _owner.ThrowIfDisposed();
         }
 
         // Every native query is a full shared-object reconcile that waits out its
@@ -40,12 +48,21 @@ namespace Quaternar.Qaros
             QueryFunc queryFunc,
             Func<IntPtr, Result<T>> snapshot)
         {
+            using (var session = Borrow())
+                return QueryHandles(session.Handle, queryFunc, snapshot);
+        }
+
+        private static Result<T[]> QueryHandles<T>(
+            IntPtr session,
+            QueryFunc queryFunc,
+            Func<IntPtr, Result<T>> snapshot)
+        {
             var capacity = InitialQueryCapacity;
             while (true)
             {
                 var handles = new IntPtr[capacity];
                 UIntPtr written;
-                var queryInfo = Results.ToInfo(queryFunc(DangerousHandle, handles, (UIntPtr)capacity, out written));
+                var queryInfo = Results.ToInfo(queryFunc(session, handles, (UIntPtr)capacity, out written));
                 if (!queryInfo.IsSuccess)
                     return Result<T[]>.Failure(queryInfo);
                 var writtenCount = NativeConvert.ToInt32(written);
@@ -80,12 +97,14 @@ namespace Quaternar.Qaros
         /// Starts a continuous native subscription that owns its native cancel
         /// token, bridged to <paramref name="cancellationToken"/> when it can be
         /// canceled; disposing the subscription stops native delivery.
+        /// <paramref name="start"/> gets the subscription, the borrowed session
+        /// handle and the subscription's cancel token handle.
         /// </summary>
         internal Result<IDisposable> StartSubscription<T>(
             CancellationToken cancellationToken,
             Func<CancelToken, T> createOwned,
             Func<CancelToken, CancellationTokenRegistration, T> createRegistered,
-            Func<T, IntPtr, ResultNative> start)
+            Func<T, IntPtr, IntPtr, ResultNative> start)
             where T : NativeSubscription
         {
             ThrowIfDisposed();
@@ -98,7 +117,27 @@ namespace Quaternar.Qaros
             var subscription = cancellationToken.CanBeCanceled && !cancellationToken.IsCancellationRequested
                 ? createRegistered(token, cancellationToken.Register(CancelNativeToken, token))
                 : createOwned(token);
-            var info = Results.ToInfo(start(subscription, token.DangerousHandle));
+            return StartSubscription(subscription, start);
+        }
+
+        /// <summary>
+        /// Starts <paramref name="subscription"/> with the session borrowed for the call; a failed
+        /// start, a disposed session included, disposes the subscription and its owned token.
+        /// </summary>
+        internal Result<IDisposable> StartSubscription<T>(T subscription, Func<T, IntPtr, IntPtr, ResultNative> start)
+            where T : NativeSubscription
+        {
+            ResultInfo info;
+            try
+            {
+                using (var session = Borrow())
+                    info = Results.ToInfo(start(subscription, session.Handle, subscription.TokenHandle));
+            }
+            catch
+            {
+                subscription.DisposeAfterFailedStart();
+                throw;
+            }
             return Results.SubscriptionResult(info, subscription);
         }
 
@@ -113,9 +152,13 @@ namespace Quaternar.Qaros
             }
         }
 
+        /// <summary>
+        /// Makes the session unusable and releases it. A call still borrowing the session defers the
+        /// native release until it is done.
+        /// </summary>
         public void Dispose()
         {
-            _handle.Dispose();
+            _owner.Dispose();
         }
 
         internal delegate ResultNative QueryFunc(IntPtr session, IntPtr[] handles, UIntPtr bufferSize, out UIntPtr written);

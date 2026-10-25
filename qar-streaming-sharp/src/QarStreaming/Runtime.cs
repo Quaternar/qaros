@@ -19,14 +19,58 @@ namespace Quaternar.Qaros
     public sealed class Runtime : IDisposable
     {
         private readonly RuntimeSafeHandle _handle;
+        // Orders Dispose against the release of an async call's borrow (ReleaseAsyncBorrow).
+        private readonly object _releaseGate = new object();
         private volatile bool _disposed;
+
+        // Cancelled by Dispose: the native token of every call that may wait is linked to it, so a
+        // Dispose ends the call instead of the call's borrow keeping the disposed runtime alive
+        // (an async call's native completion would otherwise wait for the runtime's teardown).
+        private readonly CancellationTokenSource _disposing = new CancellationTokenSource();
 
         internal Runtime(RuntimeSafeHandle handle)
         {
             _handle = handle ?? throw new ArgumentNullException(nameof(handle));
         }
 
-        internal IntPtr DangerousHandle { get { ThrowIfDisposed(); return _handle.DangerousGetHandle(); } }
+        /// <summary>
+        /// The native handle, referenced by <paramref name="scope"/> until it is disposed, so neither
+        /// a concurrent <see cref="Dispose"/> nor the finalizer frees the runtime while a native call
+        /// still uses it.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The runtime is disposed.</exception>
+        internal IntPtr BorrowHandle(NativeMemoryScope scope)
+        {
+            ThrowIfDisposed();
+            return scope.Borrow(_handle);
+        }
+
+        /// <summary>
+        /// Releases the borrow an async call held until its native completion, on that completion's
+        /// thread. While the runtime is not disposed this only drops a reference: the caller's own
+        /// <see cref="Dispose"/> releases the runtime later, on its thread. When it was disposed
+        /// while the call ran, the borrow is the last reference and its release destroys the
+        /// runtime, which joins the native task this completion runs on: it is handed to the thread
+        /// pool instead. The gate keeps a concurrent Dispose from falling between the check and the
+        /// release.
+        /// </summary>
+        internal void ReleaseAsyncBorrow(NativeMemoryScope borrow)
+        {
+            lock (_releaseGate)
+            {
+                if (!_disposed)
+                {
+                    borrow.Dispose();
+                    return;
+                }
+            }
+            ThreadPool.QueueUserWorkItem(DisposeBorrow, borrow);
+        }
+
+        private static void DisposeBorrow(object? borrow)
+        {
+            ((NativeMemoryScope)borrow!).Dispose();
+        }
 
         /// <summary>
         /// Creates the runtime. Set <see cref="RuntimeOptions.RuntimeBinariesFolderPath"/> to the
@@ -82,13 +126,13 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _disposing.Token);
             if (!cancellationResult.IsSuccess)
                 return Result<Session>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
             using (var presentationChain = NativeStructureChain.From(options.Presentation == null ? null : options.Presentation.Extension))
-            using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = NativeInit.Rejoin(options, scope, chain.Head, presentationChain.Head);
@@ -114,7 +158,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
             var state = new RuntimeOnboardAsyncState(progress, false);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _disposing.Token);
             if (!cancelHandle.IsSuccess)
             {
                 state.CompleteRejoin(Result<Session>.Failure(cancelHandle.Info));
@@ -128,8 +172,12 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                // The call's own borrow: the completion may fire, and drop the state's borrow,
+                // before the call returns (hub G56).
+                using var call = new NativeMemoryScope();
+                BorrowHandle(call);
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_rejoin_async(
-                    _handle.DangerousGetHandle(),
+                    state.BorrowRuntime(this),
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -188,13 +236,13 @@ namespace Quaternar.Qaros
             if (options.Mode == null)
                 throw new ArgumentNullException(nameof(options.Mode));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _disposing.Token);
             if (!cancellationResult.IsSuccess)
                 return Result<OnboardSession>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Mode, options.Extension))
             using (var presentationChain = NativeStructureChain.From(options.Presentation == null ? null : options.Presentation.Extension))
-            using (var cancellation = cancellationResult.Value)
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = NativeInit.Onboard(options, scope, chain.Head, presentationChain.Head);
@@ -229,7 +277,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options.Mode));
             ThrowIfDisposed();
             var state = new RuntimeOnboardAsyncState(progress, true);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _disposing.Token);
             if (!cancelHandle.IsSuccess)
             {
                 state.CompleteOnboard(Result<OnboardSession>.Failure(cancelHandle.Info));
@@ -243,8 +291,12 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                // The call's own borrow: the completion may fire, and drop the state's borrow,
+                // before the call returns (hub G56).
+                using var call = new NativeMemoryScope();
+                BorrowHandle(call);
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_onboard_async(
-                    _handle.DangerousGetHandle(),
+                    state.BorrowRuntime(this),
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -277,10 +329,11 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
+            using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
             {
                 var native = NativeInit.Forget(options, chain.Head);
-                return Results.FromNative(NativeMethods.qar_impl_runtime_forget(_handle.DangerousGetHandle(), ref native));
+                return Results.FromNative(NativeMethods.qar_impl_runtime_forget(scope.Borrow(_handle), ref native));
             }
         }
 
@@ -307,11 +360,11 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _disposing.Token);
             if (!cancellationResult.IsSuccess)
                 return Result<MemberHubInvitation>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
+            using (var scope = new NativeMemoryScope())
             {
                 var native = MemberHubInvitationNative.Create(options, scope);
                 IntPtr invitation;
@@ -350,11 +403,11 @@ namespace Quaternar.Qaros
             if (options.Invitation == null)
                 throw new ArgumentNullException(nameof(options.Invitation));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _disposing.Token);
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
+            using (var scope = new NativeMemoryScope())
             using (var progressState = ProgressState.Create(progress))
             {
                 var native = MemberHubInvitationNative.Join(options, scope);
@@ -373,9 +426,17 @@ namespace Quaternar.Qaros
         /// </summary>
         public void Dispose()
         {
-            // A blocking call borrowing the handle (Onboard, Rejoin, JoinHubAsMember) defers its
-            // release until it returns; the flag makes the runtime unusable from here on all the same.
-            _disposed = true;
+            // A call borrowing the handle (Onboard, Rejoin, JoinHubAsMember, Forget, and the async
+            // calls until their completion fires) defers its release until it is done; the flag makes the runtime unusable from here on all the same.
+            lock (_releaseGate)
+                _disposed = true;
+            try
+            {
+                _disposing.Cancel();
+            }
+            catch (AggregateException)
+            {
+            }
             _handle.Dispose();
         }
 

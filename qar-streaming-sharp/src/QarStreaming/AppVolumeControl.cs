@@ -104,7 +104,8 @@ namespace Quaternar.Qaros
             {
                 var native = NativeInit.AppVolume(options, scope, chain.Head);
                 var id = AppVolumeIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_get_or_create(_context.DangerousHandle, ref native, ref id));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_get_or_create(session.Handle, ref native, ref id));
                 return info.IsSuccess ? Result<AppVolumeId>.Success(info, AppVolumeId.FromNative(id)) : Result<AppVolumeId>.Failure(info);
             }
         }
@@ -117,7 +118,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             using (var str = NativeUtf8String.FromUtf8(displayName))
-                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_display_name(_context.DangerousHandle, ref nativeId, str.Pointer));
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_display_name(session.Handle, ref nativeId, str.Pointer));
         }
 
         /// <summary>
@@ -128,7 +130,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativeSize = size.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_size(_context.DangerousHandle, ref nativeId, ref nativeSize));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_size(session.Handle, ref nativeId, ref nativeSize));
         }
 
         /// <summary>
@@ -143,7 +146,8 @@ namespace Quaternar.Qaros
         public Result<Unit> Close(AppVolumeId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_close_volume(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_close_volume(session.Handle, ref nativeId));
         }
 
         /// <summary>
@@ -158,7 +162,8 @@ namespace Quaternar.Qaros
             var nativeId = id.ToNative();
             var nativeAdds = NativeIdArrays.ToNative(additions ?? Array.Empty<PeerId>());
             var nativeRemoves = NativeIdArrays.ToNative(removals ?? Array.Empty<PeerId>());
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_update_used_by_peers(_context.DangerousHandle, ref nativeId, nativeAdds, (UIntPtr)nativeAdds.Length, nativeRemoves, (UIntPtr)nativeRemoves.Length));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_update_used_by_peers(session.Handle, ref nativeId, nativeAdds, (UIntPtr)nativeAdds.Length, nativeRemoves, (UIntPtr)nativeRemoves.Length));
         }
 
         /// <summary>
@@ -173,14 +178,16 @@ namespace Quaternar.Qaros
         public Result<Unit> StartEditing(AppVolumeId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_start_editing(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_start_editing(session.Handle, ref nativeId));
         }
 
         /// <summary>Clears the editing status, whichever peer set it.</summary>
         public Result<Unit> StopEditing(AppVolumeId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_stop_editing(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_stop_editing(session.Handle, ref nativeId));
         }
 
         /// <summary>Sets the app pose: the application's origin in app volume space, in volume metres.</summary>
@@ -194,7 +201,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativePose = appPose.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_pose(_context.DangerousHandle, ref nativeId, ref nativePose));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_pose(session.Handle, ref nativeId, ref nativePose));
         }
 
         /// <summary>
@@ -210,7 +218,8 @@ namespace Quaternar.Qaros
         public Result<Unit> ChangeAppScale(AppVolumeId id, float appScale)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_scale(_context.DangerousHandle, ref nativeId, appScale));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_scale(session.Handle, ref nativeId, appScale));
         }
 
         /// <summary>
@@ -221,13 +230,15 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativeAnchor = anchor.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_world_anchor(_context.DangerousHandle, ref nativeId, ref nativeAnchor));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_app_world_anchor(session.Handle, ref nativeId, ref nativeAnchor));
         }
 
         public Result<Unit> ClearAppWorldAnchor(AppVolumeId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_app_world_anchor(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_app_world_anchor(session.Handle, ref nativeId));
         }
 
         /// <summary>Moves the volume. <paramref name="pose"/> is the cuboid centre in room space.</summary>
@@ -239,7 +250,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativePose = pose.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_pose(_context.DangerousHandle, ref nativeId, ref nativePose));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_pose(session.Handle, ref nativeId, ref nativePose));
         }
 
         /// <summary>Latest locally known app pose, in app volume space.</summary>
@@ -253,7 +265,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             PoseNative pose;
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_app_pose(_context.DangerousHandle, ref nativeId, out pose));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_app_pose(session.Handle, ref nativeId, out pose));
             return info.IsSuccess ? Result<Pose>.Success(info, Pose.FromNative(pose)) : Result<Pose>.Failure(info);
         }
 
@@ -262,7 +275,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             float scale;
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_app_scale(_context.DangerousHandle, ref nativeId, out scale));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_app_scale(session.Handle, ref nativeId, out scale));
             return info.IsSuccess ? Result<float>.Success(info, scale) : Result<float>.Failure(info);
         }
 
@@ -274,7 +288,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             PoseNative pose;
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_pose(_context.DangerousHandle, ref nativeId, out pose));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_pose(session.Handle, ref nativeId, out pose));
             return info.IsSuccess ? Result<Pose>.Success(info, Pose.FromNative(pose)) : Result<Pose>.Failure(info);
         }
 
@@ -283,7 +298,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             AppVolumeSizeNative size;
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_size(_context.DangerousHandle, ref nativeId, out size));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_app_volume_get_latest_size(session.Handle, ref nativeId, out size));
             return info.IsSuccess ? Result<AppVolumeSize>.Success(info, AppVolumeSize.FromNative(size)) : Result<AppVolumeSize>.Failure(info);
         }
 
@@ -308,7 +324,8 @@ namespace Quaternar.Qaros
             using (var scope = new NativeMemoryScope())
             {
                 var nativeConfig = configuration.ToNative(scope);
-                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_gesture_configuration(_context.DangerousHandle, ref nativeId, ref nativeConfig));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_gesture_configuration(session.Handle, ref nativeId, ref nativeConfig));
             }
         }
 
@@ -334,7 +351,8 @@ namespace Quaternar.Qaros
             using (var scope = new NativeMemoryScope())
             {
                 var nativeConfig = configuration.ToNative(scope);
-                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_gesture_mode(_context.DangerousHandle, ref nativeId, modeId, ref nativeConfig));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_app_volumes_change_gesture_mode(session.Handle, ref nativeId, modeId, ref nativeConfig));
             }
         }
 
@@ -348,7 +366,8 @@ namespace Quaternar.Qaros
         public Result<Unit> RemoveGestureMode(AppVolumeId id, uint modeId)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_remove_gesture_mode(_context.DangerousHandle, ref nativeId, modeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_remove_gesture_mode(session.Handle, ref nativeId, modeId));
         }
 
         /// <summary>
@@ -368,7 +387,8 @@ namespace Quaternar.Qaros
             using (var scope = new NativeMemoryScope())
             {
                 var nativePeer = peer.HasValue ? scope.AllocStruct(peer.Value.ToNative()) : IntPtr.Zero;
-                return Results.FromNative(NativeMethods.qar_impl_app_volumes_select_gesture_mode(_context.DangerousHandle, ref nativeId, nativePeer, modeId));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_app_volumes_select_gesture_mode(session.Handle, ref nativeId, nativePeer, modeId));
             }
         }
 
@@ -377,14 +397,16 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativePeer = peer.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_peer_gesture_mode(_context.DangerousHandle, ref nativeId, ref nativePeer));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_peer_gesture_mode(session.Handle, ref nativeId, ref nativePeer));
         }
 
         /// <summary>Drops every peer's own gesture mode, so all follow the default.</summary>
         public Result<Unit> ClearAllPeerGestureModes(AppVolumeId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_all_peer_gesture_modes(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_app_volumes_clear_all_peer_gesture_modes(session.Handle, ref nativeId));
         }
 
         /// <summary>
@@ -408,7 +430,7 @@ namespace Quaternar.Qaros
                 cancellationToken,
                 token => AppVolumeGestureSubscription.Create(token, true, handler),
                 (token, registration) => AppVolumeGestureSubscription.Create(token, registration, handler),
-                (subscription, token) => NativeMethods.qar_impl_app_volumes_subscribe_all_gesture_events(_context.DangerousHandle, ref nativeId, subscription.Callback, subscription.UserState, token));
+                (subscription, session, token) => NativeMethods.qar_impl_app_volumes_subscribe_all_gesture_events(session, ref nativeId, subscription.Callback, subscription.UserState, token));
         }
 
         /// <summary>
@@ -491,8 +513,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
             var subscription = AppVolumeUpdateSubscription.Create(cancelToken, ownsToken, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, cancelToken.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(subscription, StartUpdates);
         }
 
         private Result<IDisposable> SubscribeUpdatesCore(EventHandler<AppVolumeUpdatedEventArgs> handler, CancellationToken cancellationToken)
@@ -500,29 +521,11 @@ namespace Quaternar.Qaros
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            try
-            {
-                var tokenResult = CancelToken.Create();
-                if (!tokenResult.IsSuccess)
-                    return Result<IDisposable>.Failure(tokenResult.Info);
-                var hasRegistration = false;
-                if (cancellationToken.IsCancellationRequested)
-                    tokenResult.Value.Cancel();
-                else if (cancellationToken.CanBeCanceled)
-                {
-                    registration = cancellationToken.Register(CancelNativeToken, tokenResult.Value);
-                    hasRegistration = true;
-                }
-                var subscription = hasRegistration ? AppVolumeUpdateSubscription.Create(tokenResult.Value, registration, handler) : AppVolumeUpdateSubscription.Create(tokenResult.Value, true, handler);
-                var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-                return Results.SubscriptionResult(info, subscription);
-            }
-            catch
-            {
-                registration.Dispose();
-                throw;
-            }
+            return _context.StartSubscription(
+                cancellationToken,
+                token => AppVolumeUpdateSubscription.Create(token, true, handler),
+                (token, registration) => AppVolumeUpdateSubscription.Create(token, registration, handler),
+                StartUpdates);
         }
 
 #if NET8_0_OR_GREATER
@@ -624,8 +627,9 @@ namespace Quaternar.Qaros
             _context.ThrowIfDisposed();
             var nativeId = id.ToNative();
             var subscription = AppVolumeGestureSubscription.Create(cancelToken, ownsToken, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_subscribe_gesture_events(_context.DangerousHandle, ref nativeId, gestureKind, subscription.Callback, subscription.UserState, cancelToken.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(
+                subscription,
+                (started, session, token) => NativeMethods.qar_impl_app_volumes_subscribe_gesture_events(session, ref nativeId, gestureKind, started.Callback, started.UserState, token));
         }
 
         private Result<IDisposable> SubscribeGestureUpdatesCore(AppVolumeId id, GestureKind gestureKind, EventHandler<AppVolumeGestureEventArgs> handler, CancellationToken cancellationToken)
@@ -634,40 +638,16 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
             var nativeId = id.ToNative();
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            try
-            {
-                var tokenResult = CancelToken.Create();
-                if (!tokenResult.IsSuccess)
-                    return Result<IDisposable>.Failure(tokenResult.Info);
-                var hasRegistration = false;
-                if (cancellationToken.IsCancellationRequested)
-                    tokenResult.Value.Cancel();
-                else if (cancellationToken.CanBeCanceled)
-                {
-                    registration = cancellationToken.Register(CancelNativeToken, tokenResult.Value);
-                    hasRegistration = true;
-                }
-                var subscription = hasRegistration ? AppVolumeGestureSubscription.Create(tokenResult.Value, registration, handler) : AppVolumeGestureSubscription.Create(tokenResult.Value, true, handler);
-                var info = Results.ToInfo(NativeMethods.qar_impl_app_volumes_subscribe_gesture_events(_context.DangerousHandle, ref nativeId, gestureKind, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-                return Results.SubscriptionResult(info, subscription);
-            }
-            catch
-            {
-                registration.Dispose();
-                throw;
-            }
+            return _context.StartSubscription(
+                cancellationToken,
+                token => AppVolumeGestureSubscription.Create(token, true, handler),
+                (token, registration) => AppVolumeGestureSubscription.Create(token, registration, handler),
+                (started, session, token) => NativeMethods.qar_impl_app_volumes_subscribe_gesture_events(session, ref nativeId, gestureKind, started.Callback, started.UserState, token));
         }
 
-        private static void CancelNativeToken(object? state)
+        private static ResultNative StartUpdates(AppVolumeUpdateSubscription subscription, IntPtr session, IntPtr token)
         {
-            try
-            {
-                ((CancelToken)state!).Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            return NativeMethods.qar_impl_app_volumes_subscribe_updates(session, subscription.Callback, subscription.UserState, token);
         }
 
 #if NET8_0_OR_GREATER

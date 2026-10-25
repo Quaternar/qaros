@@ -11,15 +11,53 @@ namespace Quaternar.Qaros.Tests
 {
     /// <summary>
     /// The safe handle a wrapper owns, read by reflection so the product keeps no raw-handle
-    /// accessor for the tests: a native call borrows a handle only through a scope (hub G49).
+    /// accessor for the tests: a native call borrows a handle only through a scope or a
+    /// <see cref="NativeHandleOwner"/> (hub G49, G56). Follows <c>_context</c> (a session's
+    /// native context) and <c>_owner</c> (a <see cref="NativeHandleOwner"/>) down to the
+    /// <c>_handle</c> field.
     /// </summary>
     internal static class NativeHandles
     {
+        private static readonly string[] Path = { "_handle", "_owner", "_context" };
+
         internal static SafeHandle Of(object owner)
         {
-            var field = owner.GetType().GetField("_handle", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field);
-            return Assert.IsAssignableFrom<SafeHandle>(field!.GetValue(owner));
+            return Find<SafeHandle>(owner);
+        }
+
+        /// <summary>The owner a wrapper's native calls borrow its handle from.</summary>
+        internal static NativeHandleOwner OwnerOf(object owner)
+        {
+            return Find<NativeHandleOwner>(owner);
+        }
+
+        internal static SessionNativeContext ContextOf(Session session)
+        {
+            return Find<SessionNativeContext>(session);
+        }
+
+        private static T Find<T>(object owner)
+            where T : class
+        {
+            var current = owner;
+            for (var depth = 0; depth < Path.Length + 1; depth++)
+            {
+                if (current is T found)
+                    return found;
+                current = Next(current);
+            }
+            throw new Xunit.Sdk.XunitException("No " + typeof(T).Name + " under " + owner.GetType().Name + ".");
+        }
+
+        private static object Next(object owner)
+        {
+            foreach (var name in Path)
+            {
+                var field = owner.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+                if (field != null)
+                    return Assert.IsAssignableFrom<object>(field.GetValue(owner));
+            }
+            throw new Xunit.Sdk.XunitException(owner.GetType().Name + " has none of the fields " + string.Join(", ", Path) + ".");
         }
     }
 

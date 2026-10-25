@@ -10,14 +10,23 @@ namespace Quaternar.Qaros
 {
     internal sealed class CancelToken : IDisposable
     {
-        private readonly CancelTokenSafeHandle _handle;
+        private readonly NativeHandleOwner _owner;
 
         internal CancelToken(CancelTokenSafeHandle handle)
         {
-            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _owner = new NativeHandleOwner(handle, nameof(CancelToken));
         }
 
-        internal IntPtr DangerousHandle { get { ThrowIfDisposed(); return _handle.DangerousGetHandle(); } }
+        /// <summary>
+        /// The native token, referenced until the returned borrow is disposed: a call or a
+        /// subscription that hands the token to native code holds it this way, so a concurrent
+        /// <see cref="Dispose"/> or the finalizer cannot free it under them.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The token is disposed.</exception>
+        internal HandleBorrow Borrow()
+        {
+            return _owner.Borrow();
+        }
 
         public static Result<CancelToken> Create()
         {
@@ -35,37 +44,31 @@ namespace Quaternar.Qaros
 
         public Result<Unit> Cancel()
         {
-            ThrowIfDisposed();
-            return Results.FromNative(NativeMethods.qar_impl_cancel_token_cancel(_handle.DangerousGetHandle()));
+            using (var token = _owner.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_cancel_token_cancel(token.Handle));
         }
 
         public Result<Unit> CancelAfter(uint timeoutMs)
         {
-            ThrowIfDisposed();
-            return Results.FromNative(NativeMethods.qar_impl_cancel_token_cancel_after(_handle.DangerousGetHandle(), timeoutMs));
+            using (var token = _owner.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_cancel_token_cancel_after(token.Handle, timeoutMs));
         }
 
         public bool IsCancelled()
         {
-            ThrowIfDisposed();
-            return NativeMethods.qar_impl_cancel_token_is_cancelled(_handle.DangerousGetHandle());
+            using (var token = _owner.Borrow())
+                return NativeMethods.qar_impl_cancel_token_is_cancelled(token.Handle);
         }
 
         public bool IsTimeout()
         {
-            ThrowIfDisposed();
-            return NativeMethods.qar_impl_cancel_token_is_timeout(_handle.DangerousGetHandle());
+            using (var token = _owner.Borrow())
+                return NativeMethods.qar_impl_cancel_token_is_timeout(token.Handle);
         }
 
         public void Dispose()
         {
-            _handle.Dispose();
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (_handle.IsClosed || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(CancelToken));
+            _owner.Dispose();
         }
     }
 }
