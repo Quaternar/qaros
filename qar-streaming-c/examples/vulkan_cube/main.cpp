@@ -491,13 +491,19 @@ SessionAdapter(const QarSession* session)
 	return AdapterIdHex(bytes.data(), sizeof(id.uuid));
 }
 
+// The cube's app tag: an identity key, constant across versions, so every
+// start of this approved executable gets the same peer id back from the hub.
+// Printable ASCII, a DNS-style name scoped by the app.
+constexpr const char* kAppTag = "vulkan-cube.examples.qaros";
+
 constexpr const char* kUsage =
 	"Usage: qar-vulkan-source\n"
 	"\n"
 	"Loads the QAROS runtime (qar_library_load(NULL): one beside this executable,\n"
 	"else the folder QAROS_RUNTIME_DIR names, else the installed QAROS, else one on\n"
-	"PATH) and joins the QAROS on this PC as a local app. The first run waits until\n"
-	"you click Allow in QAROS.\n"
+	"PATH) and joins the QAROS on this PC as a local app with the app tag\n"
+	"vulkan-cube.examples.qaros. The first run waits until you click Allow in QAROS;\n"
+	"later runs join without asking and keep their peer id.\n"
 	"The cube renders on the GPU its session was created on.\n"
 	"Stop with Ctrl+C, or by closing stdin when it is a pipe.\n";
 
@@ -526,16 +532,20 @@ CancelOnStop(const std::atomic<bool>* finished, QarCancelToken* cancel)
 }
 
 // Joins the QAROS on this PC as a local app: no code, the user approves the app
-// once in QAROS. No QarGraphicsDeviceId is chained: the session decides the
-// GPU, and the cube creates its device on it. Ctrl+C or a closed stdin cancels
-// the call, which can wait minutes for the approval.
+// once in QAROS. The app tag makes the hub hand back the same peer id on every
+// start. No QarGraphicsDeviceId is chained: the session decides the GPU, and
+// the cube creates its device on it. Ctrl+C or a closed stdin cancels the call,
+// which can wait minutes for the approval.
 QarResult
 JoinAsLocalApp(QarRuntime* runtime, QarSession** session)
 {
 	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+	QarOnboardLocalAppTagExt tag = qar_onboard_local_app_tag_ext_default();
+	tag.app_tag = kAppTag;
 	QarOnboardInit init = qar_onboard_init_default();
 	init.presentation.display_name = "Vulkan Cube Source";
 	init.header.next = &local.header;
+	local.header.next = &tag.header;
 	QarCancelToken* cancel = nullptr;
 	const QarResult created = qar_cancel_token_create(&cancel);
 	if(not qar_result_is_success(created))
@@ -551,6 +561,26 @@ JoinAsLocalApp(QarRuntime* runtime, QarSession** session)
 	canceller.join();
 	qar_cancel_token_handle_destroy(cancel);
 	return result;
+}
+
+// Prints the peer id the hub gave this app. Thanks to the app tag it is the
+// same on every start, so the user (and a test) can see the restart kept it.
+void
+PrintMyPeerId(const QarSession* session)
+{
+	QarPeerSpec* me = nullptr;
+	if(not Check(qar_session_get_my_spec(session, &me)))
+	{
+		return;
+	}
+	QarPeerId id = qar_peer_id_default();
+	std::array<char, 64> text{};
+	if(Check(qar_peer_spec_get_id(me, &id))
+	   && Check(qar_uuid_to_string(id.data, text.data(), text.size())))
+	{
+		std::cout << "Joined QAROS as peer " << text.data() << '\n';
+	}
+	qar_peer_spec_handle_destroy(me);
 }
 
 // Tells the user, in plain words, why joining failed and what to do.
@@ -575,8 +605,8 @@ ExplainOnboardingFailure(QarResult result)
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH))
 	{
 		std::cerr << "This app no longer matches what QAROS approved: it was moved, copied or "
-					 "re-signed. In the QAROS Visualizer, revoke it under Connection > Approved "
-					 "apps, then start it again to approve it anew.\n";
+					 "re-signed. In the QAROS Visualizer, revoke it under Source Applications > "
+					 "Approved apps, then start it again to approve it anew.\n";
 	}
 	else if(qar_result_has_code(result, QAR_STATUS_ONBOARDING_HUB_UNREACHABLE))
 	{
@@ -620,6 +650,7 @@ RunApp()
 	// device on the same one.
 	if(session != nullptr && not g_stopRequested.load())
 	{
+		PrintMyPeerId(session);
 		success = gpu.Create(SessionAdapter(session));
 		if(success)
 		{

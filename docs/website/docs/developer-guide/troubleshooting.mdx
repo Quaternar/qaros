@@ -19,7 +19,7 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 |---|---|---|
 | `qar_library_load(NULL)` returns `false` | no `qar-streaming-c.dll` beside the executable, `QAROS_RUNTIME_DIR` unset, no QAROS installation on this PC, and none on `PATH` | install QAROS ([Installation](/docs/operator-guide/installation)) |
 | The app runs an older or newer runtime than the installed QAROS | a `qar-streaming-c.dll` beside the executable, or `QAROS_RUNTIME_DIR`, wins over the installation | remove the copy beside the app, or unset `QAROS_RUNTIME_DIR` |
-| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | QAROS is installed but not running: no tray icon | start **QAROS** from the Start menu, then start the app again |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | QAROS is installed but not running: no tray icon. The QAROS service waits up to a minute for a Hub to start before it answers so | start **QAROS** from the Start menu, then start the app again |
 | `QAR_STATUS_ONBOARDING_APPROVAL_DENIED` (1805) | someone clicked **Deny** or closed the prompt, or an operator revoked the app | start the app again and click **Allow**. Nothing is remembered from a Deny. |
 | `QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT` (1806) | nobody answered the prompt within 120 s | retry, and answer the prompt in the Visualizer or the QAROS tray window. Raise `approval_timeout_ms` if users need longer (at most 10 minutes). |
 | `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC` (1807) | the program serving the local enrollment pipe is not the installed, signed QAROS | do not retry. Reinstall QAROS from the official installer; if it persists, contact your administrator. |
@@ -36,7 +36,7 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 |---|---|
 | the app renders on one GPU while the session uses another | create your graphics device on the session's adapter (`qar_session_get_graphics_device_id`), or chain the adapter you render on as `QarGraphicsDeviceId` ([Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)) |
 | `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from onboard with a `QarGraphicsDeviceId` | the adapter is not supported: only NVIDIA GPUs are |
-| the Vulkan cube picks the wrong GPU | the cube renders on its session's GPU: the target's GPU when it joined with a launch invite, otherwise the library's pick. It reads no environment variable, prints the GPU it uses and stops when no Vulkan device matches. |
+| the Vulkan cube picks the wrong GPU | the cube renders on its session's GPU: the target's GPU when QAROS started it (launch invite or `QAR_GPU_ADAPTER_ID`, read by the library), otherwise the library's pick. The cube itself reads no environment variable, prints the GPU it uses and stops when no Vulkan device matches. |
 
 ## Status codes that are part of normal flow
 

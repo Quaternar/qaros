@@ -47,7 +47,7 @@ Each primary Hub operates its own private CA, built into the Hub process. This m
 - **The Hub is the trust root.** A certificate from Hub A means "Hub A vouched for this device". The Hub machine itself is assumed trusted — protect it as you would a domain controller.
 - **Renewal** is online and CSR-based: a device with a valid certificate refreshes it with a new key, without a code, also across up to two session rotations. A certificate that expires while the device is offline requires pairing again.
 - **Revocation** is two-layered: the CA records the revoked serial, and the gateway keeps an encrypted blacklist. A blacklisted device is refused on every channel, a new pairing code included, until an operator allows it again. Peers that have received the Hub's revocation list refuse the device; peers that have not keep accepting it until its certificate expires (at most 24 h) - see [Managing Devices](/docs/operator-guide/managing-devices).
-- **Keys at rest** - the CA keys, the Hub's own keys, device identities, approved apps and the licence are encrypted under a key of the signed-in Windows user held in the PC's TPM (DPAPI where no TPM is usable). No PIN is asked. They work only on this PC, for this user - see [Security Deep Dive: What is stored where](./security-deep-dive.md#what-is-stored-where).
+- **Keys at rest** - an installed Hub's CA keys, own keys, approved apps and licence are encrypted under a machine key in the PC's TPM that only the QAROS service can use, and handed only to the installed Hub; device and app identities under a key of the signed-in Windows user (TPM, DPAPI where no TPM is usable). No PIN is asked. They work only on this PC - see [Security Deep Dive: What is stored where](./security-deep-dive.md#what-is-stored-where).
 
 - **An update to this release starts a fresh CA:** every device, app and member Hub pairs again once.
 
@@ -74,9 +74,9 @@ A source app on the QAROS PC joins without a code. Windows, not the app, says wh
 
 ## Known gaps in this release
 
-What this release does **not** protect against. The full, maintained threat model is [Quaternar issue #220](https://github.com/Quaternar/Quaternar/issues/220).
+What this release does **not** protect against.
 
-- **Malware running as the same Windows user.** Hub keys, device identities and the approved-apps list are encrypted under a TPM-backed key of the signed-in user, which keeps other users and copies of the disk out, but a program running as that user can open them like the Hub does: read them, approve itself, or act as the Hub's user. Hub state (`hub-state.json`) is a plain file.
+- **Malware running as the same Windows user.** An installed Hub's keys and approved-apps list are held by the QAROS service, out of that user's reach on disk, but a program running as that user can inject into the running Hub or Visualizer: read what they hold in memory, click **Allow** for itself, or act as the Hub's user. Device and app identities in the user's data folder are encrypted under a key of that user, which such a program can use. Hub state (`hub-state.json`) is a plain file.
 - **Code inside an approved app.** Plugins, scripts or injected code in an approved process act as that app. Approving an editor or engine admits everything it loads.
 - **Member Hubs share one name.** A compromised member Hub cannot publish session-wide authority, but it can impersonate another member Hub on the topics members may use, and it can obtain device certificates for its own PC within its quota.
 - **First join of a Hub.** *Allow* relies on you recognising the Hub's name, PC and address. A join by invitation without an administrator's list trusts the primary of the first invitation the Hub accepts: malware running as the same user, or a swapped invitation, could make that first choice. Deploy the list on managed PCs.

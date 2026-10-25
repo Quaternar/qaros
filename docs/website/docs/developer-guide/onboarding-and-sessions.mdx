@@ -459,7 +459,7 @@ Apps cannot obtain credentials for an arbitrary new peer:
 
 ## Choosing the GPU
 
-Chain a `QarGraphicsDeviceId` into `QarOnboardInit` or `QarRejoinInit` to create the session's GPU devices — and with them every render sender's frame textures — on a specific adapter. Windows takes the adapter LUID, other platforms its UUID. Absent, QAROS selects one: for an app onboarded with a [launch invite](#platforms-without-local-enrollment), its target's GPU; otherwise the library picks one. Only NVIDIA adapters are supported; an unsupported adapter fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+Chain a `QarGraphicsDeviceId` into `QarOnboardInit` or `QarRejoinInit` to create the session's GPU devices — and with them every render sender's frame textures — on a specific adapter. Windows takes the adapter LUID, other platforms its UUID. Absent, QAROS selects one: for an app onboarded with a [launch invite](#platforms-without-local-enrollment), its target's GPU; for an app [started by QAROS](#launched-by-qaros-qaros-api-apps), the GPU QAROS names in `QAR_GPU_ADAPTER_ID`; otherwise the library picks one. Only NVIDIA adapters are supported; an unsupported adapter fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
 
 ```c
 QarGraphicsDeviceId adapter = qar_graphics_device_id_default();
@@ -493,7 +493,7 @@ An operator can add your executable as a **QAROS API app** in the Visualizer's [
 | Arguments | Command line, one argument per line the operator entered. |
 | A stop request | **stdin** is a pipe that QAROS closes on **Stop**. |
 
-QAROS sets no environment variable for your app. The working directory is the executable's folder; stdout and stderr go to the hub's log folder. To work as an API app:
+QAROS sets one environment variable, `QAR_GPU_ADAPTER_ID`: the GPU of the target the app is started for. The library reads it when it creates the session; your app reads nothing ([Choosing the GPU](#choosing-the-gpu)). The working directory is the executable's folder; stdout and stderr go to the hub's log folder. To work as an API app:
 
 1. Onboard with `QarOnboardLocalAppExt` ([above](#local-app-on-the-qaros-pc-no-code)). Do not prompt for anything: nobody is at the console. On an approval timeout, exit with an error instead of asking to retry.
 2. Onboard first, without chaining a `QarGraphicsDeviceId`. Then read the session's adapter with `qar_session_get_graphics_device_id` (C# `Session.GetGraphicsDeviceId()`) and create your graphics device on it ([Choosing the GPU](#choosing-the-gpu)). An app that must render on a GPU of its own chains its `QarGraphicsDeviceId` instead; a chained adapter always wins.

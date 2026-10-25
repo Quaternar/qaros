@@ -61,6 +61,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Security Deep Dive*, *Installation* and *Maintenance & Updates* say where an installed
+  Hub keeps its secrets now (the QAROS System Service's store under `%ProgramData%`, reachable only
+  by the installed Hub and `qaros-license.exe`), that the Hub needs the service running, that the
+  update destroys the old secrets (devices pair again) and what a per-user backup no longer holds.
+- **Docs:** *Installation* says what uninstalling keeps and what "delete the data" (`/PurgeData`)
+  destroys: the Hub's protected secrets and the machine key that encrypts them, so a reinstall
+  after keeping the data finds approvals, devices and the licence again.
+
 - **Docs:** *Onboarding and Sessions* explains app tags (several instances of one local app, each
   keeping its peer id across restarts), several API instances in one process sharing one session,
   and co-process invites with in-memory storage, with C and C# snippets; *What apps no longer do*
@@ -116,6 +124,26 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Getting Started* (Developer Guide) walks from the installer to a cube on a viewer as
+  it happens: the demo setup name, the SmartScreen step for preview builds, no Vulkan SDK needed,
+  the console lines in their real order, the approval window title (`qar-vulkan-source`) and that it
+  opens in front of all windows whether or not the Visualizer is open, a step 7 showing that a
+  second run joins without a prompt under the same peer id, and an error table that no longer
+  says "press Enter to ask again" and lists `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC` (1807).
+  The cube example's README matches it.
+- **Docs:** *Installation* lists the demo setup, the setup options (`/NoFirewall`, `/NoAutostart`,
+  `/AllowDowngrade`, `/ANARI`, `/NoANARI`), exit codes 6, 8 and 9, and that a running source app
+  holds the runtime open during an upgrade or uninstall; its port table matches *Networking and
+  Federation* (no fixed TCP 7447).
+- **Docs:** *Onboarding and Sessions* and *Troubleshooting* say that QAROS sets
+  `QAR_GPU_ADAPTER_ID` for an app it starts and the library reads it; they said no variable was
+  set. *Troubleshooting* says a 1802 can take up to a minute while the QAROS service waits for a
+  Hub.
+- **Docs:** *Security Model* describes keys at rest and the same-user gap of an installed Hub,
+  whose secrets the QAROS service holds, and no longer links a private issue.
+- **Docs:** *Launcher Configuration Reference* and *Maintenance and Updates* say that
+  `runtimeStorageRoot` also holds the encrypted store with the licence and must be absolute, and
+  how `qaros-license.exe` finds it (`--config`, `--runtime-storage-root`).
 - **Docs:** the CPU and D3D11 rendering examples and their tutorials pick their target app from
   the session's peer list (role target, presence online) instead of waiting for a render stream
   request, which never comes for a new app's volume. *Rendering Streams* no longer says to serve

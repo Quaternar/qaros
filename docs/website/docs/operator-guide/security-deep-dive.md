@@ -170,20 +170,23 @@ The Hub signs its own certificate through an in-process gateway (no network hop)
 
 ## What is stored where
 
-Every secret is in one encrypted store, `secure-store` under the runtime storage root (`runtimeStorageRoot`, default the per-user data folder); the rest are plain files. Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root - see [Launcher Configuration Reference](./launcher-config-reference.md).
+Every secret is in an encrypted store; the rest are plain files. An **installed** Hub keeps its own secrets in the store of the QAROS System Service under `%ProgramData%`; a Hub run from a development build, and every device and app, keep theirs in `secure-store` under the runtime storage root (`runtimeStorageRoot`, default the per-user data folder). Paths are relative to the Hub's configured CA directory (`caDir`) and runtime storage root - see [Launcher Configuration Reference](./launcher-config-reference.md).
 
 | Location | Contents | Protection |
 |---|---|---|
-| `<storage>/secure-store/` | Hub and member identity, CA private keys (primary only; a member deletes them on join), trust-authority key, session-store key, device blacklist, issued-certificate inventory, approved local apps, licence, launcher state; each device and app's identity (private key, certificate chain, CA bundle) and last session; trusted Hub CAs | **Encrypted** (AES-256-GCM per value, bound to its name) under a key of the signed-in user: the TPM through the Microsoft Platform Crypto Provider, or DPAPI where no TPM works |
+| `%ProgramData%\Quaternar\Qaros\secure\store\hub\` (installed Hub) | Hub and member identity, CA private keys (primary only; a member deletes them on join), trust-authority key, session-store key, device blacklist, issued-certificate inventory, approved local apps, licence, launcher state; one folder per Windows user and Hub data folder | **Encrypted** (AES-256-GCM per value, bound to its name) under the machine key below. The folder and the key are usable only by SYSTEM and the QAROS service; the service hands values only to the installed Hub (`qar-runtime-launcher.exe`) and `qaros-license.exe` from the installation folder, checked by Windows, not by what they claim |
+| `<storage>/secure-store/` | Each device and app's identity (private key, certificate chain, CA bundle) and last session; trusted Hub CAs; the Hub's own secrets (as above) when the Hub runs from a development build | **Encrypted** (AES-256-GCM per value, bound to its name) under a key of the signed-in user: the TPM through the Microsoft Platform Crypto Provider, or DPAPI where no TPM works |
 | `caDir/ca/certs/` | Root and intermediate CA certificates (primary only) | Public trust material |
 | `caDir/ca/db/revoked-serials.json` | Revoked serials, an audit artifact | Not relied on for trust |
 | `caDir/hub-state.json` | Hub name, room, remembered devices, membership (member) or members and their pinned keys (primary) | OS file permissions only |
 | `caDir/audit/` | Hash-chained audit log; on a primary also `members/<peer>/` | Checkpoints signed with the Hub key; OS file permissions |
 | `caDir/security-service/` | Gateway audit log | OS file permissions only |
-| `%ProgramData%\Quaternar\Qaros\secure\` | Service storage: a machine key `QAROS-storage-kek-v1-system` on the TPM (or software) usable only by SYSTEM and the QAROS service | Not used yet by the Hub |
+| `%ProgramData%\Quaternar\Qaros\secure\` | Service storage: a machine key `QAROS-storage-kek-v1-system` on the TPM (or software) usable only by SYSTEM and the QAROS service | Protects the installed Hub's secrets; the service does not start when it holds secrets but cannot use the key |
 
-- The store's key never leaves the TPM and needs no PIN; it is not bound to the boot state. Secrets are bound to **this PC and this Windows user**: a copy of the folder, a backup restored elsewhere, or another user cannot read them.
-- A store the PC can no longer read (TPM cleared, Windows reinstalled, profile moved) is reported, never silently replaced. The Hub does not start until the `secure-store` folder is deleted, which creates a new CA: every device pairs again.
+- The store's key never leaves the TPM and needs no PIN; it is not bound to the boot state. Secrets are bound to **this PC** (and, in `secure-store`, to this Windows user): a copy of the folder, a backup restored elsewhere, or another user cannot read them.
+- Malware running as the signed-in user cannot read an installed Hub's secrets from disk or with the user's key. It could still read what the running Hub holds in memory by injecting into it; keep antivirus or EDR on the Hub PC.
+- A store the PC can no longer read (TPM cleared, Windows reinstalled, profile moved) is reported, never silently replaced. A development Hub does not start until the `secure-store` folder is deleted; an installed Hub recovers with a reset to a new install. Either creates a new CA: every device pairs again.
+- An installed Hub does not start while the QAROS System Service is stopped; it never falls back to the user's store.
 - Values that must not go backwards (blacklist, approvals, licence) carry a revision; an older one is refused while the Hub runs, not across a restart.
 - Updating from a build before this storage destroys the old plaintext key files at the first start; nothing is imported (see [Maintenance & Updates](./maintenance-and-updates.md#updating-to-encrypted-storage)).
 

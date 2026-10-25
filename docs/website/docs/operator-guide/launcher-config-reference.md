@@ -82,7 +82,7 @@ Paths default to the data root or the log root ([Installation: Where data and lo
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `caDir` | path | `<data root>/hub-ca` | Hub certificate authority directory. |
-| `runtimeStorageRoot` | path | `<data root>` | Root of identity store, trust store and launcher session state. |
+| `runtimeStorageRoot` | path | `<data root>` | Root of identity store, trust store and launcher session state, and of the encrypted `secure-store` that holds the licence. Must be an absolute path: an empty or relative value stops the launcher at start. `qaros-license.exe` reads this key from the same config file, so it activates the licence this Hub checks. |
 | `logFolder` | path | `<log root>/qar-launcher-default/<session-id>` | Log folder. The default folder is emptied on every start; a configured one is not. |
 | `startupTargetPath` | path | - | File the launcher writes the Hub-interconnect target to after connecting to another Hub. Without it the interconnect is not restored on the next start. Set by the tray to `startup-target.json`: next to the config file passed as the tray's first argument, otherwise in the tray's log folder (`<log root>/qaros-hub-service`). |
 
