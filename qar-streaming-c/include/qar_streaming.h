@@ -2900,6 +2900,27 @@ static inline void qar_result_log_if_error(QarResult result);
  * qar_cancel_token_cancel_after()) stops its subscriptions shortly after it
  * expires but does not wait for a running callback. Cancel or destroy the
  * token before freeing `user_state`.
+ *
+ * @anchor qar_c_async_calls
+ * **Async calls.** Every `qar_*_async` function that returns success fires
+ * its result callback **exactly once**, on a library thread:
+ * - with the outcome, success or error;
+ * - with `QAR_STATUS_TIMEOUT` when its cancel token is cancelled, times out
+ *   or is destroyed before the call finished;
+ * - with `QAR_STATUS_TIMEOUT` when its owner goes away first:
+ *   qar_session_handle_destroy() (calls on a session or a render sender),
+ *   qar_render_stream_handle_destroy() (calls on that render sender),
+ *   qar_runtime_handle_destroy() (onboard, rejoin) or qar_library_destroy().
+ *   That destroy call returns only after the callback has returned, unless
+ *   it is made from that very callback (a render sender destroyed from its
+ *   begin-frame callback).
+ *
+ * When the call itself returns an error, the callback never fires. Keep
+ * `user_state` valid until the result callback has returned; no progress
+ * callback of the call fires after it. A cancel arriving just as the call
+ * finishes may still deliver the outcome instead of `QAR_STATUS_TIMEOUT`.
+ * Do not destroy the call's session, runtime or the library from its result
+ * callback.
  * @{ */
 // Forward declarations
 /** @brief Create a new cancellation token (non-signaled). */
@@ -3063,7 +3084,8 @@ static inline QarResult qar_runtime_rejoin(
  * @brief Async variant of qar_runtime_rejoin.
  *
  * Returns immediately after starting the restore; result_callback fires
- * exactly once on a background thread (also on cancellation).
+ * exactly once on a background thread (also on cancellation, see
+ * @ref qar_c_async_calls "Async calls").
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero (the
  *   callback does not fire in this case).
  */
@@ -3119,7 +3141,8 @@ static inline QarResult qar_runtime_onboard(
 );
 
 /** @brief Async variant of qar_runtime_onboard. The result
- * callback delivers the generated onboarding id — persist it. */
+ * callback delivers the generated onboarding id — persist it. It fires
+ * exactly once, see @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_runtime_onboard_async(
 	QarRuntime* runtime,
 	const QarOnboardInit* init,
@@ -3164,7 +3187,8 @@ static inline QarResult qar_session_request_onboarding_invite(
 
 /** @brief Async variant of qar_session_request_onboarding_invite. The init is
  * validated (and app_tag copied) before the call returns; a refused init
- * returns the error and the callback does not fire. */
+ * returns the error and the callback does not fire. Otherwise it fires
+ * exactly once, see @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_session_request_onboarding_invite_async(
 	QarSession* session,
 	const QarRequestInviteInit* init,
@@ -3716,7 +3740,8 @@ static inline QarResult qar_session_invite_target_app(
  * QarSessionInviteTargetAppInit.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
- * @param result_callback Fires exactly once with the outcome. Required.
+ * @param result_callback Fires exactly once with the outcome, see
+ *   @ref qar_c_async_calls "Async calls". Required.
  * @param update_callback Optional progress callback (can be NULL).
  * @param user_state User pointer passed to both callbacks unchanged.
  * @param cancel Optional cancellation token (can be NULL).
@@ -3757,7 +3782,8 @@ static inline QarResult qar_session_kill_target_app(
  * @brief Ask this machine's hub to stop a target app it started.
  * @param session Active session handle.
  * @param target_app Peer id returned by qar_session_invite_target_app.
- * @param result_callback Fires exactly once with the outcome. Required.
+ * @param result_callback Fires exactly once with the outcome, see
+ *   @ref qar_c_async_calls "Async calls". Required.
  * @param update_callback Optional progress callback (can be NULL).
  * @param user_state User pointer passed to both callbacks unchanged.
  * @param cancel Optional cancellation token (can be NULL).
@@ -4165,7 +4191,9 @@ static inline QarResult qar_render_sender_create(
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
 );
-/** @brief Async variant of qar_render_sender_create. */
+/** @brief Async variant of qar_render_sender_create. The callback fires
+ * exactly once, see @ref qar_c_async_calls "Async calls"; `out_stream` is
+ * the app's only on success. */
 static inline QarResult qar_render_sender_create_async(
 	QarSession* session,
 	QarRenderSenderInit* init,
@@ -4292,7 +4320,8 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 );
 /** @brief Async version of begin_frame. Same poses, same space, same
  * failures and the same wait through a paused stream as
- * qar_render_sender_begin_frame(). */
+ * qar_render_sender_begin_frame(). The callback fires exactly once, see
+ * @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_render_sender_begin_frame_async(
 	QarRenderSender* stream,
 	qar_render_sender_begin_frame_callback_t callback,

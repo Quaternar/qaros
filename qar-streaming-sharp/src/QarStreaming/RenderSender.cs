@@ -313,12 +313,24 @@ namespace Quaternar.Qaros
         /// out becomes invalid.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Safe while another thread is inside a call on the sender: the sender refuses new calls at
-        /// once, a <see cref="BeginFrame"/> or <see cref="BeginFrameAsync(CancellationToken)"/>
-        /// waiting through a paused stream is cancelled and fails, and the native sender is
-        /// released, on a thread-pool thread, when the running call returns (an async one when its
-        /// native completion fires).
+        /// once (<see cref="ObjectDisposedException"/>), a <see cref="BeginFrame"/> or
+        /// <see cref="BeginFrameAsync(CancellationToken)"/> waiting through a paused stream is
+        /// cancelled and fails, and Dispose waits until the running call returned (an async one
+        /// until its native completion fired). Only then is the native sender destroyed, on the
+        /// thread that calls Dispose: dispose a D3D11, OpenGL or Vulkan sender on a thread where
+        /// its graphics context may be used, and do not hold a lock there that the render thread
+        /// needs to leave its call.
+        /// </para>
+        /// <para>
+        /// The wait is not bounded; the waiting calls are cancelled first, so it ends when the
+        /// running frame call does. Do not call it from a QAROS callback or event handler: the
+        /// completion it waits for may need that library thread, so there it throws
+        /// <see cref="InvalidOperationException"/> while another thread is in a call on the sender.
+        /// </para>
         /// </remarks>
+        /// <exception cref="InvalidOperationException">Called from a QAROS callback where it would have to wait (see remarks).</exception>
         public void Dispose()
         {
             _owner.Dispose();

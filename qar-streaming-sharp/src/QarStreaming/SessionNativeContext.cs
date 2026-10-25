@@ -122,11 +122,13 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Starts <paramref name="subscription"/> with the session borrowed for the call; a failed
-        /// start, a disposed session included, disposes the subscription and its owned token.
+        /// start, a disposed session included, disposes the subscription and its owned token. Its
+        /// handler calls are marked as callbacks of the session, whose Dispose they cannot run.
         /// </summary>
         internal Result<IDisposable> StartSubscription<T>(T subscription, Func<T, IntPtr, IntPtr, ResultNative> start)
             where T : NativeSubscription
         {
+            subscription.RunsCallbacksOf(_owner);
             ResultInfo info;
             try
             {
@@ -153,9 +155,10 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Makes the session unusable and releases it. A call still borrowing the session defers the
-        /// native release until it is done.
+        /// Makes the session unusable, cancels its waiting calls, waits until every call borrowing
+        /// the session is done and destroys it on this thread (NativeHandleOwner.Dispose).
         /// </summary>
+        /// <exception cref="InvalidOperationException">Called from a QAROS callback where it would have to wait (see remarks).</exception>
         public void Dispose()
         {
             _owner.Dispose();

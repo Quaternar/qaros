@@ -156,6 +156,11 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>Closes the stream to every receiver, draining frames still being sent first.</summary>
+        /// <remarks>
+        /// Safe while another thread is inside a call on the sender: new calls are refused at once
+        /// (<see cref="ObjectDisposedException"/>), Dispose waits until the running call returned
+        /// and then destroys the native sender on the calling thread.
+        /// </remarks>
         public void Dispose()
         {
             _owner.Dispose();

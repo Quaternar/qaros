@@ -299,6 +299,17 @@ callback, and teardown runs in reverse of setup.
 - Values handed to you inside an event/callback are already **immutable DTO
   snapshots** (`PeerSpec`, `GuiPanel`, `AppVolume`) — safe to keep; there is no
   borrowed native handle to worry about.
+- `Dispose` of a `Session`, a sender, a `RenderFrameInfo` or the `Runtime` is
+  safe while another thread is inside a call on it: new calls throw
+  `ObjectDisposedException` at once, calls that wait (a `BeginFrame` through a
+  paused stream, a hub request) are cancelled and fail, and `Dispose` waits until
+  the running calls returned (async ones until their completion fired). Then it
+  releases the native object on the calling thread, so a graphics sender is
+  released where you dispose it, and a session's subscriptions have ended when
+  `Dispose` returns. Do not dispose from a QAROS callback or event handler: from
+  one of the object's own callbacks, or while another thread is in a call on the
+  object, `Dispose` throws `InvalidOperationException` there instead of waiting
+  on the library thread.
 - `ObjectDisposedException` is thrown only for **managed misuse** (using an
   object after you disposed it), never for native failures.
 - Dispose in reverse: session, then runtime, then `Library.Destroy()`.

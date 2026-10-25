@@ -55,6 +55,10 @@ namespace Quaternar.Qaros
             return info.IsSuccess ? Result<Fov>.Success(info, Fov.FromNative(fov)) : Result<Fov>.Failure(info);
         }
 
+        /// <summary>
+        /// Releases the frame info. While another thread reads it, refuses new reads at once and
+        /// waits until the running one returned; the release then runs on the calling thread.
+        /// </summary>
         public void Dispose()
         {
             _owner.Dispose();

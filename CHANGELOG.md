@@ -61,6 +61,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *API Conventions* says what a C# `Dispose` of a session, sender, frame info or runtime
+  does while another thread is inside a call on it: refuses new calls, cancels the waiting ones,
+  waits for the running ones and releases the native object on the disposing thread; from a QAROS
+  callback where it would have to wait it throws `InvalidOperationException`.
 - **Docs:** *Security Deep Dive*, *Installation* and *Maintenance & Updates* say where an installed
   Hub keeps its secrets now (the QAROS System Service's store under `%ProgramData%`, reachable only
   by the installed Hub and `qaros-license.exe`), that the Hub needs the service running, that the

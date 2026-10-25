@@ -14,7 +14,9 @@ namespace Quaternar.Qaros
 
         internal CancelToken(CancelTokenSafeHandle handle)
         {
-            _owner = new NativeHandleOwner(handle, nameof(CancelToken));
+            // Destroyed by its last user, no wait: it has no thread affinity and an owner's Dispose
+            // ends its shared dispose token while calls still borrow it.
+            _owner = new NativeHandleOwner(handle, nameof(CancelToken), false);
         }
 
         /// <summary>

@@ -15,10 +15,9 @@ namespace Quaternar.Qaros
     /// The caller owns the session. <see cref="Dispose"/> tears the session down but keeps the
     /// persisted identity, so the next start can <see cref="Runtime.Rejoin"/> silently; erasing the
     /// identity is <see cref="Runtime.Forget"/>. Disposing ends every subscription of the session
-    /// and waits for a handler running on another thread, so never dispose it from a QAROS
-    /// callback or event handler, nor while holding a lock a handler takes. A call running on
-    /// another thread at that moment defers the teardown until it returns (see
-    /// <see cref="Dispose"/>).
+    /// and waits for a handler running on another thread, and for the session calls other threads
+    /// are making (see <see cref="Dispose"/>): never dispose it from a QAROS callback or event
+    /// handler, nor while holding a lock a handler or such a call takes.
     /// </remarks>
     public sealed partial class Session : IDisposable
     {
@@ -219,7 +218,7 @@ namespace Quaternar.Qaros
             using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
                 var native = NativeInit.RequestInvite(options, scope, chain.Head);
                 IntPtr invite;
@@ -329,7 +328,7 @@ namespace Quaternar.Qaros
                 return Result<PeerId>.Failure(cancellationResult.Info);
             using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
                 var native = NativeInit.InviteTargetApp(connectionString, scope);
                 var peer = PeerIdNative.CreateDefault();
@@ -380,7 +379,7 @@ namespace Quaternar.Qaros
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
             using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
                 var native = targetApp.ToNative();
                 using var session = _context.Borrow();
@@ -422,20 +421,31 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Tears the session down but keeps its persisted identity for a later
-        /// <see cref="Runtime.Rejoin"/>. Waits for subscription handlers running on other threads;
-        /// do not call it from one.
+        /// <see cref="Runtime.Rejoin"/>. Waits for the calls and subscription handlers running on
+        /// other threads; do not call it from a callback of the session.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Safe while another thread is inside a call on the session or one of its controls: the
-        /// session refuses new calls at once and cancels the calls that wait (render-sender
-        /// creation, target-app invite and kill, invite request, sync and async alike). It is torn
-        /// down, on a thread-pool thread, only when the running call returns, or for an async call
-        /// when its native completion fires; Dispose then returns without waiting for the
-        /// teardown, so subscription handlers may still run briefly. Dispose the subscriptions
-        /// first when that matters. The deferred teardown can also follow a
-        /// <see cref="Runtime.Dispose"/> or <see cref="Library.Destroy"/> made right after: end the
-        /// other threads' session calls before disposing the session when those come next.
+        /// session refuses new calls at once (<see cref="ObjectDisposedException"/>), cancels the
+        /// calls that wait (render-sender creation, target-app invite and kill, invite request,
+        /// sync and async alike; they fail), waits until every running call returned and every
+        /// async call's completion fired, and then tears the session down on the calling thread.
+        /// When Dispose returns the session is gone and its subscriptions have ended: no handler
+        /// runs and none starts, so a <see cref="Runtime.Dispose"/> or
+        /// <see cref="Library.Destroy"/> may follow at once.
+        /// </para>
+        /// <para>
+        /// The wait is not bounded: a call that does not wait on the hub returns on its own, and the
+        /// waiting ones are cancelled first. Never dispose while holding a lock a call or a handler
+        /// on another thread needs. Called from inside one of the session's own callbacks (a
+        /// subscription handler, a progress report of a session call) it would wait for itself, so
+        /// it throws <see cref="InvalidOperationException"/> and changes nothing (uncaught in a
+        /// handler, the exception is swallowed like any other); dispose from a thread of your own.
+        /// From another QAROS callback it throws too while another thread is in a session call.
+        /// </para>
         /// </remarks>
+        /// <exception cref="InvalidOperationException">Called from a QAROS callback where it would have to wait (see remarks).</exception>
         public void Dispose()
         {
             _context.Dispose();

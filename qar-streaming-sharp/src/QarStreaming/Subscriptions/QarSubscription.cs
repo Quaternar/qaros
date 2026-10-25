@@ -70,6 +70,10 @@ namespace Quaternar.Qaros.Interop
 
         private readonly bool _hasStandardCancellationRegistration;
 
+        // The object the subscription was started on, marked as in a callback while the handler
+        // runs, so its Dispose from the handler throws instead of waiting for itself.
+        private NativeHandleOwner? _callbackOwner;
+
         protected NativeSubscription(CancelToken token, bool ownsToken)
             : this(token, ownsToken, default(CancellationTokenRegistration), false)
         {
@@ -96,6 +100,21 @@ namespace Quaternar.Qaros.Interop
         public IntPtr TokenHandle { get { return _tokenBorrow.Handle; } }
 
         protected bool IsDisposed { get { return Volatile.Read(ref _disposed) != 0; } }
+
+        /// <summary>
+        /// Names the object the subscription is started on (a session); set before the native start,
+        /// so every handler call sees it.
+        /// </summary>
+        internal void RunsCallbacksOf(NativeHandleOwner owner)
+        {
+            _callbackOwner = owner;
+        }
+
+        /// <summary>Wraps one handler call: see <see cref="NativeHandleOwner.EnterCallback"/>.</summary>
+        protected NativeHandleOwner.CallbackScope EnterCallback()
+        {
+            return NativeHandleOwner.EnterCallback(_callbackOwner);
+        }
 
         internal void DisposeAfterFailedStart()
         {
@@ -168,7 +187,11 @@ namespace Quaternar.Qaros.Interop
                     return;
                 if (sub.IsDisposed) return;
                 var peer = PeerSpec.FromHandle(handle, false);
-                if (peer.IsSuccess) sub._handler(sub, new PeerSpecUpdatedEventArgs(peer.Value));
+                if (peer.IsSuccess)
+                {
+                    using (sub.EnterCallback())
+                        sub._handler(sub, new PeerSpecUpdatedEventArgs(peer.Value));
+                }
                 GC.KeepAlive(sub);
             }
             catch
@@ -198,7 +221,11 @@ namespace Quaternar.Qaros.Interop
                 if (!NativeCallbackRegistry.TryGet(userState, out SessionLifecycleSubscription sub))
                     return;
                 if (sub.IsDisposed) return;
-                if (info != IntPtr.Zero) sub._handler(sub, SessionLifecycleChangedEventArgs.FromNativePointer(info));
+                if (info != IntPtr.Zero)
+                {
+                    using (sub.EnterCallback())
+                        sub._handler(sub, SessionLifecycleChangedEventArgs.FromNativePointer(info));
+                }
                 GC.KeepAlive(sub);
             }
             catch
@@ -236,7 +263,11 @@ namespace Quaternar.Qaros.Interop
                     return;
                 if (sub.IsDisposed) return;
                 var panel = GuiPanel.FromHandle(handle, false);
-                if (panel.IsSuccess) sub._handler(sub, new GuiPanelUpdatedEventArgs(panel.Value));
+                if (panel.IsSuccess)
+                {
+                    using (sub.EnterCallback())
+                        sub._handler(sub, new GuiPanelUpdatedEventArgs(panel.Value));
+                }
                 GC.KeepAlive(sub);
             }
             catch
@@ -274,7 +305,11 @@ namespace Quaternar.Qaros.Interop
                     return;
                 if (sub.IsDisposed) return;
                 var volume = AppVolume.FromHandle(handle, false);
-                if (volume.IsSuccess) sub._handler(sub, new AppVolumeUpdatedEventArgs(volume.Value));
+                if (volume.IsSuccess)
+                {
+                    using (sub.EnterCallback())
+                        sub._handler(sub, new AppVolumeUpdatedEventArgs(volume.Value));
+                }
                 GC.KeepAlive(sub);
             }
             catch
@@ -313,7 +348,8 @@ namespace Quaternar.Qaros.Interop
                 if (sub.IsDisposed) return;
                 // The handle dies with this call, so it is read into a managed
                 // copy here rather than handed to the application.
-                sub._handler(sub, new AppVolumeGestureEventArgs(AppVolumeGestureEvent.FromHandle(gesture)));
+                using (sub.EnterCallback())
+                    sub._handler(sub, new AppVolumeGestureEventArgs(AppVolumeGestureEvent.FromHandle(gesture)));
                 GC.KeepAlive(sub);
             }
             catch
@@ -352,7 +388,8 @@ namespace Quaternar.Qaros.Interop
                 if (sub.IsDisposed) return;
                 // The handle dies with this call, so it is read into a managed
                 // copy here rather than handed to the application.
-                sub._handler(sub, new GuiPanelGestureEventArgs(GuiPanelGestureEvent.FromHandle(gesture)));
+                using (sub.EnterCallback())
+                    sub._handler(sub, new GuiPanelGestureEventArgs(GuiPanelGestureEvent.FromHandle(gesture)));
                 GC.KeepAlive(sub);
             }
             catch
@@ -398,7 +435,8 @@ namespace Quaternar.Qaros.Interop
                 var streamInfo = Results.ToInfo(NativeMethods.qar_impl_render_request_get_stream_id(request, ref streamId));
                 if (!streamInfo.IsSuccess)
                     return;
-                sub._handler(sub, new RenderStreamRequestEventArgs(new RenderStreamRequest(PeerId.FromNative(peerId), StreamId.FromNative(streamId))));
+                using (sub.EnterCallback())
+                    sub._handler(sub, new RenderStreamRequestEventArgs(new RenderStreamRequest(PeerId.FromNative(peerId), StreamId.FromNative(streamId))));
                 GC.KeepAlive(sub);
             }
             catch
@@ -444,8 +482,20 @@ namespace Quaternar.Qaros.Interop
 
         private int _holdsTarget;
 
+        // The object the call was made on, marked as in a callback while a progress report runs,
+        // so its Dispose from the report throws instead of waiting for this call.
+        private NativeHandleOwner? _callbackOwner;
+
+        private readonly IProgress<ActionProgress>? _progress;
+
         protected AsyncStateBase()
+            : this(null)
         {
+        }
+
+        protected AsyncStateBase(IProgress<ActionProgress>? progress)
+        {
+            _progress = progress;
             Completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
             _selfHandle = GCHandle.Alloc(this);
             UserState = GCHandle.ToIntPtr(_selfHandle);
@@ -463,7 +513,7 @@ namespace Quaternar.Qaros.Interop
 
         /// <summary>
         /// Borrows the handle of <paramref name="owner"/> for the async call until its native
-        /// completion fires, so a Dispose while the call runs defers the native release instead of
+        /// completion fires, so a Dispose while the call runs waits for that completion instead of
         /// freeing the object under it. A task cancelled by its token completes at the cancel,
         /// earlier: the borrow is held until the native completion all the same. Once per call.
         /// </summary>
@@ -474,6 +524,7 @@ namespace Quaternar.Qaros.Interop
                 throw new InvalidOperationException("An async call holds one handle.");
             var borrow = owner.Borrow();
             _target = borrow;
+            _callbackOwner = owner;
             // Publishes the borrow before the native call can complete and release it.
             Volatile.Write(ref _holdsTarget, 1);
             return borrow.Handle;
@@ -481,15 +532,33 @@ namespace Quaternar.Qaros.Interop
 
         /// <summary>
         /// Drops the borrow when the native completion fires, before the task completes with its
-        /// result, so the caller's Dispose after the await releases the object on its own thread.
-        /// Released on the completion's thread only while the owner is not disposed: the final
-        /// release goes to the thread pool (NativeHandleOwner.Release).
+        /// result. It never destroys the object: a Dispose waiting for this borrow wakes and
+        /// destroys on its own thread, and a Dispose after the await finds no borrow left.
         /// </summary>
-        private void ReleaseTarget()
+        protected void ReleaseTarget()
         {
             if (Interlocked.CompareExchange(ref _holdsTarget, 2, 1) != 1)
                 return;
             _target.Dispose();
+        }
+
+        /// <summary>
+        /// The native progress callback of a call with progress: reports to the state's progress,
+        /// marked as a callback of the object the call was made on (<see cref="HoldUntilCompletion"/>).
+        /// </summary>
+        protected static void OnProgress(ActionSeverity severity, float percent, IntPtr message, IntPtr userState)
+        {
+            try
+            {
+                var state = (AsyncStateBase<T>)GCHandle.FromIntPtr(userState).Target!;
+                if (state._progress == null)
+                    return;
+                using (NativeHandleOwner.EnterCallback(state._callbackOwner))
+                    state._progress.Report(new ActionProgress(severity, percent, NativeString.DecodeNullTerminated(message) ?? string.Empty));
+            }
+            catch
+            {
+            }
         }
 
         public Result<IntPtr> UseStandardCancellation(CancellationToken cancellationToken)
@@ -529,16 +598,6 @@ namespace Quaternar.Qaros.Interop
                 CleanupOnce();
                 throw;
             }
-        }
-
-        /// <summary>
-        /// <see cref="UseStandardCancellation(CancellationToken)"/> for an async call on an object
-        /// whose Dispose cancels <paramref name="endedBy"/>: always a native token of the call's
-        /// own, linked to both.
-        /// </summary>
-        public Result<IntPtr> UseStandardCancellation(CancellationToken cancellationToken, CancellationToken endedBy)
-        {
-            return UseOwnedCancellation(cancellationToken, endedBy);
         }
 
         // A native token of the call's own, cancelled by cancellationToken (which also cancels the
@@ -643,20 +702,26 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly IProgress<ActionProgress>? _progress;
 
+        // The object the blocking call is made on. The call holds its borrow while a report runs, so
+        // the report is marked as its callback: a Dispose from it throws instead of waiting.
+        private readonly NativeHandleOwner _callbackOwner;
+
         public ProgressCallback Callback { get; }
 
         public IntPtr UserState { get; }
 
-        private ProgressState(IProgress<ActionProgress>? progress)
+        private ProgressState(IProgress<ActionProgress>? progress, NativeHandleOwner callbackOwner)
         {
             _progress = progress;
+            _callbackOwner = callbackOwner;
             Callback = new ProgressCallback(OnProgress);
             UserState = progress == null ? IntPtr.Zero : GCHandle.ToIntPtr(GCHandle.Alloc(this));
         }
 
-        public static ProgressState Create(IProgress<ActionProgress>? progress)
+        /// <summary>Progress of a blocking call made on <paramref name="callbackOwner"/>.</summary>
+        public static ProgressState Create(IProgress<ActionProgress>? progress, NativeHandleOwner callbackOwner)
         {
-            return new ProgressState(progress);
+            return new ProgressState(progress, callbackOwner);
         }
 
         private static void OnProgress(ActionSeverity severity, float percent, IntPtr message, IntPtr userState)
@@ -666,7 +731,9 @@ namespace Quaternar.Qaros.Interop
                 if (userState == IntPtr.Zero)
                     return;
                 var state = (ProgressState)GCHandle.FromIntPtr(userState).Target!;
-                if (state._progress != null)
+                if (state._progress == null)
+                    return;
+                using (NativeHandleOwner.EnterCallback(state._callbackOwner))
                     state._progress.Report(new ActionProgress(severity, percent, NativeString.DecodeNullTerminated(message) ?? string.Empty));
             }
             catch
@@ -685,18 +752,11 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly NativeMemoryScope _scope = new NativeMemoryScope();
 
-        // The runtime borrowed for the call, held until the native completion fires.
-        private NativeMemoryScope? _runtimeBorrow;
-
-        private Runtime? _runtime;
-
         private NativeStructureChain? _chain;
 
         private NativeStructureChain? _presentationChain;
 
         private readonly bool _returnsOnboardSession;
-
-        private readonly IProgress<ActionProgress>? _progress;
 
         private readonly TaskCompletionSource<Result<Session>>? _sessionCompletion;
 
@@ -709,8 +769,8 @@ namespace Quaternar.Qaros.Interop
         public Task<Result<Session>> SessionTask { get { return _sessionCompletion == null ? System.Threading.Tasks.Task.FromResult(Result<Session>.Failure(new ResultInfo(StatusCode.LogicError, 0, "Invalid async state usage."))) : _sessionCompletion.Task; } }
 
         public RuntimeOnboardAsyncState(IProgress<ActionProgress>? progress, bool returnsOnboardSession)
+            : base(progress)
         {
-            _progress = progress;
             _returnsOnboardSession = returnsOnboardSession;
             if (!returnsOnboardSession)
                 // Callers may dispose the runtime after a failed rejoin. Never
@@ -719,47 +779,6 @@ namespace Quaternar.Qaros.Interop
                 _sessionCompletion = new TaskCompletionSource<Result<Session>>(TaskCreationOptions.RunContinuationsAsynchronously);
             ResultCallback = new RuntimeOnboardResultCallback(OnResult);
             ProgressCallback = new ProgressCallback(OnProgress);
-        }
-
-        /// <summary>
-        /// Borrows <paramref name="runtime"/> until the native completion fires, so a
-        /// <see cref="Runtime.Dispose"/> while the call runs defers the native release instead of
-        /// freeing the runtime under it.
-        /// </summary>
-        /// <exception cref="ObjectDisposedException">The runtime is disposed.</exception>
-        public IntPtr BorrowRuntime(Runtime runtime)
-        {
-            var borrow = new NativeMemoryScope();
-            try
-            {
-                var handle = runtime.BorrowHandle(borrow);
-                _runtime = runtime;
-                _runtimeBorrow = borrow;
-                return handle;
-            }
-            catch
-            {
-                borrow.Dispose();
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Drops the runtime borrow when the native completion fires, before the task completes with
-        /// its result (Runtime.ReleaseAsyncBorrow). A task cancelled by its token completes at the
-        /// cancel, earlier: the borrow is held until the native completion all the same.
-        /// </summary>
-        private void ReleaseRuntime()
-        {
-            var borrow = Interlocked.Exchange(ref _runtimeBorrow, null);
-            if (borrow == null)
-                return;
-            if (_runtime == null)
-            {
-                borrow.Dispose();
-                return;
-            }
-            _runtime.ReleaseAsyncBorrow(borrow);
         }
 
         public RejoinInitNative CreateNative(RejoinOptions options)
@@ -778,7 +797,7 @@ namespace Quaternar.Qaros.Interop
 
         public void CompleteRejoin(Result<Session> result)
         {
-            ReleaseRuntime();
+            ReleaseTarget();
             if (_sessionCompletion != null)
                 _sessionCompletion.TrySetResult(result);
             CleanupOnce();
@@ -786,13 +805,12 @@ namespace Quaternar.Qaros.Interop
 
         public void CompleteOnboard(Result<OnboardSession> result)
         {
-            ReleaseRuntime();
             Complete(result);
         }
 
         public void FaultRejoin(Exception ex)
         {
-            ReleaseRuntime();
+            ReleaseTarget();
             if (_sessionCompletion != null)
                 _sessionCompletion.TrySetException(ex);
             CleanupOnce();
@@ -804,7 +822,6 @@ namespace Quaternar.Qaros.Interop
             try
             {
                 state = (RuntimeOnboardAsyncState)GCHandle.FromIntPtr(userState).Target!;
-                state.ReleaseRuntime();
                 var info = Results.ToInfo(status);
                 if (state._returnsOnboardSession)
                 {
@@ -840,22 +857,8 @@ namespace Quaternar.Qaros.Interop
             }
         }
 
-        private static void OnProgress(ActionSeverity severity, float percent, IntPtr message, IntPtr userState)
-        {
-            try
-            {
-                var state = (RuntimeOnboardAsyncState)GCHandle.FromIntPtr(userState).Target!;
-                if (state._progress != null)
-                    state._progress.Report(new ActionProgress(severity, percent, NativeString.DecodeNullTerminated(message) ?? string.Empty));
-            }
-            catch
-            {
-            }
-        }
-
         protected override void Cleanup()
         {
-            ReleaseRuntime();
             _presentationChain?.Dispose();
             _chain?.Dispose();
             _scope.Dispose();
@@ -867,8 +870,6 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly NativeMemoryScope _scope = new NativeMemoryScope();
 
-        private readonly IProgress<ActionProgress>? _progress;
-
         private NativeStructureChain? _chain;
 
         public SessionRequestInviteResultCallback ResultCallback { get; }
@@ -876,8 +877,8 @@ namespace Quaternar.Qaros.Interop
         public ProgressCallback ProgressCallback { get; }
 
         public RequestInviteAsyncState(IProgress<ActionProgress>? progress)
+            : base(progress)
         {
-            _progress = progress;
             ResultCallback = new SessionRequestInviteResultCallback(OnResult);
             ProgressCallback = new ProgressCallback(OnProgress);
         }
@@ -904,19 +905,6 @@ namespace Quaternar.Qaros.Interop
             }
         }
 
-        private static void OnProgress(ActionSeverity severity, float percent, IntPtr message, IntPtr userState)
-        {
-            try
-            {
-                var state = (RequestInviteAsyncState)GCHandle.FromIntPtr(userState).Target!;
-                if (state._progress != null)
-                    state._progress.Report(new ActionProgress(severity, percent, NativeString.DecodeNullTerminated(message) ?? string.Empty));
-            }
-            catch
-            {
-            }
-        }
-
         protected override void Cleanup()
         {
             _chain?.Dispose();
@@ -934,8 +922,6 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly NativeMemoryScope _scope = new NativeMemoryScope();
 
-        private readonly IProgress<ActionProgress>? _progress;
-
         private readonly Func<IntPtr, TValue> _value;
 
         public TargetAppResultCallback ResultCallback { get; }
@@ -945,8 +931,8 @@ namespace Quaternar.Qaros.Interop
         public NativeMemoryScope Scope { get { return _scope; } }
 
         public TargetAppAsyncState(IProgress<ActionProgress>? progress, Func<IntPtr, TValue> value)
+            : base(progress)
         {
-            _progress = progress;
             _value = value;
             ResultCallback = new TargetAppResultCallback(OnResult);
             ProgressCallback = new ProgressCallback(OnProgress);
@@ -965,19 +951,6 @@ namespace Quaternar.Qaros.Interop
             {
                 if (state != null)
                     state.Fault(ex);
-            }
-        }
-
-        private static void OnProgress(ActionSeverity severity, float percent, IntPtr message, IntPtr userState)
-        {
-            try
-            {
-                var state = (TargetAppAsyncState<TValue>)GCHandle.FromIntPtr(userState).Target!;
-                if (state._progress != null)
-                    state._progress.Report(new ActionProgress(severity, percent, NativeString.DecodeNullTerminated(message) ?? string.Empty));
-            }
-            catch
-            {
             }
         }
 

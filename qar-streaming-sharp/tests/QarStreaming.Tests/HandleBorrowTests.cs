@@ -11,12 +11,278 @@ using Xunit;
 namespace Quaternar.Qaros.Tests
 {
     /// <summary>
-    /// Hub G56: every native call on a session, a sender, a frame info or a cancel token holds a
-    /// reference on its handle until the call is done (an async call until its native completion
-    /// fires), so a concurrent Dispose or the finalizer defers the native release instead of
-    /// freeing the object under the call. A disposed wrapper refuses new calls at once. The final
-    /// release of an object disposed during a borrow runs on the thread pool, never on the borrowing
-    /// thread, which may be a native thread the release would join.
+    /// Runs a Dispose on a thread of its own, so a test can hold a borrow while it waits, and checks
+    /// whether it waits or returned.
+    /// </summary>
+    internal static class DisposeProbe
+    {
+        internal static Task Start(Action dispose)
+        {
+            return Task.Factory.StartNew(dispose, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        /// <summary>Starts <paramref name="dispose"/> and returns the managed id of the thread that runs it.</summary>
+        internal static Task<int> StartRecordingThread(Action dispose)
+        {
+            return Task.Factory.StartNew(
+                () =>
+                {
+                    dispose();
+                    return Environment.CurrentManagedThreadId;
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+        }
+
+        internal static void AssertWaiting(Task dispose)
+        {
+            Assert.False(dispose.Wait(ExtTime.Scaled(TimeSpan.FromMilliseconds(200))), "Dispose returned while a call still borrowed the object");
+        }
+
+        internal static void AssertReturned(Task dispose)
+        {
+            Assert.True(dispose.Wait(QarNativeAssert.Budget), "Dispose did not return after the last borrow was released");
+        }
+
+        /// <summary>Waits until the Dispose running on another thread marked the owner disposed.</summary>
+        internal static void WaitMarkedDisposed(NativeHandleOwner owner)
+        {
+            Assert.True(SpinWait.SpinUntil(() => owner.IsDisposed, QarNativeAssert.Budget), "Dispose never marked the object disposed");
+        }
+    }
+
+    /// <summary>A handle that records the thread its release ran on, in place of a native object.</summary>
+    internal sealed class RecordingSafeHandle : SafeHandle
+    {
+        private int _releasedOnThread = -1;
+
+        public RecordingSafeHandle()
+            : base(IntPtr.Zero, true)
+        {
+            SetHandle(new IntPtr(1));
+        }
+
+        public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
+
+        /// <summary>The managed thread id the release ran on, or -1 before it.</summary>
+        public int ReleasedOnThread { get { return Volatile.Read(ref _releasedOnThread); } }
+
+        protected override bool ReleaseHandle()
+        {
+            Volatile.Write(ref _releasedOnThread, Environment.CurrentManagedThreadId);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The dispose contract of every wrapper that owns a native object (hub G56): Dispose refuses
+    /// new calls, cancels the waiting ones, waits until every borrow is released and destroys the
+    /// object on its own thread; from inside one of the object's own callbacks it throws. Offline:
+    /// a recording handle stands in for the native object.
+    /// </summary>
+    public sealed class NativeHandleOwnerDisposeTests
+    {
+        private static ResultInfo Failed()
+        {
+            return new ResultInfo(StatusCode.LogicError, 0, "test completion");
+        }
+
+        [Fact]
+        public async Task DisposeWaitsForTheRunningCallAndDestroysOnTheDisposingThread()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var call = owner.Borrow();
+            var dispose = DisposeProbe.StartRecordingThread(owner.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
+            Assert.Throws<ObjectDisposedException>(() => owner.Borrow());
+            DisposeProbe.AssertWaiting(dispose);
+            Assert.False(handle.IsClosed);
+            call.Dispose();
+            DisposeProbe.AssertReturned(dispose);
+            // Destroyed before Dispose returned, on the thread that called it.
+            Assert.True(handle.IsClosed);
+            Assert.Equal(await dispose, handle.ReleasedOnThread);
+        }
+
+        // The native completion fires on a library thread; the release there only wakes the Dispose.
+        [Fact]
+        public async Task DisposeWaitsForAnAsyncCallsCompletionAndDestroysOnTheDisposingThread()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var state = new BeginFrameAsyncState();
+            state.HoldUntilCompletion(owner);
+            var dispose = DisposeProbe.StartRecordingThread(owner.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
+            DisposeProbe.AssertWaiting(dispose);
+            var completion = Task.Factory.StartNew(
+                () =>
+                {
+                    state.Complete(Result<RenderFrameInfo>.Failure(Failed()));
+                    return Environment.CurrentManagedThreadId;
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
+            Assert.Equal(await dispose, handle.ReleasedOnThread);
+            var completed = await Task.WhenAny(completion, Task.Delay(QarNativeAssert.Budget)) == completion;
+            Assert.True(completed, "the completion thread did not finish");
+            Assert.NotEqual(await completion, handle.ReleasedOnThread);
+        }
+
+        // Dispose cancels the waiting calls before it waits: a call that ends on the cancel lets
+        // the Dispose return on the same thread, without another thread's help.
+        [Fact]
+        public void DisposeCancelsTheWaitingCallsBeforeItWaits()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var call = owner.Borrow();
+            using var endsOnCancel = owner.Disposing.Register(() => call.Dispose());
+            owner.Dispose();
+            Assert.True(handle.IsClosed);
+            Assert.Equal(Environment.CurrentManagedThreadId, handle.ReleasedOnThread);
+        }
+
+        [Fact]
+        public async Task ASecondDisposeWaitsForTheFirstOnesDestroy()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var call = owner.Borrow();
+            var first = DisposeProbe.StartRecordingThread(owner.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
+            var second = DisposeProbe.Start(owner.Dispose);
+            DisposeProbe.AssertWaiting(second);
+            call.Dispose();
+            DisposeProbe.AssertReturned(first);
+            DisposeProbe.AssertReturned(second);
+            Assert.True(handle.IsClosed);
+            Assert.Equal(await first, handle.ReleasedOnThread);
+        }
+
+        // From inside one of its own callbacks Dispose would wait for itself: it throws and leaves
+        // the object as it was. Another object without a running call is destroyed right there.
+        [Fact]
+        public void DisposeFromInsideAnOwnCallbackThrows()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var other = new RecordingSafeHandle();
+            var otherOwner = new NativeHandleOwner(other, "Other");
+            using (NativeHandleOwner.EnterCallback(owner))
+            {
+                var thrown = Assert.Throws<InvalidOperationException>(() => owner.Dispose());
+                Assert.Contains("Probe", thrown.Message);
+                otherOwner.Dispose();
+                Assert.True(other.IsClosed);
+            }
+            Assert.False(owner.IsDisposed);
+            Assert.False(handle.IsClosed);
+            owner.Dispose();
+            Assert.True(handle.IsClosed);
+        }
+
+        // From another object's callback Dispose would wait on a library thread the running call
+        // may need: it throws while a call runs and leaves the object usable.
+        [Fact]
+        public void DisposeFromAnotherObjectsCallbackWhileACallRunsThrows()
+        {
+            var callbackOwner = new NativeHandleOwner(new RecordingSafeHandle(), "Session");
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Sender");
+            var call = owner.Borrow();
+            using (NativeHandleOwner.EnterCallback(callbackOwner))
+                Assert.Throws<InvalidOperationException>(() => owner.Dispose());
+            Assert.False(owner.IsDisposed);
+            call.Dispose();
+            owner.Dispose();
+            Assert.True(handle.IsClosed);
+        }
+
+        // The first Dispose may be waiting for the very callback that repeats it: the repeat
+        // returns at once instead of throwing or waiting, and the first one destroys.
+        [Fact]
+        public async Task ARepeatedDisposeFromACallbackReturnsAtOnce()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var call = owner.Borrow();
+            var first = DisposeProbe.StartRecordingThread(owner.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
+            using (NativeHandleOwner.EnterCallback(owner))
+                owner.Dispose();
+            Assert.False(handle.IsClosed);
+            call.Dispose();
+            DisposeProbe.AssertReturned(first);
+            Assert.Equal(await first, handle.ReleasedOnThread);
+        }
+
+        private sealed class DisposingProgress : IProgress<ActionProgress>
+        {
+            private readonly Action _dispose;
+
+            public DisposingProgress(Action dispose)
+            {
+                _dispose = dispose;
+            }
+
+            public Exception? Thrown { get; private set; }
+
+            public void Report(ActionProgress value)
+            {
+                try
+                {
+                    _dispose();
+                }
+                catch (Exception ex)
+                {
+                    Thrown = ex;
+                }
+            }
+        }
+
+        // A progress report runs while the reporting call holds its borrow.
+        [Fact]
+        public void DisposeFromAProgressReportOfTheObjectsCallThrows()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var progress = new DisposingProgress(owner.Dispose);
+            using (var call = owner.Borrow())
+            using (var state = ProgressState.Create(progress, owner))
+                state.Callback(ActionSeverity.Info, 50.0f, IntPtr.Zero, state.UserState);
+            Assert.IsType<InvalidOperationException>(progress.Thrown);
+            Assert.False(owner.IsDisposed);
+            owner.Dispose();
+            Assert.True(handle.IsClosed);
+        }
+
+        [Fact]
+        public void DisposeFromAnAsyncCallsProgressReportThrows()
+        {
+            var handle = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(handle, "Probe");
+            var progress = new DisposingProgress(owner.Dispose);
+            var state = new RequestInviteAsyncState(progress);
+            state.HoldUntilCompletion(owner);
+            state.ProgressCallback(ActionSeverity.Info, 50.0f, IntPtr.Zero, state.UserState);
+            Assert.IsType<InvalidOperationException>(progress.Thrown);
+            Assert.False(owner.IsDisposed);
+            state.Complete(Result<OnboardingInvite>.Failure(Failed()));
+            owner.Dispose();
+            Assert.True(handle.IsClosed);
+        }
+    }
+
+    /// <summary>
+    /// Hub G56: every native call on a cancel token holds a reference on its handle until the call
+    /// is done (an async call until its native completion fires). A token is the one wrapper whose
+    /// Dispose does not wait: its last borrow destroys it, on whatever thread lets go last.
     /// </summary>
     public sealed class CancelTokenBorrowTests
     {
@@ -47,7 +313,7 @@ namespace Quaternar.Qaros.Tests
             // The call that borrowed it still has a live native token.
             Assert.True(IsLive(borrow.Handle));
             borrow.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            Assert.True(handle.IsClosed);
         }
 
         // Not owned here, so only the subscription's own reference keeps the token alive after
@@ -63,7 +329,7 @@ namespace Quaternar.Qaros.Tests
             Assert.False(handle.IsClosed);
             Assert.True(IsLive(subscription.TokenHandle));
             subscription.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            Assert.True(handle.IsClosed);
         }
 
         [Fact]
@@ -100,7 +366,7 @@ namespace Quaternar.Qaros.Tests
             Assert.False(handle.IsClosed);
             Assert.True(IsLive(scope.Handle));
             scope.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            Assert.True(handle.IsClosed);
             scope.Dispose();
         }
 
@@ -129,26 +395,28 @@ namespace Quaternar.Qaros.Tests
             Assert.True(handle.IsClosed);
         }
 
-        // Disposing the object an async call was made on cancels the call's native token, so a call
-        // whose completion only the object's teardown would bring still completes; the task waits
-        // for that completion and reports its failure.
+        // Disposing the object an async call was made on cancels the call's native token first, so
+        // a call whose completion only the object's teardown would bring still completes; Dispose
+        // then waits for that completion, and the task reports its failure.
         [Fact]
-        public void DisposingTheTargetCancelsAWaitingAsyncCall()
+        public void DisposingTheTargetCancelsAWaitingAsyncCallAndWaitsForItsCompletion()
         {
-            var target = CancelToken.Create().ValueOrThrow();
-            var owner = NativeHandles.OwnerOf(target);
+            var target = new RecordingSafeHandle();
+            var owner = new NativeHandleOwner(target, "Probe");
             var state = new BeginFrameAsyncState();
             var tokenHandle = state.UseStandardCancellation(CancellationToken.None, owner).ValueOrThrow();
             Assert.NotEqual(IntPtr.Zero, tokenHandle);
             state.HoldUntilCompletion(owner);
             Assert.False(NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle));
-            target.Dispose();
-            Assert.True(NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle));
+            var dispose = DisposeProbe.Start(owner.Dispose);
+            Assert.True(SpinWait.SpinUntil(() => NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle), QarNativeAssert.Budget));
+            DisposeProbe.AssertWaiting(dispose);
             Assert.False(state.Task.IsCompleted);
-            Assert.False(NativeHandles.Of(target).IsClosed);
+            Assert.False(target.IsClosed);
             state.Complete(Result<RenderFrameInfo>.Failure(Failed()));
             Assert.True(state.Task.IsCompleted);
-            Assert.True(SpinWait.SpinUntil(() => NativeHandles.Of(target).IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(target.IsClosed);
         }
 
         [Fact]
@@ -193,13 +461,13 @@ namespace Quaternar.Qaros.Tests
             Assert.True(NativeMethods.qar_impl_cancel_token_is_cancelled(second.Handle));
             Assert.False(shared.IsClosed);
             second.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => shared.IsClosed, QarNativeAssert.Budget));
+            Assert.True(shared.IsClosed);
         }
     }
 
     /// <summary>
-    /// The runtime's waiting calls are linked to its Dispose like the session's: the async
-    /// onboard's borrow would otherwise keep a disposed runtime alive until the hub answers.
+    /// The runtime's waiting calls are linked to its Dispose like the session's: Dispose cancels
+    /// the async onboard, waits for its completion and only then releases the runtime.
     /// </summary>
     [Collection("QAR Native")]
     public sealed class RuntimeDisposeTests : IClassFixture<QarNativeFixture>
@@ -210,23 +478,23 @@ namespace Quaternar.Qaros.Tests
         }
 
         [Fact]
-        public void DisposingTheRuntimeCancelsAWaitingAsyncOnboard()
+        public void DisposingTheRuntimeCancelsAWaitingAsyncOnboardAndWaitsForIt()
         {
             var storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "qar-sharp-tests", Guid.NewGuid().ToString("N"));
             var runtime = Runtime.Create(new RuntimeOptions { StorageFolderPath = storageRoot }).ValueOrThrow();
             var handle = NativeHandles.Of(runtime);
-            var field = typeof(Runtime).GetField("_disposing", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field);
-            var disposing = Assert.IsType<CancellationTokenSource>(field!.GetValue(runtime)).Token;
+            var owner = NativeHandles.OwnerOf(runtime);
             var state = new RuntimeOnboardAsyncState(null, true);
-            var tokenHandle = state.UseStandardCancellation(CancellationToken.None, disposing).ValueOrThrow();
-            state.BorrowRuntime(runtime);
+            var tokenHandle = state.UseStandardCancellation(CancellationToken.None, owner).ValueOrThrow();
+            state.HoldUntilCompletion(owner);
             Assert.False(NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle));
-            runtime.Dispose();
-            Assert.True(NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle));
+            var dispose = DisposeProbe.Start(runtime.Dispose);
+            Assert.True(SpinWait.SpinUntil(() => NativeMethods.qar_impl_cancel_token_is_cancelled(tokenHandle), QarNativeAssert.Budget));
+            DisposeProbe.AssertWaiting(dispose);
             Assert.False(handle.IsClosed);
             state.CompleteOnboard(Result<OnboardSession>.Failure(new ResultInfo(StatusCode.LogicError, 0, "test completion")));
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
     }
 
@@ -246,7 +514,7 @@ namespace Quaternar.Qaros.Tests
         }
 
         [Fact]
-        public void ACallHoldsTheSessionUntilItIsDone()
+        public void DisposeWaitsForACallOnTheSession()
         {
             using var scope = _fixture.CreateSessionScope();
             var session = scope.Session;
@@ -254,8 +522,8 @@ namespace Quaternar.Qaros.Tests
             var context = NativeHandles.ContextOf(session);
             var borrow = context.Borrow();
             Assert.Equal(handle.DangerousGetHandle(), borrow.Handle);
-            session.Dispose();
-            Assert.False(handle.IsClosed);
+            var dispose = DisposeProbe.Start(session.Dispose);
+            DisposeProbe.WaitMarkedDisposed(context.Owner);
             Assert.Throws<ObjectDisposedException>(() => session.GetId());
             Assert.Throws<ObjectDisposedException>(() => session.Peers.GetMySpec());
             Assert.Throws<ObjectDisposedException>(() => session.Peers.GetAll());
@@ -263,31 +531,35 @@ namespace Quaternar.Qaros.Tests
             Assert.Throws<ObjectDisposedException>(() => session.GuiPanels.Close(default(GuiPanelId)));
             Assert.Throws<ObjectDisposedException>(() => session.Peers.SubscribeUpdates((sender, args) => { }));
             Assert.Throws<ObjectDisposedException>(() => context.Borrow());
+            DisposeProbe.AssertWaiting(dispose);
             // The call that borrowed the session still reads a live native session.
             var id = SessionIdNative.CreateDefault();
             Assert.True(Results.ToInfo(NativeMethods.qar_impl_session_get_id(borrow.Handle, ref id)).IsSuccess);
             borrow.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         [Fact]
-        public void TheAsyncRenderSenderCreationHoldsTheSessionUntilTheCompletionFires()
+        public void DisposeWaitsForTheAsyncRenderSenderCreationsCompletion()
         {
             using var scope = _fixture.CreateSessionScope();
             var session = scope.Session;
             var handle = NativeHandles.Of(session);
             var state = new RenderSenderCreateAsyncState();
             Assert.Equal(handle.DangerousGetHandle(), state.HoldUntilCompletion(NativeHandles.ContextOf(session).Owner));
-            session.Dispose();
+            var dispose = DisposeProbe.Start(session.Dispose);
+            DisposeProbe.AssertWaiting(dispose);
             Assert.False(handle.IsClosed);
             state.Complete(Result<RenderSender>.Failure(Failed()));
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         // A cancelled task completes at the cancel: the borrow is held until the native completion
-        // all the same, so the native invite never loses its session.
+        // all the same, so the native invite never loses its session, and Dispose waits for it.
         [Fact]
-        public void ACancelledTargetAppInviteHoldsTheSessionUntilTheNativeCompletion()
+        public void DisposeAfterACancelledTargetAppInviteWaitsForTheNativeCompletion()
         {
             using var scope = _fixture.CreateSessionScope();
             var session = scope.Session;
@@ -298,10 +570,12 @@ namespace Quaternar.Qaros.Tests
             state.HoldUntilCompletion(NativeHandles.ContextOf(session).Owner);
             cancellation.Cancel();
             Assert.True(state.Task.IsCanceled);
-            session.Dispose();
+            var dispose = DisposeProbe.Start(session.Dispose);
+            DisposeProbe.AssertWaiting(dispose);
             Assert.False(handle.IsClosed);
             state.Complete(Result<PeerId>.Failure(Failed()));
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         // The completion drops the borrow before the task completes, so the caller's Dispose after
@@ -331,8 +605,87 @@ namespace Quaternar.Qaros.Tests
             var state = new RenderSenderCreateAsyncState();
             Assert.Throws<ObjectDisposedException>(() => state.HoldUntilCompletion(NativeHandles.ContextOf(session).Owner));
             state.Complete(Result<RenderSender>.Failure(Failed()));
-            Assert.Throws<ObjectDisposedException>(() => session.InviteTargetAppAsync("hololens://127.0.0.1").GetAwaiter().GetResult());
-            Assert.Throws<ObjectDisposedException>(() => renderSenders.CreateAsync(SenderBorrowTests.CpuOptions(PeerId.Unique())).GetAwaiter().GetResult());
+            // Both throw before they return a task, so the call itself is checked, without waiting.
+            Assert.Throws<ObjectDisposedException>(() => { _ = session.InviteTargetAppAsync("hololens://127.0.0.1"); });
+            Assert.Throws<ObjectDisposedException>(() => { _ = renderSenders.CreateAsync(SenderBorrowTests.CpuOptions(PeerId.Unique())); });
+        }
+
+        // A handler running on another thread holds the session's teardown: when Dispose returns
+        // it has finished and no handler call starts afterwards.
+        [Fact]
+        public async Task TheSessionsSubscriptionsHaveEndedWhenItsDisposeReturns()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var session = scope.Session;
+            using var entered = new ManualResetEventSlim(false);
+            using var release = new ManualResetEventSlim(false);
+            var running = 0;
+            var calls = 0;
+            var callsWhenDisposed = -1;
+            using var subscription = session.Peers.SubscribeUpdates(
+                (sender, args) =>
+                {
+                    Interlocked.Increment(ref calls);
+                    Interlocked.Increment(ref running);
+                    entered.Set();
+                    release.Wait(QarNativeAssert.Budget);
+                    Interlocked.Decrement(ref running);
+                }).ValueOrThrow();
+            QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    session.Peers.UpdateDisplayName("dispose-waits-for-handler").EnsureSuccess();
+                    return entered.IsSet;
+                },
+                "handler entered");
+            var dispose = DisposeProbe.Start(
+                () =>
+                {
+                    session.Dispose();
+                    // Read by the disposing thread the moment Dispose returns.
+                    Volatile.Write(ref callsWhenDisposed, Volatile.Read(ref calls));
+                    Assert.Equal(0, Volatile.Read(ref running));
+                });
+            DisposeProbe.AssertWaiting(dispose);
+            release.Set();
+            DisposeProbe.AssertReturned(dispose);
+            // Rethrows an assertion the disposing thread failed.
+            await dispose;
+            Thread.Sleep(ExtTime.Scaled(TimeSpan.FromMilliseconds(300)));
+            Assert.Equal(Volatile.Read(ref callsWhenDisposed), Volatile.Read(ref calls));
+        }
+
+        // Dispose from the session's own handler would wait for the handler: it throws and the
+        // session stays usable.
+        [Fact]
+        public async Task DisposingTheSessionFromItsOwnSubscriptionHandlerThrows()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var session = scope.Session;
+            var thrown = new TaskCompletionSource<Exception>();
+            using var subscription = session.Peers.SubscribeUpdates(
+                (sender, args) =>
+                {
+                    if (thrown.Task.IsCompleted)
+                        return;
+                    try
+                    {
+                        session.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        thrown.TrySetResult(ex);
+                    }
+                }).ValueOrThrow();
+            QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    session.Peers.UpdateDisplayName("dispose-from-handler").EnsureSuccess();
+                    return thrown.Task.IsCompleted;
+                },
+                "handler tried to dispose the session");
+            Assert.IsType<InvalidOperationException>(await thrown.Task);
+            Assert.True(session.GetId().IsSuccess);
         }
     }
 
@@ -387,28 +740,32 @@ namespace Quaternar.Qaros.Tests
         }
 
         [Fact]
-        public void ACallHoldsTheRenderSenderUntilItIsDone()
+        public void DisposeWaitsForACallOnTheRenderSender()
         {
             using var scope = _fixture.CreateSessionScope();
             var target = scope.StartRenderTarget();
             var sender = CreateSender(scope, target.PeerId);
             var handle = NativeHandles.Of(sender);
-            var borrow = NativeHandles.OwnerOf(sender).Borrow();
+            var owner = NativeHandles.OwnerOf(sender);
+            var borrow = owner.Borrow();
             Assert.Equal(handle.DangerousGetHandle(), borrow.Handle);
-            sender.Dispose();
-            Assert.False(handle.IsClosed);
+            var dispose = DisposeProbe.Start(sender.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
             Assert.Throws<ObjectDisposedException>(() => sender.GetLayout());
             Assert.Throws<ObjectDisposedException>(() => sender.TryBeginFrame());
             Assert.Throws<ObjectDisposedException>(() => sender.ShowFrame());
-            Assert.Throws<ObjectDisposedException>(() => sender.BeginFrameAsync().GetAwaiter().GetResult());
+            // Throws before it returns a task, so the call itself is checked, without waiting.
+            Assert.Throws<ObjectDisposedException>(() => { _ = sender.BeginFrameAsync(); });
+            DisposeProbe.AssertWaiting(dispose);
             StreamIdNative streamId;
             Assert.True(Results.ToInfo(NativeMethods.qar_impl_render_sender_stream_id(borrow.Handle, out streamId)).IsSuccess);
             borrow.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         [Fact]
-        public void TheAsyncBeginFrameHoldsTheSenderUntilTheCompletionFires()
+        public void DisposeWaitsForTheAsyncBeginFramesCompletion()
         {
             using var scope = _fixture.CreateSessionScope();
             var target = scope.StartRenderTarget();
@@ -416,18 +773,20 @@ namespace Quaternar.Qaros.Tests
             var handle = NativeHandles.Of(sender);
             var state = new BeginFrameAsyncState();
             Assert.Equal(handle.DangerousGetHandle(), state.HoldUntilCompletion(NativeHandles.OwnerOf(sender)));
-            sender.Dispose();
+            var dispose = DisposeProbe.Start(sender.Dispose);
+            DisposeProbe.AssertWaiting(dispose);
             Assert.False(handle.IsClosed);
             state.Complete(Result<RenderFrameInfo>.Failure(Failed()));
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         // The widest window of the gap: a render thread waits in BeginFrame through a paused
-        // stream, with no token of its own, while the main thread disposes the sender (Unity's
-        // OnDestroy). The sender is unusable at once, the Dispose ends the waiting call, and the
-        // native sender is released only after that call returned.
+        // stream, with no token of its own, while another thread disposes the sender (Unity's
+        // OnDestroy). The sender is unusable at once, the Dispose ends the waiting call, waits for
+        // it and destroys the native sender before it returns.
         [Fact]
-        public async Task DisposingTheSenderDuringABlockedBeginFrameDefersItsRelease()
+        public async Task DisposingTheSenderDuringABlockedBeginFrameEndsItAndDestroysBeforeReturning()
         {
             using var scope = _fixture.CreateSessionScope();
             var peer = scope.CreatePeer("QarStreamingSharpTests paused target");
@@ -437,12 +796,9 @@ namespace Quaternar.Qaros.Tests
             Assert.True(receiver.Video.WaitConnected(QarNativeAssert.Budget), "the render receiver never connected");
             receiver.Video.Pause().EnsureSuccess();
             var call = StartBlockedBeginFrame(sender);
-            sender.Dispose();
-            // Read the handle before the call state: a call still running at the second read was
-            // running at the first one, so its sender must have been alive then.
-            var closed = handle.IsClosed;
-            var stillRunning = !call.IsCompleted;
-            Assert.False(closed && stillRunning, "the sender was released while BeginFrame still used it");
+            var dispose = DisposeProbe.Start(sender.Dispose);
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed, "Dispose returned before the native sender was destroyed");
             Assert.Throws<ObjectDisposedException>(() => sender.GetLayout());
             Assert.Throws<ObjectDisposedException>(() => sender.BeginFrame());
             var ended = await Task.WhenAny(call, Task.Delay(QarNativeAssert.Budget)) == call;
@@ -451,7 +807,27 @@ namespace Quaternar.Qaros.Tests
             if (result.IsSuccess)
                 result.Value.Dispose();
             Assert.False(result.IsSuccess);
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+        }
+
+        // A cancelled task completes at the cancel, before the native completion; the Dispose after
+        // it waits for that completion, which the cancel brings, and returns with the sender gone.
+        [Fact]
+        public void DisposeAfterACancelledBeginFrameAsyncWaitsForItsCompletion()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var peer = scope.CreatePeer("QarStreamingSharpTests paused target");
+            using var receiver = peer.CreateRenderReceiver(ExtLayouts.SideBySide(64, 64));
+            var sender = CreateSender(scope, peer.Id);
+            var handle = NativeHandles.Of(sender);
+            Assert.True(receiver.Video.WaitConnected(QarNativeAssert.Budget), "the render receiver never connected");
+            receiver.Video.Pause().EnsureSuccess();
+            using var cancellation = new CancellationTokenSource();
+            var call = StartBlockedBeginFrameAsync(sender, cancellation.Token);
+            cancellation.Cancel();
+            Assert.True(call.IsCanceled);
+            var dispose = DisposeProbe.Start(sender.Dispose);
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         // Retries until one BeginFrame stays blocked: the receiver's pause reaches the sender
@@ -471,8 +847,22 @@ namespace Quaternar.Qaros.Tests
             throw new Xunit.Sdk.XunitException("BeginFrame never waited on the paused stream.");
         }
 
+        private static Task<Result<RenderFrameInfo>> StartBlockedBeginFrameAsync(RenderSender sender, CancellationToken cancellationToken)
+        {
+            var deadline = DateTime.UtcNow + QarNativeAssert.Budget;
+            while (DateTime.UtcNow < deadline)
+            {
+                var call = sender.BeginFrameAsync(cancellationToken);
+                if (!call.Wait(ExtTime.Scaled(TimeSpan.FromMilliseconds(500))))
+                    return call;
+                if (call.Result.IsSuccess)
+                    call.Result.Value.Dispose();
+            }
+            throw new Xunit.Sdk.XunitException("BeginFrameAsync never waited on the paused stream.");
+        }
+
         [Fact]
-        public void ACallHoldsTheFrameInfoUntilItIsDone()
+        public void DisposeWaitsForACallOnTheFrameInfo()
         {
             using var scope = _fixture.CreateSessionScope();
             var target = scope.StartRenderTarget();
@@ -488,35 +878,41 @@ namespace Quaternar.Qaros.Tests
                 timeoutMs: 15000,
                 intervalMs: 100)!;
             var handle = NativeHandles.Of(frame);
-            var borrow = NativeHandles.OwnerOf(frame).Borrow();
+            var owner = NativeHandles.OwnerOf(frame);
+            var borrow = owner.Borrow();
             Assert.Equal(handle.DangerousGetHandle(), borrow.Handle);
-            frame.Dispose();
-            Assert.False(handle.IsClosed);
+            var dispose = DisposeProbe.Start(frame.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
             Assert.Throws<ObjectDisposedException>(() => frame.GetViewPose(0));
             Assert.Throws<ObjectDisposedException>(() => frame.GetViewFov(0));
+            DisposeProbe.AssertWaiting(dispose);
             PoseNative pose;
             Assert.True(Results.ToInfo(NativeMethods.qar_impl_render_frame_info_get_view_pose(borrow.Handle, UIntPtr.Zero, out pose)).IsSuccess);
             borrow.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         [Fact]
-        public void ACallHoldsThePrimarylessVideoSenderUntilItIsDone()
+        public void DisposeWaitsForACallOnThePrimarylessVideoSender()
         {
             using var scope = _fixture.CreateSessionScope();
             var sender = CreateVideoSender(scope.Session);
             var handle = NativeHandles.Of(sender);
-            var borrow = NativeHandles.OwnerOf(sender).Borrow();
+            var owner = NativeHandles.OwnerOf(sender);
+            var borrow = owner.Borrow();
             Assert.Equal(handle.DangerousGetHandle(), borrow.Handle);
-            sender.Dispose();
-            Assert.False(handle.IsClosed);
+            var dispose = DisposeProbe.Start(sender.Dispose);
+            DisposeProbe.WaitMarkedDisposed(owner);
             Assert.Throws<ObjectDisposedException>(() => sender.GetStreamId());
             Assert.Throws<ObjectDisposedException>(() => sender.TryBeginFrame());
             Assert.Throws<ObjectDisposedException>(() => sender.ShowFrame());
+            DisposeProbe.AssertWaiting(dispose);
             StreamIdNative streamId;
             Assert.True(Results.ToInfo(NativeMethods.qar_impl_video_sender_stream_id(borrow.Handle, out streamId)).IsSuccess);
             borrow.Dispose();
-            Assert.True(SpinWait.SpinUntil(() => handle.IsClosed, QarNativeAssert.Budget));
+            DisposeProbe.AssertReturned(dispose);
+            Assert.True(handle.IsClosed);
         }
 
         // Not disposed: releasing a borrow only drops a reference, the owner's Dispose releases
