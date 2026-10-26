@@ -61,6 +61,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Running the Hub* says what a crash dump holds on Windows and Linux: the stacks and
+  the QAROS memory they point at, without other libraries' memory or the application's data, and
+  that each process keeps its newest 10 dumps.
 - **Docs:** *Getting Started*, *Source Applications* and *Onboarding and Sessions* describe the
   approval prompt as it is: **Deny** is the default, **Allow** is greyed out for one second, then
   takes a mouse click (in the QAROS window also an accessibility Invoke: Narrator, NVDA, UI
