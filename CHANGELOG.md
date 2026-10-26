@@ -64,6 +64,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Getting Started* and *Source Applications* describe the approval prompt as it is:
   **Deny** is the default, only a mouse click allows, closing the window denies, and **Allow** turns
   clickable one second after the window opens.
+- **Docs:** *Troubleshooting* lists `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` with "QAROS instance
+  '…' is not running": `QAR_INSTANCE` names a development hub that is not running, and the app
+  neither starts it nor joins the installed QAROS instead.
 
 - **Docs:** *Running the Hub* says an installed QAROS runs one Hub at a time per PC, for one
   Windows user, and that several Hubs side by side need a portable or development build.
