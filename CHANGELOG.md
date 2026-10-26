@@ -61,12 +61,15 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **Docs:** *Getting Started* and *Source Applications* describe the approval prompt as it is:
-  **Deny** is the default, only a mouse click allows, closing the window denies, and **Allow** turns
-  clickable one second after the window opens.
+- **Docs:** *Getting Started*, *Source Applications* and *Onboarding and Sessions* describe the
+  approval prompt as it is: **Deny** is the default, **Allow** is greyed out for one second, then
+  takes a mouse click (in the QAROS window also an accessibility Invoke: Narrator, NVDA, UI
+  Automation) but never a key, closing the window denies, and any program running as the same
+  Windows user can press **Allow** in the QAROS window once it is enabled, even while the window is
+  covered.
 - **Docs:** *Troubleshooting* lists `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` with "QAROS instance
-  '…' is not running": `QAR_INSTANCE` names a development hub that is not running, and the app
-  neither starts it nor joins the installed QAROS instead.
+  '…' is not running": `QAR_INSTANCE` names a development hub that did not come up within about a
+  minute, and the app waits for it but neither starts it nor joins the installed QAROS instead.
 
 - **Docs:** *Running the Hub* says an installed QAROS runs one Hub at a time per PC, for one
   Windows user, and that several Hubs side by side need a portable or development build.
