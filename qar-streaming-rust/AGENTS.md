@@ -136,7 +136,12 @@ function in only one of the two sets stays raw only;
 its stub behaviour, if any, goes into the `default_behaviour!` arm in
 `crates/qaros-stub/src/exports.rs`, as `qar_impl_runtime_destroy`'s does. A status code only
 the public header declares gets its `StatusCode` constant by value
-(`StatusCode::ONBOARDING_RE_PAIR_REQUIRED`).
+(`StatusCode::ONBOARDING_RE_PAIR_REQUIRED`), and so does a value of an enum both sets have
+(`PixelFormat::D16Unorm`, the `by value:` part of `c_enum!`). Types only the public header
+declares, the render sender's colour extensions, are used under the cfg
+`qaros_color_extensions`: `qaros-sys`'s build script sets it from the target's generated
+bindings and passes it on as `DEP_QAR_STREAMING_C_COLOR_EXTENSIONS`, which the build scripts of
+`qaros`, `qaros-stub` and `qaros-conformance` turn into the same cfg.
 
 ## Init structures, defaults and `header.next` chains
 

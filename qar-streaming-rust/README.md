@@ -141,6 +141,12 @@ Design rules, following the SDK's API conventions:
   `qar_render_sender_begin_frame_async` is not wrapped, since the runtime never calls back for a
   cancelled one; it is reachable through `raw_api()` with the sender's `as_raw()`.
 - Several users are several senders: one `RenderSender` per target peer.
+- A sender declares its colour through `RenderSenderConfig`: `alpha_mode` (unspecified by
+  default) and `color_encoding` (sRGB by default) chain their extension only when set to
+  something else. `PixelFormat::D16Unorm` works on every graphics API, the depth-stencil formats
+  on Vulkan only; a format the API cannot take is
+  `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`. With bindings from a header without the
+  colour extensions, such as that of 0.9.0-dev.2916, setting either is `Error::InvalidArgument`.
 - Subscription callbacks run on library threads and receive owned snapshots. `qaros::channel()`
   forwards them into a `std::sync::mpsc` receiver.
 - The Vulkan render sender is behind the feature `vulkan`, with `ash` 0.38 types:
@@ -176,8 +182,9 @@ from, called with the `as_raw()` handle of the safe value it takes (a `Session`,
 
 \* These bindings are generated from the public header in this repository
 (`qar-streaming-c/include/qar_streaming.h`), which declares the functions marked \* (peer
-presence, role, category and device identity, member hubs, the Android Java VM). A runtime
-without them, such as 0.9.0-dev.2916, does not load.
+presence, role, category and device identity, member hubs, the Android Java VM) and the types
+of the render sender's colour and depth declarations. A runtime without those functions, such
+as 0.9.0-dev.2916, does not load.
 
 | Area | Safe in Rust | Raw only | C# has it |
 | --- | --- | --- | --- |
@@ -200,6 +207,7 @@ without them, such as 0.9.0-dev.2916, does not load.
 | Vulkan render sender | feature `vulkan`: `create_vulkan_render_sender`, `VulkanFrame` | | yes |
 | D3D11 render sender | feature `d3d11` (Windows; on macOS only for the tests against `qaros-stub`): `create_d3d11_render_sender`, `D3D11Frame` | | yes |
 | OpenGL render sender | not bound: the bindings are generated without `QAR_ENABLE_OPENGL` | | yes |
+| Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` \* | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |

@@ -1,6 +1,7 @@
 //! Every Rust port in `qaros_sys::defaults` equals the header's C original,
 //! field by field (bindgen's derived `PartialEq`). The D3D11 ports exist where
-//! the bindings carry the D3D11 types, Windows and macOS, and are checked there.
+//! the bindings carry the D3D11 types, Windows and macOS, and are checked there;
+//! the colour extension ports where the bindings declare those extensions.
 
 use std::mem::MaybeUninit;
 
@@ -88,6 +89,19 @@ conformance!(
     QarSyncFrameVulkan => qar_sync_frame_vulkan_default,
     QarVideoFrameVulkan => qar_video_frame_vulkan_default,
 );
+
+#[cfg(qaros_color_extensions)]
+mod color_extensions {
+    use std::mem::MaybeUninit;
+
+    #[allow(clippy::wildcard_imports)]
+    use qaros_sys::*;
+
+    conformance!(
+        QarRenderSenderAlphaModeExt => qar_render_sender_alpha_mode_ext_default,
+        QarRenderSenderColorEncodingExt => qar_render_sender_color_encoding_ext_default,
+    );
+}
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 mod d3d11 {

@@ -54,6 +54,65 @@ pub struct FrameViewSpec {
     pub texture_index: u32,
 }
 
+/// What a render sender's colour alpha means (`QarColorAlphaMode`), declared
+/// through `QarRenderSenderAlphaModeExt`. The stream publishes it and a
+/// receiver composites by it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum ColorAlphaMode {
+    /// Not declared: a receiver keeps its own default. The sender chains no
+    /// extension.
+    #[default]
+    Unspecified,
+    /// The alpha channel means nothing; every pixel is fully covered. The
+    /// declaration for a `B8G8R8X8` colour, if any.
+    Opaque,
+    /// The colour is premultiplied by the alpha, which is the pixel's
+    /// coverage: what drawing over a transparent-black clear with ordinary
+    /// alpha blending produces.
+    Premultiplied,
+    /// The colour is not multiplied by the alpha. The sender premultiplies it
+    /// before the frame leaves the application, at one shader pass per frame,
+    /// and the stream publishes [`Self::Premultiplied`].
+    Straight,
+}
+
+/// What the numbers in a render sender's colour texture mean
+/// (`QarColorEncoding`), declared through `QarRenderSenderColorEncodingExt`.
+/// Whatever is declared, the stream carries sRGB-encoded colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum ColorEncoding {
+    /// sRGB-encoded, as a display shows it; nothing is converted. The sender
+    /// chains no extension.
+    #[default]
+    Srgb,
+    /// Linear light, as stored in a plain UNORM render target. The sender
+    /// encodes it at one GPU pass per frame; 8-bit linear colour bands
+    /// slightly in the darks, which [`PixelFormat::R16G16B16A16`] avoids.
+    Linear,
+}
+
+#[cfg(qaros_color_extensions)]
+impl ColorAlphaMode {
+    fn to_raw(self) -> sys::QarColorAlphaMode {
+        match self {
+            Self::Unspecified => sys::QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_UNSPECIFIED,
+            Self::Opaque => sys::QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_OPAQUE,
+            Self::Premultiplied => sys::QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_PREMULTIPLIED,
+            Self::Straight => sys::QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_STRAIGHT,
+        }
+    }
+}
+
+#[cfg(qaros_color_extensions)]
+impl ColorEncoding {
+    fn to_raw(self) -> sys::QarColorEncoding {
+        match self {
+            Self::Srgb => sys::QarColorEncoding::QAR_COLOR_ENCODING_SRGB,
+            Self::Linear => sys::QarColorEncoding::QAR_COLOR_ENCODING_LINEAR,
+        }
+    }
+}
+
 /// Options for `qar_render_sender_create` on the CPU path.
 #[derive(Clone, Debug)]
 pub struct RenderSenderConfig {
@@ -68,12 +127,23 @@ pub struct RenderSenderConfig {
     /// Composites the stream inside this app volume.
     pub app_volume: Option<AppVolumeId>,
     pub color_format: PixelFormat,
+    /// [`PixelFormat::D16Unorm`] on every graphics API;
+    /// [`PixelFormat::D24UnormS8Uint`] and [`PixelFormat::D32FloatS8X24Uint`]
+    /// on Vulkan only. A format the graphics API cannot take is refused with
+    /// [`crate::StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`].
     pub depth_format: PixelFormat,
+    /// Chains `QarRenderSenderAlphaModeExt` unless
+    /// [`ColorAlphaMode::Unspecified`].
+    pub alpha_mode: ColorAlphaMode,
+    /// Chains `QarRenderSenderColorEncodingExt` unless
+    /// [`ColorEncoding::Srgb`].
+    pub color_encoding: ColorEncoding,
 }
 
 impl RenderSenderConfig {
     /// The values of `qar_render_sender_init_default()`: auto-reconnect,
-    /// side-by-side, no views, BGRA8 color, D32 depth.
+    /// side-by-side, no views, BGRA8 color, D32 depth; no colour extension,
+    /// so the alpha mode is unspecified and the colour sRGB.
     pub fn new(target_peer: PeerId) -> Self {
         Self {
             target_peer,
@@ -83,6 +153,8 @@ impl RenderSenderConfig {
             app_volume: None,
             color_format: PixelFormat::B8G8R8A8,
             depth_format: PixelFormat::D32Float,
+            alpha_mode: ColorAlphaMode::Unspecified,
+            color_encoding: ColorEncoding::Srgb,
         }
     }
 }
@@ -260,8 +332,8 @@ impl GraphicsReferences {
     }
 }
 
-/// A `QarRenderSenderInit` together with the app volume id and the graphics
-/// extension it points to, so that one allocation keeps all of it valid for
+/// A `QarRenderSenderInit` together with the app volume id and the
+/// extensions it points to, so that one allocation keeps all of it valid for
 /// as long as the library may read it.
 pub(crate) struct RenderSenderInitStorage {
     init: sys::QarRenderSenderInit,
@@ -269,6 +341,10 @@ pub(crate) struct RenderSenderInitStorage {
     vulkan_params: Option<sys::QarStreamParamsVulkan>,
     #[cfg(qaros_d3d11)]
     d3d11_params: Option<sys::QarStreamParamsD3D11>,
+    #[cfg(qaros_color_extensions)]
+    alpha_mode: Option<sys::QarRenderSenderAlphaModeExt>,
+    #[cfg(qaros_color_extensions)]
+    color_encoding: Option<sys::QarRenderSenderColorEncodingExt>,
 }
 
 impl RenderSenderInitStorage {
@@ -299,7 +375,21 @@ impl RenderSenderInitStorage {
             vulkan_params: None,
             #[cfg(qaros_d3d11)]
             d3d11_params: None,
+            #[cfg(qaros_color_extensions)]
+            alpha_mode: alpha_mode_extension(config.alpha_mode),
+            #[cfg(qaros_color_extensions)]
+            color_encoding: color_encoding_extension(config.color_encoding),
         });
+        #[cfg(not(qaros_color_extensions))]
+        if config.alpha_mode != ColorAlphaMode::Unspecified
+            || config.color_encoding != ColorEncoding::Srgb
+        {
+            return Err(Error::InvalidArgument(
+                "an alpha mode or colour encoding needs bindings from a header that declares \
+                 the render sender's colour extensions"
+                    .to_owned(),
+            ));
+        }
         match graphics {
             SenderGraphics::Cpu => {
                 storage.init.graphics_api = sys::QarGraphicsAPI::QAR_GRAPHICS_API_CPU;
@@ -322,9 +412,11 @@ impl RenderSenderInitStorage {
         self.init.graphics_api
     }
 
-    /// Points the init at the app volume id and graphics extension stored
-    /// beside it. The returned pointer, and those inside it, stay valid while
-    /// the storage is neither moved nor accessed in any other way.
+    /// Points the init at the app volume id and the extensions stored beside
+    /// it, chained as alpha mode, colour encoding, graphics extension (the
+    /// header allows any order). The returned pointer, and those inside it,
+    /// stay valid while the storage is neither moved nor accessed in any other
+    /// way.
     pub(crate) fn wired_init(&mut self) -> *mut sys::QarRenderSenderInit {
         self.init.app_volume_id = self.app_volume.as_ref().map_or(ptr::null(), ptr::from_ref);
         let vulkan_extension = self
@@ -338,11 +430,49 @@ impl RenderSenderInitStorage {
             .map(|params| ptr::from_mut(&mut params.header).cast::<c_void>());
         #[cfg(not(qaros_d3d11))]
         let d3d11_extension = None;
-        self.init.header.next = vulkan_extension
+        let graphics_extension = vulkan_extension
             .or(d3d11_extension)
             .unwrap_or(ptr::null_mut());
+        #[cfg(qaros_color_extensions)]
+        let graphics_extension = self.chain_color_extensions_before(graphics_extension);
+        self.init.header.next = graphics_extension;
         &raw mut self.init
     }
+
+    /// Chains the colour extensions that are set in front of `next` and
+    /// returns the start of the chain.
+    #[cfg(qaros_color_extensions)]
+    fn chain_color_extensions_before(&mut self, mut next: *mut c_void) -> *mut c_void {
+        if let Some(extension) = self.color_encoding.as_mut() {
+            extension.header.next = next;
+            next = ptr::from_mut(&mut extension.header).cast::<c_void>();
+        }
+        if let Some(extension) = self.alpha_mode.as_mut() {
+            extension.header.next = next;
+            next = ptr::from_mut(&mut extension.header).cast::<c_void>();
+        }
+        next
+    }
+}
+
+#[cfg(qaros_color_extensions)]
+fn alpha_mode_extension(alpha_mode: ColorAlphaMode) -> Option<sys::QarRenderSenderAlphaModeExt> {
+    (alpha_mode != ColorAlphaMode::Unspecified).then(|| {
+        let mut extension = defaults::qar_render_sender_alpha_mode_ext_default();
+        extension.alpha_mode = alpha_mode.to_raw();
+        extension
+    })
+}
+
+#[cfg(qaros_color_extensions)]
+fn color_encoding_extension(
+    color_encoding: ColorEncoding,
+) -> Option<sys::QarRenderSenderColorEncodingExt> {
+    (color_encoding != ColorEncoding::Srgb).then(|| {
+        let mut extension = defaults::qar_render_sender_color_encoding_ext_default();
+        extension.color_encoding = color_encoding.to_raw();
+        extension
+    })
 }
 
 impl RenderSender {

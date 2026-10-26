@@ -503,6 +503,24 @@ pub fn qar_render_sender_init_default() -> QarRenderSenderInit {
     }
 }
 
+#[cfg(qaros_color_extensions)]
+pub fn qar_render_sender_alpha_mode_ext_default() -> QarRenderSenderAlphaModeExt {
+    QarRenderSenderAlphaModeExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT),
+        alpha_mode: QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_UNSPECIFIED,
+    }
+}
+
+#[cfg(qaros_color_extensions)]
+pub fn qar_render_sender_color_encoding_ext_default() -> QarRenderSenderColorEncodingExt {
+    QarRenderSenderColorEncodingExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT,
+        ),
+        color_encoding: QarColorEncoding::QAR_COLOR_ENCODING_SRGB,
+    }
+}
+
 pub fn qar_gui_panel_init_default() -> QarGuiPanelInit {
     QarGuiPanelInit {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_INIT),

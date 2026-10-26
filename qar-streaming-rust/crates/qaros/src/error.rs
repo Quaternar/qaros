@@ -32,6 +32,10 @@ impl StatusCode {
     /// calling begin-frame; a volume that was removed never resolves.
     pub const RENDERING_APP_VOLUME_UNRESOLVED: Self =
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED);
+    /// The render sender's depth format is one its graphics API cannot take; returned by the
+    /// creation before any receiver is waited for, with the accepted formats in the message.
+    /// Named by value, since only the public header declares it.
+    pub const RENDERING_DEPTH_FORMAT_NOT_SUPPORTED: Self = Self(QarStatusCode(806));
     pub const PAKE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_PAKE_ERROR);
     pub const ONBOARDING_SESSION_NOT_FOUND: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND);
@@ -91,6 +95,9 @@ impl StatusCode {
             }
             Self::MEDIA_STREAMING_NO_ACTIVE_TRANSFERS => "MEDIA_STREAMING_NO_ACTIVE_TRANSFERS",
             Self::RENDERING_APP_VOLUME_UNRESOLVED => "RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED",
+            Self::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED => {
+                "RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED"
+            }
             Self::PAKE_ERROR => "PAKE_ERROR",
             Self::ONBOARDING_SESSION_NOT_FOUND => "ONBOARDING_SESSION_NOT_FOUND",
             Self::ONBOARDING_FAILED => "ONBOARDING_FAILED",
@@ -309,6 +316,10 @@ mod tests {
         assert_eq!(
             StatusCode::ONBOARDING_RENEWAL_POSSESSION_UNPROVEN.to_string(),
             "QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN (1810)"
+        );
+        assert_eq!(
+            StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED.to_string(),
+            "QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED (806)"
         );
     }
 }

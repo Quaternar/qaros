@@ -76,8 +76,9 @@ pub use panels::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanels};
 pub use peers::PeerInfo;
 pub use pending_sender::{CANCELLED_CREATION_WAIT, PendingRenderSender};
 pub use render::{
-    CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame, RenderRequest, RenderSender,
-    RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout, VideoFrameView, ViewPose,
+    ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
+    RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,
+    VideoFrameView, ViewPose,
 };
 pub use runtime::{HubAddress, OnboardMethod, Onboarded, PeerPresentation, Runtime, RuntimeConfig};
 pub use session::{Session, Subscription};

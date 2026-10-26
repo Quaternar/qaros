@@ -51,9 +51,17 @@ fn image_description(
         }
         QarPixelFormat::QAR_PIXEL_FORMAT_R16G16B16A16 => vk::Format::R16G16B16A16_SFLOAT,
         QarPixelFormat::QAR_PIXEL_FORMAT_R32_FLOAT => vk::Format::R32_SFLOAT,
-        QarPixelFormat::QAR_PIXEL_FORMAT_D32_FLOAT => {
+        // D16, D32, D24S8 and D32S8; all but D32 by value, since only the public header names
+        // them.
+        QarPixelFormat(100..=103) => {
+            let depth_format = match format.0 {
+                100 => vk::Format::D16_UNORM,
+                102 => vk::Format::D24_UNORM_S8_UINT,
+                103 => vk::Format::D32_SFLOAT_S8_UINT,
+                _ => vk::Format::D32_SFLOAT,
+            };
             return Ok((
-                vk::Format::D32_SFLOAT,
+                depth_format,
                 vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
                     | vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::TRANSFER_SRC

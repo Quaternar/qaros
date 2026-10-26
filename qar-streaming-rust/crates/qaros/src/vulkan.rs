@@ -97,15 +97,19 @@ pub fn required_device_extensions() -> &'static [&'static CStr] {
 
 /// The `VkFormat` assumed for a QAROS pixel format. The header reports only
 /// the [`PixelFormat`], not the image's `VkFormat`; these are the UNORM and
-/// SFLOAT formats `qaros-stub` creates. Whether QAROS uses the sRGB variants
-/// for 8-bit color is not documented.
+/// SFLOAT formats `qaros-stub` creates, and the depth-stencil formats by their
+/// Vulkan names (`D32FloatS8X24Uint` is `D32_SFLOAT_S8_UINT`). Whether QAROS
+/// uses the sRGB variants for 8-bit color is not documented.
 pub fn assumed_vk_format(format: PixelFormat) -> Option<vk::Format> {
     match format {
         PixelFormat::R8G8B8A8 => Some(vk::Format::R8G8B8A8_UNORM),
         PixelFormat::B8G8R8A8 | PixelFormat::B8G8R8X8 => Some(vk::Format::B8G8R8A8_UNORM),
         PixelFormat::R16G16B16A16 => Some(vk::Format::R16G16B16A16_SFLOAT),
         PixelFormat::R32Float => Some(vk::Format::R32_SFLOAT),
+        PixelFormat::D16Unorm => Some(vk::Format::D16_UNORM),
         PixelFormat::D32Float => Some(vk::Format::D32_SFLOAT),
+        PixelFormat::D24UnormS8Uint => Some(vk::Format::D24_UNORM_S8_UINT),
+        PixelFormat::D32FloatS8X24Uint => Some(vk::Format::D32_SFLOAT_S8_UINT),
         PixelFormat::Other(_) => None,
     }
 }

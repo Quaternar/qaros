@@ -272,6 +272,12 @@ impl QarStatusCode {
     resolves. A volume that was removed never does; recreate it.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED: QarStatusCode =
         QarStatusCode(805);
+    /** QarRenderSenderInit::depth_format names a format the chosen
+    graphics_api cannot take as a depth plane. Returned by
+    qar_render_sender_create() before any receiver is waited for; nothing
+    was created. The result's message lists the accepted formats.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED: QarStatusCode =
+        QarStatusCode(806);
     /** Code-based onboarding handshake rejected / expired / timed out. Ask the
     user to re-check the code shown on the hub and retry.*/
     pub const QAR_STATUS_PAKE_ERROR: QarStatusCode = QarStatusCode(1600);
@@ -806,11 +812,58 @@ impl QarPixelFormat {
     pub const QAR_PIXEL_FORMAT_B8G8R8A8: QarPixelFormat = QarPixelFormat(53);
     pub const QAR_PIXEL_FORMAT_R16G16B16A16: QarPixelFormat = QarPixelFormat(55);
     pub const QAR_PIXEL_FORMAT_B8G8R8X8: QarPixelFormat = QarPixelFormat(56);
+    pub const QAR_PIXEL_FORMAT_D16_UNORM: QarPixelFormat = QarPixelFormat(100);
     pub const QAR_PIXEL_FORMAT_D32_FLOAT: QarPixelFormat = QarPixelFormat(101);
+    pub const QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT: QarPixelFormat = QarPixelFormat(102);
+    pub const QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT: QarPixelFormat = QarPixelFormat(103);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarPixelFormat(pub ::std::os::raw::c_uint);
+impl QarColorAlphaMode {
+    /** Not declared: a receiver keeps its own default. What a render sender
+    without QarRenderSenderAlphaModeExt declares.*/
+    pub const QAR_COLOR_ALPHA_MODE_UNSPECIFIED: QarColorAlphaMode = QarColorAlphaMode(0);
+    /// The alpha channel means nothing; every pixel is fully covered.
+    pub const QAR_COLOR_ALPHA_MODE_OPAQUE: QarColorAlphaMode = QarColorAlphaMode(1);
+    /** The colour is premultiplied by the alpha, and the alpha is the pixel's
+    coverage: what a renderer produces drawing over a transparent-black
+    clear with ordinary alpha blending.*/
+    pub const QAR_COLOR_ALPHA_MODE_PREMULTIPLIED: QarColorAlphaMode = QarColorAlphaMode(2);
+    /** The colour is not multiplied by the alpha, and the alpha is the pixel's
+    coverage. The sender premultiplies the colour before the frame leaves
+    the application, so the stream publishes
+    QAR_COLOR_ALPHA_MODE_PREMULTIPLIED. Costs one shader pass per frame,
+    even when no other conversion is needed.*/
+    pub const QAR_COLOR_ALPHA_MODE_STRAIGHT: QarColorAlphaMode = QarColorAlphaMode(3);
+}
+#[repr(transparent)]
+/** @brief What a stream's colour alpha means.
+
+Declared by a render sender through QarRenderSenderAlphaModeExt and
+published with the stream, so a receiver composites by it instead of
+guessing. Values are appended, never reused.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarColorAlphaMode(pub ::std::os::raw::c_uint);
+impl QarColorEncoding {
+    /** sRGB-encoded, as a display shows it: what a renderer stores in an sRGB
+    render target, or encodes in its last pass. The default; nothing is
+    converted.*/
+    pub const QAR_COLOR_ENCODING_SRGB: QarColorEncoding = QarColorEncoding(0);
+    /** Linear light, as a renderer stores it in a plain UNORM render target
+    without encoding. The sender encodes it, at one GPU pass per frame.
+    8-bit linear values have already lost precision in the darks, which then
+    band slightly; QAR_PIXEL_FORMAT_R16G16B16A16 keeps them.*/
+    pub const QAR_COLOR_ENCODING_LINEAR: QarColorEncoding = QarColorEncoding(1);
+}
+#[repr(transparent)]
+/** @brief What the numbers in a render sender's colour texture mean.
+
+Declared through QarRenderSenderColorEncodingExt. Whatever is declared, the
+stream carries sRGB-encoded colour: a linear colour is encoded by the sender
+before the frame leaves the application. Values are appended, never reused.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarColorEncoding(pub ::std::os::raw::c_uint);
 impl QarFrameLayout {
     pub const QAR_FRAME_LAYOUT_SIDE_BY_SIDE: QarFrameLayout = QarFrameLayout(0);
     pub const QAR_FRAME_LAYOUT_SEPARATED_TEXTURES: QarFrameLayout = QarFrameLayout(1);
@@ -1118,11 +1171,11 @@ pub struct QarGuiPanelSize {
     zoom, as a desktop browser's Ctrl+ and Ctrl- do: the page is drawn that
     much larger and reflowed to the panel's width, so nothing is cut off at
     the sides. Only the application sets it; the panel's + and - buttons
-    resize the panel instead (ADR-0165, ADR-0167).
+    resize the panel instead.
 
     A QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID panel ignores it: its video is
     always drawn at the full panel width and scrolled vertically by the
-    renderer when it is taller than the panel (ADR-0150).*/
+    renderer when it is taller than the panel.*/
     pub content_scale: f32,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -1184,9 +1237,9 @@ the displayed image as the viewer sees it, x increasing right and y
 increasing down. Both are clamped to the image, so x_pixels is in [0,
 content_width - 1] and y_pixels in [0, content_height - 1] of the image the
 renderer is currently displaying - for a stream panel, the video exactly as
-its sender draws it: the renderer receives it at the sender's own resolution
-(ADR-0149), and a position on a video the renderer has scrolled is the pixel
-under the finger, not one relative to the visible part (ADR-0150).
+its sender draws it: the renderer receives it at the sender's own resolution,
+and a position on a video the renderer has scrolled is the pixel under the
+finger, not one relative to the visible part.
 
 Signed for headroom, and a closed pair: a contact's depth off the glass, if
 it is ever reported, arrives as its own accessor rather than as a member
@@ -1471,6 +1524,10 @@ impl QarStructureType {
     pub const QAR_STRUCTURE_TYPE_RENDERING_END_FRAME_VIEW_OVERRIDES_EXT: QarStructureType =
         QarStructureType(12292);
     pub const QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT: QarStructureType = QarStructureType(12293);
+    pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT: QarStructureType =
+        QarStructureType(12294);
+    pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT: QarStructureType =
+        QarStructureType(12295);
     pub const QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT: QarStructureType =
         QarStructureType(16384);
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
@@ -2561,8 +2618,10 @@ Backend-specific graphics context/device configuration is supplied through
   QarStreamParamsOpenGlEgl, QarStreamParamsOpenGlWgl or
   QarStreamParamsOpenGlGlx, whichever matches the context you own.
 - QAR_GRAPHICS_API_VULKAN requires QarStreamParamsVulkan.
-QAR_GRAPHICS_API_CPU supports no extension and requires `header.next` to be
-null. The selected extension's `header.next` must also be null.*/
+QAR_GRAPHICS_API_CPU supports no graphics extension.
+
+The chain may also hold one QarRenderSenderAlphaModeExt, in any position.
+Nothing else may be chained, and no type may appear twice.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRenderSenderInit {
@@ -2649,6 +2708,68 @@ pub type qar_render_sender_request_callback_t = ::std::option::Option<
         user_state: *mut ::std::os::raw::c_void,
     ),
 >;
+/** @brief Declares what a render sender's colour alpha means.
+
+Chain it on QarRenderSenderInit::header.next, in any position beside the
+graphics extension. The stream publishes the mode, and a receiver composites
+by it: the QAROS mixer draws a QAR_COLOR_ALPHA_MODE_PREMULTIPLIED stream with
+its alpha as coverage, and a QAR_COLOR_ALPHA_MODE_OPAQUE one fully covered,
+whatever its alpha channel holds. A QAR_COLOR_ALPHA_MODE_STRAIGHT colour is
+premultiplied by the sender and published as PREMULTIPLIED. Without this
+extension the stream declares QAR_COLOR_ALPHA_MODE_UNSPECIFIED and the
+receiver keeps its own default.
+
+A B8G8R8X8 colour has no alpha; declare nothing, or OPAQUE.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarRenderSenderAlphaModeExt {
+    /** QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT. Set with
+    qar_render_sender_alpha_mode_ext_default().*/
+    pub header: QarStructureHeader,
+    /** The declared mode. A value this library does not know is rejected with
+    QAR_STATUS_ARGUMENT_NOT_SUPPORTED.*/
+    pub alpha_mode: QarColorAlphaMode,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarRenderSenderAlphaModeExt"]
+        [::std::mem::size_of::<QarRenderSenderAlphaModeExt>() - 24usize];
+    ["Alignment of QarRenderSenderAlphaModeExt"]
+        [::std::mem::align_of::<QarRenderSenderAlphaModeExt>() - 8usize];
+    ["Offset of field: QarRenderSenderAlphaModeExt::header"]
+        [::std::mem::offset_of!(QarRenderSenderAlphaModeExt, header) - 0usize];
+    ["Offset of field: QarRenderSenderAlphaModeExt::alpha_mode"]
+        [::std::mem::offset_of!(QarRenderSenderAlphaModeExt, alpha_mode) - 16usize];
+};
+/** @brief Declares what the numbers in a render sender's colour texture mean.
+
+Chain it on QarRenderSenderInit::header.next, in any position beside the
+graphics extension and QarRenderSenderAlphaModeExt. Without it the colour is
+read as QAR_COLOR_ENCODING_SRGB. Declare QAR_COLOR_ENCODING_LINEAR when the
+application renders linear light into the sender's texture without encoding
+it: every QAROS device shows the stream as sRGB-encoded, so linear values
+would look too dark.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarRenderSenderColorEncodingExt {
+    /** QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT. Set with
+    qar_render_sender_color_encoding_ext_default().*/
+    pub header: QarStructureHeader,
+    /** The declared encoding. A value this library does not know is rejected
+    with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.*/
+    pub color_encoding: QarColorEncoding,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarRenderSenderColorEncodingExt"]
+        [::std::mem::size_of::<QarRenderSenderColorEncodingExt>() - 24usize];
+    ["Alignment of QarRenderSenderColorEncodingExt"]
+        [::std::mem::align_of::<QarRenderSenderColorEncodingExt>() - 8usize];
+    ["Offset of field: QarRenderSenderColorEncodingExt::header"]
+        [::std::mem::offset_of!(QarRenderSenderColorEncodingExt, header) - 0usize];
+    ["Offset of field: QarRenderSenderColorEncodingExt::color_encoding"]
+        [::std::mem::offset_of!(QarRenderSenderColorEncodingExt, color_encoding) - 16usize];
+};
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarStreamParamsVulkan {

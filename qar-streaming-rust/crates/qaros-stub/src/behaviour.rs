@@ -832,23 +832,119 @@ unsafe fn create_sender_value(
     if init.peer_id.data == [0; 16] {
         return Err(invalid("peer_id is zero"));
     }
+    let combined_depth_stencil = [102, 103].contains(&init.depth_format.0);
+    if combined_depth_stencil && init.graphics_api != QarGraphicsAPI::QAR_GRAPHICS_API_VULKAN {
+        // QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED and the D24S8 and D32S8
+        // formats by value: only the public header declares them.
+        return Err(state::error(
+            QarStatusCode(806),
+            "the depth format takes a stencil, which only OpenGL and Vulkan senders accept; \
+             use QAR_PIXEL_FORMAT_D16_UNORM or QAR_PIXEL_FORMAT_D32_FLOAT",
+        ));
+    }
+    // SAFETY: the chain is the caller's stamped extension structures.
+    let graphics_extension = unsafe { render_sender_graphics_extension(init) }?;
     let mut sender = build_sender(session as usize, init);
     if init.graphics_api == QarGraphicsAPI::QAR_GRAPHICS_API_VULKAN {
-        // SAFETY: the chain is the caller's stamped extension structures.
-        sender.vulkan = Some(unsafe { create_vulkan_sender(init, &sender) }?);
+        // SAFETY: the extension is one of the caller's stamped extension structures.
+        sender.vulkan = Some(unsafe { create_vulkan_sender(graphics_extension, &sender) }?);
     } else if init.graphics_api == QarGraphicsAPI::QAR_GRAPHICS_API_D3D11 {
-        // SAFETY: the chain is the caller's stamped extension structures.
-        unsafe { attach_d3d11_sender(init, &mut sender) }?;
+        // SAFETY: the extension is one of the caller's stamped extension structures.
+        unsafe { attach_d3d11_sender(graphics_extension, &mut sender) }?;
     } else if init.graphics_api != QarGraphicsAPI::QAR_GRAPHICS_API_CPU {
         return Err(invalid(
             "qaros-stub supports only the CPU, Vulkan and D3D11 graphics APIs",
         ));
-    } else if !init.header.next.is_null() {
+    } else if !graphics_extension.is_null() {
         return Err(invalid(
-            "QAR_GRAPHICS_API_CPU requires header.next to be NULL",
+            "QAR_GRAPHICS_API_CPU supports no graphics extension in header.next",
         ));
     }
     Ok(sender)
+}
+
+/// The graphics extension of a render sender init's chain, or null. The colour declarations
+/// the header allows beside it in any position are taken out: at most one
+/// `QarRenderSenderAlphaModeExt` and one `QarRenderSenderColorEncodingExt`, each with a value
+/// the header names (another is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as the header states), and
+/// what they declare goes to the call log. At most one other extension may be chained; the
+/// graphics API's own checks then take it.
+///
+/// # Safety
+///
+/// `init.header.next` must be null or a chain of stamped extension structures.
+#[cfg(qaros_color_extensions)]
+unsafe fn render_sender_graphics_extension(
+    init: &QarRenderSenderInit,
+) -> Result<*const QarStructureHeader, QarResult> {
+    let mut graphics_extension: *const QarStructureHeader = std::ptr::null();
+    let mut alpha_mode = None;
+    let mut color_encoding = None;
+    let mut next = init.header.next.cast_const().cast::<QarStructureHeader>();
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT {
+            // SAFETY: the type identifies the structure.
+            let extension = unsafe { &*next.cast::<QarRenderSenderAlphaModeExt>() };
+            if alpha_mode.is_some() {
+                return Err(invalid("QarRenderSenderAlphaModeExt is chained twice"));
+            }
+            if extension.alpha_mode.0 > QarColorAlphaMode::QAR_COLOR_ALPHA_MODE_STRAIGHT.0 {
+                return Err(invalid(
+                    "QarRenderSenderAlphaModeExt::alpha_mode is not a known mode",
+                ));
+            }
+            alpha_mode = Some(extension.alpha_mode.0);
+        } else if header.type_
+            == QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT
+        {
+            // SAFETY: the type identifies the structure.
+            let extension = unsafe { &*next.cast::<QarRenderSenderColorEncodingExt>() };
+            if color_encoding.is_some() {
+                return Err(invalid("QarRenderSenderColorEncodingExt is chained twice"));
+            }
+            if extension.color_encoding.0 > QarColorEncoding::QAR_COLOR_ENCODING_LINEAR.0 {
+                return Err(invalid(
+                    "QarRenderSenderColorEncodingExt::color_encoding is not a known encoding",
+                ));
+            }
+            color_encoding = Some(extension.color_encoding.0);
+        } else if graphics_extension.is_null() {
+            graphics_extension = next;
+        } else {
+            return Err(invalid(
+                "a render sender init chains at most one graphics extension",
+            ));
+        }
+        next = header.next.cast_const().cast();
+    }
+    if alpha_mode.is_some() || color_encoding.is_some() {
+        let declared =
+            |value: Option<_>| value.map_or_else(|| "none".to_owned(), |value| format!("{value}"));
+        note(format!(
+            "render sender colour alpha_mode={} color_encoding={}",
+            declared(alpha_mode),
+            declared(color_encoding)
+        ));
+    }
+    Ok(graphics_extension)
+}
+
+/// The bindings of a header without the colour extensions chain only the graphics extension.
+///
+/// # Safety
+///
+/// `init.header.next` must be null or a stamped extension structure.
+#[cfg(not(qaros_color_extensions))]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "the same signature as the chain walk of bindings with the colour extensions"
+)]
+unsafe fn render_sender_graphics_extension(
+    init: &QarRenderSenderInit,
+) -> Result<*const QarStructureHeader, QarResult> {
+    Ok(init.header.next.cast_const().cast())
 }
 
 /// The deferred half of `qar_render_sender_create_async`: the outcome its
@@ -2894,12 +2990,11 @@ unsafe fn validate_onboard_chain(next: *const QarStructureHeader) -> Result<(), 
 ///
 /// # Safety
 ///
-/// `init.header.next` is null or a stamped extension structure.
+/// `extension` is null or a stamped extension structure.
 unsafe fn create_vulkan_sender(
-    init: &QarRenderSenderInit,
+    extension: *const QarStructureHeader,
     sender: &RenderSenderValue,
 ) -> Result<crate::vulkan::VulkanSender, QarResult> {
-    let extension = init.header.next.cast_const().cast::<QarStructureHeader>();
     if extension.is_null() {
         return Err(invalid(
             "QAR_GRAPHICS_API_VULKAN requires QarStreamParamsVulkan in header.next",
@@ -2914,6 +3009,8 @@ unsafe fn create_vulkan_sender(
     }
     // SAFETY: the type identifies the structure.
     let params = unsafe { &*extension.cast::<QarStreamParamsVulkan>() };
+    // Where the bindings have the colour extensions, the chain walk has checked what follows.
+    #[cfg(not(qaros_color_extensions))]
     if !params.header.next.is_null() {
         return Err(invalid("QarStreamParamsVulkan header.next must be NULL"));
     }
@@ -2948,13 +3045,12 @@ fn is_d3d11(_sender: &RenderSenderValue) -> bool {
 ///
 /// # Safety
 ///
-/// `init.header.next` is null or a stamped extension structure.
+/// `extension` is null or a stamped extension structure.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 unsafe fn attach_d3d11_sender(
-    init: &QarRenderSenderInit,
+    extension: *const QarStructureHeader,
     sender: &mut RenderSenderValue,
 ) -> Result<(), QarResult> {
-    let extension = init.header.next.cast_const().cast::<QarStructureHeader>();
     // SAFETY: forwarded to the caller.
     match unsafe { crate::d3d11::D3D11Sender::create(extension, sender.textures.len()) } {
         Ok((d3d11, report)) => {
@@ -2972,7 +3068,7 @@ unsafe fn attach_d3d11_sender(
 /// Where the bindings carry no D3D11 types, no D3D11 sender can be asked for through them.
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 unsafe fn attach_d3d11_sender(
-    _init: &QarRenderSenderInit,
+    _extension: *const QarStructureHeader,
     _sender: &mut RenderSenderValue,
 ) -> Result<(), QarResult> {
     Err(invalid(

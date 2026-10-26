@@ -50,6 +50,10 @@ pub fn raw_format(format: PixelFormat) -> QarPixelFormat {
         PixelFormat::R16G16B16A16 => QarPixelFormat::QAR_PIXEL_FORMAT_R16G16B16A16,
         PixelFormat::B8G8R8X8 => QarPixelFormat::QAR_PIXEL_FORMAT_B8G8R8X8,
         PixelFormat::D32Float => QarPixelFormat::QAR_PIXEL_FORMAT_D32_FLOAT,
+        // By value, as the safe layer names them: only the public header declares them.
+        PixelFormat::D16Unorm => QarPixelFormat(100),
+        PixelFormat::D24UnormS8Uint => QarPixelFormat(102),
+        PixelFormat::D32FloatS8X24Uint => QarPixelFormat(103),
         PixelFormat::Other(raw) => raw,
     }
 }

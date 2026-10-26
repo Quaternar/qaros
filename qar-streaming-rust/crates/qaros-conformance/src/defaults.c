@@ -49,6 +49,10 @@ EXPORT_DEFAULT(QarOnboardLocalAppExt, qar_onboard_local_app_ext_default)
 EXPORT_DEFAULT(QarRequestInviteInit, qar_request_invite_init_default)
 EXPORT_DEFAULT(QarForgetInit, qar_forget_init_default)
 EXPORT_DEFAULT(QarRenderSenderInit, qar_render_sender_init_default)
+EXPORT_DEFAULT(QarRenderSenderAlphaModeExt,
+               qar_render_sender_alpha_mode_ext_default)
+EXPORT_DEFAULT(QarRenderSenderColorEncodingExt,
+               qar_render_sender_color_encoding_ext_default)
 EXPORT_DEFAULT(QarGuiPanelInit, qar_gui_panel_init_default)
 EXPORT_DEFAULT(QarAppVolumeInit, qar_app_volume_init_default)
 EXPORT_DEFAULT(QarRenderFrameShow, qar_render_frame_show_default)

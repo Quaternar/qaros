@@ -10,9 +10,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use qaros::{
-    AppState, AppVolumeConfig, BlockingOptions, Error, Eye, GraphicsAdapter, GuiPanelConfig,
-    GuiPanelState, HubAddress, Library, OnboardMethod, OwnedFrame, PeerId, PeerPresentation, Pose,
-    RuntimeConfig, ShowParams, StatusCode, Vec3, ViewKind,
+    AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
+    GraphicsAdapter, GuiPanelConfig, GuiPanelState, HubAddress, Library, OnboardMethod, OwnedFrame,
+    PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, ShowParams, StatusCode, Vec3,
+    ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -1192,4 +1193,85 @@ fn try_begin_polls_a_cpu_frame_and_vulkan_access_is_refused_on_it() {
         fixture.control.calls()
     );
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[cfg(qaros_color_extensions)]
+#[test]
+fn the_colour_declarations_are_chained_only_when_set() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let plain = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("sender without colour declarations");
+    drop(plain);
+    config.alpha_mode = ColorAlphaMode::Premultiplied;
+    config.color_encoding = ColorEncoding::Linear;
+    let both = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("sender with an alpha mode and a colour encoding");
+    drop(both);
+    config.alpha_mode = ColorAlphaMode::Straight;
+    config.color_encoding = ColorEncoding::Srgb;
+    let alpha_only = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("sender with an alpha mode only");
+    drop(alpha_only);
+
+    assert_eq!(
+        fixture
+            .control
+            .entries_starting_with("render sender colour "),
+        vec![
+            "render sender colour alpha_mode=2 color_encoding=1".to_string(),
+            "render sender colour alpha_mode=3 color_encoding=none".to_string(),
+        ]
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[cfg(not(qaros_color_extensions))]
+#[test]
+fn a_colour_declaration_is_refused_where_the_bindings_lack_the_extensions() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    config.color_encoding = ColorEncoding::Linear;
+    let refused = session.create_render_sender(&config, &BlockingOptions::default());
+    assert!(
+        matches!(&refused, Err(Error::InvalidArgument(message)) if message.contains("colour extensions")),
+        "{:?}",
+        refused.map(|_| ())
+    );
+    config.color_encoding = ColorEncoding::Srgb;
+    assert_eq!(config.alpha_mode, ColorAlphaMode::Unspecified);
+    let sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("the defaults chain nothing");
+    drop(sender);
+}
+
+#[test]
+fn a_depth_format_with_stencil_is_refused_on_the_cpu_path() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    config.depth_format = PixelFormat::D24UnormS8Uint;
+    let refused = session.create_render_sender(&config, &BlockingOptions::default());
+    let Err(error) = refused else {
+        panic!("a CPU sender took a depth-stencil format");
+    };
+    assert!(
+        error.has_code(StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED),
+        "{error:?}"
+    );
+
+    config.depth_format = PixelFormat::D16Unorm;
+    let sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("a CPU sender takes 16-bit depth");
+    drop(sender);
 }

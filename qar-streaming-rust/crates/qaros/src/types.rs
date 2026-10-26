@@ -217,18 +217,24 @@ impl Fov {
 
 /// Maps a newtype C enum to a Rust enum with an `Other` variant for values
 /// this binding does not know, so values coming from the library never cause
-/// undefined behaviour.
+/// undefined behaviour. Values only the public header declares follow
+/// `by value:` with their number, so the same sources build against the
+/// bindings of the header of runtime 0.9.0-dev.2916, which lacks them.
 macro_rules! c_enum {
     (
         $(#[$documentation:meta])*
         $name:ident: $raw:ident {
             $($(#[$variant_documentation:meta])* $variant:ident = $constant:ident),* $(,)?
+            $(; by value: $(
+                $(#[$by_value_documentation:meta])* $by_value_variant:ident = $value:literal
+            ),* $(,)?)?
         }
     ) => {
         $(#[$documentation])*
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum $name {
             $($(#[$variant_documentation])* $variant,)*
+            $($($(#[$by_value_documentation])* $by_value_variant,)*)?
             /// A value not in the C header.
             Other(sys::$raw),
         }
@@ -239,12 +245,16 @@ macro_rules! c_enum {
                 $(if raw == sys::$raw::$constant {
                     return Self::$variant;
                 })*
+                $($(if raw == sys::$raw($value) {
+                    return Self::$by_value_variant;
+                })*)?
                 Self::Other(raw)
             }
 
             pub(crate) fn to_raw(self) -> sys::$raw {
                 match self {
                     $(Self::$variant => sys::$raw::$constant,)*
+                    $($(Self::$by_value_variant => sys::$raw($value),)*)?
                     Self::Other(raw) => raw,
                 }
             }
@@ -260,7 +270,16 @@ c_enum!(
         B8G8R8A8 = QAR_PIXEL_FORMAT_B8G8R8A8,
         R16G16B16A16 = QAR_PIXEL_FORMAT_R16G16B16A16,
         B8G8R8X8 = QAR_PIXEL_FORMAT_B8G8R8X8,
-        D32Float = QAR_PIXEL_FORMAT_D32_FLOAT,
+        D32Float = QAR_PIXEL_FORMAT_D32_FLOAT;
+        by value:
+        /// 16-bit normalized depth, accepted only as a render sender's depth format; the sender
+        /// widens it to 32-bit float before the frame leaves the application.
+        D16Unorm = 100,
+        /// Depth with stencil, accepted only as an OpenGL or Vulkan sender's depth format (the
+        /// CPU and D3D11 senders refuse it); only the depth is streamed, as 32-bit float.
+        D24UnormS8Uint = 102,
+        /// 32-bit float depth with stencil, accepted as [`Self::D24UnormS8Uint`] is.
+        D32FloatS8X24Uint = 103,
     }
 );
 
@@ -355,6 +374,23 @@ c_enum!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_depth_formats_named_by_value_carry_the_public_headers_values() {
+        for (format, value) in [
+            (PixelFormat::D16Unorm, 100),
+            (PixelFormat::D32Float, 101),
+            (PixelFormat::D24UnormS8Uint, 102),
+            (PixelFormat::D32FloatS8X24Uint, 103),
+        ] {
+            assert_eq!(format.to_raw(), sys::QarPixelFormat(value));
+            assert_eq!(PixelFormat::from_raw(sys::QarPixelFormat(value)), format);
+        }
+        assert_eq!(
+            PixelFormat::from_raw(sys::QarPixelFormat(104)),
+            PixelFormat::Other(sys::QarPixelFormat(104))
+        );
+    }
 
     #[test]
     fn a_retired_peer_reads_as_retired_and_back() {
