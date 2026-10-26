@@ -63,7 +63,7 @@ A source app running on this PC joins QAROS without a code, after someone allowe
 
 1. **"Allow &lt;app&gt; to join QAROS?"** opens as a window of the QAROS tray, in front of every other window, whether or not the Visualizer is open. An open Visualizer shows the same question, and its **Source Applications** panel lists it under **Waiting for approval** with **Deny** / **Approve**.
 2. Check what Windows reports about the app: publisher, product, executable, path and signature. Text the app supplies about itself is shown separately as "App says:"; do not rely on it.
-3. Click **Allow** to admit it, or **Deny**. Deny is the default; Enter and Space never approve. Closing the window denies. Unanswered, the prompt expires after 120 s (the app can ask for longer) and the app is told nobody answered.
+3. Click **Allow** to admit it, or **Deny**. Deny is the default; Enter and Space never approve, and **Allow** turns clickable one second after the window opens. Closing the window denies. Unanswered, the prompt expires after 120 s (the app can ask for longer) and the app is told nobody answered.
 
 The first answer, in the Visualizer or the tray, wins and closes the others. Deny remembers nothing: the next start of the app asks again.
 

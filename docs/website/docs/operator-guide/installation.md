@@ -84,7 +84,7 @@ Program files and data are kept apart. Data survives upgrades and uninstall.
 | Folder | Holds |
 |---|---|
 | `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA certificates, Hub and session state, the identities of apps the user runs, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc` |
-| `%ProgramData%\Quaternar\Qaros` | per machine: service state, and in `secure\` the Hub's secrets (CA keys, Hub identity, approved local apps, licence), one partition per Windows user, encrypted under a machine key only the QAROS service can use ([Security Deep Dive](./security-deep-dive.md#what-is-stored-where)) |
+| `%ProgramData%\Quaternar\Qaros` | per machine: service state, and in `secure\` the Hub's secrets (CA keys, Hub identity, approved local apps), one partition per Windows user, and the licence once for the whole PC, encrypted under a machine key only the QAROS service can use ([Security Deep Dive](./security-deep-dive.md#what-is-stored-where)) |
 | `QAR_APP_DATA_ROOT` environment variable | overrides the per-user folder |
 
 Logs are kept apart from the data, under the **log root** `%TEMP%\quaternar\logs` (with `QAR_APP_DATA_ROOT` set: that folder).

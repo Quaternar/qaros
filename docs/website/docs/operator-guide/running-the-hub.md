@@ -26,7 +26,7 @@ Hub configuration is managed through the Hub UI and persists across restarts. St
 
 ## Running several Hubs on one PC
 
-For development and testing, one PC can run several independent Hubs from the same release, demo or development build. Give each its own data root:
+For development and testing, one PC can run several independent Hubs from the same portable (ZIP) or development build. Give each its own data root:
 
 ```powershell
 $env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros-hub-service.exe
@@ -38,6 +38,7 @@ $env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros-hub-service.exe
 - To pair with a specific Hub by address, use `host:port`: the port is shown with that Hub's onboarding code. An app given only a code finds the Hub of the same Windows user on its own.
 - With `QAR_APP_DATA_ROOT` set, logs and crash dumps stay under that root, so runs never mix.
 - A Hub started without `QAR_APP_DATA_ROOT` uses the default root of its install ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)).
+- An installed QAROS runs one Hub at a time on a PC, for one Windows user: the GPU is shared by everything a Hub streams. While one runs, a second installed Hub (another data root, or another Windows user's Hub after fast user switching) does not start; its tray shows "QAROS is active for another user on this PC" (or names the other Hub of the same user) and starts it once the first Hub has stopped.
 
 ## The visualizer
 

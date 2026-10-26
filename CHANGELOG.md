@@ -61,6 +61,15 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Getting Started* and *Source Applications* describe the approval prompt as it is:
+  **Deny** is the default, only a mouse click allows, closing the window denies, and **Allow** turns
+  clickable one second after the window opens.
+
+- **Docs:** *Running the Hub* says an installed QAROS runs one Hub at a time per PC, for one
+  Windows user, and that several Hubs side by side need a portable or development build.
+- **Docs:** *Installation*, *Security Deep Dive* and the launcher config reference say that an
+  installed QAROS keeps one licence for the whole PC, shared by every Windows user, instead of one
+  per user.
 - **Docs:** *API Conventions* says what a C# `Dispose` of a session, sender, frame info or runtime
   does while another thread is inside a call on it: refuses new calls, cancels the waiting ones,
   waits for the running ones and releases the native object on the disposing thread; from a QAROS
