@@ -88,6 +88,14 @@ A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a
 
 When reporting a crash, send both files together with the log files next to them. The crash report below collects all of them for you.
 
+On Windows a dump holds the thread stacks and the memory QAROS itself uses. It leaves out keys and passwords, the memory of other libraries, and your application's own data. Set `QAR_CRASH_DUMP_DETAIL` before the process starts to change that:
+
+| Value | The dump holds |
+|---|---|
+| unset | QAROS memory without secrets (default) |
+| `minimal` | thread stacks only, a few MB |
+| `full` | the whole process, secrets included. Treat such a dump as confidential |
+
 ## When something goes wrong
 
 The visualizer opens only once it works: it has joined the Hub's session. If the Hub cannot get there, the tray shows a **QAROS Hub** window instead of the splash just closing. It also shows this window when a part of the Hub keeps crashing.

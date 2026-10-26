@@ -61,6 +61,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Running the Hub* says what a crash dump holds: on Windows the memory QAROS uses,
+  without keys, passwords, other libraries' memory or the application's data, and how
+  `QAR_CRASH_DUMP_DETAIL` changes that.
+
 - **Docs:** *Getting Started* and *Source Applications* describe the approval prompt as it is:
   **Deny** is the default, only a mouse click allows, closing the window denies, and **Allow** turns
   clickable one second after the window opens.
