@@ -77,7 +77,7 @@ Restarting a source app (crash, kill, or **Stop** then **Launch**) is safe: the 
 
 ## Crash dumps
 
-A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a short report) and `<time>_<process>_<pid>.dmp` (the dump).
+A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a short report) and the dump, `<time>_<process>_<pid>.dmp` on Windows or `<time>_<process>_<pid>.core` on Linux.
 
 | Process | Where |
 |---|---|
@@ -88,13 +88,9 @@ A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a
 
 When reporting a crash, send both files together with the log files next to them. The crash report below collects all of them for you.
 
-On Windows a dump holds the thread stacks and the memory QAROS itself uses. It leaves out keys and passwords, the memory of other libraries, and your application's own data. Set `QAR_CRASH_DUMP_DETAIL` before the process starts to change that:
+A dump holds the thread stacks and the QAROS memory they point at, usually a few MB. It leaves out the memory of other libraries and your application's own data. On Linux no other core file is written for a QAROS process. No setting changes what a dump holds: only Debug and RelWithDebInfo builds of QAROS write the whole process, secrets included.
 
-| Value | The dump holds |
-|---|---|
-| unset | QAROS memory without secrets (default) |
-| `minimal` | thread stacks only, a few MB |
-| `full` | the whole process, secrets included. Treat such a dump as confidential |
+Each process keeps only its newest 10 dumps in its crash folder and deletes older ones when it starts, so a process that keeps crashing cannot fill the disk. Copy a dump away before you restart the process many times.
 
 ## When something goes wrong
 
