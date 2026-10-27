@@ -36,6 +36,7 @@ A **Hub** (a powerful workstation) runs your 3D applications and the QAROS runti
 | Connect a HoloLens / Android device | [Onboarding Devices](/docs/user-guide/onboarding-devices) |
 | Install and run a Hub | [Installation](/docs/operator-guide/installation) |
 | Run and manage a Hub | [Operator Guide: Overview](/docs/operator-guide/overview) |
+| Do a task in the Visualizer, step by step | [Visualizer Tutorials](/docs/category/visualizer-tutorials) |
 | Understand the security model | [Security Model](/docs/operator-guide/security-model) |
 | Integrate the API into my app | [Developer Guide: Getting Started](/docs/developer-guide/getting-started) |
 | Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |

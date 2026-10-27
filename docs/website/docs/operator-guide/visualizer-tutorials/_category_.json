@@ -1,0 +1,10 @@
+{
+  "label": "Visualizer Tutorials",
+  "position": 3.6,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "title": "Visualizer Tutorials",
+    "description": "Step-by-step tasks in the QAROS Visualizer (the QAROS Hub window), with screenshots: resetting a session or the whole install, inviting and installing HoloLens 2, Meta Quest and METALENSE 2, putting METALENSE 2 on Wi-Fi, and streaming to a 3D monitor."
+  }
+}

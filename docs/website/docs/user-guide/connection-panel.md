@@ -30,12 +30,12 @@ This Hub and every Hub paired with it share one **session**.
 
 ### Session actions
 
-- **Reset session** deletes the stored data of every Hub in the session and restarts them empty. The
-  confirmation lists what is discarded and what is kept. Use it when the session is stuck on stale
-  state.
-- **Leave session** is not available yet; it will unpair this Hub from the others in a later
-  version. Until then, a pairing cannot be undone from the Visualizer (see
-  [Networking & Federation](/docs/operator-guide/networking-and-federation#what-federation-does-and-does-not-do---read-this)).
+- **New session** retires the session and starts the next one: app volumes, GUI panels and rooms are
+  deleted, while the Hub's name, remembered devices and approved apps are kept and paired devices
+  move to the new session on their own. The confirmation's **(?)** lists what is discarded and what
+  is kept. Use it when the session is stuck on stale state; step by step in
+  [Reset the Session or the Whole Install](/docs/operator-guide/visualizer-tutorials/reset-session-and-install).
+- **Leave session** is for a member Hub: it leaves the primary Hub's session.
 
 ### Pair another Hub
 
@@ -74,8 +74,8 @@ A device remembered under an older kind (Meta Quest, Metalens) is not invited an
 and add it again as a **Headset**.
 
 3. Enter the device's **Address** and an optional **Label**.
-4. Leave **Invite automatically** checked to remember the device and invite it on every start;
-   uncheck it to invite once.
+4. Check **Invite automatically** to have the Hub invite the device on every start; leave it
+   unchecked to invite once.
 5. Press **Invite**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
    notification. The card stays open for the next device; **Clear** empties it, and **Invite
    device** in the title folds it away.
