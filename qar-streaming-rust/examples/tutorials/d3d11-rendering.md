@@ -64,7 +64,7 @@ Against the stub on Windows (`QAROS_DLL` naming `target\debug\qaros_stub.dll`, a
 {{#include ../src/bin/d3d11_render_sender.rs:main}}
 ```
 
-The D3D11 code lives in a `#[cfg(windows)]` module. Elsewhere `main` prints one line, like the C example built without `QAR_ENABLE_D3D11`. The `d3d11` feature of `qaros` follows the header the same way: it compiles where the bindings carry the D3D11 types (Windows, and on macOS only for the tests against `qaros-stub`) and to nothing on Linux.
+The D3D11 code lives in a `#[cfg(windows)]` module. Elsewhere `main` prints one line. The `d3d11` feature of `qaros` follows the header the same way: it compiles where the bindings carry the D3D11 types (Windows, and on macOS only for the tests against `qaros-stub`) and to nothing on Linux.
 
 ### 2. The program, top to bottom
 
@@ -134,7 +134,7 @@ Status handling, by `is_waiting`:
 | `RENDERING_APP_VOLUME_UNRESOLVED` | `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | the same; begin-frame holds about 16 ms |
 | `RENDERING_STREAM_IS_CLOSED`, or any other error | `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`, ... | prints the error and ends the loop |
 
-With one target there is nothing to recreate, so a closed stream ends the program. It still exits with 0, like the C example. To serve a target again after `STREAM_IS_CLOSED`, drop the sender and create a new one while the target is still in the peer list ([Rendering Streams](/docs/developer-guide/rendering-streams#lifecycle-and-failure)).
+With one target there is nothing to recreate, so a closed stream ends the program. It still exits with 0. To serve a target again after `STREAM_IS_CLOSED`, drop the sender and create a new one while the target is still in the peer list ([Rendering Streams](/docs/developer-guide/rendering-streams#lifecycle-and-failure)).
 
 ## Ownership and teardown
 
@@ -167,22 +167,23 @@ On the Vulkan path your device must outlive the session ([Vulkan Rendering](/doc
 
 ## From C
 
-The C tutorial is [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering). The Rust example makes the same C calls in the same order, through the safe API. It differs where the Developer Guide has moved on since the C example:
+The C tutorial is [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering). The two programs do the same thing: join with a stored onboarding id, a pairing code or as a local app, take the first running target app from the peer list, create the device on the session's adapter, bind depth as depth stencil only, declare color and depth of both eyes, and skip the frame on paused, reconnecting, transfer-less and unresolved-volume statuses. The Rust example makes the same C calls in the same order through the safe API, except where the last rows say otherwise:
 
 | C example | Rust example |
 | --- | --- |
-| joins with a pairing code or a stored onboarding id | the same, and without either joins as a local app |
-| waits for a render request (`qar_render_sender_subscribe_requests`) | takes the first running target app from the peer list |
-| device on the default hardware adapter | device on the session's adapter (`Session::graphics_adapter`), the default only when the session names none |
+| `example_join_session` | `join_session` |
+| `example_is_running_target`: role `QAR_PEER_ROLE_TARGET`, presence `ONLINE` or `UNKNOWN` | `is_running_target`: the app state `AppState::Running`, computed from the presence, so the same targets |
+| `qar_session_get_graphics_device_id`, then the DXGI adapter with that LUID | `Session::graphics_adapter` |
 | `QarStreamParamsD3D11` filled by hand | `D3D11StreamParams::new`, which also keeps the device and context alive for the sender |
-| depth bind flags depth stencil and shader resource | depth stencil only, which the `DXGI_FORMAT_D32_FLOAT` depth textures accept |
-| no frame views declared | color and depth of both eyes declared |
 | `qar_render_sender_frame_d3d11` into a `QarVideoFrameD3D11` | `Frame::d3d11_frame`, a copy of the record that lends the textures for the frame |
-| any begin-frame failure ends the loop | paused, reconnecting, transfer-less and unresolved-volume statuses skip the frame |
+| `example_is_waiting` | `is_waiting` |
 | `log_result` | `qaros::Error`, with the function, the status and the message |
 | `qar_*_handle_destroy` on every exit path | handles released on drop, with explicit drops for the order |
 | `qar_runtime_handle_destroy` | dropping the `Runtime` |
 | D3D11 through COBJMACROS | D3D11 through the `windows` crate |
+| `qar_render_sender_create` with a 10 s timeout token | `create_d3d11_render_sender` with `BlockingOptions::default()`, no timeout |
+| `qar_render_sender_try_begin_frame`, polled with a 2 ms sleep | `begin_frame`, which blocks until the target wants a frame |
+| exit code 1 when a frame failure ends the loop | exit code 0 |
 
 ## Next
 

@@ -413,11 +413,11 @@ This is how a source application implements grabbing, pointing, and touch agains
 - When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
 - If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
-- Rendering senders are per requested target. For several users viewing the same scene, create a sender and camera for each target discovered through the request subscription; use each target's poses and FOV even when the scene objects are shared.
+- Rendering senders are per target. For several users viewing the same scene, create a sender and camera for each target you serve from the peer list ([Finding rendering targets](#finding-rendering-targets)); use each target's poses and FOV even when the scene objects are shared.
 
 ## Compiled tutorial
 
-This page is backed by the compiled example `cpu_rendering_visualizer.c`, which obtains a session, subscribes to render stream requests, and streams a CPU-rendered gradient to the requesting peer:
+This page is backed by the compiled example `cpu_rendering_visualizer.c`, which obtains a session, finds its targets in the peer list, and streams CPU-rendered frames to them:
 
 - Source: `qaros/qar-streaming-c/examples/cpu_rendering_visualizer.c`
 - Example walkthrough: [CPU Rendering with a Visualizer](/docs/developer-guide/tutorials/c/cpu-rendering)

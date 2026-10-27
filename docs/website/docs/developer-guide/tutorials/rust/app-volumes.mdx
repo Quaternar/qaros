@@ -145,8 +145,8 @@ the volume is new.
 - `app_pose` and `app_scale`, left at their defaults here, place your content in the box (step 4).
 
 Treat the config as the values for a new volume. For an existing one, change what must change with
-the setters; the C tutorial notes, for one, that get-or-create ignores the gesture configuration of
-a volume that already exists.
+the setters; get-or-create, for one, ignores the gesture configuration of a volume that already
+exists.
 
 What can go wrong: the common name must be ASCII. A string with an interior NUL fails before the
 call with `Error::InvalidArgument`.
@@ -398,8 +398,8 @@ If you know [the C tutorial](/docs/developer-guide/tutorials/c/app-volume-manage
 | `qar_app_volumes_close_volume` | `AppVolumes::close` |
 | `qar_result_has_code(r, QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED)` | `error.has_cause(StatusCode::RENDERING_APP_VOLUME_UNRESOLVED)` |
 
-The C tutorial goes further than this one: it customizes the gesture configuration, sets and
-clears a world anchor, and maps a room-space point into app content space. Gestures and world
+The C tutorial goes further than this one: it customizes the gesture configuration, sets and clears a world
+anchor, and maps a room-space point into app content space. Gestures and world
 anchors are not in the safe Rust API; reach them through `library.raw_api()` with the session's
 `as_raw()`, as the [App Volumes](/docs/developer-guide/app-volumes) page's Rust tabs show. The point mapping is
 plain math on the values `latest_pose`, `latest_size`, `latest_app_pose` and `latest_app_scale`

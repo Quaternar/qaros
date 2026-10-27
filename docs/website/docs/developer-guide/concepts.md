@@ -1,15 +1,16 @@
 ---
 sidebar_position: 2
 title: Concepts
-description: The QAROS world mapped to API objects - how Hubs, sessions, peers, panels, volumes, and streams appear in the C and C# APIs.
+description: The QAROS world mapped to API objects - how Hubs, sessions, peers, panels, volumes, and streams appear in the API, with a C to C# name map.
 ---
 
 # Concepts
 
 This guide is self-contained: you do not need the User Guide to integrate QAROS.
 This page maps the [QAROS world](/docs/user-guide/qaros-world) onto the API
-objects you actually call, in both supported languages. The prose is
-language-neutral; only the name table at the end is paired C <-> C#.
+objects you actually call. The prose is language-neutral; only the name table
+at the end is paired C <-> C#. How the Rust binding maps the C API is in
+[Language Bindings](/docs/developer-guide/language-bindings#rust).
 
 ## The objects you work with
 
@@ -89,5 +90,5 @@ functions.
 | Extensible init | `QarStructureHeader{type,next}` chain | `Structure` / `StructureType` | [API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader) |
 
 The precise idioms behind these mappings - how handles, results, extension
-chains, async pairs, enumeration, and ownership differ between C and C# - are the
+chains, async pairs, enumeration, and ownership differ between languages - are the
 subject of [API Conventions](/docs/developer-guide/api-conventions).

@@ -16,13 +16,19 @@ FULL_PATH_NAMES        = NO
 STRIP_FROM_PATH        = ../../../../
 STRIP_FROM_INC_PATH    = ../../../../
 
-# Input
-INPUT                  = ../../../../qar-streaming-c/include ../../../../qar-streaming-c/examples
+# Input. The Vulkan cube is C++: only its main.cpp, which holds its tutorial
+# page, is named, so its renderer stays out of the C API reference.
+INPUT                  = ../../../../qar-streaming-c/include \
+                         ../../../../qar-streaming-c/examples \
+                         ../../../../qar-streaming-c/examples/vulkan_cube/main.cpp
 FILE_PATTERNS          = *.h *.c
 RECURSIVE              = YES
 
-# Examples (kept alongside API docs, single Doxygen run)
-EXAMPLE_PATH           = ../../../../qar-streaming-c/examples
+# Examples (kept alongside API docs, single Doxygen run). The cube's two
+# source files are named for its tutorial's snippets.
+EXAMPLE_PATH           = ../../../../qar-streaming-c/examples \
+                         ../../../../qar-streaming-c/examples/vulkan_cube/main.cpp \
+                         ../../../../qar-streaming-c/examples/vulkan_cube/renderer.cpp
 EXAMPLE_PATTERNS       = *.c *.h
 
 # Extraction
