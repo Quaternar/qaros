@@ -1,0 +1,5 @@
+fn first_fixture_function() {
+    let fixture_value = 1;
+
+    let _ = fixture_value;
+}

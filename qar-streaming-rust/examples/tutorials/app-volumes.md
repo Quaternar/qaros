@@ -1,0 +1,324 @@
+---
+sidebar_position: 8
+title: App Volumes
+description: Get or create the 3D box your app renders into, move your content inside it, follow its changes through a subscription, and know what an unresolved volume means for rendering.
+---
+
+## What you build
+
+A small program that gets or creates an app volume, the named box in the room that holds your
+rendered content. It moves and shrinks the content inside the box, prints the distinct updates of
+its volume that its subscription delivers, reads the volume's latest transforms and lists every
+volume in the session.
+
+What you will learn:
+
+- how a volume's common name makes creation idempotent,
+- the two transforms: the box in the room, and your content in the box,
+- how to follow volume changes made by other peers and by gestures,
+- why a render sender needs a volume, and what `RENDERING_APP_VOLUME_UNRESOLVED` means.
+
+## Before you start
+
+- **Platform.** The real runtime runs on Windows. On macOS and Linux you can run the example
+  against `qaros-stub`, the in-memory stand-in library the binding's tests use.
+- **QAROS.** Installed on the Hub machine, where the example runs, or a runtime folder named by
+  `QAROS_RUNTIME_DIR` (see [How to run the examples](/docs/developer-guide/tutorials/rust/#build-and-run)).
+  Joining as a local app starts the Hub when it is not running.
+- **Joining.** The example joins the Hub as a local app
+  ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)):
+  click **Allow** in the QAROS approval prompt on the first run of the executable. Nothing is
+  stored; later runs join without a prompt.[^code]
+- **The latest stable Rust.**
+- [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels) explains subscriptions and the rule
+  for ending them in more detail. This tutorial uses the same pattern.
+
+## Run it
+
+From the binding's workspace folder, on Windows:
+
+```powershell
+# Join the Hub as a local app: click Allow in QAROS on the first run.
+cargo run -p qaros-examples --bin app_volume_management
+```
+
+Outside Windows the example does not try the local-app join, so the stub run passes a code (any
+code but `WRONG` and `UNREACHABLE`). On macOS:
+
+```sh
+cargo build -p qaros-stub
+mkdir -p target/stub-run && cd target/stub-run
+QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" \
+    cargo run -p qaros-examples --bin app_volume_management -- ANY-CODE
+```
+
+The stub run stores `app_volume_management.onboarding-id.txt` in its folder, which a later run against QAROS from that folder would try to rejoin with: keep stub runs in a folder of their own ([On macOS, against the stub](/docs/developer-guide/tutorials/rust/#on-macos-against-the-stub)). It prints (the `Loading` lines name your own path):
+
+```text
+Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
+Loaded .../target/debug/libqaros_stub.dylib
+qar_runtime_create: SUCCESS
+qar_runtime_onboard: SUCCESS
+App volume id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D
+Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 1.00 lifetime=Active
+Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 0.50 lifetime=Active
+Received 2 updates of this volume, printed 2.
+Latest: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 0.50
+- Volume id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D name='Tutorial Volume' size(1.00 x 1.00 x 1.00) position(0.00, 0.00, -1.00)
+```
+
+The stub reports one update per change, before the call returns. A real Hub delivers updates
+asynchronously, reports your own changes back to you, repeats them, and can deliver them out of
+order: the last update can carry app scale 1.00 after 0.50 was set, while the `Latest:` line
+still reads 0.50. That is why the program prints only an update that differs from the last one it
+printed, and why it takes the current values from the latest getters, not from an update. When
+some updates repeated the one before them, the `Received` line goes on:
+`printed <m>: the others matched the update printed before them.` The example renders nothing, so
+against a Hub the box stays empty.
+
+When no update of the volume arrives within 10 s of the changes, the line
+`No update of the volume arrived within 10 s of the changes.` replaces the `Update:` lines, the
+steps after the `Received` line are left out, and the program ends with
+`error: no update of the volume arrived` and exit code 1.
+
+## Walkthrough
+
+### 1. Get a session
+
+A volume is shared session state: every peer sees the same box at the same place. The example
+gets its session with the shared helper `join_session`, as
+[GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels) does: rejoin, else the pairing code,
+else a local-app join.
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:session}}
+```
+
+`ONBOARDING_SESSION_NOT_FOUND` from the rejoin is normal (the helper goes on to the code or the
+local-app join). `PAKE_ERROR` means a wrong or expired code; `ONBOARDING_HUB_UNREACHABLE` means no
+Hub answered: with a code the example finds only your own Hub, on the Hub machine, and for the
+local-app join (exit code 3), which starts a Hub that is not running, the Hub could not be
+started or reached. A local-app join that is denied or not answered within 120 s ends with exit code 4
+or 5, as in `local_app_onboarding`.
+
+### 2. Get or create the volume
+
+Like a panel, a volume is identified by a stable **common name**. `get_or_create` returns the
+volume with that name and creates it the first time, so the call is safe on every start and a
+restarted app finds its box again. The id derives from the name, and it is what a render sender
+needs (see [Using the volume for rendering](#using-the-volume-for-rendering)).
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:create}}
+```
+
+`get_or_create` returns the existing volume of that common name, or a new one when there is none,
+and the API does not say which. This example leaves its volume open, so after the first run it
+gets the volume an earlier run created, with the same id; the program prints the id, not whether
+the volume is new.
+
+- `pose` is the pose of the box's **center** in room space (a panel's pose is its top-edge
+  midpoint).
+- `size` is width (X), length (Z, horizontal depth) and height (Y), in meters. The box covers half
+  of each extent on either side of the center.
+- `app_pose` and `app_scale`, left at their defaults here, place your content in the box (step 4).
+
+Treat the config as the values for a new volume. For an existing one, change what must change with
+the setters; the C tutorial notes, for one, that get-or-create ignores the gesture configuration of
+a volume that already exists.
+
+What can go wrong: the common name must be ASCII. A string with an interior NUL fails before the
+call with `Error::InvalidArgument`.
+
+### 3. Subscribe to volume updates
+
+Users grab and scale volumes with gestures, and other peers change them too. A subscription tells
+you when.
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:subscribe}}
+```
+
+`subscribe` reports changes to **every** volume in the session; there is no per-volume form for
+volumes. The callback runs on a library thread, so it is `Send + Sync + 'static`. The example's
+callback compares the id and forwards only the `AppVolumeInfo` snapshots of its own volume into a
+`std::sync::mpsc` channel, through the forwarding half of `qaros::channel()` (the "Callback
+threading" warning under
+[Blocking / async pairs](/docs/developer-guide/api-conventions#4-blocking--async-pairs)).
+
+### 4. Move your content inside the box
+
+A volume has two transforms
+([Coordinate Systems](/docs/developer-guide/coordinate-systems#app-content-space--your-applications-world-inside-the-box)):
+
+- **The box in the room:** `set_pose` and `set_size`. Moving the box moves everything in it.
+- **Your content in the box:** `set_app_pose` and `set_app_scale`. They pan and zoom your content
+  without your renderer changing anything.
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:transforms}}
+```
+
+`app_pose` is in volume meters and is not scaled: here your content's origin sits 25 cm below the
+box's center. `app_scale` is room meters per app meter: at 0.5 your content appears at half size.
+
+What can go wrong: `APP_VOLUME_INVALID_ID` means no volume has that id, for example because it was
+closed. Call `get_or_create` again if your app still needs it.
+
+### 5. Receive the updates
+
+The example waits up to 10 s for the first update of its volume, then reads the channel until no
+update of it has arrived for half a second. The Hub can take a few seconds to deliver the first
+update, so a quiet period alone could end before anything arrived. Since the callback forwards
+only this volume's updates, updates of other volumes neither end the wait nor prolong it. When no
+update comes within 10 s, the example says so, skips the remaining steps and exits with 1. The
+wait is `updates_until_quiet` from the examples' shared library, shown in
+[GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels#5-receive-the-updates).
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:receive}}
+```
+
+The example prints an update only when it differs from the last one it printed. A repeat need not
+be equal to the bit: its floats can differ from the earlier report below any precision you print,
+so the example compares the poses, the size and the scale at the tolerances of `same_pose`, and
+the lifetime exactly:
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:same_update}}
+```
+
+A real application does not wait for a quiet period: it reads the channel from its own loop with
+`try_recv` or `try_iter`. `lifetime` tells an `Active` volume from a `Closed` one.
+
+### 6. Read the latest values
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:latest}}
+```
+
+The `latest_*` getters return the latest values this peer knows, including changes by other peers
+and by gestures. Read them when you need the current transform, for example to map a point from
+room space into your content, and after each update: an update tells you that the volume changed,
+but its snapshot can be older than the latest values, so apply what the getters return rather
+than the update's own values.
+
+### 7. List the volumes
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:list}}
+```
+
+`list` is a snapshot of every volume the session knows, built with the C API's count-then-fetch
+enumeration; the wrapper destroys each C handle after reading it.
+
+### 8. End the subscription
+
+```rust
+{{#include ../src/bin/app_volume_management.rs:end}}
+```
+
+When `cancel()` returns, a callback that was running on another thread has finished and none
+starts afterwards. Never end a subscription while holding a lock its callback takes: ending it
+waits for that callback. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels#7-end-the-subscription-then-close-the-panel)
+covers the rule in full.
+
+The example leaves the volume open, as its C original does. `close` would retire it for every
+peer.
+
+## Using the volume for rendering
+
+A render sender streams your frames into a volume, so you pass the volume's id in
+`RenderSenderConfig::app_volume` when you create the sender
+([CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering)). Without one, creating the
+sender fails with `APP_VOLUME_INVALID_ID`. Create the volume first.
+
+The volume also defines the space the sender hands you poses in, **app content space**: view
+poses, the head pose and the hands all come in it, under the volume's current `app_pose` and
+`app_scale` ([Rendering Streams](/docs/developer-guide/rendering-streams)). While the volume does
+not resolve where the stream is received, there is no app content space, and the sender hands out
+nothing: `RenderSender::begin_frame` fails with `StatusCode::RENDERING_APP_VOLUME_UNRESOLVED`
+(`QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` in C) and the hands report untracked.
+
+This is normal control flow, not an error:
+
+- Keep the sender and call `begin_frame` again; the call waits about 16 ms first, so a retry loop
+  does not spin.
+- Test for it with `error.has_cause(StatusCode::RENDERING_APP_VOLUME_UNRESOLVED)`, not
+  `has_code`: begin-frame can report a waiting condition wrapped inside
+  `RENDERING_UNABLE_TO_BEGIN_FRAME`, and `has_cause` sees both.
+- A volume you closed never resolves again. Recreate it with `get_or_create`.
+
+## Ownership and teardown
+
+| Value | Owns | Released |
+| --- | --- | --- |
+| `library` | the initialized C library | `qar_library_destroy` after everything else; the DLL stays loaded until the process exits |
+| `runtime` | the `QarRuntime` | after the last session of it |
+| `session` | the `QarSession` and every subscription's callback state | on drop: `qar_session_handle_destroy`, then the callback state |
+| `volumes` | nothing: a borrow of the session | cannot outlive `session` |
+| `subscription` | the subscription's cancel token | on `cancel()` or drop |
+| `volume_updates` | the receiving end of the channel | disconnects when the session is destroyed |
+| `volume_id`, `AppVolumeInfo` | plain values | ordinary Rust values; the id stays valid as a name for the volume, not as a handle |
+
+What the wrapper guarantees: each handle keeps its parent alive, so the C order session, runtime,
+library holds whatever order Rust drops them in; callback state lives until the session handle is
+destroyed, so no callback can see freed state; destroying the session ends every live
+subscription.
+
+What it does not guarantee: it does not close volumes, which are shared session state, not handles
+your process owns. It cannot keep you from deadlocking a cancel with your own lock. And handles are
+not `Send`: keep `library`, `runtime`, `session` and `volumes` on one thread.
+
+## Troubleshooting
+
+| Symptom | Cause | What to do |
+| --- | --- | --- |
+| `No persisted onboarding id in 'app_volume_management.onboarding-id.txt'` | Not on Windows, no code, and no id file in this folder | Pass the current pairing code, or run from the folder that holds the file |
+| Exit code 4 or 5 after `joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
+| `QAR_STATUS_PAKE_ERROR` | The code was wrong or expired | Read the current code and run again |
+| `QAR_STATUS_APP_VOLUME_INVALID_ID` from a setter or getter | The volume was closed, possibly by another peer | `get_or_create` again |
+| `QAR_STATUS_APP_VOLUME_INVALID_ID` when creating a render sender | `RenderSenderConfig::app_volume` is `None` | Create the volume first and pass its id |
+| `RENDERING_APP_VOLUME_UNRESOLVED` from `begin_frame` | The volume does not resolve yet where the stream is received, or it was closed | Keep calling; recreate a volume you closed ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
+| The content appears at the wrong size or offset | `app_pose` or `app_scale` set by a user's gesture or another peer | Read `latest_app_pose` and `latest_app_scale` again after each update |
+| The program hangs in `cancel()` or at the end of a scope | A callback is waiting for a lock the cancelling thread holds | Release the lock before ending the subscription |
+| `No update of the volume arrived within 10 s of the changes.`, exit code 1 | The Hub delivered no update of the volume within 10 s after the changes | Check that the Hub is still running and run again. In your app, read updates as they come instead of waiting for them a fixed time |
+| The last `Update:` line differs from `Latest:` | Updates arrive repeated and out of order | Read the latest getters after each update |
+
+## From C
+
+If you know [the C tutorial](/docs/developer-guide/tutorials/c/app-volume-management):
+
+| C | Rust |
+| --- | --- |
+| `QarAppVolumeInit`, `qar_app_volume_init_default()` | `AppVolumeConfig::new(common_name)` |
+| `qar_app_volumes_get_or_create` | `AppVolumes::get_or_create` |
+| `qar_app_volumes_change_pose`, `_change_size`, `_change_app_pose`, `_change_app_scale` | `set_pose`, `set_size`, `set_app_pose`, `set_app_scale` |
+| `qar_app_volume_get_latest_pose`, `_size`, `_app_pose`, `_app_scale` | `latest_pose`, `latest_size`, `latest_app_pose`, `latest_app_scale` |
+| `qar_query_app_volumes_count` + `qar_query_app_volumes` + the getters + `qar_app_volume_handle_destroy` | `AppVolumes::list`, returning `Vec<AppVolumeInfo>` |
+| `qar_app_volumes_subscribe_updates` with a `QarCancelToken` | `subscribe(callback)`, returning a `Subscription` |
+| `qar_app_volumes_close_volume` | `AppVolumes::close` |
+| `qar_result_has_code(r, QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED)` | `error.has_cause(StatusCode::RENDERING_APP_VOLUME_UNRESOLVED)` |
+
+The C tutorial goes further than this one: it customizes the gesture configuration, sets and
+clears a world anchor, and maps a room-space point into app content space. Gestures and world
+anchors are not in the safe Rust API; reach them through `library.raw_api()` with the session's
+`as_raw()`, as the [App Volumes](/docs/developer-guide/app-volumes) page's Rust tabs show. The point mapping is
+plain math on the values `latest_pose`, `latest_size`, `latest_app_pose` and `latest_app_scale`
+return, and the C tutorial's steps apply unchanged. Editing locks and used-by peers are not in the
+safe API either.
+
+## Next
+
+- [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): render into a volume.
+- [App Volumes and Gestures](/docs/developer-guide/app-volumes): gestures, world anchors and
+  coordination between users.
+- [Coordinate Systems](/docs/developer-guide/coordinate-systems): every space in one place.
+
+[^code]: The example also takes a Hub's pairing code as its argument; it passes no Hub address,
+    so the code finds only your own Hub, on the Hub machine (a Hub elsewhere needs its host and
+    port, `HubAddress`):
+    `cargo run -p qaros-examples --bin app_volume_management -- <PAIRING-CODE>`. It then
+    stores the onboarding id it gets in `app_volume_management.onboarding-id.txt` in the folder you
+    run `cargo` from, and rejoins with that id on every later run
+    ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)).

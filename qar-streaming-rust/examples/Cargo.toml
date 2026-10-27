@@ -1,0 +1,48 @@
+[package]
+name = "qaros-examples"
+description = "Rust ports of the qar-streaming-c examples."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Use the import library (QAROS_LIB_DIR) instead of loading QAROS_DLL at
+# runtime; qar-streaming-c.dll must then be on PATH at start.
+link = ["qaros/link"]
+# vulkan_cube: the Vulkan render sender on an ash device of the example's own.
+vulkan = ["qaros/vulkan", "dep:ash", "dep:glam"]
+
+[dependencies]
+# d3d11: d3d11_render_sender's safe D3D11 sender. It compiles to nothing where the bindings
+# carry no D3D11, so it costs nothing on Linux and needs no feature of its own here.
+qaros = { workspace = true, features = ["d3d11"] }
+log.workspace = true
+ash = { workspace = true, features = ["loaded"], optional = true }
+glam = { version = "0.30", optional = true }
+
+# d3d11_render_sender's device on the session's adapter, and vulkan_cube's Ctrl+C handler and
+# stdin pipe check.
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+] }
+
+[dev-dependencies]
+# Builds the stub cdylib that vulkan_cube's pixel test loads.
+qaros-stub = { path = "../crates/qaros-stub" }
+
+[[bin]]
+name = "vulkan_cube"
+required-features = ["vulkan"]
+
+[lints]
+workspace = true
