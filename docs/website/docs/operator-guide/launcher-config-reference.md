@@ -13,7 +13,7 @@ The runtime launcher (`qar-runtime-launcher.exe`) is configured by one JSON obje
 | Started by | Configuration used |
 |---|---|
 | Launcher alone, empty input | `qar-runtime-launcher.jsonc` next to the launcher executable. |
-| Tray (`qaros-hub-service.exe <config-path>`) | The file given as the tray's first argument. |
+| Tray (`qaros.exe <config-path>`) | The file given as the tray's first argument. |
 | Tray, no argument | `qar-runtime-launcher.jsonc` next to the launcher executable. |
 
 - Every config file may contain `//` and `/* */` comments.
@@ -44,7 +44,7 @@ Pass the file's absolute path as the tray's first argument; do not modify the in
 ```powershell
 $qarosInstall = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Quaternar\QAROS').InstallFolder
 $configPath = 'C:\MyApp\qaros-background.jsonc'
-& (Join-Path $qarosInstall 'bin\qaros-hub-service.exe') $configPath
+& (Join-Path $qarosInstall 'bin\qaros.exe') $configPath
 ```
 
 Leave an existing Hub for the same Windows user and data root running. Starting the tray again with that root replaces it; supplying a background configuration does not reconfigure an already running Hub in place. See [Running several Hubs](/docs/operator-guide/running-the-hub#running-several-hubs-on-one-pc) before deliberately starting another root. The user can still open the visualizer from the tray later.

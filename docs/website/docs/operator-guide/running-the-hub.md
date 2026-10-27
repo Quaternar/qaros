@@ -10,13 +10,13 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 | Process | Role |
 |---|---|
-| `qaros-hub-service.exe` | Tray companion. Always-on supervisor: starts the launcher, restarts it if it crashes, and gives you the tray menu. |
+| `qaros.exe` | Tray companion. Always-on supervisor: starts the launcher, restarts it if it crashes, and gives you the tray menu. |
 | `qar-runtime-launcher.exe` | The actual Hub runtime: hosts the session and message router, runs the private CA and onboarding services, broadcasts discovery, and orchestrates the streaming pipeline (source apps, mixers, targets). |
 | `qar-streaming-viz.exe` | The visualizer - the interactive desktop window where you see and manipulate the shared room. |
 
 ## Starting the Hub
 
-1. Start **`qaros-hub-service`** (the installer makes it start at sign-in; the tray menu's "Start QAROS at login" turns that off; otherwise **QAROS** in the Start menu). Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
+1. Start **`qaros.exe`** (**QAROS** in the Start menu, or `bin\qaros.exe`). It starts at sign-in by default: the installer sets that up for every user, the portable ZIP at its first start. The tray menu's **Start QAROS at login** turns it off for you, and it stays off across sign-ins, upgrades and reinstalls. Development builds never start at sign-in. Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
 2. **Left-click the tray icon** to open the visualizer window.
 3. The tray menu offers: *Open visualizer*, *Restart*, *New session…* and *Join hub…* (both greyed on a member), *Leave and start own session…* (on a member), and *Exit*. The tray tooltip shows the role: "Primary hub" or "Member of *primary*".
 
@@ -29,10 +29,10 @@ Hub configuration is managed through the Hub UI and persists across restarts. St
 For development and testing, one PC can run several independent Hubs from the same portable (ZIP) or development build. Give each its own data root:
 
 ```powershell
-$env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros-hub-service.exe
+$env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros.exe
 ```
 
-- A Hub is identified by its data root. Starting `qaros-hub-service.exe` again with the same root replaces the running one; a different root starts a second Hub next to it, with its own tray icon, launcher and visualizer.
+- A Hub is identified by its data root. Starting `qaros.exe` again with the same root replaces the running one; a different root starts a second Hub next to it, with its own tray icon, launcher and visualizer.
 - Each Hub has its own identity, CA, session, Hub configuration and source-app presets. Devices onboarded to one are not onboarded to the other.
 - Ports do not collide: each Hub takes the next free router port (19120, 19121, ...) and its own onboarding (pairing) port from the same range, bound exclusively, so a second Hub never shares the first one's. Pin them with `routerPort` / `routerPortRangeStart` / `discoveryPort` only for firewalled setups ([Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference#networking)).
 - To pair with a specific Hub by address, use `host:port`: the port is shown with that Hub's onboarding code. An app given only a code finds the Hub of the same Windows user on its own.

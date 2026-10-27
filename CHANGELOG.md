@@ -61,6 +61,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the operator guide names the program to start `qaros.exe` and explains turning off the
+  start at sign-in per user.
+- **Docs:** *Connecting to the Hub* and *Managing Devices* describe the Session tabs (Devices
+  first), the always-open invite form, HoloLens as the legacy kind and the Revoked peers section.
+
 - **Docs:** *Running the Hub* says what a crash dump holds on Windows and Linux: the stacks and
   the QAROS memory they point at, without other libraries' memory or the application's data, and
   that each process keeps its newest 10 dumps.

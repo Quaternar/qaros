@@ -1843,7 +1843,7 @@ typedef struct QarOnboardPeerIdExt
  *   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  * - The progress callback reports "Waiting for approval in QAROS hub" while
  *   the prompt is open.
- * - Starts the QAROS hub when it does not run: qaros-hub-service from the
+ * - Starts the QAROS hub when it does not run: qaros.exe from the
  *   installation's bin/, else from
  * QarRuntimeInit::runtime_binaries_folder_path. A running hub is left as it is,
  * and the hub outlives the app.

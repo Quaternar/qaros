@@ -37,7 +37,7 @@ Silent install, from an elevated PowerShell:
 |---|---|
 | `/S` | silent; accepts the QAROS licence |
 | `/NoFirewall` | adds no firewall rules: devices on the LAN cannot connect, local source apps still work |
-| `/NoAutostart` | QAROS does not start at sign-in (it still starts once when the setup finishes) |
+| `/NoAutostart` | QAROS does not start at sign-in for every user (it still starts once when the setup finishes); each user can still turn it on in the tray menu |
 | `/AllowDowngrade` | lets an older setup replace a newer installation (silent setups refuse otherwise) |
 | `/ANARI`, `/NoANARI` | adds or removes the optional ANARI device; without either an upgrade keeps the previous choice |
 
@@ -61,7 +61,7 @@ Silent install, from an elevated PowerShell:
 | Windows service `QAROS.SystemService` (`qaros-system-service.exe`) | runs as a service |
 | Firewall rules for every QAROS executable, TCP and UDP, in and out, on the QAROS ports below (`/NoFirewall` skips them) | Windows Defender Firewall, all network profiles |
 | Runtime location for apps: value `InstallFolder` | `HKLM\SOFTWARE\Quaternar\QAROS` |
-| QAROS tray starting at sign-in, for every user (`/NoAutostart` skips it) | `HKLM\...\Run\QAROS` |
+| QAROS tray (`qaros.exe`) starting at sign-in, for every user (`/NoAutostart` skips it). Each user turns it off for themselves with **Start QAROS at login** in the tray menu; it stays off across sign-ins, upgrades and reinstalls | `HKLM\...\Run\QAROS` |
 | Start menu shortcut, Add/Remove Programs entry, signed uninstaller | |
 
 The Hub processes (tray, launcher, Visualizer) run in the signed-in user's session, not as the service.
@@ -91,7 +91,7 @@ Logs are kept apart from the data, under the **log root** `%TEMP%\quaternar\logs
 
 | Logs of | Folder |
 |---|---|
-| Tray (`qaros-hub-service`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
+| Tray (`qaros`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
 | Launcher and every process it starts (Visualizer, source apps, mixer) | `<log root>\qar-launcher-default\<session-id>`, emptied when the Hub starts |
 
 - Deleting the per-user data folder resets the Hub: devices must onboard again and local apps must be approved again.

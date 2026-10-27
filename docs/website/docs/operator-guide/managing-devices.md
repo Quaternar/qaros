@@ -23,20 +23,20 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 ## The two onboarding paths
 
-**Push (operator-configured).** You add a device in the Visualizer's [Connection panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** > **Add device**), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+**Push (operator-configured).** You add a device in the Visualizer's [Session panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** tab, **Invite device** card), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
 
 **Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. Integrated applications on a PC or device without a Hub use this path through the C API; on the Hub's PC they join as local apps instead. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
 
 ## Listing connected peers
 
-The runtime tracks which peers are connected. In the Visualizer's Connection panel, **Hubs** lists every Hub of the session; expand one to see the apps and devices it serves. **Devices** lists the headsets with their streaming status.
+The runtime tracks which peers are connected. In the Visualizer's Session panel, the **Devices** tab (shown first) lists the headsets with their streaming status; **Hubs** lists every Hub of the session, expand one to see the apps and devices it serves.
 
 ## Forgetting and blacklisting a device
 
 Two related operations remove a device:
 
 - **Forget** wipes the device's persisted identity slot (certificate and session state) so its next connection requires a fresh pairing. A device cannot be forgotten while its session is still active - have it leave first, then forget.
-- **Blacklist (revoke)** stops the Hub from renewing or re-issuing the device's certificate and tells the rest of the session about it. A blacklisted device is refused on every channel, a new pairing code included, until you **Allow** it again (Visualizer, Connection panel, *Devices*). Revoke and Allow work only from the Hub's PC.
+- **Blacklist (revoke)** stops the Hub from renewing or re-issuing the device's certificate and tells the rest of the session about it. A blacklisted device is refused on every channel, a new pairing code included, until you **Allow** it again (Visualizer, Session > *Devices*: the device's row, or *Revoked peers* for a peer no remembered device names). Revoke and Allow work only from the Hub's PC.
 
 ### What a blacklisted device can still do
 
@@ -57,6 +57,6 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 
 For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its short lifetime. A code is offered only while that card is open.
 
-Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Add device** > **Other devices** shows the large QR code for them.
+Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Invite device** > **By QR code invite** shows the large QR code for them.
 
-- **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. Headsets you can reach by address are easier with push onboarding (**Devices** > **Add device**), which needs no code.
+- **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. Headsets you can reach by address are easier with push onboarding (**Devices** > **Invite device**), which needs no code.
