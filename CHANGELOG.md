@@ -53,7 +53,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** the Unity guide lists Vulkan next to Direct3D 11. A new *Graphics APIs* section says
   that other APIs are refused, that Vulkan needs `QarUnityGraphics.dll` loaded on startup, and that
-  a Vulkan frame reaches the stream one Unity frame later.
+  Vulkan's streamed frame rate depends on Unity's frame pacing, with measured figures.
 - **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
   presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for

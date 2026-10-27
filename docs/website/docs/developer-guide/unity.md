@@ -220,6 +220,9 @@ The package streams under Direct3D 11 and under Vulkan, in the Editor and in pla
   for sharing frames. Keep **Load on startup** set in its import settings. Without it a Vulkan
   player cannot stream, and the runtime refuses to start with a `NotSupportedException` that says
   why.
-- **Under Vulkan a frame reaches the stream one Unity frame later** than under Direct3D 11, and
-  somewhat fewer frames per second are handed over: about 20 where Direct3D 11 reaches 24 in the
-  same scene.
+- **Under Vulkan the streamed frame rate depends on Unity's frame pacing.** A Vulkan frame is
+  shown only after Unity's render thread has handed it over, so a capped frame rate hurts it more
+  than Direct3D 11. In our measurements, uncapped Vulkan streamed nearly as many frames as
+  Direct3D 11 (72 against 83 per second) at the same latency. Capped at 60 fps, or under VSync,
+  it streamed about half (around 30 per second) with about twice the latency. Where streaming
+  matters, leave the frame rate uncapped or use Direct3D 11.
