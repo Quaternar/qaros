@@ -457,7 +457,7 @@ If you know [the C tutorial](/docs/developer-guide/tutorials/c/gui-panel-operati
 
 | C | Rust |
 | --- | --- |
-| `example_obtain_session` (rejoin, else code) | `qaros_examples::join_session` (rejoin, else code, else local app) |
+| `example_join_session` (rejoin, else code, else local app) | `qaros_examples::join_session` (rejoin, else code, else local app) |
 | `QarGuiPanelInit`, `qar_gui_panel_init_default()` | `GuiPanelConfig::new(common_name)` |
 | `qar_gui_panels_get_or_create` | `GuiPanels::get_or_create` |
 | `qar_gui_panels_update_pose`, `_change_size`, `_set_state`, `_navigate_to_uri` | `set_pose`, `set_size`, `set_state`, `navigate_to_uri` |
