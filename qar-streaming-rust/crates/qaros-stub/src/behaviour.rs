@@ -44,6 +44,8 @@ const REPORT_VARIABLE: &str = "QAROS_STUB_REPORT";
 
 struct RuntimeValue {
     storage: PathBuf,
+    /// Created with `QarRuntimeEphemeralStorageExt`: onboarding persists nothing.
+    ephemeral: bool,
 }
 
 struct SessionValue {
@@ -672,6 +674,24 @@ fn fire_render_requests(session: Option<usize>, target_peer: [u8; 16]) -> usize 
     )
 }
 
+/// The stub's only lifecycle state: connected to the session `qar_session_get_id` reports.
+///
+/// # Safety
+///
+/// `reason` must be null or a C string that outlives every reader of `info`.
+unsafe fn write_connected_lifecycle(
+    info: &mut QarSessionLifecycleInfo,
+    session: &SessionValue,
+    reason: *const std::ffi::c_char,
+) {
+    info.state = QarSessionLifecycleState::QAR_SESSION_LIFECYCLE_STATE_CONNECTED;
+    info.cause = QarSessionChangeCause::QAR_SESSION_CHANGE_CAUSE_NONE;
+    info.session_id.data = derive_id(&format!("session-{}", hex(&session.onboarding_id)));
+    info.previous_session_id.data = [0; 16];
+    info.has_previous_session = false;
+    info.reason = reason;
+}
+
 /// # Safety
 ///
 /// `session` must be null or a handle from this stub.
@@ -742,6 +762,22 @@ unsafe fn runtime_storage(runtime: *mut QarRuntime) -> Option<PathBuf> {
     // SAFETY: forwarded to the caller.
     unsafe { handle_value::<RuntimeValue, QarRuntime>(runtime, RUNTIME) }
         .map(|value| value.storage.clone())
+}
+
+/// # Safety
+///
+/// `runtime` must be null or a handle from this stub.
+unsafe fn runtime_is_ephemeral(runtime: *mut QarRuntime) -> bool {
+    // SAFETY: forwarded to the caller.
+    unsafe { handle_value::<RuntimeValue, QarRuntime>(runtime, RUNTIME) }
+        .is_some_and(|value| value.ephemeral)
+}
+
+fn ephemeral_refusal(function: &str) -> QarResult {
+    state::error(
+        QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+        format!("{function} does not apply to a runtime with ephemeral storage"),
+    )
 }
 
 fn session_still_active(onboarding_id: &[u8; 16]) -> bool {
@@ -1108,8 +1144,17 @@ impl StubApi for Stub {
         } else {
             PathBuf::from(storage)
         };
+        // SAFETY: header checked; the chain consists of stamped extension structures.
+        let ephemeral =
+            match unsafe { runtime_init_is_ephemeral((*init).header.next.cast_const().cast()) } {
+                Ok(ephemeral) => ephemeral,
+                Err(failure) => return failure,
+            };
+        if ephemeral {
+            note("runtime ephemeral storage".to_string());
+        }
         // SAFETY: out_runtime is writable.
-        unsafe { *out_runtime = new_handle(RuntimeValue { storage }, RUNTIME) };
+        unsafe { *out_runtime = new_handle(RuntimeValue { storage, ephemeral }, RUNTIME) };
         success()
     }
 
@@ -1220,6 +1265,10 @@ impl StubApi for Stub {
         if init.onboarding_id.data == [0; 16] {
             return invalid("onboarding_id is zero");
         }
+        // SAFETY: runtime comes from this stub.
+        if unsafe { runtime_is_ephemeral(runtime) } {
+            return ephemeral_refusal("qar_runtime_rejoin");
+        }
         // SAFETY: the chain consists of stamped extension structures.
         if let Err(failure) = unsafe {
             validate_optional_extensions(
@@ -1304,7 +1353,10 @@ impl StubApi for Stub {
 
         // SAFETY: validated as a stamped chain above.
         let mode = unsafe { (*init.header.next.cast_const().cast::<QarStructureHeader>()).type_ };
-        if mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT {
+        // A local app and a runtime with ephemeral storage persist nothing: the zero id.
+        // SAFETY: runtime comes from this stub.
+        let ephemeral = unsafe { runtime_is_ephemeral(runtime) };
+        if mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT || ephemeral {
             // SAFETY: out-pointers checked non-null; presentation strings valid.
             unsafe {
                 (*out_onboarding_id).data = [0; 16];
@@ -1349,6 +1401,10 @@ impl StubApi for Stub {
         if onboarding_id == [0; 16] {
             return invalid("onboarding_id is zero");
         }
+        // SAFETY: runtime comes from this stub.
+        if unsafe { runtime_is_ephemeral(runtime) } {
+            return ephemeral_refusal("qar_runtime_forget");
+        }
         if session_still_active(&onboarding_id) {
             return state::error(
                 QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE,
@@ -1387,6 +1443,12 @@ impl StubApi for Stub {
         if unsafe { session_value(session) }.is_none() || out_invite.is_null() {
             return invalid("session or out_invite invalid");
         }
+        // SAFETY: header checked; app_tag is a C string or NULL.
+        let app_tag = unsafe { text_or_empty((*init).app_tag) };
+        if let Err(failure) = validate_app_tag(&app_tag) {
+            return failure;
+        }
+        note(format!("invite app_tag={app_tag}"));
         // SAFETY: out_invite is writable.
         unsafe {
             *out_invite = new_handle(
@@ -1540,6 +1602,59 @@ impl StubApi for Stub {
         unsafe {
             (*out_session_id).data = derive_id(&format!("session-{}", hex(&value.onboarding_id)));
         };
+        success()
+    }
+
+    unsafe fn qar_impl_session_get_lifecycle_state(
+        session: *const QarSession,
+        out_info: *mut QarSessionLifecycleInfo,
+    ) -> QarResult {
+        // SAFETY: session comes from this stub.
+        let Some(value) = (unsafe { session_value(session) }) else {
+            return invalid("session is not a live handle");
+        };
+        if out_info.is_null() {
+            return invalid("out_info is NULL");
+        }
+        // SAFETY: out_info is writable; its header is left untouched, as the header says.
+        unsafe { write_connected_lifecycle(&mut *out_info, value, std::ptr::null()) };
+        success()
+    }
+
+    /// Registers the subscription and delivers the current state at once, as the library does
+    /// first on every subscription; the stub's sessions never move.
+    unsafe fn qar_impl_session_subscribe_lifecycle(
+        session: *mut QarSession,
+        callback: qar_session_lifecycle_callback_t,
+        user_state: *mut c_void,
+        token: *mut QarCancelToken,
+    ) -> QarResult {
+        if token.is_null() {
+            return invalid("token is NULL");
+        }
+        let registered = register_subscription(
+            session,
+            SubscriptionKind::SessionLifecycle,
+            state::callback_address(callback),
+            user_state,
+            token,
+            None,
+        );
+        if registered.code != QarStatusCode::QAR_STATUS_SUCCESS {
+            return registered;
+        }
+        // SAFETY: registered above, so the session is live.
+        let Some(value) = (unsafe { session_value(session) }) else {
+            return invalid("session is not a live handle");
+        };
+        let mut info = qaros_sys::defaults::qar_session_lifecycle_info_default();
+        let reason = c"stub: connected";
+        // SAFETY: reason is a static C string.
+        unsafe { write_connected_lifecycle(&mut info, value, reason.as_ptr()) };
+        if let Some(callback) = callback {
+            // SAFETY: the caller's callback with its own state; info lives for the call.
+            unsafe { callback(&raw const info, user_state) };
+        }
         success()
     }
 
@@ -2903,6 +3018,49 @@ fn adapter_report(adapter: &QarGraphicsDeviceId) -> String {
     }
 }
 
+/// The app tag rules of the header: non-empty printable ASCII, no space at either end, at most
+/// `QAR_MAX_APP_TAG_LENGTH` bytes, never starting with `member/`.
+fn validate_app_tag(app_tag: &str) -> Result<(), QarResult> {
+    let printable = app_tag.bytes().all(|byte| (0x20..=0x7e).contains(&byte));
+    let trimmed = app_tag.trim() == app_tag;
+    let fits = app_tag.len() <= QAR_MAX_APP_TAG_LENGTH as usize;
+    if app_tag.is_empty() || !printable || !trimmed || !fits || app_tag.starts_with("member/") {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+            format!("app tag {app_tag:?} is not a valid app tag"),
+        ));
+    }
+    Ok(())
+}
+
+/// Whether a `QarRuntimeInit` chain holds `QarRuntimeEphemeralStorageExt`, its only extension.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped extension structures.
+unsafe fn runtime_init_is_ephemeral(
+    mut next: *const QarStructureHeader,
+) -> Result<bool, QarResult> {
+    let mut ephemeral = false;
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        if header.type_ != QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT {
+            note(format!(
+                "ERROR unexpected extension type {} in QarRuntimeInit",
+                header.type_.0
+            ));
+            return Err(state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "unexpected extension in QarRuntimeInit",
+            ));
+        }
+        ephemeral = true;
+        next = header.next.cast_const().cast();
+    }
+    Ok(ephemeral)
+}
+
 /// # Safety
 ///
 /// `next` must be null or the start of a chain of stamped structures.
@@ -2967,12 +3125,24 @@ unsafe fn validate_onboard_chain(next: *const QarStructureHeader) -> Result<(), 
             "local app approval_timeout_ms={}",
             local_app_extension.approval_timeout_ms
         ));
+        let mut rest: *const QarStructureHeader =
+            local_app_extension.header.next.cast_const().cast();
+        // SAFETY: forwarded to the caller.
+        if !rest.is_null()
+            && unsafe { (*rest).type_ }
+                == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT
+        {
+            // SAFETY: the type identifies the structure.
+            let tag_extension = unsafe { &*rest.cast::<QarOnboardLocalAppTagExt>() };
+            // SAFETY: app_tag is a C string or NULL.
+            let app_tag = unsafe { text_or_empty(tag_extension.app_tag) };
+            validate_app_tag(&app_tag)?;
+            note(format!("local app tag={app_tag}"));
+            rest = tag_extension.header.next.cast_const().cast();
+        }
         // SAFETY: forwarded to the caller.
         return unsafe {
-            validate_optional_extensions(
-                local_app_extension.header.next.cast_const().cast(),
-                OptionalExtensions::AfterLocalAppMode,
-            )
+            validate_optional_extensions(rest, OptionalExtensions::AfterLocalAppMode)
         };
     }
     note(format!(

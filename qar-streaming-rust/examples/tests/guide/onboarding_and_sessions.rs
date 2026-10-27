@@ -1,12 +1,9 @@
-use std::ffi::{CStr, c_char};
 use std::sync::mpsc;
 
-use qaros::qaros_sys::{
-    QarOnboardingInvite, QarRequestOnboardingCodesInit, QarStructureType, defaults,
-};
 use qaros::{
     BlockingOptions, CancelToken, GraphicsAdapter, HubAddress, Library, OnboardMethod,
-    OnboardingId, PeerPresentation, Progress, Runtime, Session, StatusCode,
+    OnboardingId, PeerPresentation, Progress, Runtime, RuntimeConfig, Session, SessionId,
+    SessionLifecycle, SessionLifecycleState, StatusCode, Subscription,
 };
 
 fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> {
@@ -25,6 +22,7 @@ fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> 
     let joined = runtime.onboard(
         &OnboardMethod::LocalApp {
             approval_timeout: None,
+            app_tag: None, // the default tag; see "App tags"
         },
         &presentation,
         &BlockingOptions {
@@ -38,6 +36,24 @@ fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> 
     let session = joined?.session;
     // ANCHOR_END: local_app
     Ok(session)
+}
+
+fn local_app_with_tag(runtime: &Runtime) -> qaros::Result<Session> {
+    // ANCHOR: app_tag
+    let who = PeerPresentation {
+        display_name: Some("TerraExplorer – left view".to_string()), // any UTF-8
+        ..PeerPresentation::default()
+    };
+    let onboarded = runtime.onboard(
+        &OnboardMethod::LocalApp {
+            approval_timeout: None,
+            app_tag: Some("left.terraexplorer.skyline"),
+        },
+        &who,
+        &BlockingOptions::default(),
+    )?;
+    // ANCHOR_END: app_tag
+    Ok(onboarded.session)
 }
 
 // ANCHOR: obtain_session
@@ -86,80 +102,36 @@ fn obtain_session(
 }
 // ANCHOR_END: obtain_session
 
-fn mint_invite(session: &Session) -> qaros::Result<Vec<u8>> {
-    // ANCHOR: mint_invite
-    // In the onboarded instance:
-    let invite = session.request_onboarding_invite(&BlockingOptions::default())?;
-    let wire_bytes = invite.serialize()?;
-    // ship `wire_bytes` over your IPC of choice; the invite is destroyed when it drops
-    // ANCHOR_END: mint_invite
-    Ok(wire_bytes)
-}
-
-fn onboard_sibling(
-    library: &Library,
-    runtime: &Runtime,
-    wire_bytes: &[u8],
-    who: &PeerPresentation,
-) -> qaros::Result<(Session, OnboardingId)> {
-    // ANCHOR: onboard_sibling
-    // In the sibling instance:
-    let invite = library.deserialize_invite(wire_bytes)?;
-    let onboarded = runtime.onboard(
-        &OnboardMethod::Invite(&invite),
-        who,
+fn co_process(library: &Library, session: &Session, blob: &[u8]) -> qaros::Result<Session> {
+    // ANCHOR: co_process
+    // In your app (joined as a local app):
+    let invite = session.request_onboarding_invite(
+        "companion.terraexplorer.skyline",
         &BlockingOptions::default(),
     )?;
-    let my_id = onboarded.onboarding_id; // persist it for later rejoins
-    drop(invite); // the caller keeps ownership of the invite
-    // ANCHOR_END: onboard_sibling
-    Ok((onboarded.session, my_id))
-}
+    let mut wire_bytes = invite.serialize()?;
+    drop(invite);
+    // write `wire_bytes` to the co-process's stdin, then clear it
+    wire_bytes.fill(0);
 
-fn one_time_codes(library: &Library, session: &Session) -> String {
-    // ANCHOR: one_time_codes
-    // One-time codes are raw only: call the raw table with the session's handle.
-    let api = library.raw_api();
-    let request = QarRequestOnboardingCodesInit {
-        header: defaults::structure_header(
-            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT,
-        ),
-        count: 3,              // 1 to 64
-        lifetime_seconds: 300, // 0 = 120 s, at most 600 s
-        planned_peer_id: defaults::qar_peer_id_default(),
+    // In the co-process:
+    let runtime = library.create_runtime(&RuntimeConfig {
+        ephemeral_storage: true, // identity in memory only
+        ..RuntimeConfig::default()
+    })?;
+    let received = library.deserialize_invite(blob)?;
+    let who = PeerPresentation {
+        display_name: Some("TerraExplorer companion".to_string()),
+        ..PeerPresentation::default()
     };
-    let mut invites: [*mut QarOnboardingInvite; 3] = [std::ptr::null_mut(); 3];
-    let mut code: [c_char; 128] = [0; 128];
-    // SAFETY: the session is alive and used on this thread; the array holds `count` handles,
-    // which are ours to destroy; the code buffer is writable for its length.
-    unsafe {
-        let result = (api.qar_impl_session_request_onboarding_codes)(
-            session.as_raw(),
-            &raw const request,
-            None,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            invites.as_mut_ptr(),
-        );
-        if (api.qar_impl_result_is_success)(result) {
-            (api.qar_impl_onboarding_invite_get_code)(
-                invites[0],
-                code.as_mut_ptr(),
-                code.len(),
-                std::ptr::null_mut(),
-            );
-            for invite in invites {
-                (api.qar_impl_onboarding_invite_handle_destroy)(invite);
-            }
-        }
-    }
-    // SAFETY: the library writes a terminated string into the zeroed buffer.
-    let code = unsafe { CStr::from_ptr(code.as_ptr()) }
-        .to_string_lossy()
-        .into_owned();
-    // hand `code` to one device; it onboards with OnboardMethod::Code
-    // ANCHOR_END: one_time_codes
-    code
+    let onboarded = runtime.onboard(
+        &OnboardMethod::Invite(&received),
+        &who,
+        &BlockingOptions::default(),
+    )?;
+    // onboarded.onboarding_id stays zero; the invite is destroyed when it drops
+    // ANCHOR_END: co_process
+    Ok(onboarded.session)
 }
 
 fn onboard_on_adapter(
@@ -174,6 +146,7 @@ fn onboard_on_adapter(
     let onboarded = runtime.onboard_on_adapter(
         &OnboardMethod::LocalApp {
             approval_timeout: None,
+            app_tag: None,
         },
         who,
         Some(adapter),
@@ -218,6 +191,33 @@ fn onboard_from_stdin_line(
     };
     // ANCHOR_END: launch_invite
     Ok(onboarded.session)
+}
+
+/// What the app does with the lifecycle states on its own thread.
+fn get_or_create_owned_objects(_session: &Session) {}
+
+fn follow_lifecycle(session: &Session) -> qaros::Result<Subscription> {
+    // ANCHOR: session_lifecycle
+    let (posted, states) = mpsc::channel::<SessionLifecycle>();
+    // Library thread: hand the snapshot to the app's thread and return.
+    let lifecycle = session.subscribe_lifecycle(move |state| {
+        let _ = posted.send(state);
+    })?; // without it the app never learns of RePairRequired
+
+    // On the app's thread, for each posted state:
+    let mut last_id: SessionId = session.id()?;
+    for state in states.try_iter() {
+        if state.session_id != last_id {
+            last_id = state.session_id; // re-read whatever you keyed by the session id
+            get_or_create_owned_objects(session); // app volumes, panels, ... per common name
+        }
+        if state.state == SessionLifecycleState::RePairRequired {
+            // drop `lifecycle` and the session, onboard again, then get_or_create_owned_objects()
+            // and recreate your senders
+        }
+    }
+    // ANCHOR_END: session_lifecycle
+    Ok(lifecycle)
 }
 
 fn teardown(runtime: &Runtime, session: Session, saved_id: OnboardingId) -> qaros::Result<()> {

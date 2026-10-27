@@ -278,6 +278,7 @@ let (progress, reports) = mpsc::channel();
 let onboarded = runtime.onboard(
     &OnboardMethod::LocalApp {
         approval_timeout: None,
+        app_tag: None,
     },
     &PeerPresentation::default(),
     &BlockingOptions {

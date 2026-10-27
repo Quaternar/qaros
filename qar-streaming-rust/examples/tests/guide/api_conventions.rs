@@ -72,6 +72,7 @@ fn blocking_call(library: &Library, runtime: &Runtime) -> qaros::Result<Onboarde
     let onboarded = runtime.onboard(
         &OnboardMethod::LocalApp {
             approval_timeout: None,
+            app_tag: None,
         },
         &PeerPresentation::default(),
         &BlockingOptions {

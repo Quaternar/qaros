@@ -90,6 +90,7 @@ pub fn create_runtime(library: &Library, bin: &Path, scratch: &Path, name: &str)
         .create_runtime(&RuntimeConfig {
             runtime_binaries_directory: Some(bin.to_path_buf()),
             storage_directory: Some(storage),
+            ephemeral_storage: false,
         })
         .expect("create the runtime")
 }

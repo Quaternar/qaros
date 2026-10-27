@@ -20,7 +20,7 @@ use crate::render::{
 };
 use crate::runtime::RuntimeInner;
 use crate::strings;
-use crate::types::SessionId;
+use crate::types::{SessionId, SessionLifecycle};
 use crate::volumes::AppVolumes;
 
 /// A `QarSession`, obtained by [`crate::Runtime::rejoin`] or
@@ -300,6 +300,46 @@ impl Session {
         )
     }
 
+    /// The session's current lifecycle state (`qar_session_get_lifecycle_state`): the session
+    /// id it is in now and, after a move, the one it moved from and why. `reason` is empty here.
+    pub fn lifecycle(&self) -> Result<SessionLifecycle> {
+        let api = self.inner.api();
+        let mut info = defaults::qar_session_lifecycle_info_default();
+        // SAFETY: live session; info is stamped and a valid out-pointer.
+        let result = unsafe {
+            (api.qar_impl_session_get_lifecycle_state)(self.inner.handle.as_ptr(), &raw mut info)
+        };
+        check(api, "qar_session_get_lifecycle_state", result)?;
+        Ok(SessionLifecycle::from_raw(&info))
+    }
+
+    /// Calls `callback` with each lifecycle state of the session
+    /// (`qar_session_subscribe_lifecycle`): first the current one, then every change. Runs on
+    /// library threads; hand the snapshot to the app's own thread. On a new session id, get or
+    /// create again what the app keys by it (app volumes, panels, senders); on
+    /// [`crate::SessionLifecycleState::RePairRequired`], drop the session and onboard again.
+    pub fn subscribe_lifecycle(
+        &self,
+        callback: impl Fn(SessionLifecycle) + Send + Sync + 'static,
+    ) -> Result<Subscription> {
+        let session = self.inner.handle.as_ptr();
+        self.inner.subscribe(
+            Box::new(callback),
+            "qar_session_subscribe_lifecycle",
+            |api, user_state, token| {
+                // SAFETY: as in subscribe_peer_updates.
+                unsafe {
+                    (api.qar_impl_session_subscribe_lifecycle)(
+                        session,
+                        Some(session_lifecycle_trampoline),
+                        user_state,
+                        token,
+                    )
+                }
+            },
+        )
+    }
+
     /// Calls `callback` for each incoming render stream request (for example
     /// from a visualizer). Runs on library threads; create the sender on the
     /// session's thread.
@@ -488,13 +528,19 @@ impl Session {
         GuiPanels::new(&self.inner)
     }
 
-    /// Mints an invite for a sibling API instance
-    /// (`qar_session_request_onboarding_invite`).
+    /// Mints a co-process invite (`qar_session_request_onboarding_invite`): a process this app
+    /// starts onboards with it ([`crate::OnboardMethod::Invite`], with
+    /// [`crate::RuntimeConfig::ephemeral_storage`]) and joins under the peer id the hub remembers
+    /// for this app's approval and `app_tag`. `app_tag` is required, an identity key as for
+    /// [`crate::OnboardMethod::LocalApp`]; give the co-process a tag of its own. Only a session
+    /// that joined as a local app, or an app the QAROS launcher started, may request one; any
+    /// other fails with [`crate::StatusCode::ONBOARDING_INVITE_REFUSED`], which is final.
     pub fn request_onboarding_invite(
         &self,
+        app_tag: &str,
         options: &BlockingOptions<'_>,
     ) -> Result<OnboardingInvite> {
-        OnboardingInvite::request(&self.inner, options)
+        OnboardingInvite::request(&self.inner, app_tag, options)
     }
 }
 
@@ -705,4 +751,17 @@ unsafe extern "C" fn render_request_trampoline(
         Ok(render_request) => state.deliver(render_request, "render request"),
         Err(error) => log::warn!("reading a render request: {error}"),
     }
+}
+
+unsafe extern "C" fn session_lifecycle_trampoline(
+    info: *const sys::QarSessionLifecycleInfo,
+    user_state: *mut c_void,
+) {
+    // SAFETY: registered by subscribe_lifecycle with this event type.
+    let state = unsafe { CallbackState::<SessionLifecycle>::from_user_state(user_state) };
+    // SAFETY: the library passes a valid info for the duration of the callback, or null.
+    let Some(info) = (unsafe { info.as_ref() }) else {
+        return;
+    };
+    state.deliver(SessionLifecycle::from_raw(info), "session lifecycle");
 }

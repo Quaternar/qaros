@@ -8,9 +8,8 @@ API in `qaros`, and Rust ports of the C examples. The bindings load the same
 
 - The latest stable Rust, through [rustup](https://rustup.rs).
 - To run against QAROS: Windows with the MSVC toolchain (`stable-x86_64-pc-windows-msvc`, Visual
-  Studio Build Tools 2022 with "Desktop development with C++") and QAROS installed, or
-  a QAROS binary package (requested from <https://www.quaternar.com/>) whose `bin` folder
-  `QAROS_RUNTIME_DIR` names ([Loading the runtime](#loading-the-runtime)).
+  Studio Build Tools 2022 with "Desktop development with C++") and QAROS installed, or a QAROS
+  development hub whose instance `QAR_INSTANCE` names ([Loading the runtime](#loading-the-runtime)).
 - A QAROS runtime that exports every function of the header the bindings are generated from
   ([qar-streaming-c/include/qar_streaming.h](../qar-streaming-c/include/qar_streaming.h) in this
   repository), and that is the runtime of the Hub you join. The binding loads all of the
@@ -61,15 +60,15 @@ render sender (Windows) to either line.
 use qaros::{AppState, AppVolumeConfig, BlockingOptions, Eye, FrameViewSpec, Library, LibraryConfig, OnboardMethod, PeerPresentation, PixelFormat, RenderSenderConfig, RuntimeConfig, ShowParams, ViewKind};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // SAFETY: the runtime found (the installed QAROS, or the one QAROS_RUNTIME_DIR names)
-    // matches these bindings.
+    // SAFETY: the runtime found (the installed QAROS, or that of the instance QAR_INSTANCE
+    // names) matches these bindings.
     let library = unsafe { Library::load_default(&LibraryConfig::default())? };
     let runtime = library.create_runtime(&RuntimeConfig::default())?;
     // On the Hub machine (Windows), join as a local app: the first start waits until the user
     // clicks Allow in QAROS, and there is nothing to persist.
     let session = runtime
         .onboard(
-            &OnboardMethod::LocalApp { approval_timeout: None },
+            &OnboardMethod::LocalApp { approval_timeout: None, app_tag: Some("main.my-app.example") },
             &PeerPresentation::default(),
             &BlockingOptions::default(),
         )?
@@ -232,7 +231,7 @@ wins:
 | --- | --- | --- |
 | 0 | A `qar-streaming-c` already loaded in the process | Nothing is loaded; a reference is taken. |
 | 1 | Beside the binding | The folder of the executable or library the binding is compiled into: a test binary, an unpacked development ZIP, an app built into a QAROS tree. |
-| 2 | The folder `QAROS_RUNTIME_DIR` names | When the variable is set, it is the only copy considered: a runtime missing there or failing to load is an error. |
+| 2 | The runtime folder of the QAROS instance `QAR_INSTANCE` names | Windows; elsewhere there are no instance records and the variable is not read. `default` is the installed QAROS (step 3's folder); any other name is the `RuntimeFolder` recorded under `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a QAROS development hub records its build output there and sets `QAR_INSTANCE` for the apps it starts), else that record's `<InstallFolder>\bin`; only fully qualified folders count. When the variable is set, a name that is not 1-64 of `A-Z a-z 0-9 . _ -`, an unknown instance, or a runtime missing there or failing to load is an error, never a reason to load another instance's runtime. |
 | 3 | The installed QAROS, `<InstallFolder>\bin` | Windows. `InstallFolder` is read from `HKLM\SOFTWARE\Quaternar\QAROS`, never `HKCU`. An installed runtime missing or failing to load is an error. |
 | 4 | Each folder on `PATH`, in order | Elsewhere: the dynamic linker's own search. |
 
@@ -243,11 +242,12 @@ wins:
 - Nothing found is `Error::Load(LoadError::NotFound { attempts })`, whose message names every
   place looked at and what was there.
 - `Library::load(path)` loads one library file and nothing else, with the same flags. It is for
-  development builds of QAROS; to point a run at another runtime without code, set
-  `QAROS_RUNTIME_DIR`.
+  development builds of QAROS; to point a run at another QAROS instance's runtime without code,
+  set `QAR_INSTANCE` (an app a QAROS hub starts receives it).
 - `RuntimeConfig::runtime_binaries_directory` stays `None` by default: the runtime then uses the
   folder it was loaded from, where it finds `qar-runtime-launcher`.
-- Diagnostics: `qaros::installed_bin_folder()`, `qaros::runtime_dir_from_environment()`,
+- Diagnostics: `qaros::installed_bin_folder()`, `qaros::requested_instance()` (the value of
+  `QAR_INSTANCE`), `qaros::instance_runtime_folder(name)` (the folder step 2 loads from),
   `Library::library_path()` (the file loaded) and `Library::lookup_step()` (the step that found
   it).
 
@@ -265,8 +265,8 @@ is named with `--qaros-library=PATH`, else `QAROS_DLL`, else the first line of
 path, as their C originals). The developer guide's Rust tutorials walk through each of them
 ([Tutorials](#tutorials)).
 
-On Windows, on the Hub machine, with QAROS installed or `QAROS_RUNTIME_DIR` set to the `bin`
-folder of an unpacked QAROS package. Joining as a local app starts the Hub when it is not
+On Windows, on the Hub machine, with QAROS installed, or with `QAR_INSTANCE` naming the instance
+of a running QAROS development hub. Joining as a local app starts the Hub when it is not
 running; a running Hub is left as it is, and the Hub keeps running after the example exits. The
 rendering examples also need a target app
 in the session, such as the Visualizer:
@@ -363,7 +363,9 @@ C compiler (MSVC in C11 mode on Windows; on macOS with the D3D11 stand-in header
 initializers are checked on both) and compares them with the Rust ports. The runtime lookup's
 order is tested against a simulated process, environment and registry
 (`crates/qaros-sys/src/lookup.rs`), and `Library::load_default` once against a copy of the stub
-that `QAROS_RUNTIME_DIR` names.
+(`crates/qaros/tests/default_lookup.rs`): on Windows through `QAR_INSTANCE` and a per-user
+instance record unique to the run, removed afterwards; elsewhere it checks that `QAR_INSTANCE`
+is not read.
 
 - The D3D11 tests (`crates/qaros/tests/stub/d3d11_path.rs`, with the feature `d3d11`, which the
   examples turn on for the workspace: on Windows, and on macOS for these tests) run against the
@@ -437,7 +439,7 @@ cargo test -p qar-streaming-rust-ext --features e2e -- --nocapture
 | `real_vulkan_render` | The Vulkan render sender on the extension's device |
 | `real_vulkan_own_device` | The Vulkan render sender on the application's own `ash` device, chosen by `Session::graphics_adapter` |
 | `real_multi_user` | Two targets, two senders on one session; one user leaves |
-| `real_local_app` | `vulkan_cube` (`QAROS_E2E_APP`) started with a piped stdin, as QAROS starts it: it joins the Hub running on this machine as a local app, renders for a target when `QAROS_E2E_REQUIRE_TARGET=1`, and exits 0 when its stdin closes. It needs that Hub, the runtime in `QAROS_PACKAGE_BIN`, and the Allow click on the cube's first run |
+| `real_local_app` | `vulkan_cube` (`QAROS_E2E_APP`) started with a piped stdin, as QAROS starts it: it joins the Hub running on this machine as a local app, renders for a target when `QAROS_E2E_REQUIRE_TARGET=1`, and exits 0 when its stdin closes. It needs that Hub and the Allow click on the cube's first run. The cube inherits `QAR_INSTANCE`, which picks the Hub and the runtime (a development hub's instance name; unset, the installed QAROS) |
 
 `QAROS_E2E_EYE=<width>x<height>` and `QAROS_E2E_FRAMES` size the runs. Each test prints `RATE`
 and `PHASES` lines.

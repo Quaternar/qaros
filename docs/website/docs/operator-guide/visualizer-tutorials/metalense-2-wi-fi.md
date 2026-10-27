@@ -12,7 +12,7 @@ instead, then invites the glasses at the address they receive.
 ## Before you start
 
 - The glasses are connected over a USB-C data cable and the player is installed
-  ([Install and Invite](./quest-and-metalense-2)).
+  ([Install and Invite](./quest-and-metalense-2.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**,
   and the glasses are listed under **Connected over USB**.
 - The network is WPA2 (or open). Enterprise (802.1X) networks are not supported.

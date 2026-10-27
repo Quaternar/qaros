@@ -1,5 +1,6 @@
 //! Value types: identifiers, math, and the C enums the safe API uses.
 
+use std::ffi::CStr;
 use std::fmt;
 
 use qaros_sys as sys;
@@ -398,5 +399,72 @@ mod tests {
         assert_eq!(AppState::from_raw(raw), AppState::Retired);
         assert_eq!(AppState::Retired.to_raw(), raw);
         assert_eq!(format!("{:?}", AppState::from_raw(raw)), "Retired");
+    }
+}
+
+c_enum!(
+    /// Where a session stands in its hub's session lifecycle (`QarSessionLifecycleState`).
+    /// Treat [`Self::Other`] as [`Self::HubUnreachable`]: the session keeps trying.
+    SessionLifecycleState: QarSessionLifecycleState {
+        /// In the hub's current session; traffic flows.
+        Connected = QAR_SESSION_LIFECYCLE_STATE_CONNECTED,
+        /// Moving into another session in place; traffic resumes once connected.
+        Migrating = QAR_SESSION_LIFECYCLE_STATE_MIGRATING,
+        /// The hub has not answered for a while; the session keeps trying by itself.
+        HubUnreachable = QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE,
+        /// The hub no longer admits this peer (its approval was revoked, it missed too many
+        /// rotations, or the hub was reset). Terminal: drop the session and onboard again.
+        RePairRequired = QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED,
+    }
+);
+
+c_enum!(
+    /// Why the session moved into another session id (`QarSessionChangeCause`). Informational
+    /// only; treat [`Self::Other`] as [`Self::Rotated`].
+    SessionChangeCause: QarSessionChangeCause {
+        /// No move: a state change within the same session.
+        None = QAR_SESSION_CHANGE_CAUSE_NONE,
+        /// The hub serves a new session of its own.
+        Rotated = QAR_SESSION_CHANGE_CAUSE_ROTATED,
+        /// The hub this app paired with joined another hub as its member.
+        JoinedPrimary = QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY,
+    }
+);
+
+/// One state of a session's lifecycle (`QarSessionLifecycleInfo`), copied out of the library.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionLifecycle {
+    pub state: SessionLifecycleState,
+    /// Why the latest move happened; [`SessionChangeCause::None`] outside a move.
+    pub cause: SessionChangeCause,
+    /// The session the app is in now: during [`SessionLifecycleState::Migrating`] still the old
+    /// one. Compare it with the id the app last saw to tell a new move from an old one.
+    pub session_id: SessionId,
+    /// The session it moved from, on the state that ends a move.
+    pub previous_session_id: Option<SessionId>,
+    /// Text for logs and the operator, never a secret. Empty from
+    /// [`crate::Session::lifecycle`].
+    pub reason: String,
+}
+
+impl SessionLifecycle {
+    pub(crate) fn from_raw(info: &sys::QarSessionLifecycleInfo) -> Self {
+        let reason = if info.reason.is_null() {
+            String::new()
+        } else {
+            // SAFETY: non-null and NUL-terminated; valid during the callback that delivered it.
+            unsafe { CStr::from_ptr(info.reason) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        Self {
+            state: SessionLifecycleState::from_raw(info.state),
+            cause: SessionChangeCause::from_raw(info.cause),
+            session_id: SessionId::from_raw(info.session_id),
+            previous_session_id: info
+                .has_previous_session
+                .then(|| SessionId::from_raw(info.previous_session_id)),
+            reason,
+        }
     }
 }

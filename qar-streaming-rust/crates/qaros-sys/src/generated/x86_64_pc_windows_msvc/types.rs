@@ -13,6 +13,7 @@ pub const QAR_ORIENTATION_TRACKED_BIT: u32 = 4;
 pub const QAR_POSITION_TRACKED_BIT: u32 = 8;
 pub const QAR_HAND_JOINT_COUNT: u32 = 26;
 pub const QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES: u32 = 16;
+pub const QAR_MAX_APP_TAG_LENGTH: u32 = 256;
 pub type DWORD = ::std::os::raw::c_ulong;
 pub type LONG = ::std::os::raw::c_long;
 #[repr(C)]
@@ -94,9 +95,10 @@ pub type QarSession = QarSessionHandle;
 pub struct QarOnboardingInviteHandle {
     _unused: [u8; 0],
 }
-/** Onboarding invite (opaque) — full invite blob for onboarding a sibling
-instance (see qar_session_request_onboarding_invite /
-qar_runtime_onboard).*/
+/** Onboarding invite (opaque) — a full invite blob: a co-process invite this
+app requested (qar_session_request_onboarding_invite) or the launch invite
+QAROS hands an app it starts; redeemed with QarOnboardInviteExt in
+qar_runtime_onboard.*/
 pub type QarOnboardingInvite = QarOnboardingInviteHandle;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -353,6 +355,11 @@ impl QarStatusCode {
     update the app or device, pairing again is not enough.*/
     pub const QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN: QarStatusCode =
         QarStatusCode(1810);
+    /** The hub refused qar_session_request_onboarding_invite: it mints a
+    co-process invite only for a local app it enrolled on its own PC (local
+    enrollment) or a process its launcher started. A device, or an app that
+    joined with a code or an invite, gets none. Final; nothing was minted.*/
+    pub const QAR_STATUS_ONBOARDING_INVITE_REFUSED: QarStatusCode = QarStatusCode(1812);
     /** The hub has no target app it can launch for the requested device (an
     unknown connection-string scheme family, or a device kind that is never
     invited, such as a camera). Nothing was invited; pick another target.*/
@@ -1618,16 +1625,23 @@ impl QarStructureType {
         QarStructureType(4109);
     pub const QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT: QarStructureType =
         QarStructureType(4110);
+    pub const QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT: QarStructureType =
+        QarStructureType(4111);
+    pub const QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT: QarStructureType =
+        QarStructureType(4112);
+    pub const QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT: QarStructureType =
+        QarStructureType(4113);
+    pub const QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT: QarStructureType =
+        QarStructureType(4114);
     pub const QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID: QarStructureType =
         QarStructureType(8196);
     pub const QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT: QarStructureType =
-        QarStructureType(8197);
-    pub const QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT: QarStructureType =
-        QarStructureType(8200);
+        QarStructureType(8202);
     pub const QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT: QarStructureType =
         QarStructureType(8199);
     pub const QAR_STRUCTURE_TYPE_PEER_PRESENTATION: QarStructureType = QarStructureType(8198);
     pub const QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY: QarStructureType = QarStructureType(8201);
+    pub const QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO: QarStructureType = QarStructureType(8203);
     pub const QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT: QarStructureType =
         QarStructureType(12288);
     pub const QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME: QarStructureType = QarStructureType(12289);
@@ -1689,7 +1703,10 @@ impl QarStructureType {
 Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
 0x2002 (PEER_SPEC_INIT), 0x100B (RUNTIME_MEMBER_JOIN_REQUEST_INIT),
-0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT). The never-released
+0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT), 0x2005 (the untagged
+SESSION_REQUEST_INVITE_INIT, refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED
+"app tag required"), 0x2008 (SESSION_REQUEST_ONBOARDING_CODES_INIT, removed
+with qar_session_request_onboarding_codes). The never-released
 SESSION_SPONSOR_MEMBER_INIT shared 0x2009 by mistake; 0x2009 stays
 PEER_DEVICE_IDENTITY.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1907,6 +1924,46 @@ const _: () = {
         [::std::mem::offset_of!(QarRuntimeInit, runtime_binaries_folder_path) - 16usize];
     ["Offset of field: QarRuntimeInit::storage_folder_path"]
         [::std::mem::offset_of!(QarRuntimeInit, storage_folder_path) - 24usize];
+};
+/** @brief Extension: keep this runtime's identities in memory only.
+
+Chain into QarRuntimeInit.header.next. For a process that must leave
+nothing on disk, typically a co-process joining with a co-process invite
+(see QarRequestInviteInit): the identity it onboards with lives in an
+in-memory secure store and is gone when the runtime is.
+
+- qar_runtime_onboard writes nothing under the storage root, and
+  out_onboarding_id is the zero id. A non-zero QarOnboardInit.onboarding_id
+  is refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Certificate renewal
+  works as usual.
+- The identity is forgotten when its session handle is destroyed.
+- qar_runtime_rejoin and qar_runtime_forget return
+  QAR_STATUS_ARGUMENT_NOT_SUPPORTED: there is no persisted slot. A restarted
+  process onboards again (a fresh co-process invite from its parent).
+- Only identities are kept off disk. Logs still go to
+  QarLibraryInit.log_folder_path and carry no key or invite secret. A crash
+  dump (its `crashes` subfolder, or QAR_CRASH_DUMP_DIR) holds process memory
+  and may hold the in-memory key, which is good until its certificate
+  expires (30 minutes for a co-process).
+- QarOnboardLocalAppExt is stateless already and is unaffected.
+- A runtime older than this extension skips it like any unknown chained
+  struct and stores the identity on disk. Before relying on it, check
+  QarRuntimeInfo::version (qar_runtime_info) against the version whose
+  changelog introduces it. The same holds for QarOnboardLocalAppTagExt.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarRuntimeEphemeralStorageExt {
+    ///< QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT
+    pub header: QarStructureHeader,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarRuntimeEphemeralStorageExt"]
+        [::std::mem::size_of::<QarRuntimeEphemeralStorageExt>() - 16usize];
+    ["Alignment of QarRuntimeEphemeralStorageExt"]
+        [::std::mem::align_of::<QarRuntimeEphemeralStorageExt>() - 8usize];
+    ["Offset of field: QarRuntimeEphemeralStorageExt::header"]
+        [::std::mem::offset_of!(QarRuntimeEphemeralStorageExt, header) - 0usize];
 };
 /** @brief Identity slot key, generated by the runtime on first onboard.
 
@@ -2151,8 +2208,9 @@ const _: () = {
     ["Offset of field: QarOnboardHostExt::port"]
         [::std::mem::offset_of!(QarOnboardHostExt, port) - 24usize];
 };
-/** @brief Extension: onboard from a full invite blob (sibling app / second API
-instance).*/
+/** @brief Extension: onboard from a full invite blob - a co-process invite
+(qar_session_request_onboarding_invite) or the launch invite QAROS hands an
+app it starts.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarOnboardInviteExt {
@@ -2173,11 +2231,16 @@ const _: () = {
 };
 /** @brief Extension: join the session under a peer id chosen by the caller.
 
-Chain into QarOnboardInit.header.next, next to the mode extension. For a
-process whose peer id was planned by someone else - the runtime launcher
-assigns one to every process it starts and reports it to the rest of the
-session - so the process must appear under that id. Absent, onboarding mints
-a fresh id. The id is persisted with the slot, so a later rejoin keeps it.*/
+Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
+QarOnboardInviteExt, for a process whose peer id was planned and announced
+to the session by someone else, so the process must appear under that id.
+- Absent: the process takes the peer id the hub bound to the code or invite
+  (a co-process invite always carries one), else a fresh one.
+- Present: it must equal any peer id the hub bound to the code or invite;
+  a different id fails onboarding.
+- Refused with QarOnboardLocalAppExt, which gets its peer id from the hub
+  (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+The id is persisted with the slot, so a later rejoin keeps it.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarOnboardPeerIdExt {
@@ -2217,7 +2280,7 @@ user approved. The runtime renews the certificate before it expires.
   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
 - The progress callback reports "Waiting for approval in QAROS hub" while
   the prompt is open.
-- Starts the QAROS hub when it does not run: qaros-hub-service from the
+- Starts the QAROS hub when it does not run: qaros.exe from the
   installation's bin/, else from
 QarRuntimeInit::runtime_binaries_folder_path. A running hub is left as it is,
 and the hub outlives the app.
@@ -2239,6 +2302,50 @@ const _: () = {
         [::std::mem::offset_of!(QarOnboardLocalAppExt, header) - 0usize];
     ["Offset of field: QarOnboardLocalAppExt::approval_timeout_ms"]
         [::std::mem::offset_of!(QarOnboardLocalAppExt, approval_timeout_ms) - 16usize];
+};
+/** @brief Extension: the app tag of a local source app, telling several
+instances of one approved app apart.
+
+Chain into QarOnboardInit.header.next next to QarOnboardLocalAppExt; it is
+refused with any other mode (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+
+The hub remembers a peer id per approval and tag: the next start of the app
+with the same tag gets the same peer id while no other live process holds
+it, and a one-off id otherwise. Absent, the app has the default tag, which
+is remembered the same way. The hub keeps at most 64 tags per approval,
+dropping the least recently used, forgets a tag unused for 30 days, and
+forgets all of them when the approval is revoked or narrowed.
+
+An app tag is an identity key, treated like the common name of an app
+volume or GUI panel:
+- non-empty printable ASCII (0x20-0x7E, no control characters), no space
+  at either end, at most QAR_MAX_APP_TAG_LENGTH bytes; anything else is
+refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Put non-ASCII text in
+  QarPeerPresentation::display_name.
+- never starting with `member/`, which the hub keeps for the apps of its
+  member hubs (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+- compared exactly (case-sensitive) and kept constant across versions of
+  the app.
+- a DNS-style name scoped by the app is recommended, e.g.
+  `left.terraexplorer.skyline`.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarOnboardLocalAppTagExt {
+    ///< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT
+    pub header: QarStructureHeader,
+    /// Required; the app tag (rules above). Copied before the call returns.
+    pub app_tag: *const ::std::os::raw::c_char,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarOnboardLocalAppTagExt"]
+        [::std::mem::size_of::<QarOnboardLocalAppTagExt>() - 24usize];
+    ["Alignment of QarOnboardLocalAppTagExt"]
+        [::std::mem::align_of::<QarOnboardLocalAppTagExt>() - 8usize];
+    ["Offset of field: QarOnboardLocalAppTagExt::header"]
+        [::std::mem::offset_of!(QarOnboardLocalAppTagExt, header) - 0usize];
+    ["Offset of field: QarOnboardLocalAppTagExt::app_tag"]
+        [::std::mem::offset_of!(QarOnboardLocalAppTagExt, app_tag) - 16usize];
 };
 /** @brief What the loaded qar-streaming-c reports about itself
 (qar_runtime_info).*/
@@ -2263,58 +2370,46 @@ const _: () = {
     ["Offset of field: QarRuntimeInfo::c_api"]
         [::std::mem::offset_of!(QarRuntimeInfo, c_api) - 16usize];
 };
-/** @brief Mint an invite to hand to a sibling instance (session-scoped).
+/** @brief Mint a co-process invite: a one-time invite for a process this app
+starts on the same PC (a companion in another language, a helper process).
 
-Deliberately empty: the invite is always requested from the hub this
-session onboarded through, and nothing else is configurable today. The
-header keeps it an ABI-safe growth point (new fields or header.next).*/
+The hub binds the invite to the peer id it remembers for this session's
+approval and app_tag (see QarOnboardLocalAppTagExt), so the co-process joins
+as the same peer on every start while no other live process holds that id.
+
+- Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
+  process the QAROS launcher started, may request one.
+- Single use, valid for 60 s (set by the hub), redeemable only from the
+  hub's PC.
+- The co-process gets the short local certificate profile under this app's
+  approval; its certificate renews only while the requesting session is
+  still in the session, and revoking the approval revokes both.
+- The co-process should chain QarRuntimeEphemeralStorageExt so it writes
+  nothing to disk.
+
+An invite for another PC, or for a new device, is not available to apps:
+pairing codes and unbound invites are minted by the hub's operators.
+
+A struct whose header carries any other structure type, including a retired
+one (see QarStructureType), is refused with
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRequestInviteInit {
     ///< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT
     pub header: QarStructureHeader,
+    /** Required; the co-process's app tag. Same rules as
+    QarOnboardLocalAppTagExt::app_tag. Copied before the call returns.*/
+    pub app_tag: *const ::std::os::raw::c_char,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of QarRequestInviteInit"][::std::mem::size_of::<QarRequestInviteInit>() - 16usize];
+    ["Size of QarRequestInviteInit"][::std::mem::size_of::<QarRequestInviteInit>() - 24usize];
     ["Alignment of QarRequestInviteInit"][::std::mem::align_of::<QarRequestInviteInit>() - 8usize];
     ["Offset of field: QarRequestInviteInit::header"]
         [::std::mem::offset_of!(QarRequestInviteInit, header) - 0usize];
-};
-/** @brief Ask the hub for a new set of one-time onboarding codes.
-
-Every request mints codes of its own: codes other callers hold and the
-code on the hub's onboarding screen stay valid, and none of the new ones is
-announced or displayed. Each code works once and lapses after its
-lifetime.*/
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct QarRequestOnboardingCodesInit {
-    /**<
-    QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT*/
-    pub header: QarStructureHeader,
-    /// How many codes, 1 to 64. Also the length of the caller's out array.
-    pub count: u32,
-    /// Seconds each code stays valid; 0 -> 120. At most 600.
-    pub lifetime_seconds: u32,
-    /** Zero -> any device may use the codes. Otherwise a device pairing with
-    one of them can only join under this peer id (QarOnboardPeerIdExt).*/
-    pub planned_peer_id: QarPeerId,
-}
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of QarRequestOnboardingCodesInit"]
-        [::std::mem::size_of::<QarRequestOnboardingCodesInit>() - 40usize];
-    ["Alignment of QarRequestOnboardingCodesInit"]
-        [::std::mem::align_of::<QarRequestOnboardingCodesInit>() - 8usize];
-    ["Offset of field: QarRequestOnboardingCodesInit::header"]
-        [::std::mem::offset_of!(QarRequestOnboardingCodesInit, header) - 0usize];
-    ["Offset of field: QarRequestOnboardingCodesInit::count"]
-        [::std::mem::offset_of!(QarRequestOnboardingCodesInit, count) - 16usize];
-    ["Offset of field: QarRequestOnboardingCodesInit::lifetime_seconds"]
-        [::std::mem::offset_of!(QarRequestOnboardingCodesInit, lifetime_seconds) - 20usize];
-    ["Offset of field: QarRequestOnboardingCodesInit::planned_peer_id"]
-        [::std::mem::offset_of!(QarRequestOnboardingCodesInit, planned_peer_id) - 24usize];
+    ["Offset of field: QarRequestInviteInit::app_tag"]
+        [::std::mem::offset_of!(QarRequestInviteInit, app_tag) - 16usize];
 };
 /** @brief Ask this machine's hub to start a target app for one AR device.
 
@@ -2322,11 +2417,9 @@ const _: () = {
   - `"hololens:<host>"` — HoloLens
   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
     served by the Android streamer; it reports its exact model itself
-  - `"quest:<host>"`, `"android:<host>"` — older spellings of
-    `"headset:<host>"`
-`<host>` is a hostname or an IP address; the two are interchangeable. A bare
-`"<host>"` with no scheme is accepted as the legacy spelling of
-`"hololens:<host>"`.
+  - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
+  - `"<host>"` with no scheme — alias of `"hololens:<host>"`
+`<host>` is a hostname or an IP address; the two are interchangeable.
 
 Only these device kinds can be invited. Anything else — a visualizer, a
 desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
@@ -2492,6 +2585,82 @@ const _: () = {
     ["Offset of field: QarMemberHubInvitationInit::label"]
         [::std::mem::offset_of!(QarMemberHubInvitationInit, label) - 32usize];
 };
+/** @brief Extension: the invitation also grants one remote app on the joining
+PC, chained into QarMemberHubInvitationInit.header.next.
+
+The grant is bound to the calling app's approval and `app_tag`. On a member
+hub of this primary, the first executable that onboards as a local app with
+the invitation chained (QarOnboardRemoteAppGrantExt) is approved there
+without a prompt, recorded by its publisher or image hash. Later starts of
+that executable onboard with no invitation and no prompt, and the primary
+gives them the same peer id while no other live process holds it (the peer
+is remembered under the grant's tag). A different executable is refused the
+grant once it is redeemed, also with a later invitation of the same app and
+tag.
+
+- One grant admits one app on one member PC, however many hubs the
+  invitation's max_uses lets join; issue one tag per remote app.
+- With a grant the calling app's own approval is not extended to the member
+  hub (it is without one).
+- Revoking the calling app's approval, or the granted one, on the primary
+  revokes the granted app and forgets its peer id.
+- `app_tag` follows the app tag rules of QarOnboardLocalAppTagExt;
+  QAR_STATUS_ARGUMENT_NOT_SUPPORTED otherwise.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarMemberHubInvitationAppGrantExt {
+    /**<
+    QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT*/
+    pub header: QarStructureHeader,
+    /// Required; the grant's app tag. Copied before the call returns.
+    pub app_tag: *const ::std::os::raw::c_char,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarMemberHubInvitationAppGrantExt"]
+        [::std::mem::size_of::<QarMemberHubInvitationAppGrantExt>() - 24usize];
+    ["Alignment of QarMemberHubInvitationAppGrantExt"]
+        [::std::mem::align_of::<QarMemberHubInvitationAppGrantExt>() - 8usize];
+    ["Offset of field: QarMemberHubInvitationAppGrantExt::header"]
+        [::std::mem::offset_of!(QarMemberHubInvitationAppGrantExt, header) - 0usize];
+    ["Offset of field: QarMemberHubInvitationAppGrantExt::app_tag"]
+        [::std::mem::offset_of!(QarMemberHubInvitationAppGrantExt, app_tag) - 16usize];
+};
+/** @brief Extension: redeem a remote-app grant while onboarding as a local app
+on another PC, chained into QarOnboardInit.header.next next to
+QarOnboardLocalAppExt (with any other mode:
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+
+The hub on this PC must already be a member of the invitation's primary
+(qar_runtime_join_hub_as_member). When no approval admits this executable
+there yet, the primary records it as the app the invitation's grant admits,
+without a prompt; once redeemed by another executable the onboarding fails
+with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
+it, the invitation is not used. The app tag of the grant applies; a
+QarOnboardLocalAppTagExt is not needed.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarOnboardRemoteAppGrantExt {
+    /**<
+    QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT*/
+    pub header: QarStructureHeader,
+    /** Required; the invitation the primary's app created with
+    QarMemberHubInvitationAppGrantExt, as
+    qar_member_hub_invitation_deserialize returned it. Borrowed for the
+    duration of the call.*/
+    pub invitation: *const QarMemberHubInvitation,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarOnboardRemoteAppGrantExt"]
+        [::std::mem::size_of::<QarOnboardRemoteAppGrantExt>() - 24usize];
+    ["Alignment of QarOnboardRemoteAppGrantExt"]
+        [::std::mem::align_of::<QarOnboardRemoteAppGrantExt>() - 8usize];
+    ["Offset of field: QarOnboardRemoteAppGrantExt::header"]
+        [::std::mem::offset_of!(QarOnboardRemoteAppGrantExt, header) - 0usize];
+    ["Offset of field: QarOnboardRemoteAppGrantExt::invitation"]
+        [::std::mem::offset_of!(QarOnboardRemoteAppGrantExt, invitation) - 16usize];
+};
 /** @brief Join the QAROS hub on this PC to a primary hub as its member
 (qar_runtime_join_hub_as_member).
 
@@ -2561,6 +2730,98 @@ const _: () = {
         [::std::mem::offset_of!(QarGraphicsDeviceId, luid) - 20usize];
     ["Offset of field: QarGraphicsDeviceId::uuid"]
         [::std::mem::offset_of!(QarGraphicsDeviceId, uuid) - 28usize];
+};
+impl QarSessionLifecycleState {
+    /// In the hub's current session; traffic flows.
+    pub const QAR_SESSION_LIFECYCLE_STATE_CONNECTED: QarSessionLifecycleState =
+        QarSessionLifecycleState(0);
+    /// Moving into another session in place; traffic resumes once CONNECTED.
+    pub const QAR_SESSION_LIFECYCLE_STATE_MIGRATING: QarSessionLifecycleState =
+        QarSessionLifecycleState(1);
+    /** The hub has not answered for a while; the session keeps trying by
+    itself.*/
+    pub const QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE: QarSessionLifecycleState =
+        QarSessionLifecycleState(2);
+    /** The hub no longer admits this peer (its approval was revoked, it missed
+    too many rotations, or the hub was reset to a new install). Terminal:
+    nothing is retried. Destroy the session and onboard again.*/
+    pub const QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED: QarSessionLifecycleState =
+        QarSessionLifecycleState(3);
+}
+#[repr(transparent)]
+/** @brief Where a session stands in its hub's session lifecycle.
+
+Treat a value this header does not name as
+QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE: the session keeps trying.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarSessionLifecycleState(pub ::std::os::raw::c_int);
+impl QarSessionChangeCause {
+    /// No move: a state change within the same session.
+    pub const QAR_SESSION_CHANGE_CAUSE_NONE: QarSessionChangeCause = QarSessionChangeCause(0);
+    /** The hub serves a new session of its own: its operator started a new
+    session, a member hub left its primary, or this peer missed the
+    announcement of a join.*/
+    pub const QAR_SESSION_CHANGE_CAUSE_ROTATED: QarSessionChangeCause = QarSessionChangeCause(1);
+    /** The hub this app paired with joined another hub as its member; the
+    session moved into that primary hub's session.*/
+    pub const QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY: QarSessionChangeCause =
+        QarSessionChangeCause(2);
+}
+#[repr(transparent)]
+/** @brief Why the session moved into another session id.
+
+Informational only: the move itself is the same. Treat a value this header
+does not name as QAR_SESSION_CHANGE_CAUSE_ROTATED.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarSessionChangeCause(pub ::std::os::raw::c_int);
+/** @brief One state of a session's lifecycle.
+
+Read with qar_session_get_lifecycle_state() (initialize it with
+qar_session_lifecycle_info_default()) or received by a
+qar_session_subscribe_lifecycle() callback.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarSessionLifecycleInfo {
+    ///< QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO
+    pub header: QarStructureHeader,
+    pub state: QarSessionLifecycleState,
+    /** Why the latest move happened; QAR_SESSION_CHANGE_CAUSE_NONE on a state
+    that is not part of a move.*/
+    pub cause: QarSessionChangeCause,
+    /** The session the app is in now: during MIGRATING still the old one, the
+    new one once the move completed. qar_session_get_id() answers the same.*/
+    pub session_id: QarSessionId,
+    /// The session it moved from; valid only when has_previous_session.
+    pub previous_session_id: QarSessionId,
+    /** Set on the CONNECTED (or HUB_UNREACHABLE) state that ends a move. The
+    state stays current until the next change, so the first state of a
+    subscription made after a move, and qar_session_get_lifecycle_state(),
+    still carry it with its cause: compare session_id with the id the app
+    last saw to tell a new move from an old one.*/
+    pub has_previous_session: bool,
+    /** UTF-8 text for logs and the operator, never a secret. Valid only during
+    the callback; NULL from qar_session_get_lifecycle_state().*/
+    pub reason: *const ::std::os::raw::c_char,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarSessionLifecycleInfo"][::std::mem::size_of::<QarSessionLifecycleInfo>() - 72usize];
+    ["Alignment of QarSessionLifecycleInfo"]
+        [::std::mem::align_of::<QarSessionLifecycleInfo>() - 8usize];
+    ["Offset of field: QarSessionLifecycleInfo::header"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, header) - 0usize];
+    ["Offset of field: QarSessionLifecycleInfo::state"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, state) - 16usize];
+    ["Offset of field: QarSessionLifecycleInfo::cause"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, cause) - 20usize];
+    ["Offset of field: QarSessionLifecycleInfo::session_id"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, session_id) - 24usize];
+    ["Offset of field: QarSessionLifecycleInfo::previous_session_id"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, previous_session_id) - 40usize];
+    ["Offset of field: QarSessionLifecycleInfo::has_previous_session"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, has_previous_session) - 56usize];
+    ["Offset of field: QarSessionLifecycleInfo::reason"]
+        [::std::mem::offset_of!(QarSessionLifecycleInfo, reason) - 64usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -3032,6 +3293,17 @@ const _: () = {
         view_overrides_count
     ) - 464usize];
 };
+/** @brief Callback of qar_session_subscribe_lifecycle().
+
+@param info The new state; valid only during the callback, `info->reason`
+  included. Copy what you keep.
+@param user_state The pointer passed to qar_session_subscribe_lifecycle().*/
+pub type qar_session_lifecycle_callback_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        info: *const QarSessionLifecycleInfo,
+        user_state: *mut ::std::os::raw::c_void,
+    ),
+>;
 /// @brief Callback invoked when a peer spec changes.
 pub type qar_peer_update_callback_t = ::std::option::Option<
     unsafe extern "C" fn(handle: *mut QarPeerSpec, user_state: *mut ::std::os::raw::c_void),

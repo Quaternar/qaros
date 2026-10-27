@@ -86,10 +86,13 @@ impl Library {
     /// runs against the QAROS installed on the PC and ships no copy of the runtime.
     ///
     /// The first match wins: a runtime already loaded in the process; one beside the executable
-    /// (or library) this binding is compiled into; the folder named by `QAROS_RUNTIME_DIR`; the
+    /// (or library) this binding is compiled into; on Windows, when `QAR_INSTANCE` names a QAROS
+    /// instance, that instance's runtime folder (`default` is the installed QAROS, any other name
+    /// the `RuntimeFolder` its hub records under `HKCU\SOFTWARE\Quaternar\QAROS\Instances`); the
     /// installed QAROS (`<InstallFolder>\bin` from `HKLM\SOFTWARE\Quaternar\QAROS`); each
-    /// folder on `PATH`. A set `QAROS_RUNTIME_DIR`, or an installed QAROS, whose runtime is
-    /// missing or fails to load is an error, not a reason to go on. Nothing found is
+    /// folder on `PATH`. A set `QAR_INSTANCE` naming an invalid or unknown instance, and an
+    /// instance or installed QAROS whose runtime is missing or fails to load, is an error, never
+    /// a reason to load another runtime. Nothing found is
     /// [`Error::Load`] with [`qaros_sys::LoadError::NotFound`], naming every place looked at.
     /// See [`QarApi::load_default`] for the details; [`Library::library_path`] tells which file
     /// was loaded.
@@ -105,8 +108,8 @@ impl Library {
 
     /// Loads `qar-streaming-c` from the library file at `path` and runs `qar_library_init`.
     /// Only that file is tried. Explicit paths are for development builds of QAROS;
-    /// a distributed application uses [`Library::load_default`], and `QAROS_RUNTIME_DIR` points
-    /// a run at another runtime without code.
+    /// a distributed application uses [`Library::load_default`], and `QAR_INSTANCE` points a run
+    /// at another QAROS instance's runtime without code.
     ///
     /// # Safety
     ///

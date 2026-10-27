@@ -32,9 +32,12 @@ cargo run -p qaros-examples --bin local_app_onboarding
 
 # Wait up to 90 s for the approval instead of the Hub's default.
 cargo run -p qaros-examples --bin local_app_onboarding -- 90000
+
+# A second instance beside the first, with an app tag of its own.
+cargo run -p qaros-examples --bin local_app_onboarding -- 0 second.local-app-onboarding.examples.quaternar
 ```
 
-The only argument is the approval timeout in milliseconds. Absent or `0` means the Hub's default of 120 s; the Hub caps longer waits at 10 minutes. The example takes no library path: like a shipped app, it always uses the default lookup.
+The first argument is the approval timeout in milliseconds. Absent or `0` means the Hub's default of 120 s; the Hub caps longer waits at 10 minutes. The second is the app tag, `main.local-app-onboarding.examples.quaternar` when absent. The example takes no library path: like a shipped app, it always uses the default lookup.
 
 On the first run, while the approval prompt is open and after the user clicks **Allow**, the example prints this (the runtime may add log lines of its own):
 
@@ -44,22 +47,25 @@ Waiting for approval in QAROS hub
 Certificate signed.
 Onboarding complete.
 Joined QAROS.
+This app joined as peer <uuid>
 ```
 
-It exits with 0. Later starts of the same executable print the same lines without `Waiting for approval in QAROS hub`.
+It exits with 0. Later starts of the same executable print the same lines without `Waiting for approval in QAROS hub`, and the same peer id while no other instance with the same tag runs.
 
-Without Windows, the stub must be found by the default lookup, under the runtime's file name. Put a copy in `target/stub-runtime`, inside the build folder, which git ignores. On macOS:
+Without Windows, the stub must be found by the default lookup, under the runtime's file name. There is no `QAR_INSTANCE` step outside Windows, so put a copy in `target/stub-runtime`, inside the build folder, which git ignores, and let the dynamic linker's search find it (`LD_LIBRARY_PATH` on Linux). Run the executable itself, since a `DYLD_LIBRARY_PATH` set for `cargo run` may not reach it. On macOS:
 
 ```sh
 cargo build -p qaros-stub
+cargo build -p qaros-examples --bin local_app_onboarding
 mkdir -p target/stub-runtime
 cp target/debug/libqaros_stub.dylib target/stub-runtime/libqar-streaming-c.dylib
-QAROS_RUNTIME_DIR="$PWD/target/stub-runtime" cargo run -p qaros-examples --bin local_app_onboarding
+DYLD_LIBRARY_PATH="$PWD/target/stub-runtime" target/debug/local_app_onboarding
 ```
 
 ```text
 stub onboarding complete
 Joined QAROS.
+This app joined as peer <uuid>
 ```
 
 ## Walkthrough
@@ -105,6 +111,8 @@ Console logging is off: this app talks to a user, not a developer. Any `Error::L
 The call blocks until the Hub answers, which can take minutes. The progress reports show what it is waiting for. They arrive on a library thread, so the example passes the sending half of a channel in `BlockingOptions::progress` and prints from a thread of its own. When the call returns, the options and with them the sender are dropped, the channel closes, and the printer thread ends; `join` waits for its last line.
 
 The example passes no cancel token, so it can only wait. An application passes a `CancelToken` in `BlockingOptions::cancel` and cancels it when the user quits; `CancelToken::cancel_handle` gives a handle that cancels from another thread, such as a Ctrl+C handler.
+
+`app_tag` names this instance of the app ([App tags](/docs/developer-guide/onboarding-and-sessions#app-tags-telling-instances-apart)). The Hub picks the peer id and remembers one per approval and tag, so the next start with the same tag gets the same peer id back, and the example prints it. While another live process holds that id (a second instance with the same tag), the newcomer gets a one-off id: give instances that run together different tags. The tag is an identity key: printable ASCII, no space at either end, never starting with `member/`, constant across versions of the app; anything else fails with `StatusCode::ARGUMENT_NOT_SUPPORTED`. `None` is the default tag, remembered the same way.
 
 A local app is **stateless**. `Onboarded::onboarding_id` is the zero id, and there is nothing to save: every start calls onboard again, and the Hub remembers the approval. `Runtime::rejoin` and `Runtime::forget` refuse the zero id with `Error::InvalidArgument`.
 
@@ -156,7 +164,7 @@ The exit code is computed while the result is still alive, then the session, the
 | exit 5 | nobody answered within the timeout | answer the prompt in the Visualizer or the tray window; pass a longer timeout if users need it |
 | exit 6 | the program serving the local enrollment is not the installed, signed QAROS | do not retry; reinstall QAROS from the official installer |
 | exit 7 | the executable was moved, copied, re-signed or changed since its approval | revoke the old approval in the Visualizer ([Approved local apps](/docs/operator-guide/source-applications#approved-local-apps)) and start again |
-| exit 1, `ONBOARDING_FAILED` with a runtime version or flavor in the message | the app loaded a runtime other than the one the Hub installed, for example through `QAROS_RUNTIME_DIR` or a copy beside the executable | load the installed runtime: unset the variable, remove the copy |
+| exit 1, `ONBOARDING_FAILED` with a runtime version or flavor in the message | the app loaded a runtime other than the one of the Hub it joins, for example a copy beside the executable, or another instance's runtime through `QAR_INSTANCE` | load that Hub's runtime: remove the copy, set `QAR_INSTANCE` to that Hub's instance or unset it for the installed QAROS |
 | exit 1, `NOT_IMPLEMENTED` | not Windows | run the app on Windows, on the Hub machine |
 | exit 1, `approval timeout '...' is not a number of milliseconds` | the argument is not a number | pass milliseconds, or nothing |
 | the prompt comes back after every build | the executable is unsigned, so its approval is for one exact file | expected during development |
@@ -171,7 +179,9 @@ The C tutorial is [Local App Onboarding](/docs/developer-guide/tutorials/c/local
 |---|---|
 | `qar_library_load(NULL)`, then `qar_library_init` with `enable_console_logging = false` | `Library::load_default(&LibraryConfig { console_logging: false, .. })` |
 | `qar_runtime_create` with `qar_runtime_init_default()` | `Library::create_runtime(&RuntimeConfig::default())` |
-| `QarOnboardLocalAppExt` chained into `QarOnboardInit`, `approval_timeout_ms` | `OnboardMethod::LocalApp { approval_timeout }`, an `Option<Duration>` |
+| `QarOnboardLocalAppExt` chained into `QarOnboardInit`, `approval_timeout_ms` | `OnboardMethod::LocalApp { approval_timeout, .. }`, an `Option<Duration>` |
+| `QarOnboardLocalAppTagExt` chained after it, `app_tag` | `OnboardMethod::LocalApp { app_tag, .. }`, an `Option<&str>` |
+| `example_print_own_peer_id` in `common.h` | `Session::my_peer()` and `Library::uuid_to_string` |
 | `init.presentation.display_name` | `PeerPresentation { display_name, .. }` |
 | a progress callback and its state pointer | `BlockingOptions { progress: Some(sender), .. }`, reports as `Progress { severity, percent, message }` |
 | `qar_result_has_code(result, QAR_STATUS_ONBOARDING_...)` | `error.has_code(StatusCode::ONBOARDING_...)` |

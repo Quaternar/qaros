@@ -77,10 +77,14 @@ without a Vulkan driver prints `skipped` and passes); for doc comments
 ## Loading the runtime
 
 `QarApi::load_default` (and `Library::load_default`) follows the default lookup of "Authoring a
-Language Binding": already loaded, beside the binding, `QAROS_RUNTIME_DIR`, the installed QAROS
-(`HKLM` only), `PATH`. A set `QAROS_RUNTIME_DIR` or an installation whose runtime does not load
-is reported, never skipped. Decisions live in `crates/qaros-sys/src/lookup.rs`, tested against a
-simulated system; system calls in `crates/qaros-sys/src/platform.rs`.
+Language Binding" and the header's `qar_loadlib_default`: already loaded, beside the binding, the
+runtime folder of the QAROS instance `QAR_INSTANCE` names (Windows only: `default` is the
+installed QAROS, any other name the `RuntimeFolder`, else `<InstallFolder>\bin`, of its `HKCU`
+instance record), the installed QAROS (`HKLM` only), `PATH`. A set `QAR_INSTANCE` that is no
+valid or known instance, and an instance or installation whose runtime does not load, is
+reported, never skipped. Decisions live in `crates/qaros-sys/src/lookup.rs`, tested against a
+simulated system; system calls in `crates/qaros-sys/src/platform.rs`. When the header's lookup
+changes, follow it step by step, messages included, as the C# binding's `InstalledRuntime` does.
 
 Loading resolves every symbol of the table or none (`LoadError::MissingSymbols` names all that
 are missing), so bindings from a newer header do not load an older runtime.

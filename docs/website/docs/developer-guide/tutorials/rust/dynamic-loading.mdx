@@ -19,7 +19,7 @@ What you will learn:
 
 ## Before you start
 
-- **Windows** for the real runtime. QAROS installed, or the `bin` folder of a QAROS runtime package somewhere on disk. No Hub needs to run: this example only loads the library.
+- **Windows** for the real runtime. QAROS installed, or a QAROS development hub that has recorded its runtime folder under its instance name. No Hub needs to run: this example only loads the library.
 - **A runtime that exports the whole header.** The binding needs a runtime that exports every function of the header it was generated from (the repository's `qar-streaming-c/include/qar_streaming.h`), and that is the runtime of the Hub you join. An older runtime fails to load and names the functions it lacks, as step 2 explains.
 - **macOS or Linux:** the example runs against `qaros-stub`, the in-memory stand-in the tests use.
 - **The latest stable Rust.**
@@ -33,10 +33,10 @@ With QAROS installed, the default lookup finds the installed runtime:
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 
-With an unpacked QAROS package instead, name its `bin` folder, which holds `qar-streaming-c.dll`, with `QAROS_RUNTIME_DIR`:
+To load the runtime of a QAROS development hub instead, name the hub's instance with `QAR_INSTANCE`. The hub records the folder of its runtime under that name, and sets the variable for the apps it starts:
 
 ```powershell
-$env:QAROS_RUNTIME_DIR = "C:\path\to\QAROS-package\bin"
+$env:QAR_INSTANCE = "dev-0123456789abcdef" # the development hub's instance name
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 
@@ -113,11 +113,11 @@ pub fn load_library() -> ExampleResult<Library> {
         unsafe { Library::load(&path, &LibraryConfig::default()) }?
     } else {
         println!("Loading the QAROS runtime (default lookup)");
-        // SAFETY: the runtime found is the installed QAROS or one the user chose with
-        // QAROS_RUNTIME_DIR; a mismatching one is a configuration error, as in the C examples.
+        // SAFETY: the runtime found is the installed QAROS or that of the instance the user chose
+        // with QAR_INSTANCE; a mismatching one is a configuration error, as in the C examples.
         unsafe { Library::load_default(&LibraryConfig::default()) }.map_err(|error| match error {
             qaros::Error::Load(qaros::qaros_sys::LoadError::NotFound { .. }) => format!(
-                "{error}\nInstall QAROS, set QAROS_RUNTIME_DIR to the folder of qar-streaming-c.dll, or pass --qaros-library=PATH (the qaros-stub library in target/debug/ runs without QAROS)."
+                "{error}\nInstall QAROS, set QAR_INSTANCE to the QAROS instance whose runtime to load, or pass --qaros-library=PATH (the qaros-stub library in target/debug/ runs without QAROS)."
             ),
             other => other.to_string(),
         })?
@@ -139,13 +139,13 @@ Both calls are `unsafe`. Opening a library runs its initialization code, and the
 |---|---|---|
 | 0 | a `qar-streaming-c` already loaded in this process | `already loaded in this process` |
 | 1 | beside the binding: the folder of the executable or library this crate is compiled into | `beside the binding` |
-| 2 | the folder `QAROS_RUNTIME_DIR` names | `QAROS_RUNTIME_DIR` |
+| 2 | when `QAR_INSTANCE` is set, the runtime folder of that QAROS instance (Windows only): `default` is the installed QAROS; any other name is the `RuntimeFolder` value of `HKCU\SOFTWARE\Quaternar\QAROS\Instances\` plus the name, else that record's `InstallFolder` plus `\bin` | `QAR_INSTANCE` |
 | 3 | the installed QAROS: `InstallFolder` under `HKLM\SOFTWARE\Quaternar\QAROS`, plus `\bin` (Windows only) | `the installed QAROS` |
 | 4 | each absolute folder on `PATH`, in order; elsewhere the dynamic linker's search | `PATH`; elsewhere `the dynamic linker's search` |
 
-Two steps end the lookup when they fail. A set `QAROS_RUNTIME_DIR` is the only copy considered, so a missing or broken runtime there is an error even when `PATH` holds a good one. An installed QAROS whose runtime is missing or fails to load is an error too. The current directory is never searched, and the process's search path is never changed.
+Two steps end the lookup when they fail. A set `QAR_INSTANCE` is the only copy considered: a value that is not an instance name (1 to 64 of `A-Z a-z 0-9 . _ -`), an instance without a recorded, fully qualified runtime folder, or a runtime missing or broken there is an error, never a reason to load another instance's runtime, even when the installation or `PATH` holds a good one. An installed QAROS whose runtime is missing or fails to load is an error too. Outside Windows there are no instance records, and the variable is not read. The current directory is never searched, and the process's search path is never changed.
 
-`Library::lookup_step()` returns the step that found the runtime, and `Library::library_path()` the file. The helper prints both, so `Loaded ... (QAROS_RUNTIME_DIR)` tells you at a glance which runtime you got. Print this in your own application too. A copy of the runtime beside the executable wins over the installation, and this line is how you notice.
+`Library::lookup_step()` returns the step that found the runtime, and `Library::library_path()` the file. The helper prints both, so `Loaded ... (QAR_INSTANCE)` tells you at a glance which runtime you got. Print this in your own application too. A copy of the runtime beside the executable wins over the installation, and this line is how you notice.
 
 **All or nothing.** The load resolves every `qar_impl_*` function the bindings know before it returns. If one is missing, it fails with a list of all missing names and keeps nothing. You never hold a half-bound API that fails at its first call.
 
@@ -195,8 +195,10 @@ Dropping the last `Library` runs `qar_library_destroy`. The runtime library itse
 
 | What you see | Cause | What to do |
 |---|---|---|
-| `no loadable QAROS runtime (qar-streaming-c.dll); looked at:` followed by one line per place (`libqar-streaming-c.dylib` on macOS, `libqar-streaming-c.so` on Linux) | no runtime in any place of the lookup | install QAROS, or set `QAROS_RUNTIME_DIR` to the runtime's `bin` folder, or pass `--qaros-library=PATH` |
-| `QAROS_RUNTIME_DIR: ...\qar-streaming-c.dll does not exist` (the macOS or Linux file name elsewhere), and the lookup stops there | the variable names a folder without the runtime; the lookup does not go on to `PATH` | fix or unset the variable |
+| `no loadable QAROS runtime (qar-streaming-c.dll); looked at:` followed by one line per place (`libqar-streaming-c.dylib` on macOS, `libqar-streaming-c.so` on Linux) | no runtime in any place of the lookup | install QAROS, or set `QAR_INSTANCE` to the QAROS instance whose runtime to load, or pass `--qaros-library=PATH` |
+| `QAR_INSTANCE='...' is not a QAROS instance name (1-64 of A-Z a-z 0-9 . _ -); no runtime is loaded` | the variable is set to something that is not an instance name | fix or unset the variable |
+| `QAR_INSTANCE is '...', but no runtime folder is recorded for that instance ...` (or, for `default`, `... but QAROS is not installed ...`), and the lookup stops there | no development hub of that name has recorded its runtime folder; the lookup does not go on to the installation or `PATH` | start that instance's hub, or unset the variable |
+| `QAR_INSTANCE is '...', but no loadable qar-streaming-c.dll is in its runtime folder '...'`, and the lookup stops there | the recorded folder holds no runtime, or one that fails to load (the reason follows in brackets) | rebuild or restart that hub, or unset the variable |
 | `... lacks N of M required symbols: ...`, followed by the missing names | the runtime is older than the header the bindings were generated from: it lacks the functions the header added | use a runtime that exports every function of the repository's `qar-streaming-c/include/qar_streaming.h`, the runtime of the Hub you join; or pin the dependency (`rev` or `tag`) to a commit whose header that runtime exports in full |
 | `cannot open ...: ` with the operating system's reason | the file or one of its dependencies cannot be loaded | name the `qar-streaming-c.dll` inside the runtime's `bin` folder, where its dependencies are |
 | `Loaded ... (beside the binding)` when you expected the installation | a copy of the runtime sits beside your executable and wins | remove it; do not ship the runtime with your application |
@@ -214,7 +216,8 @@ The C tutorial [Dynamic Loading](/docs/developer-guide/tutorials/c/dynamic-loadi
 | `qar_library_load(path)` then `qar_library_init(&init)` | `Library::load(path, &config)` |
 | `QarLibraryInit` from `qar_library_init_default()` | `LibraryConfig::default()` |
 | `qar_library_destroy()` then `qar_library_unload()` | drop the last `Library`; it destroys and never unloads |
-| `qar_installed_bin_folder`, `qar_runtime_env_folder` | `qaros::installed_bin_folder()`, `qaros::runtime_dir_from_environment()` |
+| `qar_installed_bin_folder` | `qaros::installed_bin_folder()` |
+| `QAR_INSTANCE`, read by the loader | `qaros::requested_instance()`, and `qaros::instance_runtime_folder(name)` for the folder step 2 loads from |
 | `qar_runtime_info` | `Library::runtime_info()` |
 | no argument for the default lookup, `--qaros-library=PATH` for a file | the same, and a file from `QAROS_DLL` or `qaros-library.txt` beside the executable |
 | exit codes 1 and 2 | exit code 1 on any error, with the message on stderr |

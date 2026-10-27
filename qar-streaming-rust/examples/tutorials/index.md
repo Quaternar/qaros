@@ -79,7 +79,8 @@ and the error names the functions it lacks
 
 The examples load the runtime with the default lookup every binding follows
 ([Authoring a Language Binding](/docs/developer-guide/authoring-a-binding)): a copy beside the
-executable, else the folder `QAROS_RUNTIME_DIR` names, else the installed QAROS, else `PATH`. To
+executable, else on Windows the runtime of the QAROS instance `QAR_INSTANCE` names (a development
+hub sets it for the apps it starts), else the installed QAROS, else `PATH`. To
 load one specific library file instead, pass `--qaros-library=PATH`, set `QAROS_DLL`, or put the
 path on the first line of `qaros-library.txt` beside the executable (for a start without
 arguments). `vulkan_cube` and `local_app_onboarding` always use the default lookup, as
@@ -94,8 +95,7 @@ first argument: they then store the onboarding id they get as `<example>.onboard
 the folder you run them from and rejoin with it on later runs. They pass no Hub address, so the
 code finds only your own Hub, on the Hub machine; a Hub elsewhere needs its host and port
 (`HubAddress`, see [Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)). `onboarding_and_rejoin` is the example of that path: it onboards with a code on
-its first run and keeps one id per runtime, `onboarding_and_rejoin.primary-onboarding-id.txt` and
-`onboarding_and_rejoin.sibling-onboarding-id.txt`.
+its first run and keeps its id in `onboarding_and_rejoin.primary-onboarding-id.txt`.
 
 ### On macOS, against the stub
 
@@ -115,8 +115,8 @@ It runs the program's logic and shows nothing. Like a real run, a stub run store
 id in the folder it runs from, and a later run against QAROS from that folder would first try to
 rejoin with the stub's id; the folder of its own keeps them apart.
 
-`vulkan_cube` and `local_app_onboarding` take no library path: they find the stub through
-`QAROS_RUNTIME_DIR`, as their pages show ([Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering#run-it),
+`vulkan_cube` and `local_app_onboarding` take no library path: they find the stub through the
+dynamic linker's search (`DYLD_LIBRARY_PATH` on macOS, `LD_LIBRARY_PATH` on Linux), as their pages show ([Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering#run-it),
 [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding#run-it)).
 `d3d11_render_sender` prints that it requires Windows and exits; on Windows, against the stub, it
 submits its frames without drawing, since the stub lends no D3D11 textures.

@@ -474,9 +474,29 @@ pub fn qar_onboard_local_app_ext_default() -> QarOnboardLocalAppExt {
     }
 }
 
+pub fn qar_runtime_ephemeral_storage_ext_default() -> QarRuntimeEphemeralStorageExt {
+    QarRuntimeEphemeralStorageExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT,
+        ),
+    }
+}
+
+/// `app_tag` is required; the caller sets it.
+pub fn qar_onboard_local_app_tag_ext_default() -> QarOnboardLocalAppTagExt {
+    QarOnboardLocalAppTagExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT,
+        ),
+        app_tag: ptr::null(),
+    }
+}
+
+/// `app_tag` is required; the caller sets it.
 pub fn qar_request_invite_init_default() -> QarRequestInviteInit {
     QarRequestInviteInit {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT),
+        app_tag: ptr::null(),
     }
 }
 
@@ -557,6 +577,18 @@ pub fn qar_render_frame_show_default() -> QarRenderFrameShow {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_RENDERING_END_FRAME),
         rendered_near_far: qar_near_far_default(),
         depth_scale: 1.0,
+    }
+}
+
+pub fn qar_session_lifecycle_info_default() -> QarSessionLifecycleInfo {
+    QarSessionLifecycleInfo {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO),
+        state: QarSessionLifecycleState::QAR_SESSION_LIFECYCLE_STATE_CONNECTED,
+        cause: QarSessionChangeCause::QAR_SESSION_CHANGE_CAUSE_NONE,
+        session_id: qar_session_id_default(),
+        previous_session_id: qar_session_id_default(),
+        has_previous_session: false,
+        reason: ptr::null(),
     }
 }
 

@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
     GraphicsAdapter, GuiPanelConfig, GuiPanelState, HubAddress, Library, OnboardMethod, OwnedFrame,
-    PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, ShowParams, StatusCode, Vec3,
-    ViewKind,
+    PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, SessionChangeCause,
+    SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -582,7 +582,7 @@ fn gui_panels_and_app_volumes_round_trip() {
 }
 
 #[test]
-fn a_sibling_runtime_onboards_from_a_serialized_invite() {
+fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
     let fixture = Fixture::new();
     let library = load_stub();
     let primary = library
@@ -597,8 +597,12 @@ fn a_sibling_runtime_onboards_from_a_serialized_invite() {
         .expect("onboard")
         .session;
     let invite = session
-        .request_onboarding_invite(&BlockingOptions::default())
+        .request_onboarding_invite("companion.examples.qaros", &BlockingOptions::default())
         .expect("invite");
+    assert_eq!(
+        fixture.control.entries_starting_with("invite app_tag="),
+        vec!["invite app_tag=companion.examples.qaros".to_string()]
+    );
     assert!(invite.expires_unix().expect("expiry") > 0);
     let wire_bytes = invite.serialize().expect("serialize");
     drop(invite);
@@ -607,8 +611,15 @@ fn a_sibling_runtime_onboards_from_a_serialized_invite() {
         .create_runtime(&RuntimeConfig {
             runtime_binaries_directory: None,
             storage_directory: Some(fixture.storage.join("sibling")),
+            ephemeral_storage: true,
         })
-        .expect("sibling runtime");
+        .expect("co-process runtime");
+    assert_eq!(
+        fixture
+            .control
+            .entries_starting_with("runtime ephemeral storage"),
+        vec!["runtime ephemeral storage".to_string()]
+    );
     let received = library
         .deserialize_invite(&wire_bytes)
         .expect("deserialize");
@@ -618,8 +629,9 @@ fn a_sibling_runtime_onboards_from_a_serialized_invite() {
             &PeerPresentation::default(),
             &BlockingOptions::default(),
         )
-        .expect("sibling onboard");
-    assert!(!sibling_onboarded.onboarding_id.is_zero());
+        .expect("co-process onboard");
+    // Ephemeral storage persists nothing: the id is zero, so rejoin and forget do not apply.
+    assert!(sibling_onboarded.onboarding_id.is_zero());
 
     let garbage = library
         .deserialize_invite(b"not an invite")
@@ -627,6 +639,150 @@ fn a_sibling_runtime_onboards_from_a_serialized_invite() {
     assert!(garbage.has_code(StatusCode::PAKE_ERROR));
     drop(sibling_onboarded);
     drop(received);
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_co_process_invite_needs_a_valid_app_tag() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    for refused_tag in ["", " padded", "member/companion"] {
+        let refused = session
+            .request_onboarding_invite(refused_tag, &BlockingOptions::default())
+            .expect_err("an invalid app tag");
+        assert!(
+            refused.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED),
+            "{refused_tag:?}: {refused}"
+        );
+    }
+    let interior_nul = session
+        .request_onboarding_invite("a\0b", &BlockingOptions::default())
+        .expect_err("an interior NUL never reaches the library");
+    assert!(matches!(interior_nul, Error::InvalidArgument(_)));
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_runtime_with_ephemeral_storage_refuses_rejoin_and_forget() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&RuntimeConfig {
+            ephemeral_storage: true,
+            ..fixture.runtime_config()
+        })
+        .expect("runtime");
+    let some_id = qaros::OnboardingId([7; 16]);
+    let rejoin = runtime.rejoin(
+        some_id,
+        &PeerPresentation::default(),
+        &BlockingOptions::default(),
+    );
+    assert!(
+        matches!(&rejoin, Err(error) if error.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED)),
+        "{rejoin:?}"
+    );
+    let forget = runtime.forget(some_id).expect_err("forget");
+    assert!(
+        forget.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED),
+        "{forget}"
+    );
+}
+
+#[test]
+fn a_local_app_tag_is_chained_after_the_mode_and_validated() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let onboarded = runtime
+        .onboard_on_adapter(
+            &OnboardMethod::LocalApp {
+                approval_timeout: None,
+                app_tag: Some("left.examples.qaros"),
+            },
+            &PeerPresentation::default(),
+            Some(GraphicsAdapter::Uuid([3; 16])),
+            &BlockingOptions::default(),
+        )
+        .expect("local app onboard with a tag and an adapter");
+    drop(onboarded.session);
+    assert_eq!(
+        fixture.control.entries_starting_with("local app tag="),
+        vec!["local app tag=left.examples.qaros".to_string()]
+    );
+    let refused = runtime
+        .onboard(
+            &OnboardMethod::LocalApp {
+                approval_timeout: None,
+                app_tag: Some("member/left"),
+            },
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect_err("a reserved tag");
+    assert!(
+        refused.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED),
+        "{refused}"
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn the_session_lifecycle_is_read_and_delivered_first_on_subscription() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let now = session.lifecycle().expect("lifecycle");
+    assert_eq!(now.state, SessionLifecycleState::Connected);
+    assert_eq!(now.cause, SessionChangeCause::None);
+    assert_eq!(now.session_id, session.id().expect("session id"));
+    assert_eq!(now.previous_session_id, None);
+    assert_eq!(now.reason, "");
+
+    let delivered = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = Arc::clone(&delivered);
+    let subscription = session
+        .subscribe_lifecycle(move |state| {
+            if let Ok(mut states) = sink.lock() {
+                states.push(state);
+            }
+        })
+        .expect("subscribe");
+    let first = delivered
+        .lock()
+        .expect("lock")
+        .first()
+        .cloned()
+        .expect("a first state");
+    assert_eq!(first.state, SessionLifecycleState::Connected);
+    assert_eq!(first.session_id, now.session_id);
+    assert_eq!(first.reason, "stub: connected");
+    drop(subscription);
     drop(session);
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
@@ -931,6 +1087,7 @@ fn a_local_app_onboards_without_a_code_and_gets_the_zero_id() {
         .onboard(
             &OnboardMethod::LocalApp {
                 approval_timeout: Some(Duration::from_secs(30)),
+                app_tag: None,
             },
             &PeerPresentation::default(),
             &BlockingOptions::default(),
@@ -943,6 +1100,7 @@ fn a_local_app_onboards_without_a_code_and_gets_the_zero_id() {
         .onboard(
             &OnboardMethod::LocalApp {
                 approval_timeout: None,
+                app_tag: None,
             },
             &PeerPresentation::default(),
             &BlockingOptions::default(),
@@ -963,6 +1121,7 @@ fn a_local_app_onboards_without_a_code_and_gets_the_zero_id() {
         .onboard(
             &OnboardMethod::LocalApp {
                 approval_timeout: Some(Duration::ZERO),
+                app_tag: None,
             },
             &PeerPresentation::default(),
             &BlockingOptions::default(),
@@ -983,6 +1142,7 @@ fn the_zero_id_of_a_local_app_is_refused_before_any_rejoin_reaches_the_library()
         .onboard(
             &OnboardMethod::LocalApp {
                 approval_timeout: None,
+                app_tag: None,
             },
             &PeerPresentation::default(),
             &BlockingOptions::default(),
@@ -1051,6 +1211,7 @@ fn local_app_refusals_name_what_the_user_has_to_do() {
             .onboard(
                 &OnboardMethod::LocalApp {
                     approval_timeout: None,
+                    app_tag: None,
                 },
                 &PeerPresentation::default(),
                 &BlockingOptions::default(),

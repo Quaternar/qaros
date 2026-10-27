@@ -253,6 +253,7 @@ impl Fixture {
         RuntimeConfig {
             runtime_binaries_directory: None,
             storage_directory: Some(self.storage.clone()),
+            ephemeral_storage: false,
         }
     }
 

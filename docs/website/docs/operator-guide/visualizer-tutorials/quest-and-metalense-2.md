@@ -15,7 +15,7 @@ No Android tools or terminal are needed.
 | **Device type** in the Visualizer | **Meta Quest · USB** | **Metalens · USB** |
 | APK in the QAROS ZIP (`devices/android/`) | `QAROS Player Quest <version>.apk` | `QAROS Player MetaLens <version>.apk` |
 | One-time preparation | Developer Mode on the headset (Meta Horizon phone app) | None |
-| Wi-Fi | Set on the headset itself | Can be set from the Visualizer ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi)) |
+| Wi-Fi | Set on the headset itself | Can be set from the Visualizer ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)) |
 | Invite as | **Headset** | **Headset** |
 
 ## 1. Prepare the device
@@ -85,7 +85,7 @@ The device must be on the same network as the Hub, with the player running.
 
 Start, stop and forget work as for every device: **Stop** / **Invite** on the row, **⋯** for
 **Invite automatically** and **Forget...** (see
-[HoloLens 2, step 3](./hololens-2#3-start-and-stop-streaming)).
+[HoloLens 2, step 3](./hololens-2.md#3-start-and-stop-streaming)).
 
 - An empty **Address** gives *Enter the device's hostname or IP address before inviting it.*
 - A wrong address gives a notification *Invite failed: …*.

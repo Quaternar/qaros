@@ -24,7 +24,7 @@ The program is `examples/src/bin/vulkan_cube.rs` in the Rust binding, behind the
 
 - **Platform.** Windows 10 or 11 for the real runtime. Joining as a local app is available on Windows; elsewhere the runtime refuses it. Without QAROS, the example and its test run against `qaros-stub`, which emulates the Vulkan path on your device.
 - **GPU.** A GPU whose Vulkan driver offers `VK_KHR_external_memory_win32` and `VK_KHR_external_semaphore_win32` on Windows. QAROS supports only NVIDIA GPUs ([Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)). The Vulkan loader comes with the GPU driver.
-- **QAROS.** Installed on the Hub machine, where the example runs. When the Hub is not running, joining as a local app starts it, and the Hub keeps running after the app exits. The example takes no path: it finds the runtime with the default lookup, so the installed QAROS, unless a runtime sits beside the executable or `QAROS_RUNTIME_DIR` names one.
+- **QAROS.** Installed on the Hub machine, where the example runs. When the Hub is not running, joining as a local app starts it, and the Hub keeps running after the app exits. The example takes no path: it finds the runtime with the default lookup, so the installed QAROS, unless a runtime sits beside the executable or `QAR_INSTANCE` names a QAROS instance, such as a development hub, whose runtime it then loads.
 - **What you do.** On the first run, click **Allow** in the QAROS approval prompt, in the Visualizer or in a tray window, within 120 s ([The approval prompt](/docs/developer-guide/onboarding-and-sessions#the-approval-prompt)). An unsigned build asks again after every rebuild.
 - **A target.** Open the Visualizer, or start a headset.
 - **The latest stable Rust.** No shader compiler: the shaders are QAROS's GLSL, checked in as SPIR-V.
@@ -86,20 +86,20 @@ cargo test -p qaros-examples --features vulkan --bin vulkan_cube --no-run
 QAROS_REQUIRE_VULKAN=1 DYLD_LIBRARY_PATH=/opt/homebrew/lib target/debug/deps/vulkan_cube-<hash>
 ```
 
-The example itself also runs against the stub. It takes no library path, so put a copy of the stub under the runtime's file name in a folder and name that folder with `QAROS_RUNTIME_DIR`. `target/stub-runtime` keeps the copy inside the build folder, which git ignores. On macOS, with the Homebrew Vulkan loader and MoltenVK:
+The example itself also runs against the stub. It takes no library path, so put a copy of the stub under the runtime's file name in a folder and let the dynamic linker's search find it there, the last step of the default lookup outside Windows: name the folder with `DYLD_LIBRARY_PATH` (`LD_LIBRARY_PATH` on Linux). `target/stub-runtime` keeps the copy inside the build folder, which git ignores. On macOS, with the Homebrew Vulkan loader and MoltenVK:
 
 ```sh
 cargo build -p qaros-stub
 cargo build -p qaros-examples --features vulkan --bin vulkan_cube
 mkdir -p target/stub-runtime
 cp target/debug/libqaros_stub.dylib target/stub-runtime/libqar-streaming-c.dylib
-QAROS_RUNTIME_DIR="$PWD/target/stub-runtime" DYLD_LIBRARY_PATH=/opt/homebrew/lib target/debug/vulkan_cube
+DYLD_LIBRARY_PATH="$PWD/target/stub-runtime:/opt/homebrew/lib" target/debug/vulkan_cube
 ```
 
 Stopped by closing a piped stdin, it prints (with your own path and GPU):
 
 ```text
-Loaded .../target/stub-runtime/libqar-streaming-c.dylib (QAROS_RUNTIME_DIR)
+Loaded .../target/stub-runtime/libqar-streaming-c.dylib (the dynamic linker's search)
 Joining the QAROS on this PC. On the first run, click Allow in the QAROS approval prompt.
 stub onboarding complete
 Rendering on <GPU name> (LUID <adapter LUID>), the first supported GPU
@@ -120,7 +120,7 @@ The stub accepts the local-app join without a prompt and names no GPU, so the ex
 
 `stop::watch_for_stop_requests` installs a Ctrl+C handler (SIGINT and SIGTERM outside Windows) and, when stdin is a pipe, a thread that waits for its end. A signal handler may safely do nothing but write an atomic, so all QAROS and GPU cleanup stays on the main thread, which polls `stop::requested()`.
 
-`Library::load_default` is the C `qar_library_load(NULL)`: the runtime beside the executable, the folder `QAROS_RUNTIME_DIR` names, the installed QAROS, then `PATH`. It is `unsafe` because a library file that does not match these bindings is undefined behavior. The exit codes: 0 after a stop, 2 when no runtime loads, 3 when the library fails to initialize, 4 for any other failure.
+`Library::load_default` is the C `qar_library_load(NULL)`: the runtime beside the executable, the runtime of the QAROS instance `QAR_INSTANCE` names (Windows), the installed QAROS, then `PATH`. It is `unsafe` because a library file that does not match these bindings is undefined behavior. The exit codes: 0 after a stop, 2 when no runtime loads, 3 when the library fails to initialize, 4 for any other failure.
 
 ### 2. The order of the whole program
 
@@ -273,7 +273,7 @@ What the wrapper guarantees on this path: the frame record is borrowed, so it ca
 
 | The example says | Cause | What to do |
 | --- | --- | --- |
-| `Could not load QAROS. Install QAROS on this PC, then start this app again.` (exit 2) | the next line says which: no runtime found by the default lookup, one that does not open, or one that lacks functions these bindings need | install QAROS, or set `QAROS_RUNTIME_DIR` to the `bin` folder of a runtime that matches the binding's header |
+| `Could not load QAROS. Install QAROS on this PC, then start this app again.` (exit 2) | the next line says which: no runtime found by the default lookup, one that does not open, or one that lacks functions these bindings need | install QAROS, or set `QAR_INSTANCE` to a QAROS instance whose runtime matches the binding's header; a set `QAR_INSTANCE` that names no instance, or one without a loadable runtime, is reported on the next line |
 | `The QAROS runtime failed to initialize: ...` (exit 3) | the runtime loaded, but `qar_library_init` failed | read the message; check the QAROS installation |
 | `QAROS is not running on this PC. ...` | `ONBOARDING_HUB_UNREACHABLE`: no Hub answered, and none could be started | start QAROS from the Start menu, then the example |
 | `QAROS did not allow this app to join ...` | `ONBOARDING_APPROVAL_DENIED`: Deny, a closed prompt, or a revoked approval | start it again and click **Allow** |

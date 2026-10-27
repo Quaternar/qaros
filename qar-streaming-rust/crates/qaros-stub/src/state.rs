@@ -14,6 +14,7 @@ pub enum SubscriptionKind {
     PeerUpdates,
     GuiPanels,
     AppVolumes,
+    SessionLifecycle,
 }
 
 /// A registered C callback. Pointers are stored as addresses so the state is

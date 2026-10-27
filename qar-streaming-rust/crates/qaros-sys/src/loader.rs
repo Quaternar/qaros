@@ -27,8 +27,9 @@ pub enum LoadError {
         symbols: Vec<&'static str>,
     },
     /// The default lookup ([`QarApi::load_default`]) found no runtime it could load. The
-    /// attempts name every place looked at, in lookup order; a set `QAROS_RUNTIME_DIR` or an
-    /// installed QAROS whose runtime is missing or fails to load ends the lookup there.
+    /// attempts name every place looked at, in lookup order; a set `QAR_INSTANCE` that names no
+    /// valid or known instance, or an instance or installed QAROS whose runtime is missing or
+    /// fails to load, ends the lookup there.
     NotFound {
         /// Each place looked at and what was met there.
         attempts: Vec<LookupAttempt>,
@@ -248,8 +249,13 @@ impl QarApi {
     /// 0. a `qar-streaming-c` already loaded in the process (a reference is taken);
     /// 1. `qar-streaming-c.dll` beside the binding: in the folder of the executable or library
     ///    this crate is compiled into;
-    /// 2. the folder named by `QAROS_RUNTIME_DIR`; when the variable is set it is the only copy
-    ///    considered, and a runtime missing there or failing to load is an error;
+    /// 2. when `QAR_INSTANCE` names a QAROS instance (Windows only), that instance's runtime
+    ///    folder: `default` is the installed QAROS, any other name the `RuntimeFolder` recorded
+    ///    under `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a QAROS development hub
+    ///    records its build output there and sets `QAR_INSTANCE` for the apps it starts), else
+    ///    that record's `<InstallFolder>\bin`. When the variable is set it is the only copy
+    ///    considered: an invalid name, an unknown instance, or a runtime missing there or failing
+    ///    to load is an error, never a reason to load another instance's runtime;
     /// 3. the installed QAROS, `<InstallFolder>\bin`, from `HKLM\SOFTWARE\Quaternar\QAROS`
     ///    (Windows); an installed runtime missing or failing to load is an error;
     /// 4. each folder on `PATH`, in order (elsewhere: the dynamic linker's search).

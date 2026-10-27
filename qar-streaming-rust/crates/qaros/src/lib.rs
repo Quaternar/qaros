@@ -32,8 +32,8 @@
 //! use qaros::{BlockingOptions, Library, LibraryConfig, OnboardMethod, PeerPresentation, RuntimeConfig};
 //!
 //! # fn main() -> qaros::Result<()> {
-//! // SAFETY: the runtime found (the installed QAROS, or one QAROS_RUNTIME_DIR names)
-//! // matches these bindings.
+//! // SAFETY: the runtime found (the installed QAROS, or that of the instance QAR_INSTANCE
+//! // names) matches these bindings.
 //! let library = unsafe { Library::load_default(&LibraryConfig::default())? };
 //! let runtime = library.create_runtime(&RuntimeConfig::default())?;
 //! let onboarded = runtime.onboard(
@@ -85,12 +85,13 @@ pub use session::{Session, Subscription};
 pub use types::{
     ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout, GuiPanelId,
     GuiPanelState, LogSeverity, OnboardingId, OnboardingMethod, PeerId, PixelFormat, Pose, Quat,
-    SessionId, StreamId, Vec3, ViewKind,
+    SessionChangeCause, SessionId, SessionLifecycle, SessionLifecycleState, StreamId, Vec3,
+    ViewKind,
 };
 pub use volumes::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, AppVolumes};
 
 pub use qaros_sys;
-pub use qaros_sys::{installed_bin_folder, runtime_dir_from_environment};
+pub use qaros_sys::{installed_bin_folder, instance_runtime_folder, requested_instance};
 
 /// The binding's README as doc tests, so its "Use" example keeps compiling against the API.
 #[cfg(doctest)]

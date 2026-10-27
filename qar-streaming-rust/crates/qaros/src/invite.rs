@@ -7,10 +7,12 @@ use crate::callbacks::BlockingOptions;
 use crate::error::{Error, Result, StatusCode, check};
 use crate::library::{LibraryInner, require_handle};
 use crate::session::SessionInner;
+use crate::strings;
 use crate::types::OnboardingMethod;
 
-/// A `QarOnboardingInvite`: lets a sibling API instance onboard without a
-/// pairing code. Expires; mint it on demand and hand it over at once.
+/// A `QarOnboardingInvite`: lets a co-process onboard without a pairing code. A secret until
+/// it is used: single use, valid for 60 s, redeemable only on the hub's PC. Mint it on demand,
+/// hand it over at once over a private channel (stdin, a pipe), never on a command line.
 #[derive(Debug)]
 pub struct OnboardingInvite {
     handle: NonNull<sys::QarOnboardingInvite>,
@@ -20,13 +22,16 @@ pub struct OnboardingInvite {
 impl OnboardingInvite {
     pub(crate) fn request(
         session: &Rc<SessionInner>,
+        app_tag: &str,
         options: &BlockingOptions<'_>,
     ) -> Result<Self> {
         let api = session.api();
-        let init = defaults::qar_request_invite_init_default();
+        let app_tag_text = strings::to_c_string(app_tag, "app tag")?;
+        let mut init = defaults::qar_request_invite_init_default();
+        init.app_tag = app_tag_text.as_ptr();
         let mut handle: *mut sys::QarOnboardingInvite = ptr::null_mut();
-        // SAFETY: live session; init is stamped; options borrow the progress
-        // sender and token for the call; valid out-pointer.
+        // SAFETY: live session; init is stamped and its tag outlives the call; options borrow
+        // the progress sender and token for the call; valid out-pointer.
         let result = unsafe {
             (api.qar_impl_session_request_onboarding_invite)(
                 session.handle.as_ptr(),

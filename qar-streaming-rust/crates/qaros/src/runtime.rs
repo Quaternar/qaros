@@ -24,6 +24,13 @@ pub struct RuntimeConfig {
     /// on Windows is `%LOCALAPPDATA%\Quaternar\QarOS`. Give each runtime
     /// instance in one application its own directory.
     pub storage_directory: Option<PathBuf>,
+    /// Keep the identity in memory only (`QarRuntimeEphemeralStorageExt`), for a co-process
+    /// that joins with an invite from its parent app: nothing is written under the storage
+    /// directory, the returned onboarding id is zero, and [`Runtime::rejoin`] and
+    /// [`Runtime::forget`] fail with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. A runtime
+    /// older than the extension skips it and stores the identity on disk: check
+    /// [`crate::Library::runtime_info`] before relying on it.
+    pub ephemeral_storage: bool,
 }
 
 /// How this peer presents itself to others. `None` keeps the persisted value
@@ -58,7 +65,8 @@ pub enum OnboardMethod<'a> {
         code: &'a str,
         hub: Option<HubAddress<'a>>,
     },
-    /// An invite minted by an already onboarded instance.
+    /// An invite: a co-process invite from the local app that started this process
+    /// ([`crate::Session::request_onboarding_invite`]), or one the hub's operators minted.
     Invite(&'a OnboardingInvite),
     /// A source app joining the QAROS hub installed on this PC, with no code
     /// (`QarOnboardLocalAppExt`, Windows only). The first start of an app
@@ -71,7 +79,18 @@ pub enum OnboardMethod<'a> {
     /// `ONBOARDING_APP_IDENTITY_MISMATCH` codes, see
     /// [`crate::StatusCode::user_action`]. Stateless: the returned onboarding
     /// id is the zero id, and rejoin and forget do not apply.
-    LocalApp { approval_timeout: Option<Duration> },
+    ///
+    /// `app_tag` (`QarOnboardLocalAppTagExt`) names this instance of the app: the hub remembers
+    /// one peer id per approval and tag, so the next start with the same tag gets the same peer
+    /// id back while no other live process holds it. An identity key: printable ASCII, no space
+    /// at either end, at most `QAR_MAX_APP_TAG_LENGTH` bytes, never starting with `member/`, and
+    /// constant across versions of the app; anything else fails with
+    /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. `None` is the default tag, remembered the
+    /// same way. Give instances that run together different tags.
+    LocalApp {
+        approval_timeout: Option<Duration>,
+        app_tag: Option<&'a str>,
+    },
 }
 
 /// The result of a successful onboarding.
@@ -148,11 +167,15 @@ impl Runtime {
         let mut init = defaults::qar_runtime_init_default();
         init.runtime_binaries_folder_path = strings::pointer_or_null(binaries_directory.as_ref());
         init.storage_folder_path = strings::pointer_or_null(storage_directory.as_ref());
+        let mut ephemeral_extension = defaults::qar_runtime_ephemeral_storage_ext_default();
+        if config.ephemeral_storage {
+            init.header.next = (&raw mut ephemeral_extension).cast();
+        }
 
         let api = &library.api;
         let mut handle: *mut sys::QarRuntime = ptr::null_mut();
-        // SAFETY: init is stamped and its strings outlive the call; handle is
-        // a valid out-pointer.
+        // SAFETY: init and its chained extension are stamped and, with their strings, outlive
+        // the call; handle is a valid out-pointer.
         let result = unsafe { (api.qar_impl_runtime_create)(&raw const init, &raw mut handle) };
         check(api, "qar_runtime_create", result)?;
         let handle = require_handle(handle, "qar_runtime_create")?;
@@ -265,6 +288,7 @@ impl Runtime {
         let mut host_extension = defaults::qar_onboard_host_ext_default();
         let mut invite_extension = defaults::qar_onboard_invite_ext_default();
         let mut local_app_extension = defaults::qar_onboard_local_app_ext_default();
+        let mut app_tag_extension = defaults::qar_onboard_local_app_tag_ext_default();
         let mut adapter_extension = adapter.map(GraphicsAdapter::to_raw);
         let adapter_pointer: *mut std::ffi::c_void = adapter_extension
             .as_mut()
@@ -273,6 +297,7 @@ impl Runtime {
             });
         let code_text: CString;
         let hostname_text: CString;
+        let app_tag_text: CString;
         match method {
             OnboardMethod::Code { code, hub } => {
                 code_text = strings::to_c_string(code, "pairing code")?;
@@ -292,10 +317,20 @@ impl Runtime {
                 invite_extension.header.next = adapter_pointer;
                 init.header.next = (&raw mut invite_extension).cast();
             }
-            OnboardMethod::LocalApp { approval_timeout } => {
+            OnboardMethod::LocalApp {
+                approval_timeout,
+                app_tag,
+            } => {
                 local_app_extension.approval_timeout_ms =
                     approval_timeout_milliseconds(*approval_timeout)?;
                 local_app_extension.header.next = adapter_pointer;
+                // The tag goes after the mode extension, before the adapter.
+                if let Some(tag) = app_tag {
+                    app_tag_text = strings::to_c_string(tag, "app tag")?;
+                    app_tag_extension.app_tag = app_tag_text.as_ptr();
+                    app_tag_extension.header.next = adapter_pointer;
+                    local_app_extension.header.next = (&raw mut app_tag_extension).cast();
+                }
                 init.header.next = (&raw mut local_app_extension).cast();
             }
         }

@@ -60,6 +60,10 @@ impl StatusCode {
     /// certificate's key: update to the current SDK, else pair again. Named by value, since only
     /// the public header declares it.
     pub const ONBOARDING_RENEWAL_POSSESSION_UNPROVEN: Self = Self(QarStatusCode(1810));
+    /// The hub refused to mint a co-process invite: this session did not join as a local app
+    /// (or as an app the QAROS launcher started). Final; nothing was minted.
+    pub const ONBOARDING_INVITE_REFUSED: Self =
+        Self(QarStatusCode::QAR_STATUS_ONBOARDING_INVITE_REFUSED);
 
     pub(crate) fn from_raw(raw: QarStatusCode) -> Self {
         Self(raw)
@@ -111,6 +115,7 @@ impl StatusCode {
             Self::ONBOARDING_RENEWAL_POSSESSION_UNPROVEN => {
                 "ONBOARDING_RENEWAL_POSSESSION_UNPROVEN"
             }
+            Self::ONBOARDING_INVITE_REFUSED => "ONBOARDING_INVITE_REFUSED",
             _ => return None,
         };
         Some(name)

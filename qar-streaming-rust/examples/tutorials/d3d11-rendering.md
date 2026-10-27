@@ -20,7 +20,7 @@ The program is `examples/src/bin/d3d11_render_sender.rs` in the Rust binding, a 
 ## Before you start
 
 - **Platform.** Windows with a D3D11.1-capable GPU. On any other system the example prints that it requires Windows and exits with 0.
-- **QAROS.** Installed on the Hub machine, where the example runs, or a runtime folder named by `QAROS_RUNTIME_DIR`, or a library file named with `--qaros-library=PATH`.
+- **QAROS.** Installed on the Hub machine, where the example runs, or the runtime of a QAROS development hub whose instance `QAR_INSTANCE` names, or a library file named with `--qaros-library=PATH`.
 - **A target.** At least one target app in the session (the Visualizer, a headset). Joining as a local app starts the Hub when it is not running.
 - **Joining.** The example joins the Hub as a local app, as the CPU example does: click **Allow** in the QAROS approval prompt on the first run of the executable; nothing is stored, and later runs join without a prompt ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)).[^code]
 - **The latest stable Rust.** The D3D11 types come from the `windows` crate 0.62, a Windows-only dependency of `qaros` (feature `d3d11`) and of the examples.

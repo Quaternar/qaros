@@ -136,7 +136,7 @@ fn raw_runtime_sender_token_and_invite_calls_reach_the_safe_handles() {
     assert!(token.is_cancelled(), "the safe token sees the raw cancel");
 
     let invite = session
-        .request_onboarding_invite(&BlockingOptions::default())
+        .request_onboarding_invite("companion.examples.qaros", &BlockingOptions::default())
         .expect("invite");
     let mut expires = 0_i64;
     // SAFETY: a live invite's handle; valid out-pointer.

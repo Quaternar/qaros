@@ -2,7 +2,8 @@
 //! examples' `common.h`.
 //!
 //! The runtime is found with `Library::load_default`, as the C examples' `qar_library_load(NULL)`
-//! does: the installed QAROS, or the folder `QAROS_RUNTIME_DIR` names (see the README). An
+//! does: the installed QAROS, or on Windows the runtime of the QAROS instance `QAR_INSTANCE`
+//! names, which a development hub sets for the apps it starts (see the README). An
 //! explicit library file, for a development build of QAROS or the `qaros-stub` library cargo
 //! builds in `target/debug/`, comes from `--qaros-library=PATH`, else `QAROS_DLL`, else the first
 //! line of `qaros-library.txt` beside the executable. `RUST_LOG`-style filtering is not provided;
@@ -13,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
-use qaros::qaros_sys::LookupStep;
 use qaros::{
     BlockingOptions, Library, LibraryConfig, OnboardMethod, OnboardingId, PeerInfo,
     PeerPresentation, Pose, Progress, Runtime, RuntimeConfig, Session, StatusCode,
@@ -105,6 +105,7 @@ pub fn runtime_config(storage_directory: Option<&Path>) -> RuntimeConfig {
     RuntimeConfig {
         runtime_binaries_directory: None,
         storage_directory: storage_directory.map(Path::to_path_buf),
+        ephemeral_storage: false,
     }
 }
 
@@ -122,11 +123,11 @@ pub fn load_library() -> ExampleResult<Library> {
         unsafe { Library::load(&path, &LibraryConfig::default()) }?
     } else {
         println!("Loading the QAROS runtime (default lookup)");
-        // SAFETY: the runtime found is the installed QAROS or one the user chose with
-        // QAROS_RUNTIME_DIR; a mismatching one is a configuration error, as in the C examples.
+        // SAFETY: the runtime found is the installed QAROS or that of the instance the user chose
+        // with QAR_INSTANCE; a mismatching one is a configuration error, as in the C examples.
         unsafe { Library::load_default(&LibraryConfig::default()) }.map_err(|error| match error {
             qaros::Error::Load(qaros::qaros_sys::LoadError::NotFound { .. }) => format!(
-                "{error}\nInstall QAROS, set QAROS_RUNTIME_DIR to the folder of qar-streaming-c.dll, or pass --qaros-library=PATH (the qaros-stub library in target/debug/ runs without QAROS)."
+                "{error}\nInstall QAROS, set QAR_INSTANCE to the QAROS instance whose runtime to load, or pass --qaros-library=PATH (the qaros-stub library in target/debug/ runs without QAROS)."
             ),
             other => other.to_string(),
         })?
@@ -143,19 +144,8 @@ pub fn describe_loaded_runtime(library: &Library) -> String {
         |path| path.display().to_string(),
     );
     match library.lookup_step() {
-        Some(step) => format!("{file} ({})", describe_lookup_step(step)),
+        Some(step) => format!("{file} ({step})"),
         None => file,
-    }
-}
-
-fn describe_lookup_step(step: LookupStep) -> &'static str {
-    match step {
-        LookupStep::AlreadyLoaded => "already loaded in this process",
-        LookupStep::BesideBinding => "beside the binding",
-        LookupStep::RuntimeDirVariable => "QAROS_RUNTIME_DIR",
-        LookupStep::InstalledRuntime => "the installed QAROS",
-        LookupStep::SearchPath if cfg!(windows) => "PATH",
-        LookupStep::SearchPath => "the dynamic linker's search",
     }
 }
 
@@ -343,6 +333,7 @@ fn join_as_local_app(runtime: &Runtime, presentation: &PeerPresentation) -> Exam
     let joined = runtime.onboard(
         &OnboardMethod::LocalApp {
             approval_timeout: Some(LOCAL_APP_APPROVAL_TIMEOUT),
+            app_tag: None,
         },
         presentation,
         &BlockingOptions {

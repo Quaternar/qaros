@@ -88,7 +88,7 @@ The tests run against `qaros-stub`, an in-memory stand-in for the runtime, so no
 The integration tests drive the C API against `qar-streaming-c-ext`, as the C# tests do: set
 `QAROS_PACKAGE_BIN` to the `bin` folder of a Debug or RelWithDebInfo SDK build, then
 `cargo test -p qar-streaming-rust-ext --features e2e`. The runtime is found the way every binding
-finds it, with `QAROS_RUNTIME_DIR` to point a run at another one. Details:
+finds it, with `QAR_INSTANCE` to point a run at another QAROS instance's runtime. Details:
 [qar-streaming-rust/README.md](qar-streaming-rust/README.md).
 
 ## Support channels

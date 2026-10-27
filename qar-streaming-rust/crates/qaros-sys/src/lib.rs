@@ -6,8 +6,9 @@
 //! [`QarApi`] function table, which comes from one of two loading modes:
 //!
 //! - [`QarApi::load_default`] (default): finds `qar-streaming-c.dll` with the runtime lookup
-//!   every QAROS binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, the
-//!   installed QAROS, `PATH`), opens it at runtime and resolves every symbol up front.
+//!   every QAROS binding follows (already loaded, beside the binding, the runtime of the QAROS
+//!   instance `QAR_INSTANCE` names, the installed QAROS, `PATH`), opens it at runtime and
+//!   resolves every symbol up front.
 //!   [`QarApi::load`] opens one given file instead. A missing symbol is a [`LoadError`] listing
 //!   all missing names, instead of the header's `abort()` at the first call.
 //! - `QarApi::linked` (feature `link`): the symbols are declared
@@ -81,10 +82,11 @@ mod platform;
 
 pub use loader::{LoadError, QarApi, RUNTIME_RELEASE_SYMBOL, SYMBOL_NAMES, open_package_library};
 pub use lookup::{
-    INSTALL_FOLDER_VALUE, INSTALL_REGISTRY_KEY, LookupAttempt, LookupOutcome, LookupStep,
-    RUNTIME_DIR_VARIABLE,
+    DEFAULT_INSTANCE_NAME, INSTALL_FOLDER_VALUE, INSTALL_REGISTRY_KEY, INSTANCE_NAME_MAX_LENGTH,
+    INSTANCE_RUNTIME_FOLDER_VALUE, INSTANCE_VARIABLE, INSTANCES_REGISTRY_KEY, LookupAttempt,
+    LookupOutcome, LookupStep, is_valid_instance_name,
 };
-pub use platform::{installed_bin_folder, runtime_dir_from_environment};
+pub use platform::{installed_bin_folder, instance_runtime_folder, requested_instance};
 pub use types::*;
 
 /// File name of the C API library inside the binary package's `bin/`.
