@@ -62,7 +62,7 @@ The launcher starts RViz2 and then stays running until RViz2 exits, so that it c
 - It starts `rviz2.exe` with the default scene `scene3_grid_marker.rviz`, which holds a grid and the markers of the test publisher. The publisher itself starts only with `-TestMarkers`; without it the scene shows only the grid, and the button **Start test markers** on the Diagnostics tab starts and stops the publisher at any time.
 - When RViz2 has exited, it copies the log of the QAROS library of the run, the newest log files of the QAROS launcher and every crash report of the run next to the RViz2 logs.
 
-The launcher does **not** start the QAROS Hub or a Visualizer. With a local join, the plugin starts QAROS itself when you press **Connect to QarOS** and no Hub runs ([Joining the Hub of this PC](#join-the-hub-of-this-pc)); a Visualizer you open from QAROS yourself. These parameters matter most:
+The launcher does **not** start the QAROS Hub or a Visualizer. With a local join, the QAROS runtime starts the Hub itself when you press **Connect to QarOS** and no Hub runs (the comment on `QarOnboardLocalAppExt` in `qar_streaming.h` says so; see [Joining the Hub of this PC](#join-the-hub-of-this-pc)); a Visualizer you open from QAROS yourself. These parameters matter most:
 
 | Parameter | Effect |
 |---|---|
@@ -120,11 +120,11 @@ The plugin identifies itself to the Hub as `RViz2 (QAROS ROS plugin) on <name of
 
 This is the join for a Hub on the PC that runs RViz2. Everything the vendor documents about it applies unchanged: [Local app: on the QAROS PC, no code](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code) describes the call and the approval prompt, and [Approved local apps](/docs/operator-guide/source-applications#approved-local-apps) shows how an operator lists and revokes the approvals.
 
-1. **Connect.** Press **Connect to QarOS**. The state line reads `QarOS: loading the QAROS runtime ...` and then `QarOS: waiting for approval in the QAROS Hub - click Allow in the QAROS window`, followed by a countdown of the time left. If no Hub runs on this PC, the join starts QAROS; this is how the vendor's local enrollment behaves.
+1. **Connect.** Press **Connect to QarOS**. The state line reads `QarOS: loading the QAROS runtime ...` and then `QarOS: waiting for approval in the QAROS Hub - click Allow in the QAROS window`, followed by a countdown of the time left. If no Hub runs on this PC, the join starts QAROS: the comment on `QarOnboardLocalAppExt` in the C API header `qar_streaming.h` says "Starts the QAROS hub when it does not run" and that a running Hub is left as it is. The vendor's [onboarding page](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code) lists `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) for a Hub that cannot be reached; the state line shows the message of the table below when the Hub could not be started.
 2. **Allow.** The first time, the Hub opens the window `Allow <app> to join QAROS?` in front of every other window. Check what it reports about `rviz2.exe` and press **Allow**. Nothing is stored by the plugin; the Hub remembers the approval. The `rviz2.exe` of the ROS 2 distribution is not code-signed, so the approval is for one exact file and the Hub asks again after RViz2 is updated or replaced; the approval window of the authors' runs said so.
 3. **Connected.** The state line reads `QarOS: connected (local app) - <n> target(s), <k> served`, and the identity line reads `This PC: approved local app (...)`. Later starts of an unchanged `rviz2.exe` join without a prompt.
 
-The prompt waits 120 seconds by default. `QAR_PANEL_APPROVAL_TIMEOUT_S` sets another wait, from 1 to 600 seconds; a value that is not a number of seconds is reported in the log and the default applies. **Cancel** stops the wait. The plugin has no button that revokes an approval: the operator does that in the Visualizer, on the Source Applications panel. The group **Invite a device** works in this mode only ([Devices](#devices)).
+The prompt waits 120 seconds by default. `QAR_PANEL_APPROVAL_TIMEOUT_S` sets another wait, from 0 to 600 seconds: 0 is the Hub's default of 120 seconds, and a larger value is lowered to 600 without a message; a value that is not a number of seconds, or is negative, is reported in the log and the default applies. **Cancel** stops the wait. The plugin has no button that revokes an approval: the operator does that in the Visualizer, on the Source Applications panel. The group **Invite a device** works in this mode only ([Devices](#devices)).
 
 What the authors ran: the join with **Allow**, a second start of RViz2 without a prompt, and the streaming that follows, in the live checks of 2026-10-24 and 2026-10-25. The paths for **Deny**, for no answer within the wait, and for a Hub that is stopped while the plugin is connected are **designed and not tested** in a live session. For them the plugin shows these messages in the state line and in `Last error:`:
 
@@ -318,7 +318,7 @@ Variables that you set in the PowerShell window before you start the launcher or
 | `QAR_PANEL_LIVE_STREAM` | Any value that is not empty starts the panel in live mode. The launcher sets it. |
 | `QAR_PANEL_HUB_MODE` | `auto`, `local` or `remote`: the Hub to join. |
 | `QAR_PANEL_HUB_HOST`, `QAR_PANEL_HUB_PORT` | The host and the onboarding port that the fields of a code pairing start from. The code is never an environment variable. |
-| `QAR_PANEL_APPROVAL_TIMEOUT_S` | Seconds that the Hub waits for the **Allow** of a local join, 1 to 600. Without it the Hub's default of 120 seconds applies. |
+| `QAR_PANEL_APPROVAL_TIMEOUT_S` | Seconds that the Hub waits for the **Allow** of a local join, 0 to 600. 0 and an unset variable give the Hub's default of 120 seconds; a larger value is lowered to 600. |
 | `QAR_PANEL_INSTANCE` | A name that is added to the identity folder and to the names of the plugin's QAROS panels, for a second RViz2 on the same PC. |
 | `QAR_PANEL_IDENTITY_DIR` | Replaces `%LOCALAPPDATA%\Quaternar\QarOS-ROS` as the parent of the identity folder. |
 | `QAROS_RUNTIME_DIR` | A folder with another QAROS runtime for the library lookup (the vendor's variable; `-RuntimeDir` of the launcher sets it). |
@@ -338,7 +338,7 @@ Variables that you set in the PowerShell window before you start the launcher or
 | `QAR_PANEL_LOG_DIR`, `QAR_PANEL_LOG_SEVERITY`, `QAR_PANEL_LOG_CONSOLE` | The folder, the severity and the console echo of the QAROS library inside RViz2. |
 | `QAR_GUI_CALL_WARN_MS` | The limit, in milliseconds, above which a QAROS call on the Qt thread is reported as slow; 20 by default. |
 
-A variable of the earlier session start-up (the invitation of a Visualizer, the admission of peers, the runtime folder) has no effect with the installed runtime; when one is set, the plugin writes `ignored: <name> has no effect with this QAROS` to its log. The saved settings of an earlier plugin are read and migrated: the setting for peer admission is dropped, and an invitation kind that the Hub cannot start is read as `hololens`.
+A variable of the earlier session start-up (the invitation of a Visualizer, the admission of peers, the runtime folder) has no effect with the installed runtime; when one is set, the plugin writes `ignored: <name> has no effect with this QAROS` to its log. The saved settings of an earlier plugin are read and migrated: the setting for peer admission is dropped, and a saved invitation kind `quest` is read as `headset`, and `visualizer` and `zed` are read as `hololens`.
 
 ## Known issues
 
@@ -352,7 +352,7 @@ What you can do: leave `Hide panels in AR instead of closing them` on, close and
 
 ### Lines at the end of a run
 
-When the last Visualizer has closed, or while RViz2 closes, the log can hold the lines `submit_phase: sender rejected the frame` and `wglMakeCurrent FAILED`. Neither line is a failure by itself. RViz2 used to leave a Windows crash report when it closed. The authors removed the two causes, which were objects of the plugin that outlived its library, and two runs after the change ended without a new crash report; judge a run by its heartbeat lines.
+When the last Visualizer has closed, or while RViz2 closes, the log can hold the lines `submit_phase: sender rejected the frame` and `wglMakeCurrent FAILED`. Neither line is a failure by itself. RViz2 ended without a new Windows crash report in the authors' two runs of 2026-10-23, after they removed two objects of the plugin that outlived its library, and the crash report folders were empty after the checks of 2026-10-25 with the runtime 0.9.0-dev.3008+65dc9aeb; judge a run by its heartbeat lines.
 
 ## Related pages
 
