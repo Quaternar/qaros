@@ -14,6 +14,11 @@ require("graceful-fs").gracefulify(nodeFs);
 // instances share one version list; the unreleased working copy is labelled
 // with the next planned release from qaros/VERSION.
 const { currentLabel, rehypeVersionedLinks, remarkVersionedImages } = require("./scripts/docs-versions.js");
+const nodePath = require("path");
+
+function readJsonIfPresent(file: string): Record<string, string> {
+	return nodeFs.existsSync(file) ? JSON.parse(nodeFs.readFileSync(file, "utf8")) : {};
+}
 const versionedDocsOptions = {
 	versions: { current: { label: currentLabel() } },
 	beforeDefaultRemarkPlugins: [remarkVersionedImages],
@@ -23,6 +28,10 @@ const versionedDocsOptions = {
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 const config: Config = {
+	// Version name -> URL of the Rust API reference, written by `npm run docs:rust`.
+	customFields: {
+		rustApiVersions: readJsonIfPresent(nodePath.join(__dirname, "rust-versions.json")),
+	},
 	title: "QAROS Docs",
 	tagline: "Don’t Rewrite. Extend.",
 	favicon: "img/favicon.ico",
@@ -220,6 +229,30 @@ const config: Config = {
 							docsPluginId: "api",
 							docId: "qar-streaming-sharp/index",
 							label: "C# API",
+						},
+						{
+							type: "doc",
+							docId: "developer-guide/language-bindings",
+							label: "Language bindings",
+						}
+					]
+				},
+				{
+					type: "dropdown",
+					label: "Rust API",
+					position: "left",
+					items: [
+						// rustdoc's own HTML (npm run docs:rust), one per docs version: the
+						// link follows the version being browsed (RustApiNavbarItem).
+						{
+							type: "custom-rustApiLink",
+							label: "Rust API",
+						},
+						// A plain link while no released docs version has the Rust tutorials:
+						// a `doc` item fails in a version that lacks its doc.
+						{
+							to: "/docs/next/developer-guide/tutorials/rust/",
+							label: "Tutorials",
 						},
 						{
 							type: "doc",

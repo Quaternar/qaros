@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
+  crates, under the new *Rust API* menu, beside the Rust tutorials and *Language bindings*;
+  versioned like the docs, with a version bar on every page.
+
 - **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
   several API instances, co-process, remote app through a member hub, code pairing on a PC without
   a hub, launched by QAROS), what each stores, how long its credentials and bootstrap secrets live,

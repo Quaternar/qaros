@@ -9,6 +9,7 @@ on:
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
+      - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
+      - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
   workflow_dispatch:
 
@@ -40,6 +42,8 @@ jobs:
         uses: actions/checkout@v5
         with:
           lfs: true
+          # The Rust API reference of each release is built from its v<version> tag.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -54,6 +58,13 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
+
+      # Rust API reference: rustdoc documents the binding for the Windows target, the
+      # runtime's platform; only that target's standard library is needed, nothing is linked.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
       - name: Install system dependencies
         run: |
