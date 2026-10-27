@@ -220,6 +220,14 @@ The package streams under Direct3D 11 and under Vulkan, in the Editor and in pla
   for sharing frames. Keep **Load on startup** set in its import settings. Without it a Vulkan
   player cannot stream, and the runtime refuses to start with a `NotSupportedException` that says
   why.
-- **Under Vulkan a frame reaches the stream one Unity frame later** than under Direct3D 11, and
+- **With the default Vulkan path a frame reaches the stream one Unity frame later** than under Direct3D 11, and
   somewhat fewer frames per second are handed over: about 20 where Direct3D 11 reaches 24 in the
   same scene.
+
+### Experimental Vulkan frame overlap
+
+- Source builds offer **Enable Vulkan Frame Overlap** on the `QarDeviceBehaviour` prefab used by your endpoints. Enable it before connecting, then build a Windows Vulkan player. It defaults off, the Editor refuses this option until domain-reload retirement is verified.
+- Rebuild and sync the native runtime, `QarUnityGraphics.dll` and C# binding together. An older release's bundled binaries cannot use this prototype by replacing C# scripts alone.
+- Publication can proceed after Unity's real signal submit without waiting for its next main-thread readiness check. Performance gains are still being measured, this option does not establish headset latency or broader pipeline support.
+- Disconnect starts asynchronous retirement. Wait for `CurrentConnectionState == Disconnected` before reconnecting. Player quit waits for active endpoint retirement while Unity continues processing queued events.
+- If submission or retirement cannot be proved, the endpoint stays `Disconnecting`, retains its resources and blocks replacement/quit. A timeout does not free GPU resources. The current prototype has no recovery marker for a failed release/signal after copies were flushed.
