@@ -98,11 +98,11 @@ The cube prints what happened and what to do. The common cases:
 
 | The cube says | Do this |
 |---|---|
-| `Could not load QAROS. Install QAROS on this PC...` | install QAROS (step 1) |
-| `QAROS is not running on this PC...` | start **QAROS** from the Start menu, then run the cube again. While no QAROS window or tray icon is up, the message can take up to a minute |
+| `Could not load QAROS. Install QAROS on this machine, then start this app again.` | install QAROS (step 1) |
+| `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.` | the cube starts QAROS when it does not run, and QAROS did not start: start **QAROS** from the Start menu, then run the cube again |
 | `Nobody answered the approval prompt in QAROS in time...` | run the cube again, then click **Allow** |
 | `QAROS did not allow this app to join...` | someone clicked **Deny**: run the cube again. The `Details:` line names any other reason, such as QAROS running for another Windows user |
-| `The program answering on this PC is not the installed QAROS...` | reinstall QAROS from the official setup; the cube does not retry |
+| `The program answering on this machine is not the installed QAROS...` | reinstall QAROS from the official setup; the cube does not retry |
 | `This app no longer matches what QAROS approved...` | you moved or copied the executable: revoke its approval ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)) and run it again |
 
 More: [Troubleshooting](/docs/developer-guide/troubleshooting).
@@ -117,7 +117,7 @@ The cube is not code-signed, so QAROS approves this exact file. After every rebu
 
 QAROS ships a native **C API**, a **C#/.NET binding** over it and a **Rust binding** over it. Pick your language above; the selection follows you across the whole Developer Guide. Every app has the same shape: initialize the library, create a runtime, obtain a session, do work, tear down in reverse. For the mental model read [Concepts](/docs/developer-guide/concepts).
 
-Your application joins the QAROS running on this PC, or a hub on another PC with a code. If QAROS is not running, start **QAROS** from the Start menu; see [Installation](/docs/operator-guide/installation).
+On the Hub machine, your application joins as a local app. The join starts the Hub when it does not run, and the Hub keeps running after your app exits. On another machine, your application pairs with a code and the Hub's host and port ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions)). QAROS must be installed on the machine your app runs on; see [Installation](/docs/operator-guide/installation).
 
 <CodeTabs>
 <Lang value="c">
@@ -158,8 +158,11 @@ Functions are loaded *by symbol name* into tables your application owns, so newe
 ```powershell
 cmake --preset x64-windows
 cmake --build --preset x64-windows-debug
-# loads the installed QAROS; the other examples do too, and join it as a local app
+# No argument: the default lookup finds the installed QAROS (or the runtime of the
+# instance QAR_INSTANCE names); the other examples load it the same way
 .\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe
+# --qaros-library=PATH loads that qar-streaming-c.dll instead
+.\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe --qaros-library=C:\path\to\qar-streaming-c.dll
 ```
 
 </Lang>

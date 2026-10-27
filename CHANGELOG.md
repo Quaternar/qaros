@@ -44,6 +44,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   examples of the new Rust binding (`qar-streaming-rust/`); a Rust section in *Language Bindings*
   and a Rust row in *Authoring a Language Binding*. A code sample without a tab in the chosen
   language says which language it shows instead.
+- **Docs:** the C tutorials rewritten around the reworked C samples, plus Local App Onboarding
+  and Vulkan Rendering tutorials. The samples load the installed QAROS by the default lookup, join
+  as a local app when they have no stored id or pairing code, find rendering targets in the peer
+  list, and check every result. The Developer Guide's onboarding, troubleshooting and rendering
+  pages follow the header: a pairing code finds a Hub of your own user, the local-app join starts
+  the Hub, and targets come from the peer list.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.

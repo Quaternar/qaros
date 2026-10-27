@@ -52,7 +52,7 @@ The `app_custom_peer_info` field is yours: put a JSON blob or tag there to coord
 
 ## Enumerating peers
 
-In C this is a count-then-fetch, like every enumeration in the API. In C# the same enumeration returns a ready-made array:
+In C this is a count-then-fetch, like every enumeration in the API. The bindings run it for you: C# returns a ready-made array, Rust a `Vec` of owned snapshots.
 
 <CodeTabs>
 <Lang value="c">
@@ -147,7 +147,7 @@ The role, category and device getters follow in the next sections.
 
 Useful fields:
 
-- **presence** — `qar_peer_spec_get_presence()` (`PeerSpec.Presence` in C#): whether the peer is here. Render for, wait for and count `QAR_PEER_PRESENCE_ONLINE` and `QAR_PEER_PRESENCE_UNKNOWN` peers; stop at `OFFLINE`, `LEAVING` or `RETIRED`.
+- **presence**: `qar_peer_spec_get_presence()` (in C#, `PeerSpec.Presence`; in Rust, raw only, as the Rust tab above shows): whether the peer is here. Render for, wait for and count `QAR_PEER_PRESENCE_ONLINE` and `QAR_PEER_PRESENCE_UNKNOWN` peers; stop at `OFFLINE`, `LEAVING` or `RETIRED`.
 
   | Presence | Means |
   |---|---|
@@ -157,15 +157,15 @@ Useful fields:
   | `RETIRED` | it left for good; query results no longer list it |
   | `UNKNOWN` | the hub has not reconciled it yet (an older hub that never reports presence, or one that just started); nothing says it is gone, so treat it like `ONLINE` |
 
-- **app state** — do not use it: `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` are computed from the presence, and every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
-- **room tag** — which physical room the peer is in; lets multi-room deployments group peers.
-- **`qar_session_get_my_spec`** — your own peer's spec (e.g. to learn your assigned peer ID).
+- **app state** (deprecated): `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` still work and are computed from the presence, but every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
+- **room tag**: which physical room the peer is in; lets multi-room deployments group peers.
+- **`qar_session_get_my_spec`**: your own peer's spec (e.g. to learn your assigned peer ID).
 
 ## What a peer is: role, category and device
 
-Every peer describes itself with five values. Read them from any `QarPeerSpec`, or from `PeerSpec` in C#:
+Every peer describes itself with five values. Read them from any `QarPeerSpec` with the C getters. In C#, `PeerSpec` carries them as properties; in Rust, they are raw only, through `library.raw_api()`.
 
-| Value | C getter | C# | Example | Meaning |
+| Value | C getter | C# property | Example | Meaning |
 |---|---|---|---|---|
 | Role | `qar_peer_spec_get_role` | `Role` | `QAR_PEER_ROLE_TARGET` | What the peer does: `SOURCE` (renders or captures), `TARGET` (shows rendered content), `RUNTIME` (a Hub), `CONTROL` (a visualizer's control session), `INTERNAL` (pipeline infrastructure such as the mixer) |
 | Category | `qar_peer_spec_get_category` | `Category` | `QAR_DEVICE_CATEGORY_HEADSET` | The kind of device: `HEADSET`, `CAMERA`, `VISUALIZER`, `DESKTOP_PC`, `SERVER`, or `UNKNOWN` |

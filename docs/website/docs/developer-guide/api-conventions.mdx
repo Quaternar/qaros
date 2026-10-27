@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 title: API Conventions
-description: The patterns every QAROS module follows in C and C# — handles, results, extensible init structs, async pairs, enumeration, and ownership.
+description: The patterns every QAROS module follows in every language (handles, results, extensible init structs, async pairs, enumeration and ownership).
 ---
 
 import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
@@ -303,26 +303,27 @@ let created: Option<RenderSender> = pending.poll().transpose()?;
 </CodeTabs>
 
 :::warning Callback threading
-Result and progress callbacks (C) and subscription/event callbacks (both
-languages) arrive on **library threads**. Do not call blocking QAROS functions
+Result and progress callbacks (in C) and subscription/event callbacks (in every
+language) arrive on **library threads**. Do not call blocking QAROS functions
 from inside them, and marshal to your own thread before touching single-threaded
 application state.
 :::
 
 :::info Ending a subscription
 When `qar_cancel_token_cancel`, `qar_cancel_token_handle_destroy`,
-`qar_session_handle_destroy` or `qar_library_destroy` returns (C# `Dispose` of
-the subscription), a callback of the subscription that was running on another
-thread has finished, and none starts afterwards. Free `user_state` right after
-that call. Called from inside the subscription's own callback, cancel, destroy
-and `Dispose` return without waiting for it. Never end a subscription while
-holding a lock its callback takes.
+`qar_session_handle_destroy` or `qar_library_destroy` returns (in C#, `Dispose`
+of the subscription; in Rust, dropping its `Subscription`, which cancels its
+token), a callback of the subscription that was running on another thread has
+finished, and none starts afterwards. Free `user_state` right after that call.
+Called from inside the subscription's own callback, these calls return without
+waiting for it. Never end a subscription while holding a lock its callback
+takes.
 :::
 
 ## 5. Enumeration and string getters
 
-Reading a variable-size collection or string is a snapshot operation in both
-languages — the shape of the call differs, the meaning does not.
+Reading a variable-size collection or string is a snapshot operation in every
+language: the shape of the call differs, the meaning does not.
 
 <CodeTabs>
 <Lang value="c">
@@ -376,7 +377,7 @@ for peer in session.peers()? {
 
 ## 6. Ownership and lifetime
 
-The lifetime discipline is the same idea in both languages: you own what you
+The lifetime discipline is the same idea in every language: you own what you
 receive, borrowed things handed to you inside a callback are valid only for that
 callback, and teardown runs in reverse of setup.
 
