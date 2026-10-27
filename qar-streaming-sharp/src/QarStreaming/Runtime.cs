@@ -273,6 +273,87 @@ namespace Quaternar.Qaros
             }
         }
 
+        /// <summary>
+        /// Member-hub invitation, on the primary hub's PC: asks the QAROS hub on this PC, the
+        /// session's primary, for an invitation that joins the hub on another PC as its member. Carry
+        /// its <see cref="MemberHubInvitation.Serialize"/> bytes to your app on that PC, which calls
+        /// <see cref="JoinHubAsMember"/>. Blocks until the hub answers. Needs no session.
+        /// </summary>
+        /// <remarks>
+        /// The hub identifies this process from Windows and answers only an app it approved with
+        /// "May bring in member hubs" and quota left; the quota is spent per hub admitted. It never
+        /// prompts. The invitation is a secret bearer credential: send it only over a trusted channel
+        /// and never log it. Expected failures: <see cref="StatusCode.OnboardingHubUnreachable"/>,
+        /// <see cref="StatusCode.OnboardingApprovalDenied"/>,
+        /// <see cref="StatusCode.MemberSponsorNotAllowed"/>,
+        /// <see cref="StatusCode.MemberSponsorQuotaExceeded"/>,
+        /// <see cref="StatusCode.ArgumentNotSupported"/> (an option out of range). The caller owns
+        /// and disposes the invitation. Windows only.
+        /// </remarks>
+        public Result<MemberHubInvitation> CreateMemberHubInvitation(MemberHubInvitationOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            ThrowIfDisposed();
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            if (!cancellationResult.IsSuccess)
+                return Result<MemberHubInvitation>.Failure(cancellationResult.Info);
+            using (var scope = new NativeMemoryScope())
+            using (var cancellation = cancellationResult.Value)
+            {
+                var native = MemberHubInvitationNative.Create(options, scope);
+                IntPtr invitation;
+                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_create_member_hub_invitation(_handle.DangerousGetHandle(), ref native, cancellation.Handle, out invitation));
+                return Results.FromHandle(info, invitation, MemberHubInvitationNative.FromHandle);
+            }
+        }
+
+        /// <summary>
+        /// Member-hub invitation, on the joining PC: joins the QAROS hub on this PC to the
+        /// invitation's primary hub as a member. It does not onboard this app: call
+        /// <see cref="Onboard"/> with a local-app onboarding afterwards, which then needs no prompt.
+        /// </summary>
+        /// <remarks>
+        /// Starts the installed hub when none runs, checks the invitation (signature, expiry, then
+        /// the administrator's allow-list or the primary this PC's hub joined first), joins, rejoins
+        /// or readmits the hub, and blocks through its restart into the primary's session. Called
+        /// again on a hub that already is a member of that primary, it succeeds at once. Any process
+        /// of this PC's user may call it: the signed invitation authorizes the join. Expected
+        /// failures: <see cref="StatusCode.MemberInvitationInvalid"/>,
+        /// <see cref="StatusCode.MemberInvitationExpired"/>,
+        /// <see cref="StatusCode.MemberInvitationUsedUp"/>,
+        /// <see cref="StatusCode.MemberInvitationRevoked"/>,
+        /// <see cref="StatusCode.MemberInvitationPrimaryNotAllowed"/>,
+        /// <see cref="StatusCode.MemberInvitationPolicyNotProtected"/>,
+        /// <see cref="StatusCode.MemberJoinRefused"/>, <see cref="StatusCode.MemberRemoved"/>,
+        /// <see cref="StatusCode.PrimaryUnreachable"/>,
+        /// <see cref="StatusCode.HubLifecycleOperationRunning"/>,
+        /// <see cref="StatusCode.OnboardingHubUnreachable"/> and <see cref="StatusCode.Timeout"/>
+        /// (the join stays committed; calling again succeeds once the hub is back). Windows only.
+        /// </remarks>
+        public Result<Unit> JoinHubAsMember(JoinHubAsMemberOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            if (options.Invitation == null)
+                throw new ArgumentNullException(nameof(options.Invitation));
+            ThrowIfDisposed();
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            if (!cancellationResult.IsSuccess)
+                return Result<Unit>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
+            using (var progressState = ProgressState.Create(progress))
+            {
+                var native = MemberHubInvitationNative.Join(options);
+                return Results.FromNative(NativeMethods.qar_impl_runtime_join_hub_as_member(
+                    _handle.DangerousGetHandle(),
+                    ref native,
+                    progressState.Callback,
+                    progressState.UserState,
+                    cancellation.Handle));
+            }
+        }
+
         /// <summary>Releases the runtime. Dispose its sessions first.</summary>
         public void Dispose()
         {

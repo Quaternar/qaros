@@ -37,6 +37,104 @@ namespace Quaternar.Qaros.Tests
         }
 
         [Fact]
+        public void AnApplicationJoinsAsADesktopSource()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var mySpec = scope.Session.Peers.GetMySpec().ValueOrThrow();
+            Assert.Equal(PeerRole.Source, mySpec.Role);
+            Assert.False(mySpec.IsTargetApp);
+            Assert.Equal(DeviceCategory.DesktopPC, mySpec.Category);
+            var expectedId = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows) ? "DesktopWindows" : "DesktopLinux";
+            Assert.Equal(expectedId, mySpec.DeviceId);
+        }
+
+        [Fact]
+        public void UpdateDeviceIdentityDescribesACameraWithAnUnknownId()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var identity = new PeerDeviceIdentity(DeviceCategory.Camera, "SomeCameraNoCatalogKnows")
+            {
+                DeviceFamily = "Luxonis",
+                DeviceName = "OAK-D Pro W \U0001F4F7"
+            };
+            var myId = scope.Session.Peers.GetMySpec().ValueOrThrow().Id;
+            scope.Session.Peers.UpdateDeviceIdentity(identity).EnsureSuccess();
+            // GetMySpec() is the spec the session joined with (it does not follow updates, see the
+            // skipped display-name test); the session's peer list does.
+            var mySpec = QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    var result = scope.Session.Peers.GetAll();
+                    return result.IsSuccess ? Array.Find(result.Value, peer => peer.Id.Equals(myId)) : null;
+                },
+                peer => peer.DeviceId == identity.DeviceId,
+                "device identity update",
+                timeoutMs: 10000,
+                intervalMs: 100);
+            Assert.Equal(PeerRole.Source, mySpec.Role);
+            Assert.Equal(DeviceCategory.Camera, mySpec.Category);
+            Assert.Equal("Luxonis", mySpec.DeviceFamily);
+            Assert.Equal(identity.DeviceName, mySpec.DeviceName);
+        }
+
+        // A joined peer is Online in the hub's view, and the deprecated AppState still reads the
+        // Running every session claims when it joins (ADR-0363).
+        [Fact]
+        public void AJoinedPeerReadsOnlineAndItsDeprecatedAppStateStaysRunning()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var myId = scope.Session.Peers.GetMySpec().ValueOrThrow().Id;
+            var mySpec = QarNativeAssert.WaitUntil(
+                () =>
+                {
+                    var result = scope.Session.Peers.GetAll();
+                    return result.IsSuccess ? Array.Find(result.Value, peer => peer.Id.Equals(myId)) : null;
+                },
+                peer => peer.Presence == PeerPresence.Online,
+                "own peer online",
+                timeoutMs: 10000,
+                intervalMs: 100);
+            Assert.Equal(PeerPresence.Online, mySpec.Presence);
+#pragma warning disable CS0618 // the deprecated AppState keeps working
+            Assert.Equal(AppState.Running, mySpec.AppState);
+#pragma warning restore CS0618
+        }
+
+        // A peer that exits cleanly announces its leave: the session lists it as Leaving rather than
+        // Online, and the deprecated AppState reads ShuttingDown (ADR-0363).
+        [Fact]
+        public void APeerThatLeavesReadsLeaving()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var peer = scope.Hub.CreatePeer("QarStreamingSharpTests leaving peer");
+            var peerId = peer.Id;
+            PeerSpec? Find()
+            {
+                var result = scope.Session.Peers.GetAll();
+                return result.IsSuccess ? Array.Find(result.Value, spec => spec.Id.Equals(peerId)) : null;
+            }
+            QarNativeAssert.WaitUntil(Find, spec => spec.Presence == PeerPresence.Online, "peer online", timeoutMs: 15000, intervalMs: 100);
+            peer.Dispose();
+            var left = QarNativeAssert.WaitUntil(Find, spec => spec.Presence == PeerPresence.Leaving, "peer leaving", timeoutMs: 15000, intervalMs: 100);
+#pragma warning disable CS0618 // the deprecated AppState keeps working
+            Assert.Equal(AppState.ShuttingDown, left.AppState);
+#pragma warning restore CS0618
+        }
+
+        [Theory]
+        [InlineData(DeviceCategory.Headset)]
+        [InlineData(DeviceCategory.Visualizer)]
+        [InlineData(DeviceCategory.Unknown)]
+        public void AnApplicationCannotDeclareATargetCategory(DeviceCategory category)
+        {
+            using var scope = _fixture.CreateSessionScope();
+            var result = scope.Session.Peers.UpdateDeviceIdentity(new PeerDeviceIdentity(category, "MetaQuest3"));
+            Assert.False(result.IsSuccess);
+            Assert.Equal(StatusCode.PeerDeviceCategoryNotAllowed, result.Info.StatusCode);
+            Assert.Equal(DeviceCategory.DesktopPC, scope.Session.Peers.GetMySpec().ValueOrThrow().Category);
+        }
+
+        [Fact]
         public void GlobalSubscribeUpdatesProvidesPeerPayloadContents()
         {
             using var scope = _fixture.CreateSessionScope();

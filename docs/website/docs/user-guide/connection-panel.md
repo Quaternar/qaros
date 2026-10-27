@@ -1,43 +1,81 @@
 ---
 sidebar_position: 3
 title: Connecting to the Hub
-description: Connecting to the QAROS Hub — connection via QR code, floating code or direct IP address invite
+description: The Visualizer's Connection panel - the Hubs in your session, pairing another Hub, and inviting devices by IP address.
 ---
 # Connection Panel
 
-The Connection panel is the first panel in the left dock of the QAROS Hub Visualizer. It shows the current session, helps onboard devices into the hub, manages saved session invites, and lists peers currently visible in the session.
+The Connection panel is the first panel in the left dock of the QAROS Visualizer. Its header shows
+this Hub, how many Hubs of the session are online and how many devices are streaming. Below it, two
+areas:
 
-## Current Session
+| Area | What it is for |
+|---|---|
+| **Hubs** (default) | The session: every Hub in it, session actions, pairing another Hub |
+| **Devices** | Headsets this Hub streams to, and inviting a new one |
 
-The top of the panel shows the active session ID, this visualizer's peer ID, and its device type. If no session is active, invite and peer controls stay visible but cannot send requests.
+Apps are not managed here: start, approve and revoke them in the
+[Source Applications](/docs/operator-guide/source-applications) panel.
 
-## Onboard a Device
+## Hubs
 
-Use this section when a headset or another device needs to join this hub.
+This Hub and every Hub paired with it share one **session**.
 
-1. Press the refresh button to request a fresh onboarding invite from the runtime.
-2. Press the QR button to open the onboarding QR modal.
-3. Show the QR code to the device that is joining the hub.
-4. If the device cannot scan the QR code, use the hostname and code shown below the QR code for manual entry.
-5. Adjust QR Brightness in the modal if the device camera has trouble sensing the white QR modules. The default brightness is 50%.
+- One row per Hub, this Hub first (tagged *this hub*): online or offline, its address and how many
+  apps and devices it serves, or when it was last seen.
+- A new Hub is named after the PC it runs on (its host name). **Edit** on this Hub's row changes its name and room. With Hubs in more than one room, the list
+  is grouped by room.
+- The arrow on a row lists what runs on that Hub: **Apps** and **Devices**. Turn on **Show internal
+  services** to also see the Hub's own services (mixers, renderers).
 
-The Hostname and Code fields in the panel remember the most recent invite details so the operator can read them without reopening the modal.
+### Session actions
 
-## Session Invites
+- **Reset session** deletes the stored data of every Hub in the session and restarts them empty. The
+  confirmation lists what is discarded and what is kept. Use it when the session is stuck on stale
+  state.
+- **Leave session** is not available yet; it will unpair this Hub from the others in a later
+  version. Until then, a pairing cannot be undone from the Visualizer (see
+  [Networking & Federation](/docs/operator-guide/networking-and-federation#what-federation-does-and-does-not-do---read-this)).
 
-Use Session Invites for peers that should be launched or reconnected by the runtime.
+### Pair another Hub
 
-Each row stores:
+Opens only when you ask for it. Pairing takes both Hubs:
 
-- Auto: when enabled, the visualizer automatically sends this invite after restart if the saved peer is not already active in the current session.
-- Device: target device type for the invite.
-- Hostname: host name used for the session invite.
-- IP: enables the optional IP Address field and uses that value instead of Hostname.
-- Send: manually sends or resends the invite.
-- Status: latest invite result.
+1. On the Hub that shares: **Let another hub join us** shows a pairing code (digits, it changes
+   every few seconds), a countdown and the addresses this Hub is reachable at, each with a copy
+   button. **Stop sharing** closes it; no code is offered while it is closed.
+2. On the joining Hub: **Join another hub**. Turn on **Discover** to list Hubs on this LAN and press
+   **Use** on one, or type its **Address**. Type the **Code** from step 1 and press **Pair with hub**.
 
-Rows are saved automatically. After an invite succeeds, the returned peer ID is stored. On the next visualizer or runtime restart, the panel checks whether that peer ID is already active in the current session. If it is missing and Auto is enabled, the invite is submitted again.
+## Devices
 
-## Active Peers
+**Remembered devices** lists every headset this Hub knows, with its status (*Streaming from
+&lt;hub&gt;*, *Waiting for player*, *Offline*) and address.
 
-The Active Peers section lists peers currently visible in the session with status and device icons. Saved invite rows whose peer IDs are currently offline are shown as offline entries with a Reinvite button, so the operator can resend the matching invite without rebuilding the row.
+- **Auto**: this Hub invites the device again whenever it starts.
+- **Invite** / **Stop** starts or stops streaming to it. The trash icon forgets it.
+- A device streaming without being remembered (invited by an app) is listed too, without Auto.
+
+### Onboard a device
+
+1. Install and start the QAROS player on the device
+   ([Player installation](/docs/operator-guide/player-installation-to-device)).
+2. Press **Add device** and pick its kind:
+
+| Kind | Notes |
+|---|---|
+| HoloLens | Invited by IP address |
+| Headset | Any other headset: Meta Quest, METALENS glasses and other Android devices. *Legacy*: invited by IP address until its player pairs by QR code. The headset reports its exact model itself once it runs |
+
+A device remembered under an older kind (Meta Quest, Metalens) is not invited any more: forget it
+and add it again as a **Headset**.
+
+3. Enter the device's **Address** and an optional **Label**.
+4. Leave **Invite automatically** checked to remember the device and invite it on every start;
+   uncheck it to invite once.
+5. Press **Invite**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
+   notification.
+
+An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
+uses the code shown by **Let another hub join us** above. In Debug mode, **Other devices** in
+**Add device** opens the large QR code for players that scan it.

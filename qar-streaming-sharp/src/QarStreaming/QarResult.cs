@@ -62,7 +62,79 @@ namespace Quaternar.Qaros
         /// <summary>Discovery could not reach a hub; verify the hub is running (and the host/port) and retry.</summary>
         OnboardingHubUnreachable = 1802,
         /// <summary>Forget was called while the slot still has an active session; dispose the session first.</summary>
-        OnboardingSessionStillActive = 1803
+        OnboardingSessionStillActive = 1803,
+        /// <summary>Local app onboarding: the user denied the app in the QAROS hub, or revoked its approval. Stop and tell the user.</summary>
+        OnboardingApprovalDenied = 1805,
+        /// <summary>Local app onboarding: nobody answered the approval prompt in time. Offer a retry.</summary>
+        OnboardingApprovalTimeout = 1806,
+        /// <summary>Local app onboarding: the process serving the enrollment pipe is not the installed QAROS hub. Stop; do not retry silently.</summary>
+        OnboardingHubNotAuthentic = 1807,
+        /// <summary>Local app onboarding: the app no longer matches what the user approved (moved, re-signed, tampered). Ask the user to re-approve it.</summary>
+        OnboardingAppIdentityMismatch = 1808,
+        /// <summary>The device's certificate expired or its hub no longer renews it, and the pairing credential did not replace it. Ask the user to pair the device again with a new code.</summary>
+        OnboardingRePairRequired = 1809,
+        /// <summary>The hub refused to renew the certificate: the renewal did not prove it holds the key of the certificate it renews. This SDK makes the proof itself, so the stored identity is damaged: pair the device again. An SDK older than the hub cannot renew there; update the app or device, pairing again is not enough.</summary>
+        OnboardingRenewalPossessionUnproven = 1810,
+        /// <summary>
+        /// The hub has no target app it can launch for the device family the connection string
+        /// names. Nothing was invited; which devices can be invited is the hub's decision.
+        /// </summary>
+        HubTargetAppDeviceNotInvitable = 3100,
+        /// <summary>
+        /// A <see cref="PeerDeviceIdentity"/> declared a category an application may not claim. An
+        /// application is always a source and may describe itself only as
+        /// <see cref="DeviceCategory.DesktopPC"/>, <see cref="DeviceCategory.Server"/> or
+        /// <see cref="DeviceCategory.Camera"/>. Nothing was changed.
+        /// </summary>
+        PeerDeviceCategoryNotAllowed = 3101,
+        /// <summary>The hub is in the middle of another session-wide operation (a session rotation, a member join, a leave). Retry once it has finished.</summary>
+        HubLifecycleOperationRunning = 3300,
+        /// <summary>Member join: the primary hub has the join request and waits for its operator to allow it. Not a failure; ask again later.</summary>
+        MemberJoinPending = 3400,
+        /// <summary>Member join: the primary hub's operator denied the join request.</summary>
+        MemberJoinDenied = 3401,
+        /// <summary>Member join: the primary hub refused the join request outright, for example because the joining hub hosts members of its own. The message names the reason.</summary>
+        MemberJoinRefused = 3402,
+        /// <summary>Member join: the asked hub is itself a member of another hub; ask that primary hub instead.</summary>
+        MemberJoinRedirected = 3403,
+        /// <summary>Member join: the primary hub removed this member hub; it has to join again.</summary>
+        MemberRemoved = 3404,
+        /// <summary>A member hub could not reach its primary hub.</summary>
+        PrimaryUnreachable = 3405,
+        /// <summary>A session-wide action was asked of a member hub; only the primary hub performs it.</summary>
+        SessionWideActionOnMember = 3406,
+        /// <summary>Member-hub invitation: the app's approval on the primary hub does not allow it to bring in member hubs.</summary>
+        MemberSponsorNotAllowed = 3407,
+        /// <summary>Member-hub invitation: the app's approval has used its quota of member hubs.</summary>
+        MemberSponsorQuotaExceeded = 3408,
+        /// <summary>A hub's audit log does not verify: a record was edited, dropped or reordered.</summary>
+        AuditLogCorrupt = 3409,
+        /// <summary>Secure storage: the encrypted store failed for a reason the codes below do not name.</summary>
+        SecureStorageError = 3500,
+        /// <summary>Secure storage: the value asked for is not stored.</summary>
+        SecureStorageNotFound = 3501,
+        /// <summary>Secure storage: a stored value does not authenticate; it was edited, moved or replaced by an older copy.</summary>
+        SecureStorageTampered = 3502,
+        /// <summary>Secure storage: the data is protected by a key this machine, user or install does not have. Onboard again.</summary>
+        SecureStorageProtectorMismatch = 3503,
+        /// <summary>Secure storage: the protecting key exists but cannot be used now (TPM cleared or locked out, keyring locked).</summary>
+        SecureStorageProtectorUnavailable = 3504,
+        /// <summary>Secure storage: an invalid storage key (an internal error).</summary>
+        SecureStorageInvalidKey = 3505,
+        /// <summary>Secure storage: another process held the store's lock too long. Retrying may succeed.</summary>
+        SecureStorageLocked = 3506,
+        /// <summary>Member-hub invitation: it does not parse, its signature, kind or version is wrong, or the primary hub does not know it or judged its proof invalid.</summary>
+        MemberInvitationInvalid = 3600,
+        /// <summary>Member-hub invitation: it has expired. Ask for a new one.</summary>
+        MemberInvitationExpired = 3601,
+        /// <summary>Member-hub invitation: it was used as often as it allows.</summary>
+        MemberInvitationUsedUp = 3602,
+        /// <summary>Member-hub invitation: the primary hub's operator revoked it.</summary>
+        MemberInvitationRevoked = 3603,
+        /// <summary>Member-hub invitation: this PC does not trust its primary hub (not in the administrator's allow-list, or not the primary this PC's hub joined first).</summary>
+        MemberInvitationPrimaryNotAllowed = 3604,
+        /// <summary>Member-hub invitation: this PC's member-invitation policy can be written by a non-administrator, so every invitation is refused.</summary>
+        MemberInvitationPolicyNotProtected = 3605
     }
 
     /// <summary>

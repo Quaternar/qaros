@@ -18,25 +18,28 @@ The **render sender** is how your application's pixels reach the room. You creat
 **Your application decides which targets it renders for**: one, some or all of them. QAROS does not choose for it, not even for an app it launches. Find the targets in the peer list:
 
 - Watch peers with `qar_peer_subscribe_updates()`, and list the ones already there once with `qar_query_peer_specs()`. Subscribe first, so a target joining in between is not missed.
-- A peer for which `qar_peer_spec_is_target_app()` is true and whose app state is `QAR_APP_STATE_RUNNING` is a target you can render for: a headset, the Android streamer, a visualizer receiver.
+- A peer whose role (`qar_peer_spec_get_role()`) is `QAR_PEER_ROLE_TARGET` and whose presence (`qar_peer_spec_get_presence()`) is `QAR_PEER_PRESENCE_ONLINE`, or `QAR_PEER_PRESENCE_UNKNOWN` on a hub that has not reconciled it, is a target you can render for: a headset, a visualizer receiver, a camera's view in the visualizer. Its category, device name and family say which one ([Working with Peers](/docs/developer-guide/peers#what-a-peer-is-role-category-and-device)).
 - Create the app volume first, then one sender and one camera per target you serve. **The sender attaches its target to your app volume**, and that is what makes the target ask for your content. Use each sender's own per-frame eye poses and FOV to draw the same scene for that user.
 - Callbacks run asynchronously. Queue the target ID for your render thread, synchronize the handoff, and keep callback state alive through session/subscription teardown.
-- See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, stdin onboarding and multi-camera loop.
+- See the standalone [`vulkan_cube` source](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) for the complete dynamic-loading, local-app onboarding and multi-camera loop.
 
 ```c
 static void on_peer(QarPeerSpec* peer, void* user_state)
 {
-    bool is_target_app = false;
-    QarAppState state = QAR_APP_STATE_UNKNOWN;
+    QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
+    QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
     QarPeerId target_peer_id = qar_peer_id_default();
-    if(qar_result_is_error(qar_peer_spec_is_target_app(peer, &is_target_app)) || !is_target_app
-       || qar_result_is_error(qar_peer_spec_get_app_state(peer, &state))
-       || state != QAR_APP_STATE_RUNNING
+    if(qar_result_is_error(qar_peer_spec_get_role(peer, &role)) || role != QAR_PEER_ROLE_TARGET
+       || qar_result_is_error(qar_peer_spec_get_presence(peer, &presence))
+       || (presence != QAR_PEER_PRESENCE_ONLINE && presence != QAR_PEER_PRESENCE_UNKNOWN)
        || qar_result_is_error(qar_peer_spec_get_id(peer, &target_peer_id)))
         return;
 
     /* Not served yet? Hand target_peer_id to your render thread, which
-       creates its sender - see "Creating a sender" below. */
+       creates its sender - see "Creating a sender" below. A served target
+       whose presence turns OFFLINE, LEAVING or RETIRED is gone: stop its
+       sender; an OFFLINE one may come back ONLINE. UNKNOWN is a hub that
+       has not reconciled the peer: render for it. */
 }
 
 qar_result_log_if_error(
@@ -113,6 +116,68 @@ Key choices:
 - **Frame views** — the order you declare in `frame_views` is guaranteed: the layout (`qar_render_sender_layout`) and every frame list their views in exactly that order, each with the `eye` and `data_type` you declared at that position. Textures come in the order the views first use them (one per view for `SEPARATED_TEXTURES`, one per data type for side by side and layered); each view's `texture_index` names its texture. A view the layout provides that you did not declare follows yours.
 - **Frame layout** — how views pack into textures: `SIDE_BY_SIDE` (both eyes in one texture), `SEPARATED_TEXTURES`, or `LAYERED` (texture array). The negotiated layout can be queried (`qar_render_sender_layout`) and changed at runtime (`qar_render_sender_change_layout`).
 - **Depth matters.** Sending real depth (not just color) is what enables correct occlusion between app volumes and low-latency warping. Send it whenever you can.
+- **Alpha mode** — what your color's alpha channel means. See [Transparency](#transparency) below.
+
+## Color encoding
+
+Every QAROS device shows the stream's 8-bit color as **sRGB-encoded**, the way a display expects it. The textures a sender gives you are plain UNORM, so the numbers you write are stored as they are. If your renderer shades in linear light, do one of these:
+
+- **Encode in your last shader pass**: convert linear color to sRGB before writing it. Best quality, since the encoding happens at full precision.
+- **Declare linear color** and let QAROS encode it: chain a `QarRenderSenderColorEncodingExt` with `QAR_COLOR_ENCODING_LINEAR` (`qar_render_sender_color_encoding_ext_default()`); in C# set `RenderSenderOptions.ColorEncoding = ColorEncoding.Linear`. It costs one GPU pass per frame in your process. Send linear color as `QAR_PIXEL_FORMAT_R16G16B16A16`: in an 8-bit format the darks band slightly, because 8-bit linear values have already lost precision there.
+
+Linear values sent without either look too dark on every device. Alpha is never encoded. Premultiplied color is premultiplied in linear light, then encoded: what an sRGB render target produces when you blend over a transparent-black clear.
+
+If you render into a texture of your own first and then copy into the sender's texture, an sRGB render target (for example `DXGI_FORMAT_B8G8R8A8_UNORM_SRGB`) gives you encoded bytes with no extra work.
+
+## Transparency
+
+A sender declares what its color's alpha means, and the mixer composites the stream by it. Chain a `QarRenderSenderAlphaModeExt` (`qar_render_sender_alpha_mode_ext_default()`, then set `alpha_mode`) on `init.header.next`; in C# set `RenderSenderOptions.AlphaMode`.
+
+| Alpha mode | Means | The mixer |
+|---|---|---|
+| `QAR_COLOR_ALPHA_MODE_UNSPECIFIED` / `Unspecified` (default) | Nothing declared | Draws the stream opaque, unless the operator turns on `mixerSourceAlpha` for undeclared streams |
+| `QAR_COLOR_ALPHA_MODE_OPAQUE` / `Opaque` | The alpha channel means nothing | Every pixel fully covers what is behind it |
+| `QAR_COLOR_ALPHA_MODE_PREMULTIPLIED` / `Premultiplied` | Color is premultiplied by alpha, and alpha is the pixel's coverage | Blends each pixel over what is behind it by its coverage |
+| `QAR_COLOR_ALPHA_MODE_STRAIGHT` / `Straight` | Color is not multiplied by alpha, and alpha is the pixel's coverage | As `Premultiplied`: QAROS premultiplies the color before the frame leaves your application |
+
+- **Premultiplied** is what a renderer produces when it clears to transparent black (0, 0, 0, 0) and draws with ordinary alpha blending. Declare it only if the alpha channel stays correct up to the frame you send: a post-processing pass that overwrites alpha makes your content disappear. Declare `Opaque` then.
+- Translucent pixels that **write depth** are blended at their depth. Pixels with coverage but **no depth** (most transparent materials) are placed at the middle of your app volume along each view ray, so they show and occlude there, without parallax.
+- Color **brighter than its alpha** — glow, bloom, additive particles, even with alpha 0 — adds light over what is behind it.
+- Alpha crosses the network for a `Premultiplied` stream, at half resolution, so hard edges are slightly softer than on one machine. Both ends must run the same QAROS version.
+- **Straight** costs one GPU pass per frame in your process, even when the frame would otherwise be copied unchanged. If your renderer can produce premultiplied color directly, declare `Premultiplied` instead.
+- **Depth format** — the format of the depth textures the sender creates for you. Pick the one your renderer already draws depth in; see [Choosing a depth format](#choosing-a-depth-format).
+
+## Choosing a depth format
+
+The sender creates its depth textures in `depth_format` (C# `DepthFormat`), so render straight into them in your renderer's own format. Receivers always get 32-bit float depth: D16 and D24 are widened before the frame leaves your application, and the stencil of a depth-stencil format is dropped.
+
+| `depth_format` | CPU | D3D11 | OpenGL, Vulkan |
+|---|---|---|---|
+| `QAR_PIXEL_FORMAT_R32_FLOAT`, `QAR_PIXEL_FORMAT_D32_FLOAT` | yes | yes | yes |
+| `QAR_PIXEL_FORMAT_D16_UNORM` | yes | yes | yes |
+| `QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT`, `QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT` | no | no | yes, if the GPU can create it |
+
+- **D3D11 has no depth-stencil formats.** A D3D11 sender's textures are shared with QAROS through a keyed-mutex handle, and D3D11 cannot share a D24S8 or D32S8 texture. A D3D11 renderer with a D24S8 target copies or converts its depth to D16, D32 or R32.
+- **D32 works everywhere.** Some GPUs cannot create D24S8 at all (AMD has no `D24_UNORM_S8_UINT` in Vulkan).
+- **CPU frames:** a D16 texel is 2 bytes, but rows keep the frame's `pitch`, which is at least 4 bytes a pixel.
+
+A format the graphics API or the GPU cannot take fails `qar_render_sender_create` at once with `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, before any receiver is waited for. Trying your renderer's own format first therefore costs nothing:
+
+```c
+init.depth_format = QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT;
+QarResult r = qar_render_sender_create(session, &init, NULL, &sender);
+if (qar_result_has_code(&r, QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED))
+{
+    /* This GPU cannot create D24S8: render depth into D32 instead. */
+    init.depth_format = QAR_PIXEL_FORMAT_D32_FLOAT;
+    r = qar_render_sender_create(session, &init, NULL, &sender);
+}
+```
+
+To render into a depth-stencil texture, attach it as a depth-stencil target:
+
+- **Vulkan** — the image has depth-stencil attachment usage. Its layout barriers name `VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT`, including the release to `VK_QUEUE_FAMILY_EXTERNAL` before `show_frame`. Hand the frame back as for any format: set each texture's `layout` and `queue_family_index` and signal `synchronization.semaphore`.
+- **OpenGL** — attach the texture at `GL_DEPTH_STENCIL_ATTACHMENT`; it is a `GL_TEXTURE_2D_ARRAY`, so use `glFramebufferTextureLayer`.
 
 ## The frame loop
 

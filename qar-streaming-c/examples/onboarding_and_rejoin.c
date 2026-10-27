@@ -27,7 +27,8 @@
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target onboarding_and_rejoin
  * ./build/x64-windows/Debug/onboarding_and_rejoin.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code] [--forget]
+ * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
+ * [--forget]
  * \endcode
  *
  * \section onboarding_args Parse Arguments
@@ -74,7 +75,8 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "onboarding_and_rejoin";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"Usage: %s <installed|path-to-qar-streaming-c-library> "
+		"[runtime-binaries-dir] "
 		"[pairing-code] [--forget]\n",
 		name
 	);
@@ -113,7 +115,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* library_path = argv[1];
+	const char* library_path = library_path_argument(argv[1]);
 	const char* runtime_dir = NULL;
 	char runtime_dir_buffer[1024] = { 0 };
 	const char* pairing_code = NULL;
@@ -143,7 +145,7 @@ main(int argc, char** argv)
 
 	if(!qar_library_load(library_path))
 	{
-		fprintf(stderr, "Failed to load '%s'.\n", library_path);
+		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
 
@@ -181,7 +183,7 @@ main(int argc, char** argv)
 	   ) != 0
 	   || primary_session == NULL)
 	{
-		qar_runtime_destroy(primary_runtime);
+		qar_runtime_handle_destroy(primary_runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
@@ -284,7 +286,7 @@ main(int argc, char** argv)
 					qar_onboarding_invite_handle_destroy(sibling_invite);
 				}
 
-				qar_runtime_destroy(sibling_runtime);
+				qar_runtime_handle_destroy(sibling_runtime);
 			}
 
 			free(blob);
@@ -319,7 +321,7 @@ main(int argc, char** argv)
 					"qar_runtime_forget(sibling)",
 					qar_runtime_forget(sibling_runtime, &sibling_forget_init)
 				);
-				qar_runtime_destroy(sibling_runtime);
+				qar_runtime_handle_destroy(sibling_runtime);
 			}
 			remove("onboarding_and_rejoin.sibling-onboarding-id.txt");
 		}
@@ -333,7 +335,7 @@ main(int argc, char** argv)
 	}
 	//! [onboarding_teardown]
 
-	qar_runtime_destroy(primary_runtime);
+	qar_runtime_handle_destroy(primary_runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);
 	qar_library_unload();

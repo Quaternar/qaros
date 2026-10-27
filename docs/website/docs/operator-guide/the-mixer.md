@@ -53,7 +53,7 @@ Warping performance is observable: per-source timing reports (latency, upstream/
 ## Depth and alpha
 
 - **Depth is first-class.** The mixer consumes real depth from every source, uses it for occlusion and warping, and *emits* real depth in its output — so the device (or a further compositor) can continue to depth-blend correctly, and hand rays can be intersected with the mixed scene.
-- **Alpha is optional.** By default each source is drawn opaque. With `"mixerSourceAlpha": true` in the mixer config (or `QAR_MIXER_SOURCE_ALPHA=1`) the source's premultiplied alpha drives transparency during compositing, and empty regions stay fully transparent; occupied output pixels are emitted opaque by default.
+- **Alpha is used for blending.** A source that declares premultiplied alpha is blended over what is behind it by its coverage, and its glow adds light; a source that declares opaque, or nothing, covers fully. `mixerSourceAlpha` in the mixer config (or `QAR_MIXER_SOURCE_ALPHA=1`) reads undeclared sources as premultiplied too. Empty regions stay fully transparent, and the output carries premultiplied alpha for devices that composite with it.
 
 ## Where it runs
 

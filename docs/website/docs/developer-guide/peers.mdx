@@ -61,8 +61,9 @@ for (size_t i = 0; i < count; ++i)
     char name[128];
     qar_peer_spec_get_display_name(specs[i], name, sizeof(name));
     /* also: _get_app_version, _get_app_custom_peer_info,
-             _get_app_state, _get_version_id, _get_room_tag,
-             _get_id */
+             _get_presence, _get_version_id, _get_room_tag,
+             _get_id, _get_role, _get_category, _get_device_id,
+             _get_device_family, _get_device_name */
     qar_peer_spec_handle_destroy(specs[i]);
 }
 free(specs);
@@ -78,7 +79,9 @@ foreach (PeerSpec peer in result.ValueOrThrow())
 {
     string name = peer.DisplayName;
     // also: peer.AppVersion, peer.AppCustomPeerInfo,
-    //       peer.AppState, peer.VersionId, peer.RoomTag, peer.Id
+    //       peer.Presence, peer.VersionId, peer.RoomTag, peer.Id,
+    //       peer.Role, peer.Category, peer.DeviceId,
+    //       peer.DeviceFamily, peer.DeviceName
 }
 ```
 
@@ -87,9 +90,120 @@ foreach (PeerSpec peer in result.ValueOrThrow())
 
 Useful fields:
 
-- **app state** — `QAR_APP_STATE_INITIALIZING / RUNNING / SHUTTING_DOWN / UNKNOWN`: distinguish a peer that is present-but-loading from one that is live.
+- **presence** — `qar_peer_spec_get_presence()` (`PeerSpec.Presence` in C#): whether the peer is here. Render for, wait for and count `QAR_PEER_PRESENCE_ONLINE` and `QAR_PEER_PRESENCE_UNKNOWN` peers; stop at `OFFLINE`, `LEAVING` or `RETIRED`.
+
+  | Presence | Means |
+  |---|---|
+  | `ONLINE` | the hub sees the peer in the session |
+  | `OFFLINE` | the hub no longer sees it: a crash, a kill, a network loss or a short drop. It reads `ONLINE` again once it is back |
+  | `LEAVING` | it announced a clean exit, and may come back under the same id |
+  | `RETIRED` | it left for good; query results no longer list it |
+  | `UNKNOWN` | the hub has not reconciled it yet (an older hub that never reports presence, or one that just started); nothing says it is gone, so treat it like `ONLINE` |
+
+- **app state** (deprecated) — `qar_peer_spec_get_app_state()` / `PeerSpec.AppState` still work and are computed from the presence, but every peer reads `QAR_APP_STATE_RUNNING` from the moment it joins, so the value never tells "loading" from "ready". Read the presence instead.
 - **room tag** — which physical room the peer is in; lets multi-room deployments group peers.
 - **`qar_session_get_my_spec`** — your own peer's spec (e.g. to learn your assigned peer ID).
+
+## What a peer is: role, category and device
+
+Every peer describes itself with five values. Read them from any `QarPeerSpec`, or from `PeerSpec` in C#:
+
+| Value | C getter | C# | Example | Meaning |
+|---|---|---|---|---|
+| Role | `qar_peer_spec_get_role` | `Role` | `QAR_PEER_ROLE_TARGET` | What the peer does: `SOURCE` (renders or captures), `TARGET` (shows rendered content), `RUNTIME` (a Hub), `CONTROL` (a visualizer's control session), `INTERNAL` (pipeline infrastructure such as the mixer) |
+| Category | `qar_peer_spec_get_category` | `Category` | `QAR_DEVICE_CATEGORY_HEADSET` | The kind of device: `HEADSET`, `CAMERA`, `VISUALIZER`, `DESKTOP_PC`, `SERVER`, or `UNKNOWN` |
+| Device id | `qar_peer_spec_get_device_id` | `DeviceId` | `"MetaQuest3"` | The exact model, when known |
+| Device family | `qar_peer_spec_get_device_family` | `DeviceFamily` | `"MetaQuest"` | The model's family |
+| Device name | `qar_peer_spec_get_device_name` | `DeviceName` | `"Meta Quest 3"` | What to show the user |
+
+- Render for peers whose role is `TARGET`; the category and device only say *what* the target is.
+- **Ids and families are open strings**, not an enum: new models appear without a new QAROS SDK. Today's families include `HoloLens`, `MetaQuest`, `Metalens`, `Headset` (a headset that has not reported a known model) and `Zed`; treat this list as examples, never as complete.
+- Pick a picture or model by device id, else by family, else by category. An unknown model of a known family still matches its family; an unknown family still matches its category.
+- **The identity can change while the peer runs.** A headset first joins as the kind it was invited as (`HoloLens` or `Headset`) and is refined to the exact model once its device answers. Re-read it in your `qar_peer_subscribe_updates` callback instead of caching it.
+- The C string getters fill a caller buffer, like `qar_peer_spec_get_display_name`. Text is UTF-8.
+
+### Show the user what each target is
+
+```c
+QarPeerSpec* peers[64];
+size_t written = 0;
+qar_result_log_if_error(qar_query_peer_specs(session, peers, 64, &written));
+
+for (size_t i = 0; i < written; ++i)
+{
+    QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
+    QarDeviceCategory category = QAR_DEVICE_CATEGORY_UNKNOWN;
+    char name[128] = "", family[64] = "";
+    if (qar_result_is_success(qar_peer_spec_get_role(peers[i], &role))
+        && role == QAR_PEER_ROLE_TARGET)
+    {
+        qar_peer_spec_get_category(peers[i], &category);
+        qar_peer_spec_get_device_name(peers[i], name, sizeof(name));       /* "Meta Quest 3" */
+        qar_peer_spec_get_device_family(peers[i], family, sizeof(family)); /* "MetaQuest"    */
+        show_target(name, icon_for(family, category)); /* your icon table, category as fallback */
+    }
+    qar_peer_spec_handle_destroy(peers[i]);
+}
+```
+
+### Pick a model for a headset in Unity
+
+```csharp
+GameObject PrefabFor(PeerSpec peer) =>
+    headsetPrefabs.TryGetValue(peer.DeviceId, out var byModel) ? byModel        // "MetaQuest3"
+  : headsetPrefabs.TryGetValue(peer.DeviceFamily, out var byFamily) ? byFamily  // "MetaQuest"
+  : peer.Category == DeviceCategory.Camera ? genericCamera
+  : genericHeadset;
+```
+
+## Describing your own device
+
+An application is always a **source** (`QAR_PEER_ROLE_SOURCE`): it describes its device, never its role. By default QAROS publishes it as a desktop PC (`DesktopWindows` / `DesktopLinux`). To say more, chain a `QarPeerDeviceIdentity` on `QarPeerPresentation::header.next` when you onboard or rejoin:
+
+- `category` must be `QAR_DEVICE_CATEGORY_DESKTOP_PC`, `QAR_DEVICE_CATEGORY_SERVER` or `QAR_DEVICE_CATEGORY_CAMERA`. Anything else fails with `QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED` and changes nothing.
+- `device_id` is required. `device_family` and `device_name` are optional. An id the Hub's device catalog does not know is fine: the visualizer shows it by family or category, with your name.
+- Chain the same extension on `QarRejoinInit` to keep it across restarts.
+
+### A source app that is a camera
+
+```c
+QarPeerDeviceIdentity identity = {
+    .header = { .type = QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY },
+    .category = QAR_DEVICE_CATEGORY_CAMERA,
+    .device_id = "LuxonisOakD",   /* unknown ids are fine */
+    .device_family = "Luxonis",
+    .device_name = "Luxonis OAK-D",
+};
+
+QarOnboardInit init = qar_onboard_init_default();
+QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+init.header.next = &local.header;
+init.presentation.display_name = "Lab camera 1";
+init.presentation.header.next = &identity.header;
+
+QarOnboardingId unused = qar_onboarding_id_default();
+QarSession* session = NULL;
+QarResult r = qar_runtime_onboard(runtime, &init, NULL, NULL,
+                                  cancel, &unused, &session);
+/* Joins as Source + Camera + LuxonisOakD. */
+```
+
+### Refine the identity later
+
+When the exact model is known only after your app opened the device, update it. Other peers see a normal peer update:
+
+```c
+QarPeerDeviceIdentity refined = {
+    .header = { .type = QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY },
+    .category = QAR_DEVICE_CATEGORY_CAMERA,
+    .device_id = "LuxonisOakDPro",
+    .device_family = "Luxonis",
+    .device_name = "OAK-D Pro W",
+};
+qar_result_log_if_error(qar_peer_update_device_identity(session, &refined));
+```
+
+Declaring `CAMERA` changes how the visualizer lists and draws your peer. Streaming camera images and pose from a non-ZED camera needs a camera protocol QAROS does not offer yet.
 
 ## Reacting to changes
 
@@ -99,7 +213,7 @@ Useful fields:
 ```c
 static void on_peer_update(QarPeerSpec* peer, void* user_state)
 {
-    /* peer joined / left / changed presentation or app state */
+    /* peer joined / left / changed presentation or presence */
 }
 
 /* token is required: cancelling or destroying it ends the subscription */
@@ -113,7 +227,7 @@ qar_peer_subscribe_updates(session, on_peer_update, NULL, token);
 // As a C# event: fires on the library thread — marshal to your own thread.
 session.Peers.Updated += (sender, e) =>
 {
-    PeerSpec peer = e.Peer; // joined / left / changed presentation or app state
+    PeerSpec peer = e.Peer; // joined / left / changed presentation or presence
 };
 // Updated delivers nothing until a subscription is alive: start one, and Dispose() it to stop.
 using IDisposable eventSubscription = session.Peers.SubscribeUpdates().ValueOrThrow();

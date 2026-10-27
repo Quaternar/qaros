@@ -10,9 +10,11 @@ using Quaternar.Qaros.Mathematics;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// A peer's lifecycle state. A target app is ready to be rendered for only while it is
-    /// <see cref="Running"/>.
+    /// The state a peer last claimed about itself. Deprecated: read <see cref="PeerSpec.Presence"/>.
+    /// Every peer claims <see cref="Running"/> as soon as it joins, so the value says nothing beyond
+    /// "joined", never "finished configuring".
     /// </summary>
+    [Obsolete("Read PeerSpec.Presence (PeerPresence) instead. AppState.Running only means the peer joined.")]
     public enum AppState
     {
         Unknown = 0,
@@ -21,6 +23,80 @@ namespace Quaternar.Qaros
         ShuttingDown = 100,
         /// <summary>The peer left for good and never comes back under its id.</summary>
         Retired = 200
+    }
+
+    /// <summary>
+    /// Whether a peer is here, as an application should act on it (C <c>QarPeerPresence</c>).
+    /// Render for, wait for and count <see cref="Online"/> and <see cref="Unknown"/> peers
+    /// (<see cref="PeerSpec.IsReachable"/>). The hub's own view of the session decides
+    /// <see cref="Online"/> and <see cref="Offline"/>; a leave the peer announced decides
+    /// <see cref="Leaving"/> and <see cref="Retired"/>.
+    /// </summary>
+    public enum PeerPresence
+    {
+        /// <summary>
+        /// The hub has not reconciled the peer yet (an older hub that never does, or one that just
+        /// started). Nothing says it is gone: treat it like <see cref="Online"/>.
+        /// </summary>
+        Unknown = 0,
+        /// <summary>The hub sees the peer in the session.</summary>
+        Online = 1,
+        /// <summary>
+        /// The hub no longer sees the peer: a crash, a kill, a network loss or a short drop. It reads
+        /// <see cref="Online"/> again once it is back, without doing anything.
+        /// </summary>
+        Offline = 2,
+        /// <summary>The peer announced it is leaving (a clean exit); it may come back under its id.</summary>
+        Leaving = 3,
+        /// <summary>The peer left for good and never comes back under its id.</summary>
+        Retired = 4
+    }
+
+    /// <summary>
+    /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
+    /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
+    /// </summary>
+    public enum PeerRole
+    {
+        /// <summary>QAROS pipeline infrastructure the hub launched itself.</summary>
+        Internal = 0,
+        /// <summary>Provides content: a source application or a camera capture process.</summary>
+        Source = 1,
+        /// <summary>
+        /// Shows content: a headset's serving app, a Visualizer receiver, a camera's receiver slot.
+        /// </summary>
+        Target = 2,
+        /// <summary>A QAROS runtime (hub) process.</summary>
+        Runtime = 3,
+        /// <summary>The operator's Visualizer control session.</summary>
+        Control = 4
+    }
+
+    /// <summary>
+    /// What kind of device a peer is (C <c>QarDeviceCategory</c>): the rendering fallback when the
+    /// peer's <see cref="PeerSpec.DeviceId"/> and <see cref="PeerSpec.DeviceFamily"/> are unknown
+    /// to the application. A new device model never adds a value; treat an unnamed value as
+    /// <see cref="Unknown"/>.
+    /// </summary>
+    public enum DeviceCategory
+    {
+        /// <summary>Infrastructure, runtime, control, test targets and unrecognised devices.</summary>
+        Unknown = 0,
+        /// <summary>A desktop or laptop PC (every source application by default).</summary>
+        DesktopPC = 1,
+        /// <summary>A server machine.</summary>
+        Server = 2,
+        /// <summary>A headset or glasses of any model.</summary>
+        Headset = 3,
+        /// <summary>A Visualizer receiver showing streams on the PC.</summary>
+        Visualizer = 4,
+        /// <summary>A camera of any model: its capture process. (A build before
+        /// <see cref="Observer"/> also used it for a camera's receiver.)</summary>
+        Camera = 5,
+        /// <summary>A target app that sees the scene through a camera: it blends a camera's
+        /// RGB-D frames and pose with the mixer's stream. Its device id and name are the
+        /// camera's.</summary>
+        Observer = 6
     }
 
     /// <summary>
@@ -301,9 +377,14 @@ namespace Quaternar.Qaros
         RuntimeOnboardCodeExt = 0x1007,
         RuntimeOnboardInviteExt = 0x1008,
         RuntimeOnboardPeerIdExt = 0x1009,
+        RuntimeOnboardLocalAppExt = 0x100A,
+        // 0x100B and 0x100C (the retired member join request and complete inits) are never reused.
+        RuntimeCreateMemberHubInvitationInit = 0x100D,
+        RuntimeJoinHubAsMemberInit = 0x100E,
         SessionGraphicsDeviceId = 0x2004,
         SessionRequestInviteInit = 0x2005,
         PeerPresentation = 0x2006,
+        PeerDeviceIdentity = 0x2009,
         SessionInviteTargetAppInit = 0x2007,
         SessionRequestOnboardingCodesInit = 0x2008,
         RenderingStreamSenderInit = 0x3000,
@@ -715,6 +796,25 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// Onboarding mode: join the QAROS hub installed on this PC as a local source
+    /// app, with no code. Select with <see cref="OnboardOptions.UseLocalApp"/>.
+    /// The hub asks the user once; later starts join silently while the app still
+    /// matches. Stateless: the returned onboarding id is the zero id, so rejoin and
+    /// forget do not apply. Not combinable with a host or peer id extension.
+    /// Windows only.
+    /// </summary>
+    public sealed class OnboardLocalApp : Structure
+    {
+        public OnboardLocalApp()
+            : base(StructureType.RuntimeOnboardLocalAppExt)
+        {
+        }
+
+        /// <summary>Max wait for the user's first-time approval; zero takes the hub default (120 s).</summary>
+        public TimeSpan ApprovalTimeout { get; set; } = TimeSpan.Zero;
+    }
+
+    /// <summary>
     /// Extension: selects the graphics adapter the session's Vulkan and D3D11
     /// devices, and with them every render sender's frame textures, are created
     /// on. Chain on <see cref="OnboardOptions"/> or <see cref="RejoinOptions"/>;
@@ -989,10 +1089,10 @@ namespace Quaternar.Qaros
     public sealed class RuntimeOptions
     {
         /// <summary>
-        /// The SDK <c>bin</c> folder: the one the native library was loaded from, not the
-        /// application folder. The runtime starts <c>qar-runtime-launcher</c> from it; left null
-        /// or empty, no launcher starts and peer invites never complete.
-        /// A relative path resolves against the current working directory.
+        /// Runtime <c>bin</c> folder holding <c>qar-runtime-launcher</c>. Leave null: the runtime
+        /// uses the folder its loaded <c>qar-streaming-c.dll</c> came from, which is the installed
+        /// QAROS <c>bin</c> (<see cref="InstalledRuntime.TryGetBinFolder"/>). Set it only for our
+        /// own development builds. A relative path resolves against the current working directory.
         /// </summary>
         public string? RuntimeBinariesFolderPath { get; set; }
         /// <summary>

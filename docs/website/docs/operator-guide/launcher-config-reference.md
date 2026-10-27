@@ -72,6 +72,7 @@ Paths default to the data root or the log root ([Installation: Where data and lo
 | `routerPort` | integer | - | Fixed message-router port. Omit it: the Hub takes the first port in the range below free on both TCP and UDP, so several local Hubs coexist. Pin it only for a firewalled deployment. |
 | `routerPortRangeStart` | integer | `19120` | First port searched when `routerPort` is unset. The onboarding listener (discovery, pairing, shared-password onboarding) takes its port from the same range, skipping the router port, unless `discoveryPort` / `onboardingPakePort` pins it. |
 | `routerPortRangeEnd` | integer | `19199` | Last port searched when `routerPort` is unset, and for the onboarding listener. |
+| `memberRouterPort` | integer | `0` | Member Hubs only: port of the member's local message router. The member's devices and apps connect to it first, then to the primary, so their traffic stays on the member PC and keeps flowing while the primary is down. `0` takes the first port of the router range free on TCP and UDP (the onboarding listener skips it) and the Hub reuses that port at its next start while it is free. Nonzero pins it, for a firewalled deployment. A primary Hub ignores it. On a member, `sessionEndpoints` name this router. |
 | `sessionEndpoints` | array of locator strings or address objects | - | Endpoints put into invites sent to devices. Omit (or leave empty) to derive them from the router's listening address. Must be an array (a bare string is rejected). Each entry is either a locator string `"<protocol>/<host>:<port>"` (IPv6 host in brackets) or `{"Protocol": "tcp", "Hostname": "<ip-or-host>", "Port": <1-65535>}` with all three fields; both forms may be mixed. A malformed entry stops the launcher with an error message. |
 | `discoveryHost` | string | `""` | Host name or IP advertised in the discovery beacon as the discovery server address. |
 | `discoveryPort` | integer | `0` | TCP port of the onboarding listener (discovery requests, pairing, shared-password onboarding). `0` takes the first free port of the router range. Nonzero pins it: that port, or the Hub does not start. Same listener as `onboardingPakePort`; if both are set they must match. The UDP multicast beacon stays on `7445`. |
@@ -117,7 +118,7 @@ See [Security Model](/docs/operator-guide/security-model) and [Managing Devices]
 | `enableMixer` | boolean | `true` | Insert the mixer between source apps and targets. See [The Mixer](/docs/operator-guide/the-mixer). |
 | `unifyTargetAppWithMixer` | boolean | `false` | Run the mixer inside the target's process where the target supports it, instead of as its own process. Only with `enableMixer`. |
 | `applyDeterministicIds` | boolean | `true` | Keep launcher-assigned peer ids stable across restarts, so child processes reuse their onboarding identities instead of re-enrolling. |
-| `targetAppOverride` | string | `"None"` | Launch this target app for every target request instead of the one matching the device. `None`, `StreamVisualizer`, `HoloLens`, `MetaQuest`, `StereoKit`, `AndroidStreamer`. |
+| `targetAppOverride` | string | `"None"` | Launch this target app for every target request instead of the one matching the device. `None`, `StreamVisualizer`, `HoloLens`, `StereoKit`, `AndroidStreamer`. |
 | `handleInvites` | boolean | `true` | Answer session-invite requests. |
 | `detectConnectedPeers` | boolean | `true` | Track peers connecting to the session. |
 | `replyToServiceExists` | boolean | `true` | Answer service-existence probes. |
@@ -158,12 +159,12 @@ Each enabled entry is a device the Hub invites into the session at startup. Star
 |---|---|---|---|
 | `enabled` | boolean | `true` | `false` skips the entry. |
 | `hostname` | string | `""` | Host name or IP of the device. |
-| `deviceType` | string | `"Visualizer"` | `HoloLensARHeadset`, `MetaQuestHeadset` or `AndroidStreamer`. `Visualizer` and `CameraVisualizer` are ignored with a warning: use `autoLaunchVisualizer` instead. |
+| `deviceType` | string | `"Visualizer"` | `HoloLens` or `Headset`. A `Headset` is any headset `qar-android-streamer` streams to (Meta Quest, METALENS glasses, other Android devices); it reports its exact model itself. HoloLens is streamed to by `qar-openxr-desktop`. The old names `HoloLensARHeadset`, `Android` and `AndroidStreamer` still work. A model or model family (`MetaQuest`, `MetaQuestHeadset`, `MetaQuest3`, `Metalens`) is not invitable: the entry is skipped with a warning, change it to `Headset`. `Visualizer` is ignored with a warning: use `autoLaunchVisualizer` instead. A camera is never a target app. |
 | `configOverrides` | object | `{}` | Passed into the launched app's config (e.g. `roomTag`). Aliases: `specialKeys`, `config`. |
 
 ```json
 "targetApps": [
-  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "MetaQuestHeadset", "configOverrides": { "roomTag": "default" } }
+  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "Headset", "configOverrides": { "roomTag": "default" } }
 ]
 ```
 

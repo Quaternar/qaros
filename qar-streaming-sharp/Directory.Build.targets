@@ -18,8 +18,26 @@
     <Error Condition="!Exists('$(QarStreamingNativeBinDir)\qar-streaming-c-ext.dll')"
       Text="qar-streaming-c-ext.dll was not found in '$(QarStreamingNativeBinDir)'. The integration tests drive the C API against it; it exists only in Debug and RelWithDebInfo builds, never in a release package." />
 
+    <!--
+      qar-hub-test-ext (only where a repository sets QarHubTestExtBinDir, the Quaternar one): a
+      secured hub that rotates its session, for the follow tests. Its folder comes from the same
+      build as the SDK binaries, so a DLL in both is the same file. Without the property, or with
+      -p:QarSkipHubTestExt=true, those tests are skipped.
+    -->
+    <ItemGroup Condition="'$(QarHubTestExtBinDir)' != '' and '$(QarSkipHubTestExt)' != 'true'">
+      <QarHubTestExtBinary
+        Include="$(QarHubTestExtBinDir)\*.dll"
+        Condition="Exists('$(QarHubTestExtBinDir)')" />
+    </ItemGroup>
+    <Error Condition="'$(QarHubTestExtBinDir)' != '' and '$(QarSkipHubTestExt)' != 'true' and !Exists('$(QarHubTestExtBinDir)\qar-hub-test-ext.dll')"
+      Text="qar-hub-test-ext.dll was not found in '$(QarHubTestExtBinDir)'. Build the qar-hub-test-ext_gtests target first, or pass -p:QarSkipHubTestExt=true to skip the hub follow tests." />
+
     <Copy SourceFiles="@(QarStreamingNativeBinary)"
       DestinationFiles="@(QarStreamingNativeBinary->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+    <Copy Condition="'@(QarHubTestExtBinary)' != ''"
+      SourceFiles="@(QarHubTestExtBinary)"
+      DestinationFolder="$(TargetDir)"
       SkipUnchangedFiles="true" />
   </Target>
 </Project>

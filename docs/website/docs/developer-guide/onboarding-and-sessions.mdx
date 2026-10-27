@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Onboarding and Sessions
-description: Obtain a session — rejoin, onboard with a code, sibling invites — and tear it down correctly.
+description: Obtain a session - as a local app on the QAROS PC with no code, with an onboarding code from another PC, or from a sibling invite - and tear it down correctly.
 ---
 
 import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
@@ -11,11 +11,126 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-In QAROS you never "create" or "join" a session directly — **every session is obtained through onboarding**. This page covers the four situations an integrated application encounters and the teardown rules. The security machinery behind these calls is described in [Security and Onboarding](/docs/operator-guide/security-model); from the API's perspective it is completely hidden.
+In QAROS you never "create" or "join" a session directly: **every session is obtained through onboarding**. Which call depends on where your app runs:
 
-## The canonical startup flow
+| Your app runs | Mode | The user does | Persisted |
+|---|---|---|---|
+| on the PC where QAROS is installed | [local app](#local-app-on-the-qaros-pc-no-code) (`QarOnboardLocalAppExt`) | clicks **Allow** once in QAROS | nothing; the hub remembers the approval |
+| on another PC or device | [onboarding code](#onboarding-code-a-hub-on-another-pc) (`QarOnboardCodeExt`), then rejoin | types the code the hub shows, once | an onboarding id your app stores |
+| as a second instance of an onboarded app | [invite](#sibling-onboarding-one-app-several-api-instances) (`QarOnboardInviteExt`) | nothing | an onboarding id per instance |
 
-Persist exactly one thing: the **onboarding ID** (a 16-byte UUID) returned by your first successful onboard. Then, on every start:
+A source app streaming into QAROS normally runs on the QAROS PC: use the local app mode. The security behind these calls is described in [Security Model](/docs/operator-guide/security-model); the API hides it.
+
+## Local app: on the QAROS PC, no code
+
+Chain `QarOnboardLocalAppExt` as the only mode extension of `qar_runtime_onboard` (or `_async`). Windows only; elsewhere the call returns `QAR_STATUS_NOT_IMPLEMENTED`.
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+static void on_progress(QarActionSeverity severity, float percent,
+                        const char* message, void* state)
+{
+    printf("%s\n", message); /* "Waiting for approval in QAROS hub" */
+}
+
+QarOnboardInit init = qar_onboard_init_default();
+QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+init.presentation.display_name = "Vendor Capture";
+init.header.next = &local.header;
+
+QarOnboardingId unused = qar_onboarding_id_default(); /* stays zero */
+QarSession* session = NULL;
+QarResult r = qar_runtime_onboard(runtime, &init, on_progress, NULL,
+                                  cancel, &unused, &session);
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+var who = new PeerPresentationOptions { DisplayName = "Vendor Capture" };
+var onboard = runtime.Onboard(new OnboardOptions().WithPresentation(who).UseLocalApp());
+if (onboard.IsSuccess)
+{
+    using Session session = onboard.Value.Session;
+    // ...
+}
+```
+
+</Lang>
+</CodeTabs>
+
+- **Every start calls onboard.** Nothing is written to disk and the onboarding id stays zero, so `qar_runtime_rejoin` and `qar_runtime_forget` do not apply.
+- **Load the installed runtime** (`qar_library_load(NULL)`). The hub refuses a runtime of another version or flavor, such as a private copy shipped with your app (`QAR_STATUS_ONBOARDING_FAILED`, with the reason in the message).
+- **Not combinable** with `QarOnboardHostExt` (it is local only) or `QarOnboardPeerIdExt` (the hub assigns the peer id): `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. A `QarGraphicsDeviceId` may be chained ([Choosing the GPU](#choosing-the-gpu)).
+- **Credentials live in memory only.** Each start gets a fresh key and a 30-minute certificate; the runtime renews it in the background. Nothing for your app to do.
+- Pass a `QarCancelToken` and cancel it when your user quits: the call can wait minutes for the approval.
+
+### The approval prompt
+
+```text
+app ──onboard──> QAROS identifies the process from Windows (path, file hash, signature, user)
+                   │
+       approved before and unchanged? ──yes──> session ✓ (no prompt)
+                   │ no
+       "Allow <app> to join QAROS?" in the Visualizer and as a tray window
+                   │
+       Allow ──> trust record saved, session ✓
+       Deny / closed / no answer ──> error, nothing saved
+```
+
+- The prompt shows only what Windows says about your app: publisher, product, executable, path, signature. Your `display_name` appears separately, labelled "App says:".
+- **Deny** is the default button; Enter or Space never approve. Closing the prompt counts as Deny.
+- The prompt waits `approval_timeout_ms`; 0 means the hub default of **120 s**. The hub caps longer waits at 10 minutes.
+- While it waits, the progress callback reports `Waiting for approval in QAROS hub`. The prompt opens in front of every window, your app's included, so the user sees it even with the Visualizer closed.
+- A second start of the same app while the prompt is open waits for the same prompt.
+
+### The trust record
+
+**Allow** saves a trust record on the hub. Which rule it holds depends on whether your executable is code-signed:
+
+| Your executable | Record matches | Rebuilt or updated in place | Moved or copied elsewhere |
+|---|---|---|---|
+| **Authenticode-signed** | signer, product name, original file name, install folder, path inside it | joins silently | refused (1808) |
+| **unsigned** | exact path and file hash | asks again; the new approval replaces the old | refused (1808) |
+| **invalid signature** | never approvable | | refused (1808) |
+
+- Sign release builds of your app: users then approve it once, not after every update.
+- During development every rebuild of an unsigned app asks again. That is expected.
+- The operator lists and revokes records in the Visualizer: [Approved local apps](/docs/operator-guide/source-applications#approved-local-apps). A revoked app asks again on its next start.
+- The approval is for the **process**. Approving a host executable (an editor, a game engine) admits everything it loads.
+
+### Status codes and what to tell the user
+
+| Status | Meaning | Tell the user | Retry |
+|---|---|---|---|
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | no QAROS hub runs on this PC | "QAROS is not running. Start QAROS, then try again." | when the user says so |
+| `QAR_STATUS_ONBOARDING_APPROVAL_DENIED` (1805) | the user clicked Deny or closed the prompt, or the approval was revoked | "QAROS did not allow this app." | only when the user asks |
+| `QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT` (1806) | nobody answered in time | "Nobody answered the approval prompt in QAROS." | offer it |
+| `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC` (1807) | the program answering on this PC is not the installed QAROS | "The QAROS installation could not be verified. Reinstall QAROS or contact your administrator." | never silently |
+| `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1808) | the app no longer matches its approval (moved, copied, re-signed, tampered) | "This app changed since it was approved. Revoke it in QAROS and start it again." | after the user revoked it |
+| `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` (1809) | the device's certificate expired, was revoked or is no longer renewed by its hub, and the code given did not replace it | "This device must be paired again. Ask for a new code from the QAROS hub." | no, pair again |
+| `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (1810) | the hub refused to renew the certificate because the renewal did not prove it holds the certificate's key | "This app or device could not renew its QAROS certificate. Update the app or device to the current QAROS SDK; if it is up to date, pair it again with a new code." | no, update or pair again |
+| `qar_library_load(NULL)` returns `false` | No runtime beside the executable, `QAROS_RUNTIME_DIR` not set, QAROS not installed, and none on `PATH` | "QAROS is not installed on this PC." | no |
+
+C#: `StatusCode.OnboardingHubUnreachable`, `OnboardingApprovalDenied`, `OnboardingApprovalTimeout`, `OnboardingHubNotAuthentic`, `OnboardingAppIdentityMismatch`, `OnboardingRePairRequired`, `OnboardingRenewalPossessionUnproven`. The [Vulkan cube](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube/main.cpp) (`ExplainOnboardingFailure`) handles each of them.
+
+### Minimum SDK for certificate renewal
+
+A hub renews a certificate only for an app or device whose renewal proves it holds that certificate's key. Every renewal sends a signature by the current key over the new request; a stolen certificate without its key renews nothing.
+
+- **Minimum SDK.** The first release after 0.9.0 (the one that lists `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` in its changelog) and every later one. The runtime library, the C# package and the Unity package all make the proof themselves.
+- **An older SDK cannot renew at an updated hub.** The hub refuses its renewal and the app or device stops at its certificate's end (at most 24 hours later, plus a 7-day grace in which an updated SDK can still renew it). Pairing it again with a code does not help: its next renewal fails the same way.
+- **Migration.**
+  1. Update every app and device that loads the QAROS runtime to the current SDK: the `qar_streaming` runtime beside the executable or the installed QAROS, the `Quaternar.Qaros` NuGet package, the Unity package and the device players.
+  2. Update the hub. Apps the hub launches itself and apps on the hub's PC pick up the runtime of the installed QAROS.
+  3. An app or device that already reports `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` after the update has an identity that cannot prove its key: pair it again with a new code from the hub.
+
+## Onboarding code: a hub on another PC
+
+An app on another PC or device cannot be identified by the hub's Windows, so it pairs with the short **code** the hub shows. The code bootstraps a persisted identity: persist the **onboarding id** (a 16-byte UUID) your first successful onboard returns, then rejoin silently on every later start.
 
 ```
 saved id? ──yes──> qar_runtime_rejoin ──ok──> session ✓
@@ -35,6 +150,8 @@ static QarResult obtain_session(
     QarRuntime* runtime,
     QarOnboardingId* io_saved_id,     /* loaded from your app's settings */
     const char* code_from_user,       /* NULL until you prompted the user */
+    const char* hub_host,             /* the hub PC's host name or IP */
+    uint16_t hub_port,                /* shown with the hub's code */
     QarSession** out_session)
 {
     QarPeerPresentation who = qar_peer_presentation_default();
@@ -50,7 +167,7 @@ static QarResult obtain_session(
         QarResult r = qar_runtime_rejoin(
             runtime, &rejoin, NULL, NULL, NULL, out_session);
         if (qar_result_is_success(r))
-            return r; /* silent reconnect — the normal path */
+            return r; /* silent reconnect: the normal path */
         if (not qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
             return r; /* real error (hub unreachable, ...) */
         /* no persisted slot -> fall through to onboarding */
@@ -58,15 +175,19 @@ static QarResult obtain_session(
 
     QarOnboardInit onboard = qar_onboard_init_default();
     QarOnboardCodeExt onboard_code = qar_onboard_code_ext_default();
+    QarOnboardHostExt host = qar_onboard_host_ext_default();
     onboard.presentation = who;
     onboard_code.code = code_from_user; /* the short code shown by the hub */
+    host.hostname = hub_host;
+    host.port = hub_port;
     onboard.header.next = &onboard_code.header;
+    onboard_code.header.next = &host.header;
 
     QarResult r = qar_runtime_onboard(
         runtime, &onboard, NULL, NULL, NULL, io_saved_id, out_session);
     if (qar_result_has_code(r, QAR_STATUS_PAKE_ERROR))
     {
-        /* wrong or expired code — re-prompt the user and call again */
+        /* wrong or expired code: re-prompt the user and call again */
     }
     /* on success: persist *io_saved_id before returning */
     return r;
@@ -82,7 +203,9 @@ static QarResult obtain_session(
 static Result<Session> ObtainSession(
     Runtime runtime,
     ref OnboardingId savedId,   // loaded from your app's settings
-    string? codeFromUser)       // null until you prompted the user
+    string? codeFromUser,       // null until you prompted the user
+    string hubHost,             // the hub PC's host name or IP
+    ushort hubPort)             // shown with the hub's code
 {
     var who = new PeerPresentationOptions
     {
@@ -94,28 +217,26 @@ static Result<Session> ObtainSession(
     {
         var rejoin = runtime.Rejoin(new RejoinOptions(savedId).WithPresentation(who));
         if (rejoin.IsSuccess)
-            return rejoin;                       // silent reconnect — the normal path
+            return rejoin;                       // silent reconnect: the normal path
         if (rejoin.Info.StatusCode != StatusCode.OnboardingSessionNotFound)
             return rejoin;                       // real error (hub unreachable, ...)
         // no persisted slot -> fall through to onboarding
     }
 
     var onboard = runtime.Onboard(
-        new OnboardOptions
-    {
-        Presentation = who,
-    }.UseCode(codeFromUser!));
+        new OnboardOptions { Presentation = who }
+            .UseCode(codeFromUser!)
+            .WithHost(hubHost, hubPort));
     if (!onboard.IsSuccess)
         return Result<Session>.Failure(onboard.Info);
-    // onboard.Info carries the new OnboardingId on success — persist it before returning.
-    // A pairing error means the code was wrong or expired (~10 s) — re-prompt and retry.
+    // A pairing error means the code was wrong or expired: re-prompt and retry.
     savedId = onboard.Value.OnboardingId;       // persist before returning
     return Result<Session>.Success(onboard.Info, onboard.Value.Session);
 }
 ```
 
 :::info
-C# snippets here are accurate to the shipping binding but illustrative — see the
+C# snippets here follow the shipping binding but are illustrative; see the
 [note in Getting Started](/docs/developer-guide/getting-started).
 :::
 
@@ -124,15 +245,17 @@ C# snippets here are accurate to the shipping binding but illustrative — see t
 
 Key points:
 
-- `qar_runtime_rejoin` pops no UI and is silent — call it optimistically on every start.
-- `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: it means "this identity has no persisted slot here — onboard instead".
-- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (codes live ~10 seconds) — just re-prompt.
+- `qar_runtime_rejoin` shows no UI and is silent: call it optimistically on every start.
+- `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: this identity has no persisted slot here, onboard instead.
+- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (the screen code lives about 10 seconds): re-prompt.
 - With `QarOnboardCodeExt` alone, `qar_runtime_onboard` finds **your own Hub**. A Hub has no fixed onboarding port (it claims one from its port range), so the lookup goes:
   1. The `hub-endpoint.json` file the Hub writes into the QAROS data folder on start. The data folder is per Windows user, so this finds the Hub of the same user on this PC, with no network.
   2. Otherwise a discovery beacon from a Hub run by the same user on this PC, listening up to 6 s.
   3. Otherwise it fails with `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE`, asking for the Hub's host and port.
+- On the QAROS PC itself, prefer the [local app](#local-app-on-the-qaros-pc-no-code) mode.
 - To reach a specific Hub, chain a `QarOnboardHostExt` after the code extension with **both** `hostname` and `port` (see [API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader)). The port is shown with the Hub's pairing code; `port = 0` is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
-- Both calls have `_async` variants whose result callback delivers the same `(onboarding_id, session)` pair exactly once — use those to keep your UI thread responsive, and pass a `QarCancelToken` so the user can abort.
+- The QAROS runtime must be installed on the app's PC too: the app loads it from there.
+- Both calls have `_async` variants whose result callback delivers the same `(onboarding_id, session)` pair exactly once. Use them to keep your UI responsive, and pass a `QarCancelToken` so the user can abort.
 
 ## Sibling onboarding: one app, several API instances
 
@@ -194,7 +317,7 @@ The compiled example in this repo now demonstrates the full two-instance path en
 
 ## Onboarding several devices at once: one-time codes
 
-The code on the Hub's onboarding screen is one code at a time. To onboard several devices by code at the same time, ask the Hub for codes of your own from an onboarded session:
+The code on the Hub's onboarding screen is one code at a time. Minting further codes is an operator action: the Hub mints them only for its operators (its own visualizer, and peers configured as operators), never for an application. An application's request fails, and it should ask the operator to read codes from the visualizer's onboarding screen instead. An operator tool asks for codes of its own from its onboarded session:
 
 ```c
 QarRequestOnboardingCodesInit request = qar_request_onboarding_codes_init_default();
@@ -211,21 +334,21 @@ qar_onboarding_invite_get_code(invites[0], code, sizeof(code), NULL);
 - Every call returns new codes. Codes other callers hold, and the code on the onboarding screen, stay valid; none of yours is shown on the screen.
 - Each code works once, until its lifetime ends. A failed attempt also uses it up.
 - Hand a device either the code text (`qar_onboarding_invite_get_code`, used with `QarOnboardCodeExt`) or the whole invite (`qar_onboarding_invite_serialize`, used with `QarOnboardInviteExt`).
-- Set `planned_peer_id` and a device that pairs with one of these codes can only join under that peer id ([`QarOnboardPeerIdExt`](#joining-under-a-planned-peer-id)).
+- Set `planned_peer_id` and a device that pairs with one of these codes can only join under that peer id ([`QarOnboardPeerIdExt`](#joining-under-a-planned-peer-id)). Only the Hub's own visualizer may plan a code.
 - The code text is a secret. Do not log it or put it on a command line.
 - C#: `session.RequestOnboardingCodes(new RequestOnboardingCodesOptions { Count = 3 })` and `invite.GetCode()`.
 
 ## Choosing the GPU
 
-Chain a `QarGraphicsDeviceId` into `QarOnboardInit` or `QarRejoinInit` to create the session's GPU devices — and with them every render sender's frame textures — on a specific adapter. Windows takes the adapter LUID, other platforms its UUID. Absent, QAROS selects one: for an app it [launched](#launched-by-qaros-qaros-api-apps), its target's GPU; otherwise the library picks one. Only NVIDIA adapters are supported; an unsupported adapter fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+Chain a `QarGraphicsDeviceId` into `QarOnboardInit` or `QarRejoinInit` to create the session's GPU devices — and with them every render sender's frame textures — on a specific adapter. Windows takes the adapter LUID, other platforms its UUID. Absent, QAROS selects one: for an app onboarded with a [launch invite](#platforms-without-local-enrollment), its target's GPU; otherwise the library picks one. Only NVIDIA adapters are supported; an unsupported adapter fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
 
 ```c
 QarGraphicsDeviceId adapter = qar_graphics_device_id_default();
 adapter.id_type = QAR_GPU_DEVICE_ID_TYPE_LUID;
 memcpy(&adapter.luid, my_adapter_luid, sizeof adapter.luid); /* e.g. VkPhysicalDeviceIDProperties::deviceLUID */
 
-onboard.header.next = &onboard_code.header;   /* mode extension first */
-onboard_code.header.next = &adapter.header;   /* then the adapter     */
+init.header.next = &local.header;    /* mode extension first */
+local.header.next = &adapter.header; /* then the adapter     */
 ```
 
 Render on the session's adapter, so frames need no cross-GPU copy. Whether you chained one or QAROS selected it, read the adapter in use after onboarding with `qar_session_get_graphics_device_id` (C# `Session.GetGraphicsDeviceId()`) and create your graphics device on it:
@@ -239,51 +362,64 @@ qar_session_get_graphics_device_id(session, &gpu, &present);
 
 ## Joining under a planned peer id
 
-A process whose peer id was planned by someone else (for example a process another component starts and announces to the session) chains `QarOnboardPeerIdExt` next to the mode extension. The session then sees it under that id instead of a freshly minted one. The id is persisted with the identity slot, so later rejoins keep it. A zero id is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. Most applications do not need it.
+A process whose peer id was planned by someone else (for example a process another component starts and announces to the session) chains `QarOnboardPeerIdExt` next to the code or invite mode extension. The session then sees it under that id instead of a freshly minted one. The id is persisted with the identity slot, so later rejoins keep it. A zero id is rejected with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. Most applications do not need it; a local app never does, the hub assigns its id.
 
 ## Launched by QAROS: QAROS API apps
 
-An operator can add your executable as a **QAROS API app** in the visualizer's [Source Applications](/docs/operator-guide/source-applications) panel. QAROS then starts one process of it for all targets, and on every start hands it:
+An operator can add your executable as a **QAROS API app** in the Visualizer's [Source Applications](/docs/operator-guide/source-applications) panel. QAROS then starts one process of it for all targets and hands it:
 
-| What | How | Format |
-|---|---|---|
-| A launch invite: everything needed to reach this Hub, with its own one-time code, and the GPU to render on | First line of **stdin**, newline-terminated. Never on the command line, never logged, never shown on the Hub's onboarding screen. | One line of JSON starting with `{`: the Hub's IP, its onboarding port, a one-time pairing code, the CA fingerprint and, when the target advertised one, its GPU. Pass it unchanged to `qar_onboarding_invite_deserialize`; do not parse it yourself. |
-| Arguments | Command line | One argument per line the operator entered |
+| What | How |
+|---|---|
+| Its session | Nothing to read: the app joins as a [local app](#local-app-on-the-qaros-pc-no-code), exactly as when a user starts it. The hub recognizes the process it started and gives it the peer id it planned. The approval prompt applies the same way. Where local enrollment is not available, a launch invite on stdin instead ([below](#platforms-without-local-enrollment)). |
+| Arguments | Command line, one argument per line the operator entered. |
+| A stop request | **stdin** is a pipe that QAROS closes on **Stop**. |
 
-QAROS sets no environment variable for your app. The working directory is the executable's folder; stdout and stderr go to the Hub's log folder. To work as an API app:
+QAROS sets no environment variable for your app. The working directory is the executable's folder; stdout and stderr go to the hub's log folder. To work as an API app:
 
-1. Read the first stdin line. If it starts with `{`, it is the launch invite: turn it into a handle with `qar_onboarding_invite_deserialize` and call `qar_runtime_onboard` with `QarOnboardInviteExt`. Anything else is a code typed by hand (when someone runs your app from a console): use `QarOnboardCodeExt`, which finds that user's Hub. Do not prompt for anything else: nobody is there to answer.
-
-   ```c
-   QarOnboardInit init = qar_onboard_init_default();
-   QarOnboardInviteExt invite_ext = qar_onboard_invite_ext_default();
-   QarOnboardCodeExt code_ext = qar_onboard_code_ext_default();
-   QarOnboardingInvite* invite = NULL;
-   if(line[0] == '{')
-   {
-       qar_onboarding_invite_deserialize((const uint8_t*)line, strlen(line), &invite);
-       invite_ext.invite = invite;
-       init.header.next = &invite_ext.header;
-   }
-   else
-   {
-       code_ext.code = line;
-       init.header.next = &code_ext.header;
-   }
-   /* qar_runtime_onboard(runtime, &init, ...), then qar_onboarding_invite_handle_destroy(invite) */
-   ```
-2. Onboard first, without chaining a `QarGraphicsDeviceId`: QAROS creates the session on its target's GPU. Then read that adapter with `qar_session_get_graphics_device_id` (C# `Session.GetGraphicsDeviceId()`) and create your graphics device on it ([above](#choosing-the-gpu)). An app that must render on a GPU of its own chains its `QarGraphicsDeviceId` instead; a chained adapter always wins.
+1. Onboard with `QarOnboardLocalAppExt` ([above](#local-app-on-the-qaros-pc-no-code)). Do not prompt for anything: nobody is at the console. On an approval timeout, exit with an error instead of asking to retry.
+2. Onboard first, without chaining a `QarGraphicsDeviceId`. Then read the session's adapter with `qar_session_get_graphics_device_id` (C# `Session.GetGraphicsDeviceId()`) and create your graphics device on it ([Choosing the GPU](#choosing-the-gpu)). An app that must render on a GPU of its own chains its `QarGraphicsDeviceId` instead; a chained adapter always wins.
 3. Create your own app volume (`qar_app_volumes_get_or_create`); QAROS registers none for an API app.
 4. Find the target apps in the peer list and create a sender for each one you choose to serve ([Rendering Streams](/docs/developer-guide/rendering-streams#finding-rendering-targets)). QAROS does not choose your targets: the visualizer shows them as chosen by the app.
-5. Treat end of stdin as a request to stop. QAROS closes stdin on **Stop** and kills the process about 1.3 s later.
+5. Treat the end of stdin as a request to stop, and cancel a pending onboard then. QAROS kills the process when it has not exited about 1 s after closing stdin.
 
-An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s) and the operator is notified of the first failure. The launch invite is valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one. Apps written against the earlier contract, which read the line as a code, must accept the JSON invite. The code on the Hub's onboarding screen is separate and does not change when QAROS starts your app, so people can keep pairing devices with it meanwhile. The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this contract.
+An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s) and the operator is notified of the first failure. The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this contract: it runs with no arguments, so it works the same whether a user or QAROS starts it.
+
+### Platforms without local enrollment
+
+Where local enrollment is not available (not Windows), QAROS writes a **launch invite** as the first line of stdin instead: everything needed to reach this Hub, with its own one-time code, and the GPU to render on.
+
+- One line of JSON starting with `{`, newline-terminated: the Hub's IP, its onboarding port, a one-time pairing code, the CA fingerprint and, when the target advertised one, its GPU. Pass it unchanged to `qar_onboarding_invite_deserialize`; do not parse it yourself.
+- Never on the command line, never logged, never shown on the Hub's onboarding screen.
+- Onboarding with it and no chained `QarGraphicsDeviceId` creates the session on the target's GPU.
+- Valid for 2 minutes, for this start only, and works once: each restart brings a new one, so onboard again rather than replaying the old one. Apps written against the earlier contract, which read the line as a code, must accept the JSON invite.
+- Anything not starting with `{` is a code typed by hand (when someone runs your app from a console): use `QarOnboardCodeExt`, which finds that user's Hub.
+
+```c
+QarOnboardInit init = qar_onboard_init_default();
+QarOnboardInviteExt invite_ext = qar_onboard_invite_ext_default();
+QarOnboardCodeExt code_ext = qar_onboard_code_ext_default();
+QarOnboardingInvite* invite = NULL;
+if(line[0] == '{')
+{
+    qar_onboarding_invite_deserialize((const uint8_t*)line, strlen(line), &invite);
+    invite_ext.invite = invite;
+    init.header.next = &invite_ext.header;
+}
+else
+{
+    code_ext.code = line;
+    init.header.next = &code_ext.header;
+}
+/* qar_runtime_onboard(runtime, &init, ...), then qar_onboarding_invite_handle_destroy(invite) */
+```
+
+The code on the Hub's onboarding screen is separate and does not change when QAROS starts your app, so people can keep pairing devices with it meanwhile.
 
 ## Getting devices into the session
 
-Every peer reaches the session by running its own rejoin-or-onboard flow (this page) against the hub, either directly with a pairing code or via a serialized invite from an already-onboarded instance (see [Sibling onboarding](#sibling-onboarding-one-app-several-api-instances) above). Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers). Your application decides which target apps to render for: find them in the peer list and create a sender for each one you choose to serve (see [Finding rendering targets](/docs/developer-guide/rendering-streams#finding-rendering-targets)).
+Every peer reaches the session by running its own rejoin-or-onboard flow (this page) against the hub, either directly with a pairing code or via a serialized invite from an already-onboarded instance (see [Sibling onboarding](#sibling-onboarding-one-app-several-api-instances) above). Once a peer has joined, it becomes visible through [peer enumeration](/docs/developer-guide/peers). Your application decides which targets it renders for and creates a sender for each; that sender is what makes the target ask for your content — see [Finding rendering targets](/docs/developer-guide/rendering-streams#finding-rendering-targets).
 
-To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"`, `"quest:<host>"` or `"android:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, the invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
+To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"` for a HoloLens, `"headset:<host>"` for any other headset (Meta Quest, Android glasses), which reports its exact model itself once it runs. `"quest:<host>"` and `"android:<host>"` are older spellings of `"headset:<host>"` and still work. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
 
 ## Teardown: destroy vs. forget
 

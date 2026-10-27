@@ -18,9 +18,73 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the minimum SDK for certificate renewal and the migration steps: a hub renews only a
+  renewal that proves it holds the certificate's key, so apps and devices on an older SDK are
+  updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
+  status table lists `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` and
+  `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` with what to tell the user.
+
+- **Docs:** *Rendering Streams* has a *Choosing a depth format* section: the depth formats each
+  graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
+  D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
+  depth-stencil texture. *Troubleshooting* lists the refused format as an integration mistake.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
+- **Docs:** transparency, in the next version's docs: a sender's alpha mode in Rendering Streams
+  (C and C#), straight alpha included, `Alpha Mode` on the Unity page, and how the mixer blends by
+  it. Rendering Streams also states the color encoding a sender must send, sRGB, and how to declare
+  linear color instead.
+- **Docs:** *Working with Peers* explains what a peer is (role, category, device id, family and
+  name) with their C getters and C# properties, how to show each target's name, pick a Unity model
+  by device, and declare or refine your own device with `QarPeerDeviceIdentity` and
+  `qar_peer_update_device_identity`. *Rendering Streams* finds targets by role instead of
+  `qar_peer_spec_is_target_app`.
+- **Docs:** the Unity guide describes joining the Hub and picking from its target apps (the target
+  list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
+  targets.
+- **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
+  binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, installed QAROS,
+  `PATH`), how candidates
+  load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
+  Troubleshooting and Onboarding describe the new fallback.
+
+### Changed
+
+- **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
+  presence counts as reachable) and mark app state deprecated.
+- **Docs:** the launcher configuration reference lists the catalog device ids for
+  `targetApps[].deviceType`: `HoloLens` or `Headset` (the headset reports its model itself); the
+  old generic names still resolve, a model id is skipped, `CameraVisualizer` is gone.
+- **Docs:** *Onboarding and Sessions* invites a non-HoloLens headset with `"headset:<host>"`
+  (`"quest:"` and `"android:"` remain as older spellings); *Working with Peers* names the
+  `Headset` family.
+- **Docs:** the launcher configuration reference no longer lists `MetaQuest` for `targetAppOverride`,
+  and says which app streams to each `deviceType`: Quest and `AndroidStreamer` through
+  `qar-android-streamer`, HoloLens through `qar-openxr-desktop`.
+- **Docs:** the Connection panel guide describes the Hubs and Devices areas (session, pairing another
+  hub by code, inviting HoloLens and Headset devices by address); approving and revoking source
+  apps moved to the Source Applications guide. The player installation guides start with installing
+  from the Visualizer's Devices tab, and QAROS World explains showing or printing the scene-origin
+  marker there.
+- **Docs:** the Source Applications guide no longer describes editing a web app's scripts on its
+  tile or the Local Grid mode: scripts come from registering the web app through the visualizer's
+  MCP, and web apps stream to targets only.
+- **Docs:** *Overview*, *Security model*, *Security deep dive*, *Networking & Federation* and
+  *Running the Hub* describe primary and member Hubs instead of hub-connect federation: *Join hub…*
+  by *Allow* or join code, or by a member-Hub invitation an approved app creates on the primary
+  (accepted from an administrator's allow-list of primaries, else from the first primary the Hub
+  joined; a Hub takes its paired devices along), one CA per session (the primary's), forwarding and
+  removal, *Leave and start own session*, the new tray items, and the Hub audit log. The CA is
+  described as built into the Hub (step-ca is gone), with its new storage layout and limitations.
+- **Docs:** *Security deep dive*, *Security model*, *Installation* and *Maintenance & Updates*
+  describe the encrypted secret storage: every key, identity, approval and the licence in
+  `secure-store`, protected by a TPM-backed (or DPAPI) key of the signed-in user, what that does
+  and does not protect against, and that backups restore only on the same PC and user. The new
+  section *Updating to encrypted storage* lists what to do after the update: pair devices again,
+  approve local apps again, join member Hubs again and activate the licence again.
+- **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
+  Hub's local message router.
 - **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
   C API do, when to use which, how they stack, what they need and the SDK drop they were verified
   against.
@@ -40,11 +104,28 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Onboarding and Sessions*, also in the 0.9.0 docs, no longer says a target requests a
+  render stream by itself and no longer links to a missing *Accepting render stream requests*
+  section: your application picks its targets and creates their senders, as *Finding rendering
+  targets* describes.
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
   current pairing code, instead of describing no such screen and the code only in the Hub log, and
   covers the one-time codes an onboarded application can request.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
+- **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
+  hardening: session-named certificates and session access control, hub-assigned peer ids, online
+  renewal across session rotations, signed discovery replies for known hubs, gateway lifetime caps
+  and rate limits, signed operator requests. The CA gateway rejection is now
+  `device_revoked_operator_allow_required`: a revoked device returns only after an operator
+  *Allow*.
+- **Docs:** *Onboarding and sessions* states that only the Hub's operators can mint pairing codes
+  (`qar_session_request_onboarding_codes`), and that target-app invite and kill are served only to
+  apps the Hub admitted itself: local apps onboarded without a code and apps the Hub started.
+- **Docs:** the Source Applications guide, Rendering Streams and the security deep dive no longer
+  say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
+  with the same one-time approval; a launch invite on stdin remains only where local enrollment is
+  not available.
 - **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers, Rendering Streams and API
   Conventions guides now match the current API: poses, sizes, render sender options and render frame
   views are built with their constructors (`Pose` and `Vector3` come from
@@ -57,14 +138,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   only: a panel can also show the video stream of a video sender.
 - **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
   convention: the C header states it.
-- **Docs:** the Rendering Streams and Onboarding and Sessions guides now say to find the render
-  targets in the peer list and create a sender for each, instead of waiting for render stream
-  requests. The Source Applications guide says that a QAROS API app chooses the target applications
-  it renders for, and The Mixer guide says that source alpha is composited only with
-  `mixerSourceAlpha`.
-- **Docs:** the Welcome page lists the C# API reference next to the C API reference, the typo in the
-  description of the Connecting to the Hub page is fixed, and the documentation site README no
-  longer says that no version is released yet.
+- **Docs:** the Rendering Streams guide says to find the render targets in the peer list and create
+  a sender for each, instead of waiting for render stream requests, and the Source Applications
+  guide says that a QAROS API app chooses the target applications it renders for.
+- **Docs:** the Welcome page lists the C# API reference next to the C API reference, and the
+  documentation site README no longer says that no version is released yet.
 
 ## [0.9.0] - 2026-10-12
 

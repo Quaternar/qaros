@@ -70,7 +70,7 @@ example programs so samples can never silently go stale.
   normative handedness statement in headers. DONE (with TODOs).
 - `security-and-onboarding.md` (3) — 4-layer model (L0 discovery 7445 / L1
   EC-JPAKE 8-char 10s single-use codes / L2 AES-256-GCM + CSR enrollment via
-  CA gateway / L3 mTLS 7447), per-hub step-ca CA, renewal, revocation
+  CA gateway / L3 mTLS 7447), per-hub in-process CA, renewal, revocation
   (blacklist), hub federation = merged trust bundles, honest limitations list.
   TODO in page: separate auditor-level threat-model page. DONE.
 - `using-the-hub.md` (4) — three processes (qaros-hub-service tray /

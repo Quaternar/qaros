@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Quaternar.Qaros;
 using Quaternar.Qaros.Interop;
@@ -20,6 +21,8 @@ namespace Quaternar.Qaros.Tests
             { typeof(ResultNative), 8 },
             { typeof(StructureHeaderNative), 16 },
             { typeof(PeerIdNative), 16 },
+            { typeof(MemberHubInvitationInitNative), 40 },
+            { typeof(JoinHubAsMemberInitNative), 32 },
             { typeof(TimePointNative), 8 },
             { typeof(PoseNative), 28 },
             { typeof(FovNative), 16 },
@@ -59,8 +62,11 @@ namespace Quaternar.Qaros.Tests
             { typeof(OnboardInitNative), 72 },
             { typeof(OnboardCodeExtNative), 24 },
             { typeof(OnboardHostExtNative), 32 },
+            { typeof(PeerDeviceIdentityNative), 48 },
             { typeof(OnboardInviteExtNative), 24 },
             { typeof(OnboardPeerIdExtNative), 32 },
+            { typeof(OnboardLocalAppExtNative), 24 },
+            { typeof(RuntimeInfoNative), 24 },
             { typeof(RequestInviteInitNative), 16 },
             { typeof(SessionInviteTargetAppInitNative), 24 },
             { typeof(ForgetInitNative), 32 },
@@ -150,7 +156,14 @@ namespace Quaternar.Qaros.Tests
             { typeof(RejoinInitNative), nameof(RejoinInitNative.OnboardingId), 16 },
             { typeof(RejoinInitNative), nameof(RejoinInitNative.Presentation), 32 },
             { typeof(OnboardHostExtNative), nameof(OnboardHostExtNative.Port), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.Category), 16 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceId), 24 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceFamily), 32 },
+            { typeof(PeerDeviceIdentityNative), nameof(PeerDeviceIdentityNative.DeviceName), 40 },
             { typeof(OnboardPeerIdExtNative), nameof(OnboardPeerIdExtNative.PeerId), 16 },
+            { typeof(OnboardLocalAppExtNative), nameof(OnboardLocalAppExtNative.ApprovalTimeoutMs), 16 },
+            { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.Flavor), 8 },
+            { typeof(RuntimeInfoNative), nameof(RuntimeInfoNative.CApi), 16 },
             { typeof(SessionInviteTargetAppInitNative), nameof(SessionInviteTargetAppInitNative.ConnectionString), 16 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.IdType), 16 },
             { typeof(GraphicsDeviceIdNative), nameof(GraphicsDeviceIdNative.Luid), 20 },
@@ -201,6 +214,13 @@ namespace Quaternar.Qaros.Tests
             { typeof(RenderFrameViewOverrideNative), nameof(RenderFrameViewOverrideNative.Fov), 40 },
             { typeof(RenderFrameShowViewOverridesExtNative), nameof(RenderFrameShowViewOverridesExtNative.ViewOverrides), 16 },
             { typeof(RenderFrameShowViewOverridesExtNative), nameof(RenderFrameShowViewOverridesExtNative.ViewOverridesCount), 464 },
+            { typeof(MemberHubInvitationInitNative), nameof(MemberHubInvitationInitNative.LifetimeSeconds), 16 },
+            { typeof(MemberHubInvitationInitNative), nameof(MemberHubInvitationInitNative.MaxUses), 20 },
+            { typeof(MemberHubInvitationInitNative), nameof(MemberHubInvitationInitNative.Permissions), 24 },
+            { typeof(MemberHubInvitationInitNative), nameof(MemberHubInvitationInitNative.Label), 32 },
+            { typeof(JoinHubAsMemberInitNative), nameof(JoinHubAsMemberInitNative.Invitation), 16 },
+            { typeof(JoinHubAsMemberInitNative), nameof(JoinHubAsMemberInitNative.HubStartTimeoutMs), 24 },
+            { typeof(JoinHubAsMemberInitNative), nameof(JoinHubAsMemberInitNative.RestartTimeoutMs), 28 },
         };
 
         [Theory]
@@ -232,22 +252,68 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
+            Assert.Equal(1805, (int)StatusCode.OnboardingApprovalDenied);
+            Assert.Equal(1806, (int)StatusCode.OnboardingApprovalTimeout);
+            Assert.Equal(1807, (int)StatusCode.OnboardingHubNotAuthentic);
+            Assert.Equal(1808, (int)StatusCode.OnboardingAppIdentityMismatch);
+            Assert.Equal(1809, (int)StatusCode.OnboardingRePairRequired);
+            Assert.Equal(1810, (int)StatusCode.OnboardingRenewalPossessionUnproven);
+            Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
+            Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
+            Assert.Equal(3300, (int)StatusCode.HubLifecycleOperationRunning);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
+            Assert.Equal(3400, (int)StatusCode.MemberJoinPending);
+            Assert.Equal(3401, (int)StatusCode.MemberJoinDenied);
+            Assert.Equal(3402, (int)StatusCode.MemberJoinRefused);
+            Assert.Equal(3403, (int)StatusCode.MemberJoinRedirected);
+            Assert.Equal(3404, (int)StatusCode.MemberRemoved);
+            Assert.Equal(3405, (int)StatusCode.PrimaryUnreachable);
+            Assert.Equal(3406, (int)StatusCode.SessionWideActionOnMember);
+            Assert.Equal(3407, (int)StatusCode.MemberSponsorNotAllowed);
+            Assert.Equal(3408, (int)StatusCode.MemberSponsorQuotaExceeded);
+            Assert.Equal(3409, (int)StatusCode.AuditLogCorrupt);
+            Assert.Equal(3500, (int)StatusCode.SecureStorageError);
+            Assert.Equal(3501, (int)StatusCode.SecureStorageNotFound);
+            Assert.Equal(3502, (int)StatusCode.SecureStorageTampered);
+            Assert.Equal(3503, (int)StatusCode.SecureStorageProtectorMismatch);
+            Assert.Equal(3504, (int)StatusCode.SecureStorageProtectorUnavailable);
+            Assert.Equal(3505, (int)StatusCode.SecureStorageInvalidKey);
+            Assert.Equal(3506, (int)StatusCode.SecureStorageLocked);
+            Assert.Equal(3600, (int)StatusCode.MemberInvitationInvalid);
+            Assert.Equal(3601, (int)StatusCode.MemberInvitationExpired);
+            Assert.Equal(3602, (int)StatusCode.MemberInvitationUsedUp);
+            Assert.Equal(3603, (int)StatusCode.MemberInvitationRevoked);
+            Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
+            Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(25, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(57, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
         public void StructureTypesMirrorC()
         {
             Assert.Equal(0x1009, (int)StructureType.RuntimeOnboardPeerIdExt);
+            Assert.Equal(0x100A, (int)StructureType.RuntimeOnboardLocalAppExt);
+            Assert.Equal(0x100D, (int)StructureType.RuntimeCreateMemberHubInvitationInit);
+            Assert.Equal(0x100E, (int)StructureType.RuntimeJoinHubAsMemberInit);
+            Assert.False(Enum.IsDefined(typeof(StructureType), 0x100B));
+            Assert.False(Enum.IsDefined(typeof(StructureType), 0x100C));
             Assert.Equal(0x2004, (int)StructureType.SessionGraphicsDeviceId);
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
+            Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);
             Assert.Equal(0x4003, (int)StructureType.StreamOpenGlEglParamsExt);
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);
             Assert.Equal(0x4005, (int)StructureType.StreamOpenGlGlxParamsExt);
             Assert.Equal(0x5504, (int)StructureType.AppVolumeGestureAllowedPeersExt);
+        }
+
+        [Fact]
+        public void EveryStructureTypeIsUnique()
+        {
+            var values = Enum.GetValues(typeof(StructureType)).Cast<StructureType>().Select(v => (int)v).ToList();
+            Assert.Equal(values.Count, values.Distinct().Count());
+            Assert.Equal(Enum.GetNames(typeof(StructureType)).Length, values.Distinct().Count());
         }
 
         [Fact]
@@ -263,6 +329,12 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(56, (int)PixelFormat.B8G8R8X8);
             Assert.Equal(20, (int)VideoFrameViewEye.Right);
             Assert.Equal(0x8UL, (ulong)HandJointLocationFlags.PositionTracked);
+            Assert.Equal(0, (int)PeerPresence.Unknown);
+            Assert.Equal(1, (int)PeerPresence.Online);
+            Assert.Equal(2, (int)PeerPresence.Offline);
+            Assert.Equal(3, (int)PeerPresence.Leaving);
+            Assert.Equal(4, (int)PeerPresence.Retired);
+            Assert.Equal(5, Enum.GetValues(typeof(PeerPresence)).Length);
         }
 
         [Fact]

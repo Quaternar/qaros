@@ -30,13 +30,11 @@ Last swept: 2026-10-06 (synced with internal docs; done items removed).
   `operator-guide/running-the-hub` document this workaround. When a local
   "show my code" screen exists, update both and add the click path.
 
-- **Classic system installer** — BLOCKED(product). The planned installer is an MSI plus a signed
-  sparse MSIX identity, installing one shared runtime that source apps load instead of carrying
-  their own copy. Today the "system installer" is the interim full MSIX bundle
-  (`QAROS Hub <v>.msixbundle`). When the MSI ships, update `operator-guide/installation`
-  (artifact table, data root, install folder), `operator-guide/maintenance-and-updates`, and
-  `developer-guide/getting-started` (how an app finds the installed runtime; the NuGet and Unity
-  ZIP stop bundling it).
+- **Per-machine installer** (Quaternar #223) — documented as `QAROS-Setup-<version>.exe`.
+  Verify against the first release-signed RC: setup file name and download location, tray
+  autostart default, the uninstaller's user-data prompt, the demo setup's name, and whether the
+  NuGet and Unity ZIP still bundle the runtime. Add Visualizer screenshots of the approval prompt
+  and the Approved apps list.
 
 ## Blocked on the C# binding not being published in `qaros`
 
@@ -123,8 +121,8 @@ guarantees in the meantime):
   publisher found) - the page says there is no operator withdraw action; (b) that Hub B
   also merges Hub A's root (page only describes A merging B's); (c) how a push-invited
   remote device (HoloLens/Android) receives its provisioned key - page only covers
-  Hub-launched processes; (d) whether step-ca rejects or clamps a `certLifetimeHours`
-  above the 24 h provisioner cap.
+  Hub-launched processes; (d) resolved: the gateway clamps `certLifetimeHours` to the profile maximum (24 h) and the
+  in-process CA bounds it again; step-ca is gone (#253).
 - T10 blacklist drift: resolved by ADR-0254 (hub publishes its revocation list; peers that read
   it refuse the device, others accept it until expiry); `managing-devices` and
   `security-deep-dive` rewritten to match.

@@ -23,7 +23,7 @@
  * \code{.bash}
  * cmake --build --preset x64-windows-debug --target cpu_rendering_visualizer
  * ./build/x64-windows/Debug/cpu_rendering_visualizer.exe
- * <path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
+ * <installed|path-to-qar-streaming-c.dll> [runtime-dir] [pairing-code]
  * \endcode
  *
  * \section cpu_rendering_args Parse Arguments
@@ -57,7 +57,8 @@ print_usage(const char* program_name)
 {
 	const char* name = program_name ? program_name : "cpu_rendering_visualizer";
 	printf(
-		"Usage: %s <path-to-qar-streaming-c-library> [runtime-binaries-dir] "
+		"Usage: %s <installed|path-to-qar-streaming-c-library> "
+		"[runtime-binaries-dir] "
 		"[pairing-code]\n",
 		name
 	);
@@ -144,7 +145,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* library_path = argv[1];
+	const char* library_path = library_path_argument(argv[1]);
 	const char* runtime_dir = NULL;
 	char runtime_dir_buffer[1024] = { 0 };
 
@@ -163,7 +164,7 @@ main(int argc, char** argv)
 	//! [cpu_setup]
 	if(!qar_library_load(library_path))
 	{
-		fprintf(stderr, "Failed to load '%s'.\n", library_path);
+		fprintf(stderr, "Failed to load %s.\n", describe_library(library_path));
 		return 2;
 	}
 
@@ -201,7 +202,7 @@ main(int argc, char** argv)
 	   ) != 0
 	   || session == NULL)
 	{
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 5;
@@ -223,7 +224,7 @@ main(int argc, char** argv)
 	{
 		log_result("qar_app_volumes_get_or_create", volume_result);
 		qar_session_handle_destroy(session);
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 6;
@@ -258,7 +259,7 @@ main(int argc, char** argv)
 	{
 		log_result("qar_render_sender_create", sender_result);
 		qar_session_handle_destroy(session);
-		qar_runtime_destroy(runtime);
+		qar_runtime_handle_destroy(runtime);
 		qar_library_destroy();
 		qar_library_unload();
 		return 7;
@@ -300,7 +301,7 @@ main(int argc, char** argv)
 	//! [cpu_frames]
 
 	qar_session_handle_destroy(session);
-	qar_runtime_destroy(runtime);
+	qar_runtime_handle_destroy(runtime);
 	QarResult destroy_result = qar_library_destroy();
 	log_result("qar_library_destroy", destroy_result);
 	qar_library_unload();

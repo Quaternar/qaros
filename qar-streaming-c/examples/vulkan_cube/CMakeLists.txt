@@ -1,9 +1,10 @@
 find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_package(glm CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 add_executable(qar-vulkan-source main.cpp renderer.cpp)
 target_compile_features(qar-vulkan-source PRIVATE cxx_std_20)
-target_compile_definitions(qar-vulkan-source PRIVATE QAR_ENABLE_DYNAMIC_LOADING QAR_ENABLE_VULKAN VK_USE_PLATFORM_WIN32_KHR NOMINMAX GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_link_libraries(qar-vulkan-source PRIVATE qar-streaming-c-headers Vulkan::Vulkan glm::glm)
+target_compile_definitions(qar-vulkan-source PRIVATE QAR_ENABLE_DYNAMIC_LOADING QAR_ENABLE_VULKAN $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR;NOMINMAX> GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_link_libraries(qar-vulkan-source PRIVATE qar-streaming-c-headers Vulkan::Vulkan glm::glm Threads::Threads)
 foreach(stage vert frag)
   add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/cube.${stage}.spv"
     COMMAND Vulkan::glslc "${CMAKE_CURRENT_SOURCE_DIR}/cube.${stage}"
@@ -24,8 +25,8 @@ target_include_directories(qar-vulkan-source PRIVATE "${CMAKE_CURRENT_BINARY_DIR
 if(BUILD_VULKAN_EXAMPLE_TESTS)
   add_executable(vulkan_cube_gpu_test renderer_test.cpp renderer.cpp)
   target_compile_features(vulkan_cube_gpu_test PRIVATE cxx_std_20)
-  target_compile_definitions(vulkan_cube_gpu_test PRIVATE QAR_ENABLE_DYNAMIC_LOADING QAR_ENABLE_VULKAN VK_USE_PLATFORM_WIN32_KHR NOMINMAX GLM_FORCE_DEPTH_ZERO_TO_ONE)
-  target_link_libraries(vulkan_cube_gpu_test PRIVATE qar-streaming-c-headers Vulkan::Vulkan glm::glm)
+  target_compile_definitions(vulkan_cube_gpu_test PRIVATE QAR_ENABLE_DYNAMIC_LOADING QAR_ENABLE_VULKAN $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR;NOMINMAX> GLM_FORCE_DEPTH_ZERO_TO_ONE)
+  target_link_libraries(vulkan_cube_gpu_test PRIVATE qar-streaming-c-headers Vulkan::Vulkan glm::glm Threads::Threads)
   add_dependencies(vulkan_cube_gpu_test vulkan_cube_shaders)
   target_include_directories(vulkan_cube_gpu_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
   add_test(NAME vulkan_cube_two_cameras COMMAND vulkan_cube_gpu_test)

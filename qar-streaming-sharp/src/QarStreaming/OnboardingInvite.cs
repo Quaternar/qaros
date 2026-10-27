@@ -95,7 +95,8 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Parses invite bytes from <see cref="Serialize"/>, or the launch invite QAROS writes as
-        /// the first stdin line of an API app it starts: pass that JSON line's UTF-8 bytes unchanged.
+        /// the first stdin line of an API app it starts where local enrollment is not available
+        /// (not Windows): pass that JSON line's UTF-8 bytes unchanged.
         /// Bytes that are not an invite fail with <see cref="StatusCode.PakeError"/>.
         /// </summary>
         public static Result<OnboardingInvite> Deserialize(byte[] inviteData)
