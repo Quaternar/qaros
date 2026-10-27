@@ -111,6 +111,7 @@ The room a device is in decides which room offset applies to it.
 1. **Session** › **Rooms**. Each room card lists its **Devices**.
 2. Check that each device is under the room it physically stands in. To move one, pick the room in
    the list on its row, or drag the row onto another room card.
+
 ## 6. Line up several physical rooms
 
 Two physical spaces (two labs, two buildings) each have their own code and their own room. Without
