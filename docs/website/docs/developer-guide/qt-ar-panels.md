@@ -8,8 +8,8 @@ description: How a GUI panel shows a video stream, what a stream panel accepts, 
 
 A GUI panel can show a **video stream**, so any picture that you can draw becomes a panel: a camera image, a rendered view, a Qt widget. This page has two parts. The first describes the video route of the C API. The second describes how the library `qar_qt_streaming` uses that route to turn a `QWidget` into a panel.
 
-:::info Which SDK generation
-The first part describes the header and the C# binding of release 0.9.0. The second part describes the library `qar_qt_streaming`, which was built and verified against the QAROS SDK drop of 2026-09-28. The C API of 0.9.0 is a later generation: the session set-up, the way a gesture reports its hand, the time points and the init structures of volumes and panels are different, and the library has not been rebuilt against it. Read the second part for what the library does. The document `docs/SDK_COMPATIBILITY.md` of its repository lists the supported SDK drops and what differs in the later generation.
+:::info Which QAROS runtime
+The first part describes the header and the C# binding of the C API that this guide documents. The second part describes the library `qar_qt_streaming`, which was built and checked against the installed QAROS runtime **0.9.0-dev.3008+65dc9aeb**, a development build of the setup that precedes the 0.9.0 release. The library does not join the Hub itself: the session owner of `qar_ogre_adapter` does, as a local app on the PC of the Hub or by code pairing with a Hub on another PC ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions)), and the library borrows its session. The document `docs/SDK_COMPATIBILITY.md` of the repository lists the runtime that the library supports.
 :::
 
 ## Show a video in a GUI panel
@@ -66,7 +66,7 @@ A stream panel differs from a web panel in these points. [Limits and Behaviors t
 
 `qar_qt_streaming` is the video route for Qt widgets. The library draws a `QWidget` into a pixel buffer with the paint path of Qt, streams the buffer as the video of a GUI panel and turns the gestures that QAROS reports on the panel into Qt events, so that a widget that works on the desktop works in AR. It needs Qt 5.15.2 and builds on `qar_ogre_adapter`; [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) says how the libraries fit together and what to install.
 
-The library never calls the C API itself. The `panels` component of `qar_ogre_adapter` implements the interfaces that it uses: it creates the video sender, the GUI panel and the input subscription, and the library supplies the frames and takes the pointer samples.
+The library never calls the C API itself. The `panels` component of `qar_ogre_adapter` implements the interfaces that it uses: it creates the video sender, the GUI panel and the input subscription, and the library supplies the frames and takes the pointer samples. The calls that read or change a GUI panel can wait for the Hub, and a query of the installed runtime takes about two seconds ([How long a query takes](/docs/developer-guide/sdk-limits#how-long-a-query-takes)). The component therefore queues them for the thread of the session owner, which runs them in order, and the Qt thread picks up the results at the next tick: no QAROS call that may wait runs on the Qt thread, and a panel appears in AR a few seconds after the call that asked for it.
 
 ### Capture
 
@@ -87,11 +87,25 @@ The library never calls the C API itself. The `panels` component of `qar_ogre_ad
 
 ### Resizing
 
-A widget of a new size needs a new video sender and a new panel. The library treats the layout of a sender as fixed when the sender is created, because the receiver of the panel is allocated from it, so it closes the old panel and sender and builds new ones. To avoid a rebuild for every pixel of a drag, it adopts a new size by default only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
+A widget of a new size needs a new video sender, because the layout of a sender is fixed when the sender is created and the receiver of the panel is allocated from it. By default (`QAR_PANEL_RESIZE=swap`) the library releases the old sender and attaches a new sender of the new size to the same QAROS panel, which keeps its name: it gives the panel the new stream with `qar_gui_panels_set_stream` and the new size with `qar_gui_panels_change_size`. The header takes the resolution of the receiver from the sender at that call, but does not promise that a panel accepts a sender of another size; the installed runtime accepted it in the live checks of the authors (2026-10-25), in which a resized dock was followed by its AR panel. With `QAR_PANEL_RESIZE=new-panel` the name of every panel carries the buffer size (`@<width>x<height>`), a size change makes a second QAROS panel, the old one is hidden and kept, and a return to a size that is kept shows the kept panel again. To avoid a rebuild for every pixel of a drag, the library adopts a new size by default only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached, and the library does not use it; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
+
+### Names and the next start
+
+Every panel gets a stable ASCII name, `<key>-<hash>.<program>.<host>.qaros-ros`, made from the key that the host gave the window, the program tag of the session owner and the name of the PC, and the library asks QAROS for the panel with `qar_gui_panels_get_or_create`. The same name finds the same panel again in the next session. When QAROS returns a panel that an earlier session left behind, the library reads what it is and carries out what is missing: it gives it the new video (`set_stream`), fits its size and pose, and shows it if it was hidden. A panel that shows web content where video is wanted cannot be reused, because the content type is fixed at creation; the library asks again with the suffix `-v2`. A panel whose name is closed is not reused either: the library asks again with `-r1` up to `-r8`. Every attach writes one line, `[qar-panel-adapter] ... panel '<key>' <created|reattached> name=<name> id=<id> state_was=<state> stream_swapped=<y|n> size_changed=<y|n>`. What QAROS applies to an existing panel is not documented ([A panel or volume that already exists](/docs/developer-guide/sdk-limits#a-panel-or-volume-that-already-exists)); in the live checks of the authors a panel found again was shown in its place.
 
 ### Closing
 
-Closing a window closes its AR panel. The library releases the pointers that are pressed on the panel, cancels its subscriptions, closes the GUI panel with `qar_gui_panels_close_panel` and then destroys the video sender. When the operator closes the panel in AR instead, the library stops capturing and keeps the sender until the Qt window closes or the session ends. A close mode that keeps the panel and shows a notice instead is the escape hatch for a runtime on which destroying a sender is not safe; [Ending a video stream](/docs/developer-guide/sdk-limits#ending-a-video-stream) says what the header leaves open about the end of a stream.
+When a Qt window closes, `QAR_PANEL_CLOSE_MODE` decides what happens to its AR panel:
+
+| Mode | What happens |
+|---|---|
+| `destroy` (the default of the library) | The library releases the pointers that are pressed on the panel, cancels its subscriptions, closes the GUI panel with `qar_gui_panels_close_panel` and then destroys the video sender. Opening the window again makes a new panel. |
+| `notice` | The AR panel stays and shows a notice that the window closed; its sender is kept until the session ends. This is the escape hatch for a runtime on which destroying a sender is not safe. |
+| `park` | Nothing is closed while the session runs. The AR panel is hidden with `qar_gui_panels_set_state`, capture stops and input is dropped, and the panel, the sender and the subscriptions are kept. Adding the same key again shows the parked panel again and creates no new one. |
+
+When the operator closes the panel in AR instead, the library stops capturing and keeps the sender until the Qt window closes or the session ends. [Ending a video stream](/docs/developer-guide/sdk-limits#ending-a-video-stream) says what the header leaves open about the end of a stream.
+
+When the session ends, `destroy` closes the panels with their senders. `notice` and `park` hide every panel, release its sender and its input subscription and leave the panel in the Hub; the next session finds it by its name. If the Hub refuses the hide, the panel stays visible in AR and a warning says so.
 
 ### Hidden panels and video
 

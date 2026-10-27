@@ -1,15 +1,15 @@
 ---
 sidebar_position: 11.5
 title: Limits and Behaviors to Design Around
-description: Where the C API of release 0.9.0 offers no call or leaves a question open — retiring a video stream, resizing one, locating the operator — and the gesture rules to know before you build on it.
+description: Where the C API offers no call or leaves a question open — retiring a video stream, resizing one, locating the operator, what a query costs — and the gesture rules to know before you build on it.
 ---
 
 # Limits and Behaviors to Design Around
 
-This page collects points where the C API offers no call or leaves a question open, so that you design around them from the start. Each item rests on the header `qar_streaming.h` of release 0.9.0 and, where it says so, on the documentation comments of the C# binding, and it says what these state and what they do not. The last section reports observations that were made with earlier SDK drops.
+This page collects points where the C API offers no call or leaves a question open, so that you design around them from the start. Each item rests on the header `qar_streaming.h` that this guide documents and, where it says so, on the documentation comments of the C# binding, and it says what these state and what they do not. [How long a query takes](#how-long-a-query-takes) reports measurements of the installed runtime, and the last section reports observations that were made with earlier SDK drops.
 
-:::info Which SDK generation
-All sections except the last describe the header and the C# binding of release 0.9.0. The last section reports what the authors of the [Ogre, Qt and RViz2 libraries](/docs/developer-guide/ogre-qt-rviz) observed in live sessions with earlier SDK drops, which they have not repeated on every drop. The C API of 0.9.0 is a later generation, and this page does not claim that the observations hold with it. The document `docs/SDK_COMPATIBILITY.md` of each of those repositories lists what differs between the generations.
+:::info Which runtime
+The sections on the header and the C# binding describe the C API that this guide documents. The measurements in [How long a query takes](#how-long-a-query-takes) and the second observation of the last section were made by the authors of the [Ogre, Qt and RViz2 libraries](/docs/developer-guide/ogre-qt-rviz) with the installed QAROS runtime **0.9.0-dev.3008+65dc9aeb**, a development build of the setup that precedes the 0.9.0 release, on 2026-10-24 and 2026-10-25; another build can behave differently. The rest of the last section reports what they observed in live sessions with earlier SDK drops, which they have not repeated on every drop. The document `docs/SDK_COMPATIBILITY.md` of each of those repositories lists what differs between the generations.
 :::
 
 ## Ending a video stream
@@ -52,6 +52,32 @@ A GUI panel shows either web content or a video stream, chosen at creation with 
 - **It refuses navigation.** `qar_gui_panels_navigate_to_uri` on a stream panel returns `QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED`, because the content type of a panel is fixed at creation. A web panel returns the same status from `qar_gui_panels_set_stream`.
 - **It reports positions in video pixels.** A position that a gesture reports on a panel (`QarGuiPanelPoint`) is in panel content space. For a stream panel that is the pixel raster of the decoded video image: the origin is the top-left corner as the viewer sees it, +X runs right and +Y runs down.
 
+## How long a query takes
+
+The header documents no duration for a call, and with the installed runtime a query of the session is slow. The RViz2 plugin times the calls it makes and logs the slow ones. These are values from its logs of 2026-10-24 and 2026-10-25, with the runtime 0.9.0-dev.3008+65dc9aeb:
+
+| Call | Measured |
+|---|---|
+| `qar_query_app_volumes_count` | 2,365 ms |
+| `qar_query_app_volumes` | 1,999 ms |
+| `qar_query_gui_panels` | 2,000 ms |
+| `qar_gui_panels_set_stream` | 2,000 ms |
+| `qar_app_volumes_get_or_create` | about 0.4 s |
+
+Each query is one round trip that lasts about two seconds, a count and the fetch that follows it each cost one, and the logs show the queries two seconds apart for a whole session. A plugin that read the placement of its app volume with a count and a fetch from two callers in every render tick made four queries per tick, and RViz2 stood still for 8 seconds at a time. Creating a panel that was found again from an earlier session (see below) took about four seconds in all. The header does not say why a query takes two seconds or whether the wait can be shortened, and the authors have not found out; in their logs it is a flat cost and not a function of the number of objects.
+
+Plan for this:
+
+- Do not make a query, a panel call or an app-volume call on a thread that draws a frame or handles input. Queue it for a thread of your own that may wait, and give the other threads the result as a value they read.
+- Subscribe instead of polling. `qar_app_volumes_subscribe_updates` reports a change, and `qar_app_volume_get_latest_pose`, `qar_app_volume_get_latest_size`, `qar_app_volume_get_latest_app_pose` and `qar_app_volume_get_latest_app_scale` read the newest known value of a volume. The `qar_qar_adapter` library keeps the placement of its volume this way.
+- Count the calls of one operation. A panel that is created or found again costs several of them, each of which can wait.
+
+## A panel or volume that already exists
+
+`qar_gui_panels_get_or_create` and `qar_app_volumes_get_or_create` derive the identity of the object from a required, stable ASCII common name, so the same name finds the same object in the next session. The header leaves open what the call applies to an object that already exists: whether the pose, the size and the content that you pass replace the stored ones or are ignored, whether a panel that was closed can be reopened under its name, and whether `qar_gui_panels_set_stream` accepts the stream of a sender of another size.
+
+In the live checks of the authors with the installed runtime, a hidden panel that came back from `get_or_create` accepted a new stream, a new size and the state VISIBLE. But the Hub reported the old stored state (HIDDEN) about 40 milliseconds after the authors had shown a found panel, so a program that shows a panel has to check the state it gets back and ask again. The `qar_qar_adapter` library keeps the state it asked for for one second after it asked, and checks again when that time ends. Read back what an existing object holds before you rely on it.
+
 ## Gesture rules of an app volume
 
 A peer's gestures against an app volume are mapped by the `QarAppVolumeGestureConfiguration` of the volume. The kinds are `QAR_GESTURE_CLICK`, `QAR_GESTURE_HOVER`, `QAR_GESTURE_SINGLE_POINTER_6DOF`, `QAR_GESTURE_DUAL_POINTER_TRANSLATE_DISTANCE` and `QAR_GESTURE_DUAL_POINTER_ROTATE`. [App Volumes and Gestures](/docs/developer-guide/app-volumes#gestures) shows how to configure and consume them; these are the rules to know on top of that.
@@ -75,12 +101,12 @@ The header says that `qar_app_volume_gesture_configuration_default` mirrors the 
 
 Two hands change the scale of the app, one hand moves it, and hover and click are only reported, each with its own ray.
 
-## Observed in live sessions with earlier SDK drops
+## Observed in live sessions
 
-These two observations come from live sessions with earlier SDK drops and have not been repeated on every drop. The header of release 0.9.0 describes neither of them, and this page does not claim that they hold with 0.9.0.
+The first observation comes from a live session with an earlier SDK drop and has not been repeated on every drop; the header describes neither it nor the behavior, and this page does not claim that it holds today. The second compares such a drop with the installed runtime.
 
 - **Receivers keep retrying a stream whose sender was destroyed.** A receiver that was attached to such a stream was not told that the stream was gone. It entered a reconnecting state and retried about every ten seconds, each retry failed with the status 507, and this went on until the peer of the receiver went away.
-- **The viewport of a URL panel is fixed.** The page of a URL panel saw a viewport of 500 by 500 CSS pixels at a device pixel ratio of 2.0, whatever the size of the panel. The header documents the page zoom (`content_scale`) but no way to configure a viewport: `QarGuiPanelUrlExt` carries only the URL. Measure the viewport in your page instead of assuming it from the size of the panel.
+- **The viewport of a URL panel.** With an earlier SDK drop, the page of a URL panel saw a viewport of 500 by 500 CSS pixels at a device pixel ratio of 2.0, whatever the size of the panel. With the installed runtime 0.9.0-dev.3008+65dc9aeb (observed on 2026-10-24) the viewport that a page reports follows the size of its panel. A program that sizes a panel from the reported viewport then feeds its own size back into itself: the control panel of the RViz2 plugin shrank to a narrow strip that way. The libraries size a URL panel from a fixed design viewport of 500 by 500 CSS pixels, allow three resizes of one panel in 10 seconds and refuse a width below a floor. The header documents the page zoom (`content_scale`) but no way to configure a viewport: `QarGuiPanelUrlExt` carries only the URL. Whether the follow-the-panel behavior is intended is not documented.
 
 ## Related pages
 
@@ -89,3 +115,4 @@ These two observations come from live sessions with earlier SDK drops and have n
 - [App Volumes and Gestures](/docs/developer-guide/app-volumes#gestures) — configuring and consuming gestures.
 - [Troubleshooting](/docs/developer-guide/troubleshooting) — status codes and frequent integration mistakes.
 - [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — showing a video in a panel, and the Qt library built on it.
+- [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the libraries whose measurements this page reports.
