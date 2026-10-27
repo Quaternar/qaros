@@ -86,21 +86,28 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
   Hub's local message router.
 - **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
-  C API do, when to use which, how they stack, what they need and the SDK drop they were verified
-  against.
+  C API do, when to use which, how they stack, what they need, how they join the Hub (a local app
+  on the Hub's PC, code pairing for a Hub on another PC) and the installed runtime they were
+  checked against, 0.9.0-dev.3008+65dc9aeb.
 - **Docs:** a Limits and Behaviors to Design Around page in the Developer Guide: retiring and
-  resizing a video stream, locating the operator, what a stream panel ignores or refuses, and the
-  gesture rules of an app volume, each as far as the C header states it, plus two observations made
-  with an earlier SDK drop.
+  resizing a video stream, locating the operator, what a stream panel ignores or refuses, the
+  gesture rules of an app volume and what happens to a panel or volume that already exists, each as
+  far as the C header states it, plus what a query of the installed runtime costs (about two
+  seconds each, measured with 0.9.0-dev.3008+65dc9aeb) and observations made with earlier SDK
+  drops.
 - **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
   GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
-  does to show a widget in AR.
+  does to show a widget in AR, including stable panel names that the next start finds again, how a
+  resize swaps the stream of the same panel and what happens to a panel when a window or the session
+  ends.
 - **Docs:** a Streaming an Ogre Scene to QAROS page in the Developer Guide: how the Ogre library
-  streams a scene to each peer, the three ways to use it, the conventions a scene follows and where
-  the library stops, as verified against an earlier SDK drop.
+  joins the Hub with its session owner and streams a scene to each target, the three ways to use it,
+  the conventions a scene follows and where the library stops, as checked against the installed
+  runtime.
 - **Docs:** a Running the RViz2 Plugin on Windows page in the Operator Guide: starting RViz2 with
-  the plugin, connecting it, what you see and do in AR, reading the logs and the known issues, as
-  verified against an earlier SDK drop.
+  the plugin, joining the Hub of this PC as a local app or the Hub of another PC with a pairing
+  code, the Connection tab, what you see and do in AR, the environment variables, reading the logs
+  and the known issues, as checked against the installed runtime 0.9.0-dev.3008+65dc9aeb.
 
 ### Fixed
 
