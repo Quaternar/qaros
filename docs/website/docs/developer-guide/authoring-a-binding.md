@@ -8,8 +8,8 @@ description: The rules every QAROS binding follows — how it finds and loads th
 
 A QAROS binding is a thin layer over the C ABI of `qar-streaming-c`
 ([Language Bindings](/docs/developer-guide/language-bindings)). The C header (`qar_streaming.h`) and
-the C# binding (`Quaternar.Qaros`) are the reference implementations. A new binding (Rust, Python,
-…) follows the same rules, so an application behaves the same whichever language it is written in.
+the C# binding (`Quaternar.Qaros`) are the reference implementations. A new binding (Python, …)
+follows the same rules, so an application behaves the same whichever language it is written in.
 
 ## Loading the runtime
 
@@ -88,6 +88,7 @@ flowchart TD
 |---|---|---|
 | C | `qar_library_load(NULL)` in `qar_streaming.h` | `qar_library_load(path)` |
 | C# | `InstalledRuntime.Load()`, called by `Library.Init` | `InstalledRuntime.Load(path)` |
+| Rust | `Library::load_default(&config)` in `qaros`, over `qaros_sys::QarApi::load_default()` | `Library::load(path, &config)`, over `QarApi::load(path)` |
 
 The [Vulkan cube example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube/main.cpp)
 shows the application side: it calls `qar_library_load(NULL)` and does no searching of its own.

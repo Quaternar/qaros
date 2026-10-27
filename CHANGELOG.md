@@ -38,6 +38,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
   D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
   depth-stencil texture. *Troubleshooting* lists the refused format as an integration mistake.
+- **Docs:** Rust in the Developer Guide: every code sample with a C tab on API Conventions,
+  Getting Started, Onboarding and Sessions, Peers, App Volumes, GUI Panels, Rendering Streams and
+  Troubleshooting has a Rust tab, and the language switcher offers Rust; Rust tutorials for the
+  examples of the new Rust binding (`qar-streaming-rust/`); a Rust section in *Language Bindings*
+  and a Rust row in *Authoring a Language Binding*. A code sample without a tab in the chosen
+  language says which language it shows instead.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
