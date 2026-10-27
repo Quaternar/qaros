@@ -12,6 +12,6 @@ On Meta Quest and METALENSE 2, the easiest way is the QAROS Visualizer's **Devic
 
 ## Device pages
 
-- [HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2) - sideload the QAROS HoloLens Player through the Device Portal.
+- [HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2) - install the QAROS HoloLens Player from the Visualizer by code, or through the Device Portal.
 - [Meta Quest](/docs/operator-guide/player-installation-to-device/meta-quest) - install the Quest APK with ADB after enabling Developer Mode.
 - [P&C Solutions METALENSE 2](/docs/operator-guide/player-installation-to-device/metalense-2) - install the METALENSE 2 APK with ADB.

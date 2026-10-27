@@ -13,7 +13,7 @@ This page covers keeping a Hub running over time: how to upgrade, what compatibi
 QAROS ships as several artifacts (see [Installation](/docs/operator-guide/installation)); each upgrades differently:
 
 - **QAROS.** Run the newer installer over the installed version ([Installation: Upgrade](/docs/operator-guide/installation#upgrade)). All runtime state lives outside the install folder, so identity, CA state, session state, approved local apps and Hub configuration are kept.
-- **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, redeploy the package on HoloLens 2. Keep Hub and players on the same release.
+- **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, on HoloLens 2 show the install code again in the Visualizer ([HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2#install-from-the-visualizer)), or redeploy the package through the Device Portal. Keep Hub and players on the same release.
 - **Applications on the C API.** A runtime update reaches every application that loads it, which is why the compatibility promise below matters.
 
 ## Updating to encrypted storage

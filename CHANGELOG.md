@@ -22,6 +22,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   crates, under the new *Rust API* menu, beside the Rust tutorials and *Language bindings*;
   versioned like the docs, with a version bar on every page.
 
+- **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
+  the player from the Visualizer by code (the code opens App Installer, the certificate goes into
+  Trusted People once per HoloLens, an install page as the fallback); the Device Portal steps remain
+  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460)
+  and *Maintenance and Updates* how to update the HoloLens player.
+
 - **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
   several API instances, co-process, remote app through a member hub, code pairing on a PC without
   a hub, launched by QAROS), what each stores, how long its credentials and bootstrap secrets live,

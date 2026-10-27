@@ -7,29 +7,46 @@ description: Install the QAROS player on a HoloLens 2, invite it from the Visual
 # HoloLens 2: Install, Invite, Start and Stop
 
 HoloLens 2 is a **legacy** device in QAROS: it streams over holographic remoting and is invited by
-IP address only. The player is an `.msix` app package, not an APK, and it is installed through the
-HoloLens **Device Portal** rather than over USB.
+IP address only. The player is an `.msix` app package, not an APK. The Visualizer installs it over
+your network: it shows an install code, and scanning it on the HoloLens opens App Installer on the
+player. No Developer Mode, no Device Portal, no cable.
 
 ## 1. Install the player
 
-The Visualizer lists the steps, but the installation itself happens in a web browser.
-
 1. **Session** › **Devices**, scroll to **Set up or update a device**.
-2. Set **Device type** to **HoloLens · Device Portal**. Three steps are listed:
+2. Set **Device type** to **HoloLens · Install code**. Four steps are listed: **Show the install
+   code**, **Trust the QAROS certificate**, **Install QAROS Player**, **Invite the HoloLens**.
+3. Under **Show the install code**, click **Show install code**. The **Install QAROS Player on
+   HoloLens** dialog shows a QR code and, beside it:
 
-   ![HoloLens steps in Set up or update a device](../../img/visualizer/setup-hololens.png)
-
-   | Step | What to do |
+   | Item | What it is |
    |---|---|
-   | **Developer mode and Device Portal on** | On the HoloLens: **Settings › Update & Security › For developers**, turn on **Developer Mode**, then **Device discovery** and **Device Portal** |
-   | **Install QAROS Player** | Open `https://<HoloLens IP>` in a browser on the PC, **Views › Apps › Deploy apps**, choose the `.msix` from `devices/hololens/` of the QAROS ZIP (with its `Dependencies/` folder) and click **Install**. Full steps: [HoloLens 2 installation](/docs/operator-guide/player-installation-to-device/hololens-2) |
-   | **Invite the HoloLens** | Next section |
+   | **Code opens** | What scanning does: **App Installer** (default), **Certificate (once per HoloLens)**, or **Install page in Edge** |
+   | **Page** | The install page, `http://<PC address>:<port>/`, to type into Edge. The copy button copies it |
+   | **Serve on** | The PC's network the code points at. Pick the one the HoloLens is on |
+   | Countdown | Serving stops after 15 minutes; **Serve again** restarts it |
+   | `QAROS Player <version> · …` | What is served. Hover it for the folder it comes from |
+   | Progress | *Waiting for a HoloLens to scan the code…*, then what the HoloLens fetched |
 
-   The Visualizer cannot check the first two steps: click **Mark as done** under each once you
-   have done it.
-
-3. Start the player on the HoloLens and allow **camera** and **eye tracking** when it asks. Note the
+   If the HoloLens camera over-exposes the code, lower **Brightness** under it.
+4. **Once per HoloLens, trust the certificate.** Set **Code opens** to **Certificate** and scan the
+   code with the HoloLens: it downloads `QAROS-Player-HoloLens.cer`, and the code switches back to
+   **App Installer**. On the HoloLens **Settings › Update & Security › Certificates › Install a
+   certificate**, **Import File** (`QAROS-Player-HoloLens.cer` in **Downloads**), Store Location
+   **Local Machine**, Certificate Store **Trusted People**, **Install**. The Visualizer cannot see
+   this: click **Mark as done** under **Trust the QAROS certificate**.
+5. Scan the code again (**App Installer**). App Installer shows the player: select **Install**. The
+   dialog reads *Scanned on 1 device*, and once the player has been downloaded, **Install QAROS
+   Player** is marked done.
+6. If a policy disables App Installer links on the HoloLens, set **Code opens** to **Install page
+   in Edge**, scan, select **Install QAROS Player** on the page and open the downloaded file.
+7. Close the dialog: the Visualizer stops serving.
+8. Start the player on the HoloLens and allow **camera** and **eye tracking** when it asks. Note the
    IP address it shows.
+
+A managed HoloLens (MDM, provisioning package or Entra ID sign-in) has App Installer turned off:
+install through the Device Portal instead, see
+[HoloLens 2 installation](/docs/operator-guide/player-installation-to-device/hololens-2#install-through-the-device-portal).
 
 A HoloLens with an older player build (package version `1.0.0.0`) must uninstall it first.
 
@@ -37,7 +54,8 @@ A HoloLens with an older player build (package version `1.0.0.0`) must uninstall
 
 1. **Session** › **Devices**. The **Invite device** card is open at the top.
 2. Pick **HoloLens** (it carries the *LEGACY* tag).
-3. Type the HoloLens IP address in **Address** and, optionally, a **Label** such as `Lab HoloLens`.
+3. Type the HoloLens IP address in **Address**. The address and the device kind are all the Hub
+   needs; the device is listed under its address.
 4. Tick **Invite automatically** to have the Hub invite it again on every start. Left unticked, it
    is invited once (the device is still listed and can be invited again by hand).
 
