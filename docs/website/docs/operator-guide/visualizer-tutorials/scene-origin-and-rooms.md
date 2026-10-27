@@ -1,7 +1,7 @@
 ---
 title: Scene Origin - Anchor Several Devices Together
 sidebar_position: 6
-description: Show or print a room's scene origin code, anchor HoloLens 2 and METALENSE 2 headsets to it so they share one scene, and line up several physical rooms with room offsets.
+description: Show or print a room's scene origin code, anchor HoloLens 2, Meta Quest and METALENSE 2 headsets to it so they share one scene, and line up several physical rooms with room offsets.
 ---
 
 # Scene Origin: Anchor Several Devices Together
@@ -22,12 +22,12 @@ origin for every device that sees it.
 |---|---|---|---|
 | **HoloLens 2** | Yes | Look at the code with the player running | *Headset is not anchored! Look at QR code.* until it is anchored |
 | **METALENSE 2** | Yes | Look at the code with the player running | A green outline on the code when it is picked up |
-| **Meta Quest** | No | — | The scene origin is the headset's own floor origin, not the code: a Quest is not aligned with the other devices |
+| **Meta Quest** | Yes | Look at the code with the player running | A green outline on the code when it is picked up |
 
-:::caution METALENSE 2 takes any QR code
-The METALENSE 2 player moves the scene to **any** QR code it sees, not only a QAROS origin code.
-Keep other QR codes (posters, badges, labels, the Visualizer's pairing code) out of view while
-wearing the glasses.
+:::caution Meta Quest and METALENSE 2 take any QR code
+The Meta Quest and METALENSE 2 player moves the scene to **any** QR code it sees, not only a QAROS
+origin code. Keep other QR codes (posters, badges, labels, the Visualizer's pairing code) out of
+view while wearing the headset.
 :::
 
 ## 1. Create a room for each physical space
@@ -86,12 +86,12 @@ Keep the white border around it.
 
 ## 4. Anchor each device
 
-For every HoloLens 2 and METALENSE 2 in the room, one after another:
+For every headset in the room, one after another:
 
 1. Start the player and invite the device ([HoloLens 2](./hololens-2),
    [Meta Quest and METALENSE 2](./quest-and-metalense-2)).
 2. Put it on and **look at the code** until the device confirms
-   (HoloLens: the *not anchored* message goes; METALENSE 2: the green outline).
+   (HoloLens: the *not anchored* message goes; Meta Quest and METALENSE 2: the green outline).
 3. Look around the room for a few seconds before taking it off, so the device can save its anchor.
 
 All devices that scanned the same code now share the same origin: content placed on the table is on
@@ -112,8 +112,8 @@ The room a device is in decides which room offset applies to it.
 2. Check that each device is under the room it physically stands in. To move one, pick the room in
    the list on its row, or drag the row onto another room card.
 
-The code carries the room number, but always confirm the room here: METALENSE 2 does not read the
-room number, so it stays in the room you put it in.
+The code carries the room number, but always confirm the room here: Meta Quest and METALENSE 2 do
+not read the room number, so they stay in the room you put them in.
 
 ## 6. Line up several physical rooms
 
