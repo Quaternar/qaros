@@ -1,14 +1,15 @@
 //! Snippets of the peer presence, role, category and device identity functions, which only
 //! bindings generated from a header that declares them have; `main.rs` compiles this module
-//! there.
+//! there. Declaring the device is safe (`PeerPresentation::device_identity`,
+//! `Session::update_device_identity`); the getters are raw only.
 
 use std::ffi::{CStr, c_char};
 
-use qaros::qaros_sys::{
-    QarDeviceCategory, QarPeerDeviceIdentity, QarPeerPresence, QarPeerRole, QarPeerSpec,
-    QarSession, QarStructureType, defaults,
+use qaros::qaros_sys::{QarDeviceCategory, QarPeerPresence, QarPeerRole, QarPeerSpec};
+use qaros::{
+    BlockingOptions, CancelToken, DeviceIdentity, Library, OnboardMethod, PeerPresentation,
+    Runtime, Session, SourceDeviceCategory,
 };
-use qaros::{CancelToken, Library, Runtime, Session};
 
 fn show_target(_name: &str, _family: &str, _category: QarDeviceCategory) {}
 
@@ -83,71 +84,42 @@ fn show_targets(library: &Library, session: &Session) {
     // ANCHOR_END: show_targets
 }
 
-fn onboard_as_camera(
-    library: &Library,
-    runtime: &Runtime,
-    cancel: &CancelToken,
-) -> *mut QarSession {
+fn onboard_as_camera(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> {
     // ANCHOR: onboard_as_camera
-    // Declaring your device is raw only: onboard through the raw table with the runtime's
-    // handle. The session it hands out is raw too: not a qaros::Session, so destroy it with
-    // qar_session_handle_destroy before the runtime drops.
-    let api = library.raw_api();
-    let identity = QarPeerDeviceIdentity {
-        header: defaults::structure_header(
-            QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY,
-        ),
-        category: QarDeviceCategory::QAR_DEVICE_CATEGORY_CAMERA,
-        device_id: c"LuxonisOakD".as_ptr(), // unknown ids are fine
-        device_family: c"Luxonis".as_ptr(),
-        device_name: c"Luxonis OAK-D".as_ptr(),
+    let presentation = PeerPresentation {
+        display_name: Some("Lab camera 1".to_string()),
+        device_identity: Some(DeviceIdentity {
+            category: SourceDeviceCategory::Camera,
+            device_id: "LuxonisOakD".to_string(), // unknown ids are fine
+            device_family: Some("Luxonis".to_string()),
+            device_name: Some("Luxonis OAK-D".to_string()),
+        }),
+        ..PeerPresentation::default()
     };
-
-    let mut init = defaults::qar_onboard_init_default();
-    let mut local = defaults::qar_onboard_local_app_ext_default();
-    init.header.next = (&raw mut local.header).cast();
-    init.presentation.display_name = c"Lab camera 1".as_ptr();
-    init.presentation.header.next = (&raw const identity.header).cast_mut().cast();
-
-    let mut unused = defaults::qar_onboarding_id_default();
-    let mut session: *mut QarSession = std::ptr::null_mut();
-    // SAFETY: the runtime is alive and used on this thread; init and its chain live on this
-    // stack frame for the whole call; the out-pointers are valid.
-    let result = unsafe {
-        (api.qar_impl_runtime_onboard)(
-            runtime.as_raw(),
-            &raw const init,
-            None,
-            std::ptr::null_mut(),
-            cancel.as_raw(),
-            &raw mut unused,
-            &raw mut session,
-        )
-    };
-    // SAFETY: plain value argument.
-    unsafe { (api.qar_impl_result_log_if_error)(result) };
+    let onboarded = runtime.onboard(
+        &OnboardMethod::LocalApp {
+            approval_timeout: None,
+            app_tag: None,
+        },
+        &presentation,
+        &BlockingOptions {
+            progress: None,
+            cancel: Some(cancel),
+        },
+    )?;
     // Joins as Source + Camera + LuxonisOakD.
     // ANCHOR_END: onboard_as_camera
-    session
+    Ok(onboarded.session)
 }
 
-fn refine_identity(library: &Library, session: &Session) {
+fn refine_identity(session: &Session) -> qaros::Result<()> {
     // ANCHOR: refine_identity
-    let api = library.raw_api();
-    let refined = QarPeerDeviceIdentity {
-        header: defaults::structure_header(
-            QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY,
-        ),
-        category: QarDeviceCategory::QAR_DEVICE_CATEGORY_CAMERA,
-        device_id: c"LuxonisOakDPro".as_ptr(),
-        device_family: c"Luxonis".as_ptr(),
-        device_name: c"OAK-D Pro W".as_ptr(),
-    };
-    // SAFETY: the session is alive and used on this thread; `refined` and its strings outlive
-    // the call.
-    let result =
-        unsafe { (api.qar_impl_peer_update_device_identity)(session.as_raw(), &raw const refined) };
-    // SAFETY: plain value argument.
-    unsafe { (api.qar_impl_result_log_if_error)(result) };
+    session.update_device_identity(&DeviceIdentity {
+        category: SourceDeviceCategory::Camera,
+        device_id: "LuxonisOakDPro".to_string(),
+        device_family: Some("Luxonis".to_string()),
+        device_name: Some("OAK-D Pro W".to_string()),
+    })?;
     // ANCHOR_END: refine_identity
+    Ok(())
 }

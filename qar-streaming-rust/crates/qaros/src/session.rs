@@ -528,13 +528,37 @@ impl Session {
         GuiPanels::new(&self.inner)
     }
 
+    /// Replaces the device this application describes itself as
+    /// (`qar_peer_update_device_identity`), as [`crate::PeerPresentation::device_identity`] sets
+    /// it at onboard or rejoin. A category other than the [`crate::SourceDeviceCategory`] values
+    /// cannot be expressed; an empty device id fails with
+    /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. Present where the bindings declare
+    /// `QarPeerDeviceIdentity` (cfg `qaros_device_identity`).
+    #[cfg(qaros_device_identity)]
+    pub fn update_device_identity(&self, identity: &crate::DeviceIdentity) -> Result<()> {
+        let storage = crate::device::DeviceIdentityStorage::new(identity)?;
+        let api = self.inner.api();
+        // SAFETY: live session; the identity and its strings live for the call.
+        let result = unsafe {
+            (api.qar_impl_peer_update_device_identity)(
+                self.inner.handle.as_ptr(),
+                &raw const storage.raw,
+            )
+        };
+        check(api, "qar_peer_update_device_identity", result)
+    }
+
     /// Mints a co-process invite (`qar_session_request_onboarding_invite`): a process this app
     /// starts onboards with it ([`crate::OnboardMethod::Invite`], with
     /// [`crate::RuntimeConfig::ephemeral_storage`]) and joins under the peer id the hub remembers
     /// for this app's approval and `app_tag`. `app_tag` is required, an identity key as for
     /// [`crate::OnboardMethod::LocalApp`]; give the co-process a tag of its own. Only a session
     /// that joined as a local app, or an app the QAROS launcher started, may request one; any
-    /// other fails with [`crate::StatusCode::ONBOARDING_INVITE_REFUSED`], which is final.
+    /// other fails with [`crate::StatusCode::ONBOARDING_INVITE_REFUSED`], which is final. A tag
+    /// that breaks the rules fails with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`] before the
+    /// hub is asked; [`crate::StatusCode::ONBOARDING_HUB_UNREACHABLE`] means the session names no
+    /// hub to ask yet: retry. The invite is single use, valid for 60 s and redeemable only on the
+    /// hub's PC.
     pub fn request_onboarding_invite(
         &self,
         app_tag: &str,

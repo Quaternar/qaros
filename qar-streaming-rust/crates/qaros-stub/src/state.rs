@@ -94,6 +94,14 @@ pub struct StubState {
     /// once its token is cancelled.
     pub render_sender_create_cancel_delay: Duration,
     pub render_sender_create_completion: CreateCompletion,
+    /// How long an async onboard or rejoin waits before it creates its session.
+    pub onboard_async_delay: Duration,
+    /// An async onboard or rejoin ignores its cancel token (not the runtime's destroy).
+    pub onboard_async_ignores_cancel: bool,
+    /// Async onboards and rejoins whose callback has not returned, per runtime address.
+    pub pending_runtime_calls: HashMap<usize, usize>,
+    /// Runtimes whose destroy is waiting for their async calls, which end at once.
+    pub destroying_runtimes: HashSet<usize>,
     /// Every successful `show_frame`, across all senders.
     pub frames_shown: u64,
     pub frames_shown_by_peer: HashMap<[u8; 16], u64>,

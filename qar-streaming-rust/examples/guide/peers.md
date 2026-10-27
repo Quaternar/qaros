@@ -28,7 +28,7 @@ The role, category and device getters are raw only: call them through `library.r
 
 ## A source app that is a camera
 
-Declaring your device is raw only: onboard through `library.raw_api()` with the runtime's `as_raw()`. The session it returns is a raw `QarSession`, not a `qaros::Session`.
+`PeerPresentation::device_identity` chains the `QarPeerDeviceIdentity` on the presentation. `SourceDeviceCategory` holds only the categories an application may declare, so `QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED` cannot happen; an empty device id fails with `StatusCode::ARGUMENT_NOT_SUPPORTED`.
 
 ```rust
 {{#include ../tests/guide/peers_identity.rs:onboard_as_camera}}
@@ -36,7 +36,7 @@ Declaring your device is raw only: onboard through `library.raw_api()` with the 
 
 ## Refine the identity later
 
-Raw only: call `qar_peer_update_device_identity` through `library.raw_api()` with the session's `as_raw()`.
+`Session::update_device_identity` calls `qar_peer_update_device_identity`.
 
 ```rust
 {{#include ../tests/guide/peers_identity.rs:refine_identity}}

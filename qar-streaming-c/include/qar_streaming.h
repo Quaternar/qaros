@@ -3042,11 +3042,10 @@ static inline QarOnboardLocalAppTagExt
 qar_onboard_local_app_tag_ext_default(void);
 /** @brief Default init for QarRequestInviteInit (app_tag NULL; set it). */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
-/** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
 qar_session_invite_target_app_init_default(void);
-
+/** @brief Default init for QarForgetInit. */
 static inline QarForgetInit qar_forget_init_default(void);
 
 /**
@@ -3127,8 +3126,9 @@ static inline QarResult qar_runtime_rejoin_async(
  * @param out_session Receives the onboarded session handle on success.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
  *   hub — verify host/port and retry.
- * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected, the invite expired,
- *   out — re-prompt the user for the code.
+ * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected or timed out, or
+ *   the invite expired — re-prompt the user for the code, or get a fresh
+ *   invite.
  */
 static inline QarResult qar_runtime_onboard(
 	QarRuntime* runtime,

@@ -65,6 +65,57 @@ impl StatusCode {
     pub const ONBOARDING_INVITE_REFUSED: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_INVITE_REFUSED);
 
+    // The codes below are named by value, so they exist under both binding sets: the header of
+    // 0.9.0-dev.2916 may not declare them. `name()` gives the header's name.
+    pub const GUI_PANEL_CHANGE_NOT_PERMITTED: Self = Self(QarStatusCode(304));
+    pub const APP_VOLUME_GESTURE_CONFIGURATION_INVALID: Self = Self(QarStatusCode(326));
+    pub const APP_VOLUME_GESTURE_MODE_UNKNOWN: Self = Self(QarStatusCode(327));
+    pub const MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED: Self = Self(QarStatusCode(605));
+    pub const MEDIA_STREAMING_SEND_PIPELINE_FAILED: Self = Self(QarStatusCode(606));
+    pub const MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: Self = Self(QarStatusCode(607));
+    pub const HUB_TARGET_APP_DEVICE_NOT_INVITABLE: Self = Self(QarStatusCode(3100));
+    /// A declared device category other than desktop PC, server or camera.
+    pub const PEER_DEVICE_CATEGORY_NOT_ALLOWED: Self = Self(QarStatusCode(3101));
+    /// The hub is in the middle of another session-wide operation; retry.
+    pub const HUB_LIFECYCLE_OPERATION_RUNNING: Self = Self(QarStatusCode(3300));
+    pub const MEMBER_JOIN_PENDING: Self = Self(QarStatusCode(3400));
+    pub const MEMBER_JOIN_DENIED: Self = Self(QarStatusCode(3401));
+    /// The hub on this PC hosts members of its own, is a member of another primary, or the
+    /// invitation does not permit the join; the message names the reason.
+    pub const MEMBER_JOIN_REFUSED: Self = Self(QarStatusCode(3402));
+    pub const MEMBER_JOIN_REDIRECTED: Self = Self(QarStatusCode(3403));
+    /// The primary removed this hub and the invitation does not permit readmitting it.
+    pub const MEMBER_REMOVED: Self = Self(QarStatusCode(3404));
+    /// None of the invitation's addresses of the primary hub answers.
+    pub const PRIMARY_UNREACHABLE: Self = Self(QarStatusCode(3405));
+    /// The hub on this PC is a member: create the member-hub invitation on its primary's PC.
+    pub const SESSION_WIDE_ACTION_ON_MEMBER: Self = Self(QarStatusCode(3406));
+    /// The app's approval does not allow it to bring in member hubs.
+    pub const MEMBER_SPONSOR_NOT_ALLOWED: Self = Self(QarStatusCode(3407));
+    /// The app's approval has used its quota of member hubs.
+    pub const MEMBER_SPONSOR_QUOTA_EXCEEDED: Self = Self(QarStatusCode(3408));
+    pub const AUDIT_LOG_CORRUPT: Self = Self(QarStatusCode(3409));
+    pub const SECURE_STORAGE_ERROR: Self = Self(QarStatusCode(3500));
+    pub const SECURE_STORAGE_NOT_FOUND: Self = Self(QarStatusCode(3501));
+    pub const SECURE_STORAGE_TAMPERED: Self = Self(QarStatusCode(3502));
+    pub const SECURE_STORAGE_PROTECTOR_MISMATCH: Self = Self(QarStatusCode(3503));
+    pub const SECURE_STORAGE_PROTECTOR_UNAVAILABLE: Self = Self(QarStatusCode(3504));
+    pub const SECURE_STORAGE_INVALID_KEY: Self = Self(QarStatusCode(3505));
+    pub const SECURE_STORAGE_LOCKED: Self = Self(QarStatusCode(3506));
+    /// The member-hub invitation's signature is wrong, its bytes are no invitation, or the
+    /// primary does not know it.
+    pub const MEMBER_INVITATION_INVALID: Self = Self(QarStatusCode(3600));
+    /// Ask the primary's app for a new member-hub invitation.
+    pub const MEMBER_INVITATION_EXPIRED: Self = Self(QarStatusCode(3601));
+    /// Ask the primary's app for a new member-hub invitation.
+    pub const MEMBER_INVITATION_USED_UP: Self = Self(QarStatusCode(3602));
+    /// Ask the primary's app for a new member-hub invitation.
+    pub const MEMBER_INVITATION_REVOKED: Self = Self(QarStatusCode(3603));
+    /// This PC does not trust the invitation's primary hub.
+    pub const MEMBER_INVITATION_PRIMARY_NOT_ALLOWED: Self = Self(QarStatusCode(3604));
+    /// This PC's member-invitation policy can be written by a non-administrator.
+    pub const MEMBER_INVITATION_POLICY_NOT_PROTECTED: Self = Self(QarStatusCode(3605));
+
     pub(crate) fn from_raw(raw: QarStatusCode) -> Self {
         Self(raw)
     }
@@ -116,6 +167,44 @@ impl StatusCode {
                 "ONBOARDING_RENEWAL_POSSESSION_UNPROVEN"
             }
             Self::ONBOARDING_INVITE_REFUSED => "ONBOARDING_INVITE_REFUSED",
+            Self::GUI_PANEL_CHANGE_NOT_PERMITTED => "GUI_PANEL_CHANGE_NOT_PERMITTED",
+            Self::APP_VOLUME_GESTURE_CONFIGURATION_INVALID => {
+                "APP_VOLUME_GESTURE_CONFIGURATION_INVALID"
+            }
+            Self::APP_VOLUME_GESTURE_MODE_UNKNOWN => "APP_VOLUME_GESTURE_MODE_UNKNOWN",
+            Self::MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED => {
+                "MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED"
+            }
+            Self::MEDIA_STREAMING_SEND_PIPELINE_FAILED => "MEDIA_STREAMING_SEND_PIPELINE_FAILED",
+            Self::MEDIA_STREAMING_LAYOUT_CHANGE_FAILED => "MEDIA_STREAMING_LAYOUT_CHANGE_FAILED",
+            Self::HUB_TARGET_APP_DEVICE_NOT_INVITABLE => "HUB_TARGET_APP_DEVICE_NOT_INVITABLE",
+            Self::PEER_DEVICE_CATEGORY_NOT_ALLOWED => "PEER_DEVICE_CATEGORY_NOT_ALLOWED",
+            Self::HUB_LIFECYCLE_OPERATION_RUNNING => "HUB_LIFECYCLE_OPERATION_RUNNING",
+            Self::MEMBER_JOIN_PENDING => "MEMBER_JOIN_PENDING",
+            Self::MEMBER_JOIN_DENIED => "MEMBER_JOIN_DENIED",
+            Self::MEMBER_JOIN_REFUSED => "MEMBER_JOIN_REFUSED",
+            Self::MEMBER_JOIN_REDIRECTED => "MEMBER_JOIN_REDIRECTED",
+            Self::MEMBER_REMOVED => "MEMBER_REMOVED",
+            Self::PRIMARY_UNREACHABLE => "PRIMARY_UNREACHABLE",
+            Self::SESSION_WIDE_ACTION_ON_MEMBER => "SESSION_WIDE_ACTION_ON_MEMBER",
+            Self::MEMBER_SPONSOR_NOT_ALLOWED => "MEMBER_SPONSOR_NOT_ALLOWED",
+            Self::MEMBER_SPONSOR_QUOTA_EXCEEDED => "MEMBER_SPONSOR_QUOTA_EXCEEDED",
+            Self::AUDIT_LOG_CORRUPT => "AUDIT_LOG_CORRUPT",
+            Self::SECURE_STORAGE_ERROR => "SECURE_STORAGE_ERROR",
+            Self::SECURE_STORAGE_NOT_FOUND => "SECURE_STORAGE_NOT_FOUND",
+            Self::SECURE_STORAGE_TAMPERED => "SECURE_STORAGE_TAMPERED",
+            Self::SECURE_STORAGE_PROTECTOR_MISMATCH => "SECURE_STORAGE_PROTECTOR_MISMATCH",
+            Self::SECURE_STORAGE_PROTECTOR_UNAVAILABLE => "SECURE_STORAGE_PROTECTOR_UNAVAILABLE",
+            Self::SECURE_STORAGE_INVALID_KEY => "SECURE_STORAGE_INVALID_KEY",
+            Self::SECURE_STORAGE_LOCKED => "SECURE_STORAGE_LOCKED",
+            Self::MEMBER_INVITATION_INVALID => "MEMBER_INVITATION_INVALID",
+            Self::MEMBER_INVITATION_EXPIRED => "MEMBER_INVITATION_EXPIRED",
+            Self::MEMBER_INVITATION_USED_UP => "MEMBER_INVITATION_USED_UP",
+            Self::MEMBER_INVITATION_REVOKED => "MEMBER_INVITATION_REVOKED",
+            Self::MEMBER_INVITATION_PRIMARY_NOT_ALLOWED => "MEMBER_INVITATION_PRIMARY_NOT_ALLOWED",
+            Self::MEMBER_INVITATION_POLICY_NOT_PROTECTED => {
+                "MEMBER_INVITATION_POLICY_NOT_PROTECTED"
+            }
             _ => return None,
         };
         Some(name)
@@ -325,6 +414,14 @@ mod tests {
         assert_eq!(
             StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED.to_string(),
             "QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED (806)"
+        );
+        assert_eq!(
+            StatusCode::MEMBER_INVITATION_EXPIRED.to_string(),
+            "QAR_STATUS_MEMBER_INVITATION_EXPIRED (3601)"
+        );
+        assert_eq!(
+            StatusCode::PEER_DEVICE_CATEGORY_NOT_ALLOWED.to_string(),
+            "QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED (3101)"
         );
     }
 }

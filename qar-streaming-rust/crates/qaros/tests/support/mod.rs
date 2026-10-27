@@ -184,6 +184,20 @@ impl StubControl {
         set_delay(milliseconds);
     }
 
+    pub(crate) fn set_onboard_async_delay(&self, milliseconds: u64) {
+        let set_delay: unsafe extern "C" fn(u64) =
+            self.symbol("qar_stub_set_onboard_async_delay_ms");
+        // SAFETY: plain value argument.
+        unsafe { set_delay(milliseconds) };
+    }
+
+    pub(crate) fn set_onboard_async_ignores_cancel(&self, ignores: bool) {
+        let set_ignores: unsafe extern "C" fn(u8) =
+            self.symbol("qar_stub_set_onboard_async_ignores_cancel");
+        // SAFETY: plain value argument.
+        unsafe { set_ignores(u8::from(ignores)) };
+    }
+
     pub(crate) fn set_render_sender_create_delay(&self, milliseconds: u64) {
         let set_delay: unsafe extern "C" fn(u64) =
             self.symbol("qar_stub_set_render_sender_create_delay_ms");
@@ -288,6 +302,15 @@ pub(crate) fn code(pairing_code: &str) -> OnboardMethod<'_> {
     OnboardMethod::Code {
         code: pairing_code,
         hub: None,
+    }
+}
+
+/// A local app with the default tag: the only kind of session the stub mints co-process
+/// invites for.
+pub(crate) fn local_app() -> OnboardMethod<'static> {
+    OnboardMethod::LocalApp {
+        approval_timeout: None,
+        app_tag: None,
     }
 }
 

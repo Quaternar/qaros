@@ -61,6 +61,12 @@ pub struct CancelHandle {
 }
 
 impl CancelHandle {
+    pub(crate) fn for_token(token: &CancelTokenInner) -> Self {
+        Self {
+            token: Arc::clone(&token.cross_thread),
+        }
+    }
+
     /// Cancels every call that was given the token. `Ok(true)` when the token was cancelled,
     /// `Ok(false)` when its owner had already dropped it.
     pub fn cancel(&self) -> Result<bool> {

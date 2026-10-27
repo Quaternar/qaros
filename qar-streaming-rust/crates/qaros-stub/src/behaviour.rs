@@ -23,6 +23,8 @@ const RUNTIME: &str = "runtime";
 const SESSION: &str = "session";
 const CANCEL_TOKEN: &str = "cancel_token";
 const INVITE: &str = "invite";
+#[cfg(qaros_member_hubs)]
+const MEMBER_INVITATION: &str = "member_hub_invitation";
 const PEER_SPEC: &str = "peer_spec";
 const GUI_PANEL: &str = "gui_panel";
 const APP_VOLUME: &str = "app_volume";
@@ -55,6 +57,10 @@ struct SessionValue {
     display_name: String,
     app_version: String,
     custom_info: String,
+    /// Joined by local enrollment (`QarOnboardLocalAppExt`): the only sessions the stub's hub
+    /// mints co-process invites for. (The runtime's hub also mints them for a process its
+    /// launcher started, which the stub cannot tell from another invite.)
+    local_app: bool,
 }
 
 /// Not zero-sized, so every token gets its own heap address and the live-handle map tells
@@ -66,6 +72,57 @@ struct TokenValue {
 
 struct InviteValue {
     expires_unix: i64,
+}
+
+/// A member-hub invitation: what `qar_runtime_create_member_hub_invitation` was asked for, with
+/// the header's defaults applied.
+#[cfg(qaros_member_hubs)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MemberInvitationValue {
+    expires_unix: i64,
+    max_uses: u32,
+    permissions: u32,
+    app_grant_tag: Option<String>,
+    label: String,
+}
+
+#[cfg(qaros_member_hubs)]
+const MEMBER_INVITATION_PREFIX: &str = "qaros-stub member invitation";
+
+#[cfg(qaros_member_hubs)]
+impl MemberInvitationValue {
+    /// One field per line after the prefix; the label, which may hold anything, last.
+    fn to_wire(&self) -> Vec<u8> {
+        format!(
+            "{MEMBER_INVITATION_PREFIX}\n{}\n{}\n{}\n{}\n{}",
+            self.expires_unix,
+            self.max_uses,
+            self.permissions,
+            self.app_grant_tag.as_deref().unwrap_or(""),
+            self.label
+        )
+        .into_bytes()
+    }
+
+    fn from_wire(wire: &[u8]) -> Option<Self> {
+        let text = std::str::from_utf8(wire).ok()?;
+        let mut lines = text.splitn(6, '\n');
+        if lines.next()? != MEMBER_INVITATION_PREFIX {
+            return None;
+        }
+        let expires_unix = lines.next()?.parse().ok()?;
+        let max_uses = lines.next()?.parse().ok()?;
+        let permissions = lines.next()?.parse().ok()?;
+        let app_grant_tag = Some(lines.next()?.to_string()).filter(|tag| !tag.is_empty());
+        let label = lines.next()?.to_string();
+        Some(Self {
+            expires_unix,
+            max_uses,
+            permissions,
+            app_grant_tag,
+            label,
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -733,6 +790,7 @@ unsafe fn create_session(
     runtime: *mut QarRuntime,
     onboarding_id: [u8; 16],
     presentation: &QarPeerPresentation,
+    local_app: bool,
 ) -> *mut QarSession {
     // SAFETY: presentation strings are valid C strings or NULL.
     let (display_name, app_version, custom_info) = unsafe {
@@ -750,6 +808,7 @@ unsafe fn create_session(
             display_name,
             app_version,
             custom_info,
+            local_app,
         },
         SESSION,
     )
@@ -831,6 +890,349 @@ fn wait_unless_cancelled(delay: Duration, token_address: usize) -> Option<Cancel
             }
             if token_timed_out(&guard, token_address) {
                 return Some(CancelReason::TimedOut);
+            }
+        }
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+        std::thread::sleep((deadline - now).min(Duration::from_millis(1)));
+    }
+}
+
+/// What `qar_runtime_onboard` decided before it starts, shared by the blocking and the async
+/// form.
+struct OnboardPlan {
+    storage: PathBuf,
+    /// A local app, or a runtime with ephemeral storage: nothing persisted, the zero id.
+    stateless: bool,
+    local_app: bool,
+    /// The slot to re-enroll (`QarOnboardInit::onboarding_id`); `None` for a new identity.
+    requested_id: Option<[u8; 16]>,
+}
+
+/// The synchronous checks of `qar_runtime_onboard`: an error here is returned by the call, and
+/// the async form then never calls back.
+///
+/// # Safety
+///
+/// `runtime` is null or a handle from this stub; `init` is null or a `QarOnboardInit` whose
+/// chains are stamped structures.
+unsafe fn check_onboard(
+    runtime: *mut QarRuntime,
+    init: *const QarOnboardInit,
+) -> Result<OnboardPlan, QarResult> {
+    if let Some(failure) = header_mismatch(
+        init.cast(),
+        QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INIT,
+        "QarOnboardInit",
+    ) {
+        return Err(failure);
+    }
+    // SAFETY: header checked.
+    let init = unsafe { &*init };
+    // SAFETY: forwarded to the caller.
+    unsafe { check_presentation(&init.presentation) }?;
+    // SAFETY: runtime comes from this stub.
+    let Some(storage) = (unsafe { runtime_storage(runtime) }) else {
+        return Err(invalid("runtime is not a live handle"));
+    };
+    // SAFETY: the chain consists of stamped extension structures.
+    unsafe { validate_onboard_chain(init.header.next.cast_const().cast()) }?;
+    // SAFETY: the chain was validated, so it holds a mode extension first.
+    let mode = unsafe { (*init.header.next.cast_const().cast::<QarStructureHeader>()).type_ };
+    let local_app = mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT;
+    // SAFETY: runtime comes from this stub.
+    let ephemeral = unsafe { runtime_is_ephemeral(runtime) };
+    let requested_id = (init.onboarding_id.data != [0; 16]).then_some(init.onboarding_id.data);
+    if let Some(onboarding_id) = requested_id {
+        if local_app {
+            return Err(invalid(
+                "QarOnboardLocalAppExt is stateless; QarOnboardInit.onboarding_id must be zero",
+            ));
+        }
+        if ephemeral {
+            return Err(invalid(
+                "QarOnboardInit.onboarding_id must be zero on a runtime with ephemeral storage",
+            ));
+        }
+        if session_still_active(&onboarding_id) {
+            return Err(state::error(
+                QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE,
+                "destroy the active session handle of this slot first",
+            ));
+        }
+    }
+    Ok(OnboardPlan {
+        storage,
+        stateless: local_app || ephemeral,
+        local_app,
+        requested_id,
+    })
+}
+
+/// Persists the slot (a new identity, or the re-enrolled one) and creates the session.
+///
+/// # Safety
+///
+/// `runtime` is a live handle from this stub; the presentation strings are valid.
+unsafe fn finish_onboard(
+    runtime: *mut QarRuntime,
+    presentation: &QarPeerPresentation,
+    plan: &OnboardPlan,
+) -> Result<([u8; 16], *mut QarSession), QarResult> {
+    if plan.stateless {
+        // SAFETY: forwarded to the caller.
+        let session = unsafe { create_session(runtime, [0; 16], presentation, plan.local_app) };
+        return Ok(([0; 16], session));
+    }
+    let onboarding_id = plan.requested_id.unwrap_or_else(fresh_identity);
+    if plan.requested_id.is_some() {
+        note(format!("re-enrolled slot {}", hex(&onboarding_id)));
+    }
+    let marker = marker_path(&plan.storage, &onboarding_id);
+    let persisted = marker
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&marker, b"qaros-stub onboarding slot\n"));
+    if let Err(io_error) = persisted {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_ONBOARDING_FAILED,
+            format!("cannot persist {}: {io_error}", marker.display()),
+        ));
+    }
+    // SAFETY: forwarded to the caller.
+    let session = unsafe { create_session(runtime, onboarding_id, presentation, false) };
+    Ok((onboarding_id, session))
+}
+
+/// The synchronous checks of `qar_runtime_rejoin`.
+///
+/// # Safety
+///
+/// As for [`check_onboard`].
+unsafe fn check_rejoin(
+    runtime: *mut QarRuntime,
+    init: *const QarRejoinInit,
+) -> Result<(), QarResult> {
+    if let Some(failure) = header_mismatch(
+        init.cast(),
+        QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT,
+        "QarRejoinInit",
+    ) {
+        return Err(failure);
+    }
+    // SAFETY: header checked.
+    let init = unsafe { &*init };
+    // SAFETY: forwarded to the caller.
+    unsafe { check_presentation(&init.presentation) }?;
+    if init.onboarding_id.data == [0; 16] {
+        return Err(invalid("onboarding_id is zero"));
+    }
+    // SAFETY: runtime comes from this stub.
+    if unsafe { runtime_is_ephemeral(runtime) } {
+        return Err(ephemeral_refusal("qar_runtime_rejoin"));
+    }
+    // SAFETY: the chain consists of stamped extension structures.
+    unsafe {
+        validate_optional_extensions(
+            init.header.next.cast_const().cast(),
+            OptionalExtensions::Rejoin,
+        )
+    }?;
+    // SAFETY: runtime comes from this stub.
+    let Some(storage) = (unsafe { runtime_storage(runtime) }) else {
+        return Err(invalid("runtime is not a live handle"));
+    };
+    if !marker_path(&storage, &init.onboarding_id.data).exists() {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND,
+            "no persisted slot for this onboarding id",
+        ));
+    }
+    Ok(())
+}
+
+/// Checks a `QarPeerPresentation` and what it chains: only a `QarPeerDeviceIdentity`, where the
+/// bindings declare it, which is validated and logged.
+///
+/// # Safety
+///
+/// The presentation's chain consists of stamped structures.
+unsafe fn check_presentation(presentation: &QarPeerPresentation) -> Result<(), QarResult> {
+    if let Some(failure) = header_mismatch(
+        &raw const presentation.header,
+        QarStructureType::QAR_STRUCTURE_TYPE_PEER_PRESENTATION,
+        "QarPeerPresentation",
+    ) {
+        return Err(failure);
+    }
+    let mut next: *const QarStructureHeader = presentation.header.next.cast_const().cast();
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        #[cfg(qaros_device_identity)]
+        if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY {
+            // SAFETY: the type identifies the structure.
+            let identity = unsafe { &*next.cast::<QarPeerDeviceIdentity>() };
+            // SAFETY: the identity's strings are C strings or NULL.
+            let description = unsafe { check_device_identity(identity) }?;
+            note(format!("declared device {description}"));
+            next = header.next.cast_const().cast();
+            continue;
+        }
+        note(format!(
+            "ERROR unexpected extension type {} in QarPeerPresentation",
+            header.type_.0
+        ));
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+            "unexpected extension in QarPeerPresentation",
+        ));
+    }
+    Ok(())
+}
+
+/// The header's rules for a declared device: the category is desktop PC, server or camera
+/// (`QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED`), the device id is non-empty
+/// (`QAR_STATUS_ARGUMENT_NOT_SUPPORTED`). Returns its description for the log.
+///
+/// # Safety
+///
+/// The identity's strings are C strings or NULL.
+#[cfg(qaros_device_identity)]
+unsafe fn check_device_identity(identity: &QarPeerDeviceIdentity) -> Result<String, QarResult> {
+    let category = identity.category;
+    let declarable = category == QarDeviceCategory::QAR_DEVICE_CATEGORY_DESKTOP_PC
+        || category == QarDeviceCategory::QAR_DEVICE_CATEGORY_SERVER
+        || category == QarDeviceCategory::QAR_DEVICE_CATEGORY_CAMERA;
+    if !declarable {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED,
+            format!("category {} is not a source category", category.0),
+        ));
+    }
+    // SAFETY: forwarded to the caller.
+    let (device_id, family, name) = unsafe {
+        (
+            text_or_empty(identity.device_id),
+            text_or_empty(identity.device_family),
+            text_or_empty(identity.device_name),
+        )
+    };
+    if device_id.is_empty() {
+        return Err(invalid("QarPeerDeviceIdentity.device_id is required"));
+    }
+    Ok(format!(
+        "category={} id={device_id} family={family} name={name}",
+        category.0
+    ))
+}
+
+/// Starts an async onboard or rejoin of `runtime` on a thread of its own, as the runtime does,
+/// with the header's rules: one progress report, then the result callback exactly once, with
+/// `finish`'s outcome, or `QAR_STATUS_TIMEOUT` when the token is cancelled, times out or is
+/// destroyed, or the runtime is destroyed first (its destroy waits for the callback).
+fn start_runtime_call(
+    runtime: *mut QarRuntime,
+    token: *mut QarCancelToken,
+    progress: qar_progress_callback_t,
+    callback: unsafe extern "C" fn(QarResult, *const QarOnboardingId, *mut QarSession, *mut c_void),
+    user_state: *mut c_void,
+    name: &'static str,
+    finish: impl FnOnce() -> Result<([u8; 16], usize), QarResult> + Send + 'static,
+) -> QarResult {
+    let runtime_address = runtime as usize;
+    let token_address = token as usize;
+    let user_state_address = user_state as usize;
+    let (delay, ignores_cancel) = {
+        let mut guard = state::lock();
+        *guard
+            .pending_runtime_calls
+            .entry(runtime_address)
+            .or_default() += 1;
+        (
+            guard.onboard_async_delay,
+            guard.onboard_async_ignores_cancel,
+        )
+    };
+    // Not joined: the caller picks the outcome up later.
+    std::thread::spawn(move || {
+        if let Some(progress) = progress {
+            // SAFETY: the caller's callback and state, valid until the result callback.
+            unsafe {
+                progress(
+                    QarActionSeverity::QAR_ACTION_SEVERITY_INFO,
+                    50.0,
+                    c"stub async onboarding".as_ptr(),
+                    user_state_address as *mut c_void,
+                );
+            }
+        }
+        let watched_token = if ignores_cancel { 0 } else { token_address };
+        let (result, onboarding_id, session) =
+            match wait_for_runtime_call(delay, watched_token, runtime_address) {
+                Some(reason) => {
+                    note(format!("{name} ended early: {reason}"));
+                    (
+                        state::error(
+                            QarStatusCode::QAR_STATUS_TIMEOUT,
+                            format!("{name} {reason}"),
+                        ),
+                        [0; 16],
+                        0,
+                    )
+                }
+                None => match finish() {
+                    Ok((onboarding_id, session)) => (success(), onboarding_id, session),
+                    Err(failure) => (failure, [0; 16], 0),
+                },
+            };
+        let onboarding_id = QarOnboardingId {
+            data: onboarding_id,
+        };
+        // SAFETY: the caller's callback and user state; called once.
+        unsafe {
+            callback(
+                result,
+                &raw const onboarding_id,
+                session as *mut QarSession,
+                user_state_address as *mut c_void,
+            );
+        }
+        note(format!("{name} called back"));
+        let mut guard = state::lock();
+        if let Some(count) = guard.pending_runtime_calls.get_mut(&runtime_address) {
+            *count -= 1;
+        }
+    });
+    success()
+}
+
+/// Waits `delay`; ends early, with why, when the token (0 for none) is cancelled, times out or is
+/// destroyed, or the runtime is being destroyed.
+fn wait_for_runtime_call(
+    delay: Duration,
+    token_address: usize,
+    runtime_address: usize,
+) -> Option<&'static str> {
+    let deadline = Instant::now() + delay;
+    loop {
+        {
+            let guard = state::lock();
+            if guard.destroying_runtimes.contains(&runtime_address) {
+                return Some("ended by the runtime's destroy");
+            }
+            if token_address != 0 {
+                if guard.cancelled_tokens.contains(&token_address) {
+                    return Some("cancelled");
+                }
+                if token_timed_out(&guard, token_address) {
+                    return Some("timed out");
+                }
+                if guard.live_handles.get(&token_address) != Some(&CANCEL_TOKEN) {
+                    return Some("ended by its token's destroy");
+                }
             }
         }
         let now = Instant::now();
@@ -1160,6 +1562,21 @@ impl StubApi for Stub {
 
     unsafe fn qar_impl_runtime_handle_destroy(runtime: *mut QarRuntime) {
         let runtime_address = runtime as usize;
+        // As the header says: the destroy ends the runtime's async onboards and rejoins with
+        // QAR_STATUS_TIMEOUT and returns only after their callbacks have returned.
+        state::lock().destroying_runtimes.insert(runtime_address);
+        while state::lock()
+            .pending_runtime_calls
+            .get(&runtime_address)
+            .is_some_and(|count| *count > 0)
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        {
+            let mut guard = state::lock();
+            guard.destroying_runtimes.remove(&runtime_address);
+            guard.pending_runtime_calls.remove(&runtime_address);
+        }
         let sessions = live_handles_of(SESSION, |address| {
             // SAFETY: live session handle created by this stub.
             unsafe { session_value(address as *const QarSession) }
@@ -1170,6 +1587,7 @@ impl StubApi for Stub {
         }
         // SAFETY: runtime handles come from qar_impl_runtime_create.
         unsafe { destroy_handle::<RuntimeValue, QarRuntime>(runtime, RUNTIME) };
+        note("runtime destroyed".to_string());
     }
 
     unsafe fn qar_impl_cancel_token_create(token: *mut *mut QarCancelToken) -> QarResult {
@@ -1246,53 +1664,64 @@ impl StubApi for Stub {
         _cancel: *mut QarCancelToken,
         out_session: *mut *mut QarSession,
     ) -> QarResult {
-        if let Some(failure) = header_mismatch(
-            init.cast(),
-            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_REJOIN_INIT,
-            "QarRejoinInit",
-        ) {
+        // SAFETY: init is null or a QarRejoinInit whose chains are stamped structures.
+        if let Err(failure) = unsafe { check_rejoin(runtime, init) } {
             return failure;
         }
-        // SAFETY: header checked.
-        let init = unsafe { &*init };
-        if let Some(failure) = header_mismatch(
-            &raw const init.presentation.header,
-            QarStructureType::QAR_STRUCTURE_TYPE_PEER_PRESENTATION,
-            "QarPeerPresentation",
-        ) {
-            return failure;
+        if out_session.is_null() {
+            return invalid("out_session is NULL");
         }
-        if init.onboarding_id.data == [0; 16] {
-            return invalid("onboarding_id is zero");
-        }
-        // SAFETY: runtime comes from this stub.
-        if unsafe { runtime_is_ephemeral(runtime) } {
-            return ephemeral_refusal("qar_runtime_rejoin");
-        }
-        // SAFETY: the chain consists of stamped extension structures.
-        if let Err(failure) = unsafe {
-            validate_optional_extensions(
-                init.header.next.cast_const().cast(),
-                OptionalExtensions::Rejoin,
-            )
-        } {
-            return failure;
-        }
-        // SAFETY: runtime comes from this stub.
-        let Some(storage) = (unsafe { runtime_storage(runtime) }) else {
-            return invalid("runtime is not a live handle");
-        };
-        if !marker_path(&storage, &init.onboarding_id.data).exists() {
-            return state::error(
-                QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND,
-                "no persisted slot for this onboarding id",
-            );
-        }
-        // SAFETY: out_session is writable; presentation strings are valid.
+        // SAFETY: checked above; out_session is writable; presentation strings are valid.
         unsafe {
-            *out_session = create_session(runtime, init.onboarding_id.data, &init.presentation);
+            *out_session = create_session(
+                runtime,
+                (*init).onboarding_id.data,
+                &(*init).presentation,
+                false,
+            );
         };
         success()
+    }
+
+    unsafe fn qar_impl_runtime_rejoin_async(
+        runtime: *mut QarRuntime,
+        init: *const QarRejoinInit,
+        result_callback: qar_runtime_onboard_result_callback_t,
+        update_callback: qar_progress_callback_t,
+        user_state: *mut c_void,
+        cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(result_callback) = result_callback else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
+            );
+        };
+        // SAFETY: init is null or a QarRejoinInit whose chains are stamped structures.
+        if let Err(failure) = unsafe { check_rejoin(runtime, init) } {
+            return failure;
+        }
+        let runtime_address = runtime as usize;
+        let init_address = init as usize;
+        start_runtime_call(
+            runtime,
+            cancel,
+            update_callback,
+            result_callback,
+            user_state,
+            "rejoin_async",
+            move || {
+                let runtime = runtime_address as *mut QarRuntime;
+                let init = init_address as *const QarRejoinInit;
+                // SAFETY: the caller keeps init alive until the result callback has run.
+                let (onboarding_id, presentation) =
+                    unsafe { ((*init).onboarding_id.data, &(*init).presentation) };
+                // SAFETY: the runtime's destroy waits for this call, so it is live.
+                let session =
+                    unsafe { create_session(runtime, onboarding_id, presentation, false) };
+                Ok((onboarding_id, session as usize))
+            },
+        )
     }
 
     unsafe fn qar_impl_runtime_onboard(
@@ -1304,42 +1733,20 @@ impl StubApi for Stub {
         out_onboarding_id: *mut QarOnboardingId,
         out_session: *mut *mut QarSession,
     ) -> QarResult {
-        if let Some(failure) = header_mismatch(
-            init.cast(),
-            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_INIT,
-            "QarOnboardInit",
-        ) {
-            return failure;
-        }
-        // SAFETY: header checked.
-        let init = unsafe { &*init };
         if out_onboarding_id.is_null() || out_session.is_null() {
             return invalid("out parameters must not be NULL");
         }
-        // SAFETY: runtime comes from this stub.
-        let Some(storage) = (unsafe { runtime_storage(runtime) }) else {
-            return invalid("runtime is not a live handle");
+        // SAFETY: init is null or a QarOnboardInit whose chains are stamped structures.
+        let plan = match unsafe { check_onboard(runtime, init) } {
+            Ok(plan) => plan,
+            Err(failure) => return failure,
         };
-        // SAFETY: the chain consists of stamped extension structures.
-        if let Err(failure) =
-            unsafe { validate_onboard_chain(init.header.next.cast_const().cast()) }
-        {
-            return failure;
-        }
 
         if let Some(progress) = on_progress {
             let state_address = progress_state as usize;
-            let progress_address = progress as usize;
             run_on_library_thread(move || {
-                // SAFETY: the caller's progress callback and state, valid
-                // while the blocking call runs.
-                let progress = unsafe {
-                    std::mem::transmute::<
-                        usize,
-                        unsafe extern "C" fn(QarActionSeverity, f32, *const c_char, *mut c_void),
-                    >(progress_address)
-                };
-                // SAFETY: as above; the message is a static C string.
+                // SAFETY: the caller's progress callback and state, valid while the blocking
+                // call runs; the message is a static C string.
                 unsafe {
                     progress(
                         QarActionSeverity::QAR_ACTION_SEVERITY_DONE,
@@ -1351,38 +1758,62 @@ impl StubApi for Stub {
             });
         }
 
-        // SAFETY: validated as a stamped chain above.
-        let mode = unsafe { (*init.header.next.cast_const().cast::<QarStructureHeader>()).type_ };
-        // A local app and a runtime with ephemeral storage persist nothing: the zero id.
-        // SAFETY: runtime comes from this stub.
-        let ephemeral = unsafe { runtime_is_ephemeral(runtime) };
-        if mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT || ephemeral {
-            // SAFETY: out-pointers checked non-null; presentation strings valid.
-            unsafe {
-                (*out_onboarding_id).data = [0; 16];
-                *out_session = create_session(runtime, [0; 16], &init.presentation);
+        // SAFETY: init was checked; the runtime is live.
+        match unsafe { finish_onboard(runtime, &(*init).presentation, &plan) } {
+            Ok((onboarding_id, session)) => {
+                // SAFETY: out-pointers checked non-null.
+                unsafe {
+                    (*out_onboarding_id).data = onboarding_id;
+                    *out_session = session;
+                }
+                success()
             }
-            return success();
+            Err(failure) => failure,
         }
+    }
 
-        let onboarding_id = fresh_identity();
-        let marker = marker_path(&storage, &onboarding_id);
-        let persisted = marker
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(&marker, b"qaros-stub onboarding slot\n"));
-        if let Err(io_error) = persisted {
+    unsafe fn qar_impl_runtime_onboard_async(
+        runtime: *mut QarRuntime,
+        init: *const QarOnboardInit,
+        result_callback: qar_runtime_onboard_result_callback_t,
+        update_callback: qar_progress_callback_t,
+        user_state: *mut c_void,
+        cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(result_callback) = result_callback else {
             return state::error(
-                QarStatusCode::QAR_STATUS_ONBOARDING_FAILED,
-                format!("cannot persist {}: {io_error}", marker.display()),
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
             );
-        }
-        // SAFETY: out-pointers checked non-null; presentation strings valid.
-        unsafe {
-            (*out_onboarding_id).data = onboarding_id;
-            *out_session = create_session(runtime, onboarding_id, &init.presentation);
-        }
-        success()
+        };
+        // SAFETY: init is null or a QarOnboardInit whose chains are stamped structures.
+        let plan = match unsafe { check_onboard(runtime, init) } {
+            Ok(plan) => plan,
+            Err(failure) => return failure,
+        };
+        let runtime_address = runtime as usize;
+        let init_address = init as usize;
+        start_runtime_call(
+            runtime,
+            cancel,
+            update_callback,
+            result_callback,
+            user_state,
+            "onboard_async",
+            move || {
+                let init = init_address as *const QarOnboardInit;
+                // SAFETY: the caller keeps init alive until the result callback has run; the
+                // runtime's destroy waits for this call, so it is live.
+                unsafe {
+                    finish_onboard(
+                        runtime_address as *mut QarRuntime,
+                        &(*init).presentation,
+                        &plan,
+                    )
+                }
+                .map(|(onboarding_id, session)| (onboarding_id, session as usize))
+            },
+        )
     }
 
     unsafe fn qar_impl_runtime_forget(
@@ -1440,13 +1871,25 @@ impl StubApi for Stub {
             return failure;
         }
         // SAFETY: session comes from this stub.
-        if unsafe { session_value(session) }.is_none() || out_invite.is_null() {
-            return invalid("session or out_invite invalid");
+        let Some(local_app) = (unsafe { session_value(session) }).map(|value| value.local_app)
+        else {
+            return invalid("session invalid");
+        };
+        if out_invite.is_null() {
+            return invalid("out_invite invalid");
         }
         // SAFETY: header checked; app_tag is a C string or NULL.
         let app_tag = unsafe { text_or_empty((*init).app_tag) };
         if let Err(failure) = validate_app_tag(&app_tag) {
             return failure;
+        }
+        // As the runtime: the init is checked first, then the hub refuses a session it did not
+        // enroll as a local app.
+        if !local_app {
+            return state::error(
+                QarStatusCode::QAR_STATUS_ONBOARDING_INVITE_REFUSED,
+                "co-process invites are minted only for a local app",
+            );
         }
         note(format!("invite app_tag={app_tag}"));
         // SAFETY: out_invite is writable.
@@ -1554,6 +1997,294 @@ impl StubApi for Stub {
         }
         // SAFETY: out_method is writable.
         unsafe { *out_method = QarOnboardingMethod::QAR_ONBOARDING_METHOD_PAKE };
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_runtime_create_member_hub_invitation(
+        runtime: *mut QarRuntime,
+        init: *const QarMemberHubInvitationInit,
+        _cancel: *mut QarCancelToken,
+        out_invitation: *mut *mut QarMemberHubInvitation,
+    ) -> QarResult {
+        if let Some(failure) = header_mismatch(
+            init.cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT,
+            "QarMemberHubInvitationInit",
+        ) {
+            return failure;
+        }
+        if out_invitation.is_null() {
+            return invalid("out_invitation is NULL");
+        }
+        // SAFETY: runtime comes from this stub.
+        if unsafe { runtime_storage(runtime) }.is_none() {
+            return invalid("runtime is not a live handle");
+        }
+        // SAFETY: header checked.
+        let init = unsafe { &*init };
+        // SAFETY: label is a C string or NULL.
+        let label = unsafe { text_or_empty(init.label) };
+        let known_permissions = 0xF;
+        if init.lifetime_seconds > 604_800
+            || init.max_uses > 64
+            || label.len() > 64
+            || init.permissions & !known_permissions != 0
+        {
+            return invalid("a member-hub invitation field is out of range");
+        }
+        // SAFETY: the chain consists of stamped extension structures.
+        let app_grant_tag =
+            match unsafe { member_invitation_grant(init.header.next.cast_const().cast()) } {
+                Ok(tag) => tag,
+                Err(failure) => return failure,
+            };
+        let lifetime = if init.lifetime_seconds == 0 {
+            86_400
+        } else {
+            init.lifetime_seconds
+        };
+        let value = MemberInvitationValue {
+            expires_unix: unix_now() + i64::from(lifetime),
+            max_uses: init.max_uses.max(1),
+            permissions: if init.permissions == 0 {
+                0xB
+            } else {
+                init.permissions
+            },
+            app_grant_tag,
+            label,
+        };
+        note(format!(
+            "member invitation lifetime={lifetime} max_uses={} permissions={:#x} app_grant={}",
+            value.max_uses,
+            value.permissions,
+            value.app_grant_tag.as_deref().unwrap_or("-")
+        ));
+        // SAFETY: out_invitation is writable.
+        unsafe { *out_invitation = new_handle(value, MEMBER_INVITATION) };
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_runtime_join_hub_as_member(
+        runtime: *mut QarRuntime,
+        init: *const QarJoinHubAsMemberInit,
+        on_progress: qar_progress_callback_t,
+        progress_state: *mut c_void,
+        _cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        if let Some(failure) = header_mismatch(
+            init.cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT,
+            "QarJoinHubAsMemberInit",
+        ) {
+            return failure;
+        }
+        // SAFETY: runtime comes from this stub.
+        if unsafe { runtime_storage(runtime) }.is_none() {
+            return invalid("runtime is not a live handle");
+        }
+        // SAFETY: header checked.
+        let init = unsafe { &*init };
+        let live =
+            state::lock().live_handles.get(&(init.invitation as usize)) == Some(&MEMBER_INVITATION);
+        if !live {
+            return invalid("QarJoinHubAsMemberInit.invitation is missing or not a valid handle");
+        }
+        // SAFETY: checked live above.
+        let Some(invitation) = (unsafe {
+            handle_value::<MemberInvitationValue, QarMemberHubInvitation>(
+                init.invitation,
+                MEMBER_INVITATION,
+            )
+        }) else {
+            return invalid("QarJoinHubAsMemberInit.invitation is not a valid handle");
+        };
+        if invitation.expires_unix < unix_now() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_MEMBER_INVITATION_EXPIRED,
+                "the member-hub invitation expired",
+            );
+        }
+        if let Some(progress) = on_progress {
+            let state_address = progress_state as usize;
+            run_on_library_thread(move || {
+                // SAFETY: the caller's progress callback and state, valid while the blocking
+                // call runs; the message is a static C string.
+                unsafe {
+                    progress(
+                        QarActionSeverity::QAR_ACTION_SEVERITY_DONE,
+                        100.0,
+                        c"stub hub joined as member".as_ptr(),
+                        state_address as *mut c_void,
+                    );
+                }
+            });
+        }
+        note(format!(
+            "joined as member hub_start_timeout_ms={} restart_timeout_ms={}",
+            init.hub_start_timeout_ms, init.restart_timeout_ms
+        ));
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_member_hub_invitation_serialized_size(
+        invitation: *const QarMemberHubInvitation,
+        out_size: *mut usize,
+    ) -> QarResult {
+        // SAFETY: invitation is null or a handle from this stub.
+        let Some(value) = (unsafe {
+            handle_value::<MemberInvitationValue, QarMemberHubInvitation>(
+                invitation,
+                MEMBER_INVITATION,
+            )
+        }) else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "invalid invitation handle",
+            );
+        };
+        if out_size.is_null() {
+            return invalid("out_size is NULL");
+        }
+        // SAFETY: out_size is writable.
+        unsafe { *out_size = value.to_wire().len() };
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_member_hub_invitation_serialize(
+        invitation: *const QarMemberHubInvitation,
+        out_buffer: *mut u8,
+        buffer_size: usize,
+        out_bytes_written: *mut usize,
+    ) -> QarResult {
+        // SAFETY: invitation is null or a handle from this stub.
+        let Some(value) = (unsafe {
+            handle_value::<MemberInvitationValue, QarMemberHubInvitation>(
+                invitation,
+                MEMBER_INVITATION,
+            )
+        }) else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "invalid invitation handle",
+            );
+        };
+        if out_bytes_written.is_null() {
+            return invalid("out_bytes_written is NULL");
+        }
+        let wire = value.to_wire();
+        // SAFETY: out_bytes_written is writable.
+        unsafe { *out_bytes_written = wire.len() };
+        if out_buffer.is_null() || buffer_size < wire.len() {
+            return invalid("buffer too small");
+        }
+        // SAFETY: the buffer holds buffer_size >= wire.len() bytes.
+        unsafe { ptr::copy_nonoverlapping(wire.as_ptr(), out_buffer, wire.len()) };
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_member_hub_invitation_deserialize(
+        wire_data: *const u8,
+        wire_data_size: usize,
+        out_invitation: *mut *mut QarMemberHubInvitation,
+    ) -> QarResult {
+        if wire_data.is_null() || out_invitation.is_null() {
+            return invalid("a required pointer is NULL");
+        }
+        // SAFETY: the caller's bytes, readable for their size.
+        let wire = unsafe { std::slice::from_raw_parts(wire_data, wire_data_size) };
+        let Some(value) = MemberInvitationValue::from_wire(wire) else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_MEMBER_INVITATION_INVALID,
+                "the bytes are not a member-hub invitation",
+            );
+        };
+        // SAFETY: out_invitation is writable.
+        unsafe { *out_invitation = new_handle(value, MEMBER_INVITATION) };
+        success()
+    }
+
+    #[cfg(qaros_member_hubs)]
+    unsafe fn qar_impl_member_hub_invitation_handle_destroy(
+        invitation: *mut QarMemberHubInvitation,
+    ) {
+        // SAFETY: NULL is ignored; otherwise a handle from this stub.
+        unsafe {
+            destroy_handle::<MemberInvitationValue, QarMemberHubInvitation>(
+                invitation,
+                MEMBER_INVITATION,
+            );
+        };
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_update_device_identity(
+        session: *mut QarSession,
+        identity: *const QarPeerDeviceIdentity,
+    ) -> QarResult {
+        if let Some(failure) = header_mismatch(
+            identity.cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY,
+            "QarPeerDeviceIdentity",
+        ) {
+            return failure;
+        }
+        // SAFETY: session comes from this stub.
+        if unsafe { session_value(session) }.is_none() {
+            return invalid("session is not a live handle");
+        }
+        // SAFETY: header checked; the identity's strings are C strings or NULL.
+        match unsafe { check_device_identity(&*identity) } {
+            Ok(description) => {
+                note(format!("updated device {description}"));
+                success()
+            }
+            Err(failure) => failure,
+        }
+    }
+
+    unsafe fn qar_impl_onboarding_invite_get_code(
+        invite: *const QarOnboardingInvite,
+        out_buffer: *mut c_char,
+        buffer_size: usize,
+        out_length: *mut usize,
+    ) -> QarResult {
+        if !out_buffer.is_null() && buffer_size > 0 {
+            // SAFETY: the buffer holds at least one byte.
+            unsafe { *out_buffer = 0 };
+        }
+        // SAFETY: invite comes from this stub.
+        let Some(value) =
+            (unsafe { handle_value::<InviteValue, QarOnboardingInvite>(invite, INVITE) })
+        else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "invite is not a live handle",
+            );
+        };
+        // Every stub invite is a PAKE invite; its code names the invite as the runtime's
+        // addressed codes do.
+        let code = format!("qar-code:stub-{}", value.expires_unix);
+        if !out_length.is_null() {
+            // SAFETY: out_length is writable.
+            unsafe { *out_length = code.len() };
+        }
+        if out_buffer.is_null() {
+            return success();
+        }
+        if buffer_size <= code.len() {
+            return invalid("buffer too small for the code");
+        }
+        // SAFETY: the buffer holds buffer_size > code.len() bytes.
+        unsafe {
+            ptr::copy_nonoverlapping(code.as_ptr().cast::<c_char>(), out_buffer, code.len());
+            *out_buffer.add(code.len()) = 0;
+        }
         success()
     }
 
@@ -2959,8 +3690,10 @@ enum OptionalExtensions {
 }
 
 /// Walks the rest of a chain: the adapter (`QarGraphicsDeviceId`, logged), a
-/// planned peer id after an onboarding mode, and the hub address after a
-/// code. Anything else is an error.
+/// planned peer id after a code or invite, the hub address after a code, and
+/// the app tag and remote-app grant after the local-app mode. Any of these with
+/// another onboarding mode is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as in the
+/// runtime; anything else is an error.
 ///
 /// # Safety
 ///
@@ -2980,6 +3713,58 @@ unsafe fn validate_optional_extensions(
             return Err(invalid(
                 "a local app enrollment takes no hub address and no peer id",
             ));
+        }
+        if extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT
+            && allowed == OptionalExtensions::AfterInviteMode
+        {
+            return Err(invalid(
+                "QarOnboardHostExt is only supported together with QarOnboardCodeExt",
+            ));
+        }
+        if extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT
+            && allowed != OptionalExtensions::Rejoin
+        {
+            // SAFETY: the type identifies the structure.
+            let peer_id_extension = unsafe { &*next.cast::<QarOnboardPeerIdExt>() };
+            if peer_id_extension.peer_id.data == [0; 16] {
+                return Err(invalid("QarOnboardPeerIdExt.peer_id is zero"));
+            }
+            note(format!(
+                "planned peer id={}",
+                hex(&peer_id_extension.peer_id.data)
+            ));
+        }
+        if extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT
+            && allowed != OptionalExtensions::Rejoin
+        {
+            if allowed != OptionalExtensions::AfterLocalAppMode {
+                return Err(invalid(
+                    "QarOnboardLocalAppTagExt applies only with QarOnboardLocalAppExt",
+                ));
+            }
+            // SAFETY: the type identifies the structure.
+            let tag_extension = unsafe { &*next.cast::<QarOnboardLocalAppTagExt>() };
+            // SAFETY: app_tag is a C string or NULL.
+            let app_tag = unsafe { text_or_empty(tag_extension.app_tag) };
+            validate_app_tag(&app_tag)?;
+            note(format!("local app tag={app_tag}"));
+            next = header.next.cast_const().cast();
+            continue;
+        }
+        #[cfg(qaros_member_hubs)]
+        if extension_type
+            == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT
+            && allowed != OptionalExtensions::Rejoin
+        {
+            if allowed != OptionalExtensions::AfterLocalAppMode {
+                return Err(invalid(
+                    "QarOnboardRemoteAppGrantExt applies only with QarOnboardLocalAppExt",
+                ));
+            }
+            // SAFETY: the type identifies the structure.
+            unsafe { check_remote_app_grant(&*next.cast::<QarOnboardRemoteAppGrantExt>()) }?;
+            next = header.next.cast_const().cast();
+            continue;
         }
         let is_adapter =
             extension_type == QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID;
@@ -3016,6 +3801,74 @@ fn adapter_report(adapter: &QarGraphicsDeviceId) -> String {
     } else {
         format!("adapter uuid={}", hex(&adapter.uuid))
     }
+}
+
+/// The remote-app grant chained after the local-app mode: its invitation must be a live
+/// member-hub invitation of this stub; the grant's tag is logged.
+///
+/// # Safety
+///
+/// The extension's invitation is null or a pointer the caller passed as a handle.
+#[cfg(qaros_member_hubs)]
+unsafe fn check_remote_app_grant(grant: &QarOnboardRemoteAppGrantExt) -> Result<(), QarResult> {
+    if grant.invitation.is_null() {
+        return Err(invalid(
+            "QarOnboardRemoteAppGrantExt.invitation is required",
+        ));
+    }
+    // SAFETY: the invitation is a handle from this stub, else refused.
+    let Some(invitation) = (unsafe {
+        handle_value::<MemberInvitationValue, QarMemberHubInvitation>(
+            grant.invitation,
+            MEMBER_INVITATION,
+        )
+    }) else {
+        return Err(invalid(
+            "QarOnboardRemoteAppGrantExt.invitation is not a valid handle",
+        ));
+    };
+    note(format!(
+        "local app remote app grant tag={}",
+        invitation.app_grant_tag.as_deref().unwrap_or("-")
+    ));
+    Ok(())
+}
+
+/// The app grant chained into a `QarMemberHubInvitationInit`, validated; anything else chained
+/// is an error.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped extension structures.
+#[cfg(qaros_member_hubs)]
+unsafe fn member_invitation_grant(
+    mut next: *const QarStructureHeader,
+) -> Result<Option<String>, QarResult> {
+    let mut grant = None;
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        if header.type_
+            != QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT
+        {
+            note(format!(
+                "ERROR unexpected extension type {} in QarMemberHubInvitationInit",
+                header.type_.0
+            ));
+            return Err(state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "unexpected extension in QarMemberHubInvitationInit",
+            ));
+        }
+        // SAFETY: the type identifies the structure.
+        let extension = unsafe { &*next.cast::<QarMemberHubInvitationAppGrantExt>() };
+        // SAFETY: app_tag is a C string or NULL.
+        let app_tag = unsafe { text_or_empty(extension.app_tag) };
+        validate_app_tag(&app_tag)?;
+        grant = Some(app_tag);
+        next = header.next.cast_const().cast();
+    }
+    Ok(grant)
 }
 
 /// The app tag rules of the header: non-empty printable ASCII, no space at either end, at most
@@ -3125,24 +3978,12 @@ unsafe fn validate_onboard_chain(next: *const QarStructureHeader) -> Result<(), 
             "local app approval_timeout_ms={}",
             local_app_extension.approval_timeout_ms
         ));
-        let mut rest: *const QarStructureHeader =
-            local_app_extension.header.next.cast_const().cast();
-        // SAFETY: forwarded to the caller.
-        if !rest.is_null()
-            && unsafe { (*rest).type_ }
-                == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT
-        {
-            // SAFETY: the type identifies the structure.
-            let tag_extension = unsafe { &*rest.cast::<QarOnboardLocalAppTagExt>() };
-            // SAFETY: app_tag is a C string or NULL.
-            let app_tag = unsafe { text_or_empty(tag_extension.app_tag) };
-            validate_app_tag(&app_tag)?;
-            note(format!("local app tag={app_tag}"));
-            rest = tag_extension.header.next.cast_const().cast();
-        }
         // SAFETY: forwarded to the caller.
         return unsafe {
-            validate_optional_extensions(rest, OptionalExtensions::AfterLocalAppMode)
+            validate_optional_extensions(
+                local_app_extension.header.next.cast_const().cast(),
+                OptionalExtensions::AfterLocalAppMode,
+            )
         };
     }
     note(format!(
@@ -3657,6 +4498,22 @@ pub unsafe extern "C" fn qar_stub_set_peer_version_id(peer: *const u8, version_i
 #[unsafe(no_mangle)]
 pub extern "C" fn qar_stub_set_try_begin_frame_delay_ms(milliseconds: u64) {
     state::lock().try_begin_frame_delay = Duration::from_millis(milliseconds);
+}
+
+/// Delay before an async onboard or rejoin started from now on creates its session and calls back
+/// (0 by default); cancellation, timeout, the token's or the runtime's destroy end it early with
+/// `QAR_STATUS_TIMEOUT`.
+#[unsafe(no_mangle)]
+pub extern "C" fn qar_stub_set_onboard_async_delay_ms(milliseconds: u64) {
+    state::lock().onboard_async_delay = Duration::from_millis(milliseconds);
+}
+
+/// An async onboard or rejoin started from now on ignores its cancel token and delivers its
+/// session after the delay, as a call finishing while it is cancelled (the header allows it). The
+/// runtime's destroy still ends it.
+#[unsafe(no_mangle)]
+pub extern "C" fn qar_stub_set_onboard_async_ignores_cancel(ignores: u8) {
+    state::lock().onboard_async_ignores_cancel = ignores != 0;
 }
 
 /// Delay before an async render sender creation creates the sender and calls

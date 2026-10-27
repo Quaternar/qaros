@@ -118,7 +118,7 @@ pub fn onboard_into(
             &PeerPresentation {
                 display_name: Some(display_name.to_string()),
                 app_version: Some("e2e".to_string()),
-                custom_info: None,
+                ..PeerPresentation::default()
             },
             &BlockingOptions {
                 progress: None,

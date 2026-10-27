@@ -163,8 +163,8 @@ Design rules, following the SDK's API conventions:
   `qar_peer_spec_get_presence` through `library.raw_api()` with the session's `as_raw()`.
 - Hands, gestures, world anchors and the other areas the [coverage table](#coverage) lists as raw
   only are reached through `library.raw_api()`, the `qaros_sys::QarApi` table, with the C handle
-  of a safe value: `as_raw()` on `Runtime`, `Session`, `RenderSender`, `CancelToken` and
-  `OnboardingInvite`. Taking the pointer is safe; using it is `unsafe`: it is valid while the safe
+  of a safe value: `as_raw()` on `Runtime`, `Session`, `RenderSender`, `CancelToken`,
+  `OnboardingInvite` and `MemberHubInvitation`. Taking the pointer is safe; using it is `unsafe`: it is valid while the safe
   value lives, the safe value destroys it (never the caller), and the session's threading rules
   apply.
 
@@ -177,13 +177,16 @@ what the safe `qaros` API covers, what is reached only through `library.raw_api(
 the C# binding (`qar-streaming-sharp/src`, at the time of writing) has it in its public API. Raw
 only means the function is in `qaros_sys::QarApi` for the header the bindings are generated
 from, called with the `as_raw()` handle of the safe value it takes (a `Session`, `Runtime`,
-`RenderSender`, `CancelToken` or `OnboardingInvite`).
+`RenderSender`, `CancelToken`, `OnboardingInvite` or `MemberHubInvitation`).
 
 \* These bindings are generated from the public header in this repository
 (`qar-streaming-c/include/qar_streaming.h`), which declares the functions marked \* (peer
 presence, role, category and device identity, member hubs, the Android Java VM) and the types
 of the render sender's colour and depth declarations. A runtime without those functions, such
-as 0.9.0-dev.2916, does not load.
+as 0.9.0-dev.2916, does not load. Bindings from such a header build without the safe member-hub
+functions (`MemberHubInvitation` then has no value, so `OnboardExtensions::remote_app_grant`
+stays `None`) and without `Session::update_device_identity`; a set
+`PeerPresentation::device_identity` is `Error::InvalidArgument` there.
 
 | Area | Safe in Rust | Raw only | C# has it |
 | --- | --- | --- | --- |
@@ -193,14 +196,16 @@ as 0.9.0-dev.2916, does not load.
 | Error handling | `qaros::Error` with function, `StatusCode`, message and wrapped causes (`has_code`, `has_cause`) | the `qar_result_*` constructors and predicates, `qar_error_wrap_result`, `qar_result_log_if_error` | yes (`ResultInfo`, `StatusCode`) |
 | Cancellation | `CancelToken` with or without a timeout, `is_timed_out`, `CancelHandle` from another thread | `qar_cancel_token_cancel_after` | partly: a `CancellationToken` bridged to an internal native token; no timeout token or timeout query |
 | Runtime | `Runtime` | | yes |
-| Onboarding: pairing code, remote Hub, invite, local app; rejoin; forget | blocking: `Runtime::onboard`, `rejoin`, `forget`, `OnboardMethod`, `OnboardingInvite`, the adapter extension | `qar_session_request_onboarding_codes`, `qar_onboarding_invite_get_code`, the planned peer id extension | yes |
-| Onboarding with a declared device | | `qar_runtime_onboard` with a `QarPeerDeviceIdentity` \* chained into the presentation; the session it yields is a raw `QarSession`, not a `Session`, so everything after it is raw too | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
-| Member hubs | | `qar_runtime_create_member_hub_invitation`, `qar_runtime_join_hub_as_member`, `qar_member_hub_invitation_serialize`, `_serialized_size`, `_deserialize`, `_handle_destroy` \* | yes |
-| Async calls | `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | `qar_runtime_onboard_async`, `qar_runtime_rejoin_async`, `qar_session_request_onboarding_invite_async`, `qar_session_invite_target_app_async`, `qar_session_kill_target_app_async`, `qar_render_sender_begin_frame_async` | yes (`Task` forms) |
+| Onboarding: pairing code, remote Hub, invite, local app and its app tag; rejoin; forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, the planned peer id, re-enrolling a slot, a remote-app grant \*), `rejoin`, `forget`, `OnboardMethod`, `RuntimeConfig::ephemeral_storage` | | yes |
+| Co-process invites and the invite handle | `Session::request_onboarding_invite`, `OnboardingInvite` (serialize, deserialize, expiry, method, `code`) | `qar_onboarding_invite_handle_is_valid` | yes |
+| Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` \* | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
+| Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` \* | | yes |
+| Async calls | `Runtime::start_onboard`, `Runtime::start_rejoin` with `PendingOnboard`; `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | `qar_session_request_onboarding_invite_async`, `qar_session_invite_target_app_async`, `qar_session_kill_target_app_async`, `qar_render_sender_begin_frame_async` | yes (`Task` forms) |
 | Session | `Session::id`, `Session::graphics_adapter` | `qar_session_find_render_target` | yes |
+| Session lifecycle | `Session::lifecycle`, `Session::subscribe_lifecycle`, `SessionLifecycle` | | yes |
 | Target apps | | invite and kill a target app, `qar_target_app_connection_string_*` | yes |
 | Peers: list, own spec, display name, updates | `Session::peers`, `my_peer`, `set_display_name`, `subscribe_peer_updates`; `PeerInfo` with the app state and `is_target_app` | | yes |
-| Peers: presence, role, category, device identity | | `qar_peer_spec_get_presence`, `_get_role`, `_get_category`, `_get_device_id`, `_get_device_family`, `_get_device_name`, `qar_peer_update_device_identity` \* | yes |
+| Peers: presence, role, category, device identity | | `qar_peer_spec_get_presence`, `_get_role`, `_get_category`, `_get_device_id`, `_get_device_family`, `_get_device_name` \* | yes |
 | Render requests | `Session::subscribe_render_requests`, `RenderRequest` | | yes |
 | CPU render sender | creation (blocking and polled), layout, begin, try-begin, `CpuFrame`, show | | yes |
 | Vulkan render sender | feature `vulkan`: `create_vulkan_render_sender`, `VulkanFrame` | | yes |
@@ -304,10 +309,11 @@ your user. A Hub elsewhere needs its host and port, `HubAddress` in `OnboardMeth
 runtime, `onboarding_and_rejoin.primary-onboarding-id.txt` and
 `onboarding_and_rejoin.sibling-onboarding-id.txt`.
 
-The pairing code comes from a Hub onboarding screen when one shows it, or from an invite that an
-already onboarded session mints: `qar_session_request_onboarding_invite`
-(`Session::request_onboarding_invite`), then `qar_onboarding_invite_get_code` for its code text,
-which the safe API leaves to `library.raw_api()` with the invite's `as_raw()`.
+The pairing code comes from a Hub onboarding screen when one shows it, or from the Hub's
+operators, who mint pairing codes and addressed codes (`qar-code:...`); an app cannot mint one.
+`OnboardingInvite::code` (`qar_onboarding_invite_get_code`) reads the code text of a pairing-code
+invite. A local app mints co-process invites instead (`Session::request_onboarding_invite`), for a
+process it starts on the same PC, which onboards with `OnboardMethod::Invite`.
 
 `vulkan_cube` ports the C `vulkan_cube` source app:
 

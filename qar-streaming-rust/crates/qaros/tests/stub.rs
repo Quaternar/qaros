@@ -11,9 +11,10 @@ use std::time::{Duration, Instant};
 
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
-    GraphicsAdapter, GuiPanelConfig, GuiPanelState, HubAddress, Library, OnboardMethod, OwnedFrame,
-    PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, SessionChangeCause,
-    SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
+    GraphicsAdapter, GuiPanelConfig, GuiPanelState, HubAddress, Library, OnboardExtensions,
+    OnboardMethod, OnboardingMethod, OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose,
+    RuntimeConfig, SessionChangeCause, SessionLifecycleState, ShowParams, StatusCode, Vec3,
+    ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -26,6 +27,8 @@ mod async_create;
 #[cfg(qaros_d3d11)]
 #[path = "stub/d3d11_path.rs"]
 mod d3d11_path;
+#[path = "stub/onboarding.rs"]
+mod onboarding;
 #[path = "stub/raw_handles.rs"]
 mod raw_handles;
 #[cfg(feature = "vulkan")]
@@ -590,7 +593,7 @@ fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
         .expect("primary runtime");
     let session = primary
         .onboard(
-            &code("ABCD-EFGH"),
+            &local_app(),
             &PeerPresentation::default(),
             &BlockingOptions::default(),
         )
@@ -604,6 +607,11 @@ fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
         vec!["invite app_tag=companion.examples.qaros".to_string()]
     );
     assert!(invite.expires_unix().expect("expiry") > 0);
+    assert_eq!(invite.method().expect("method"), OnboardingMethod::Pake);
+    assert!(
+        invite.code().expect("code").starts_with("qar-code:"),
+        "a pairing-code invite has its code text"
+    );
     let wire_bytes = invite.serialize().expect("serialize");
     drop(invite);
 
@@ -644,7 +652,7 @@ fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
 }
 
 #[test]
-fn a_co_process_invite_needs_a_valid_app_tag() {
+fn only_a_local_app_gets_a_co_process_invite() {
     let fixture = Fixture::new();
     let library = load_stub();
     let runtime = library
@@ -658,7 +666,49 @@ fn a_co_process_invite_needs_a_valid_app_tag() {
         )
         .expect("onboard")
         .session;
-    for refused_tag in ["", " padded", "member/companion"] {
+    let refused = session
+        .request_onboarding_invite("companion.examples.qaros", &BlockingOptions::default())
+        .expect_err("a session that joined with a code");
+    assert!(
+        refused.has_code(StatusCode::ONBOARDING_INVITE_REFUSED),
+        "{refused}"
+    );
+    // The tag is checked before the hub is asked.
+    let invalid_tag = session
+        .request_onboarding_invite("", &BlockingOptions::default())
+        .expect_err("an empty tag");
+    assert!(
+        invalid_tag.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED),
+        "{invalid_tag}"
+    );
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_co_process_invite_needs_a_valid_app_tag() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &local_app(),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let too_long = "a".repeat(257);
+    for refused_tag in [
+        "",
+        " padded",
+        "padded ",
+        "tab	here",
+        "member/companion",
+        &too_long,
+    ] {
         let refused = session
             .request_onboarding_invite(refused_tag, &BlockingOptions::default())
             .expect_err("an invalid app tag");
@@ -739,6 +789,61 @@ fn a_local_app_tag_is_chained_after_the_mode_and_validated() {
         refused.has_code(StatusCode::ARGUMENT_NOT_SUPPORTED),
         "{refused}"
     );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_planned_peer_id_is_chained_after_the_adapter_and_refused_where_the_hub_assigns_it() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let planned = PeerId([0x5a; 16]);
+    let onboarded = runtime
+        .onboard_with(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &OnboardExtensions {
+                adapter: Some(GraphicsAdapter::Uuid([3; 16])),
+                peer_id: Some(planned),
+                ..OnboardExtensions::default()
+            },
+            &BlockingOptions::default(),
+        )
+        .expect("onboard with an adapter and a planned peer id");
+    drop(onboarded.session);
+    let calls = fixture.control.calls();
+    let adapter = position_of(&calls, &format!("adapter uuid={}", "03".repeat(16)));
+    let peer_id = position_of(&calls, &format!("planned peer id={}", "5a".repeat(16)));
+    assert!(adapter < peer_id, "{calls:?}");
+
+    for (method, extensions) in [
+        (
+            code("ABCD-EFGH"),
+            OnboardExtensions {
+                peer_id: Some(PeerId::ZERO),
+                ..OnboardExtensions::default()
+            },
+        ),
+        (
+            local_app(),
+            OnboardExtensions {
+                peer_id: Some(planned),
+                ..OnboardExtensions::default()
+            },
+        ),
+    ] {
+        let refused = runtime
+            .onboard_with(
+                &method,
+                &PeerPresentation::default(),
+                &extensions,
+                &BlockingOptions::default(),
+            )
+            .expect_err("refused before the call");
+        assert!(matches!(refused, Error::InvalidArgument(_)), "{refused}");
+    }
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 

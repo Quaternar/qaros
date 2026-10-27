@@ -125,8 +125,9 @@ are missing), so bindings from a newer header do not load an older runtime.
 - `QarApi::release_runtime` calls `qar_impl_runtime_destroy` when the bindings declare it,
   else `qar_impl_runtime_handle_destroy`; `RUNTIME_RELEASE_SYMBOL` names the one in use.
 - A raw-only call takes the C handle of a safe value: `as_raw()` on `Runtime`, `Session`,
-  `RenderSender`, `CancelToken` and `OnboardingInvite`. Taking the pointer is safe and using it
-  `unsafe`; the safe value keeps owning it, so raw code never destroys it. A new type that owns
+  `RenderSender`, `CancelToken`, `OnboardingInvite` and `MemberHubInvitation`. Taking the
+  pointer is safe and using it `unsafe`; the safe value keeps owning it, so raw code never
+  destroys it. A new type that owns
   a handle a raw-only function takes gets an `as_raw()` with the contract of `Session::as_raw`
   and a test in `crates/qaros/tests/stub/raw_handles.rs`.
 
@@ -142,10 +143,12 @@ its stub behaviour, if any, goes into the `default_behaviour!` arm in
 the public header declares gets its `StatusCode` constant by value
 (`StatusCode::ONBOARDING_RE_PAIR_REQUIRED`), and so does a value of an enum both sets have
 (`PixelFormat::D16Unorm`, the `by value:` part of `c_enum!`). Types only the public header
-declares, the render sender's colour extensions, are used under the cfg
-`qaros_color_extensions`: `qaros-sys`'s build script sets it from the target's generated
-bindings and passes it on as `DEP_QAR_STREAMING_C_COLOR_EXTENSIONS`, which the build scripts of
-`qaros`, `qaros-stub` and `qaros-conformance` turn into the same cfg.
+declares are used under a cfg per group: `qaros_color_extensions` (the render sender's colour
+extensions), `qaros_member_hubs` (the member-hub inits and the remote-app grant extensions) and
+`qaros_device_identity` (`QarPeerDeviceIdentity`). `qaros-sys`'s build script sets each from the
+target's generated bindings and passes it on as `DEP_QAR_STREAMING_C_<GROUP>`
+(`DEP_QAR_STREAMING_C_COLOR_EXTENSIONS`, ...), which the build scripts of the crates that use the
+group (`qaros`, `qaros-stub`, `qaros-conformance`) turn into the same cfg.
 
 ## Init structures, defaults and `header.next` chains
 

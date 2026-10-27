@@ -135,7 +135,16 @@ fn raw_runtime_sender_token_and_invite_calls_reach_the_safe_handles() {
     assert!(succeeded(result));
     assert!(token.is_cancelled(), "the safe token sees the raw cancel");
 
-    let invite = session
+    // Only a local app gets a co-process invite.
+    let local_session = runtime
+        .onboard(
+            &local_app(),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("local app onboard")
+        .session;
+    let invite = local_session
         .request_onboarding_invite("companion.examples.qaros", &BlockingOptions::default())
         .expect("invite");
     let mut expires = 0_i64;
@@ -145,11 +154,98 @@ fn raw_runtime_sender_token_and_invite_calls_reach_the_safe_handles() {
     };
     assert!(succeeded(result));
     assert_eq!(expires, invite.expires_unix().expect("expiry"));
+    // SAFETY: a live invite's handle.
+    assert!(unsafe { (api.qar_impl_onboarding_invite_handle_is_valid)(invite.as_raw()) });
 
     drop(invite);
+    drop(local_session);
     drop(token);
     drop(sender);
     drop(session);
+    drop(runtime);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+    drop(library);
+    assert_eq!(fixture.control.live_handle_count(), 0);
+}
+
+#[test]
+fn a_raw_onboard_chain_is_refused_where_the_header_refuses_it() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let api = library.raw_api();
+    // Onboards with a pairing code and `after_code` chained after the code extension; returns
+    // the status and the session, if any.
+    let onboard_with_code = |after_code: *mut std::ffi::c_void| {
+        let code_text = c"ABCD-EFGH";
+        let mut code_extension = defaults::qar_onboard_code_ext_default();
+        code_extension.code = code_text.as_ptr();
+        code_extension.header.next = after_code;
+        let mut init = defaults::qar_onboard_init_default();
+        init.header.next = (&raw mut code_extension).cast();
+        let mut onboarding_id = defaults::qar_onboarding_id_default();
+        let mut session: *mut sys::QarSession = ptr::null_mut();
+        // SAFETY: a live runtime's handle; the init chain and its strings live for the call;
+        // valid out-pointers.
+        let result = unsafe {
+            (api.qar_impl_runtime_onboard)(
+                runtime.as_raw(),
+                &raw const init,
+                None,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                &raw mut onboarding_id,
+                &raw mut session,
+            )
+        };
+        (result, session)
+    };
+
+    // An app tag applies only to a local app.
+    let tag_text = c"left.examples.qaros";
+    let mut tag_extension = defaults::qar_onboard_local_app_tag_ext_default();
+    tag_extension.app_tag = tag_text.as_ptr();
+    let (result, session) = onboard_with_code((&raw mut tag_extension).cast());
+    assert_eq!(result.code, StatusCode::ARGUMENT_NOT_SUPPORTED.raw());
+    assert!(session.is_null());
+
+    // A planned peer id must not be zero.
+    let mut zero_peer_id = defaults::qar_onboard_peer_id_ext_default();
+    let (result, session) = onboard_with_code((&raw mut zero_peer_id).cast());
+    assert_eq!(result.code, StatusCode::ARGUMENT_NOT_SUPPORTED.raw());
+    assert!(session.is_null());
+
+    let mut planned_peer_id = defaults::qar_onboard_peer_id_ext_default();
+    planned_peer_id.peer_id.data = [1; 16];
+    let (result, session) = onboard_with_code((&raw mut planned_peer_id).cast());
+    assert!(succeeded(result));
+    // SAFETY: the raw onboard handed out this session; destroyed once, before the runtime.
+    unsafe { (api.qar_impl_session_handle_destroy)(session) };
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[cfg(qaros_member_hubs)]
+#[test]
+fn a_raw_member_hub_call_reaches_the_invitation_of_the_safe_api() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let invitation = runtime
+        .create_member_hub_invitation(&qaros::MemberHubInvitationConfig::default(), None)
+        .expect("invitation");
+    let api = library.raw_api();
+    let mut size = 0_usize;
+    // SAFETY: a live invitation's handle; valid out-pointer.
+    let result = unsafe {
+        (api.qar_impl_member_hub_invitation_serialized_size)(invitation.as_raw(), &raw mut size)
+    };
+    assert!(succeeded(result));
+    assert_eq!(size, invitation.serialize().expect("serialize").len());
+    drop(invitation);
     drop(runtime);
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
     drop(library);
