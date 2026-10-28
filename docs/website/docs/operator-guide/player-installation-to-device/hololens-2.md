@@ -5,7 +5,7 @@ description: Install the QAROS HoloLens Player app onto HoloLens 2 from the Visu
 
 # HoloLens 2
 
-HoloLens 2 runs the **QAROS HoloLens Player** app, shipped as *QuaternAR Player* or *Skyline Player*. You sideload this app onto the device, then the Hub-side `qar-hololens-desktop` service connects to it over the network, streams the mixed view to it, and reads back head pose and hands.
+HoloLens 2 runs the **QAROS Player** app (package `com.quaternar.qaros.player`). You sideload this app onto the device, then the Hub-side `qar-hololens-desktop` service connects to it over the network, streams the mixed view to it, and reads back head pose and hands.
 
 We support only the sideloaded Quaternar player app on HoloLens. The Microsoft Holographic Remoting Player is not part of this setup.
 
@@ -16,7 +16,7 @@ The player ships with QAROS under `devices/hololens/`: `QAROS Player HoloLens <v
 | [From the Visualizer, by code](#install-from-the-visualizer) | HoloLens 2 on Windows Holographic 20H2 or newer, on the same network as the PC | Always, unless the HoloLens is managed |
 | [Through the Device Portal](#install-through-the-device-portal) | Developer Mode and the Device Portal on the HoloLens | The HoloLens is managed (MDM, provisioning package or Entra ID sign-in): App Installer is turned off there |
 
-A HoloLens with an earlier player build (package version `1.0.0.0`) must uninstall it first: the player's package version now follows the product version.
+An earlier player, listed as *QuaternAR Player* or *Skyline Player*, is a separate app: uninstall it (in Start, press and hold its tile and select **Uninstall**), then scan the scene origin code again with the new player.
 
 ## Install from the Visualizer
 
@@ -58,7 +58,7 @@ If App Installer reports the package as untrusted, the certificate is missing fr
 2. Find **Deploy apps** in the top-left corner.
 3. Select **Local Storage**, click **Choose File**, and select the app bundle to upload it.
 4. Click **Install**.
-5. On the HoloLens, open the app menu and launch **QuaternAR Player** or **Skyline Player**.
+5. On the HoloLens, open the app menu and launch **QAROS Player**.
 
 ## First launch
 

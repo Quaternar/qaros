@@ -73,3 +73,9 @@ If the app is already installed and you want to replace it, use the `-r` flag.
 ```powershell
 adb install -r "QAROS Player MetaLens <version>.apk"
 ```
+
+The player is **QAROS Player** in the app list, package `com.metalense.com.quaternar.qaros.player` (METALENSE requires its `com.metalense` prefix). An earlier player (*QAR Player Vulkan*, `com.metalense.quaternar.vulkan`) is a separate app: the Visualizer's **Devices** tab removes it after installing, or remove it yourself and scan the scene origin code again.
+
+```powershell
+adb uninstall com.metalense.quaternar.vulkan
+```

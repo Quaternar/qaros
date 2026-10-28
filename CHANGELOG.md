@@ -83,6 +83,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Player Installation to Device* names the player **QAROS Player** with its package IDs
+  (`com.quaternar.qaros.player` on Meta Quest and HoloLens 2,
+  `com.metalense.com.quaternar.qaros.player` on METALENSE 2) and says how to remove the earlier
+  player (*QAR Player Vulkan*, *QuaternAR Player*) and scan the scene origin code again.
+
 - **Docs:** *Scene Origin: Anchor Several Devices Together* says every player ignores QR codes other
   than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
   that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
