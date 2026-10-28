@@ -85,7 +85,7 @@ pub use member_hub::{
 pub use panels::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanels};
 pub use peers::PeerInfo;
 pub use pending::{PendingCall, PendingOnboard};
-pub use pending_sender::{CANCELLED_CREATION_WAIT, PendingRenderSender};
+pub use pending_sender::PendingRenderSender;
 pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,

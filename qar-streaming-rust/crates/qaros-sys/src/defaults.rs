@@ -516,7 +516,6 @@ pub fn qar_onboard_peer_id_ext_default() -> QarOnboardPeerIdExt {
 }
 
 /// Category `QAR_DEVICE_CATEGORY_DESKTOP_PC`, NULL strings; `device_id` is required.
-#[cfg(qaros_device_identity)]
 pub fn qar_peer_device_identity_default() -> QarPeerDeviceIdentity {
     QarPeerDeviceIdentity {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY),
@@ -538,7 +537,6 @@ pub fn qar_session_invite_target_app_init_default() -> QarSessionInviteTargetApp
 }
 
 /// Zero fields select the defaults: 24 h, one use, join, rejoin and bring devices.
-#[cfg(qaros_member_hubs)]
 pub fn qar_member_hub_invitation_init_default() -> QarMemberHubInvitationInit {
     QarMemberHubInvitationInit {
         header: structure_header(
@@ -552,7 +550,6 @@ pub fn qar_member_hub_invitation_init_default() -> QarMemberHubInvitationInit {
 }
 
 /// `app_tag` is required; the caller sets it.
-#[cfg(qaros_member_hubs)]
 pub fn qar_member_hub_invitation_app_grant_ext_default() -> QarMemberHubInvitationAppGrantExt {
     QarMemberHubInvitationAppGrantExt {
         header: structure_header(
@@ -563,7 +560,6 @@ pub fn qar_member_hub_invitation_app_grant_ext_default() -> QarMemberHubInvitati
 }
 
 /// `invitation` is required; the caller sets it.
-#[cfg(qaros_member_hubs)]
 pub fn qar_onboard_remote_app_grant_ext_default() -> QarOnboardRemoteAppGrantExt {
     QarOnboardRemoteAppGrantExt {
         header: structure_header(
@@ -574,7 +570,6 @@ pub fn qar_onboard_remote_app_grant_ext_default() -> QarOnboardRemoteAppGrantExt
 }
 
 /// `invitation` is required; the zero timeouts select 60 s and 120 s.
-#[cfg(qaros_member_hubs)]
 pub fn qar_join_hub_as_member_init_default() -> QarJoinHubAsMemberInit {
     QarJoinHubAsMemberInit {
         header: structure_header(
@@ -602,7 +597,6 @@ pub fn qar_render_sender_init_default() -> QarRenderSenderInit {
     }
 }
 
-#[cfg(qaros_color_extensions)]
 pub fn qar_render_sender_alpha_mode_ext_default() -> QarRenderSenderAlphaModeExt {
     QarRenderSenderAlphaModeExt {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT),
@@ -610,7 +604,6 @@ pub fn qar_render_sender_alpha_mode_ext_default() -> QarRenderSenderAlphaModeExt
     }
 }
 
-#[cfg(qaros_color_extensions)]
 pub fn qar_render_sender_color_encoding_ext_default() -> QarRenderSenderColorEncodingExt {
     QarRenderSenderColorEncodingExt {
         header: structure_header(

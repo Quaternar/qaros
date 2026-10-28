@@ -13,12 +13,9 @@
 //!
 //! `issue` writes the invitation to stdout and refuses to print it on a console; its messages go
 //! to stderr. Exit codes, as in the C sample: 0 done, 1 error, 2 QAROS is not installed.
-//!
-//! Where the bindings come from a header without member hubs, the program only says so.
 
 use std::process::ExitCode;
 
-#[cfg(qaros_member_hubs)]
 mod remote_app {
     use std::io::{IsTerminal, Read, Write};
     use std::process::ExitCode;
@@ -228,16 +225,5 @@ fn main() -> ExitCode {
         eprintln!("Usage: remote_app_onboarding issue|join|start");
         return ExitCode::from(1);
     }
-    run(&role)
-}
-
-#[cfg(qaros_member_hubs)]
-fn run(role: &str) -> ExitCode {
-    remote_app::main(role)
-}
-
-#[cfg(not(qaros_member_hubs))]
-fn run(_role: &str) -> ExitCode {
-    eprintln!("These bindings come from a header without member hubs.");
-    ExitCode::from(1)
+    remote_app::main(&role)
 }

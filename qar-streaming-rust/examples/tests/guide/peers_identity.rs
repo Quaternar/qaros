@@ -1,7 +1,5 @@
-//! Snippets of the peer presence, role, category and device identity functions, which only
-//! bindings generated from a header that declares them have; `main.rs` compiles this module
-//! there. All of it is in the safe API: `PeerInfo::identity`, `PeerPresentation::device_identity`
-//! and `Session::update_device_identity`.
+//! Snippets of the peer presence, role, category and device identity: `PeerInfo::identity`,
+//! `PeerPresentation::device_identity` and `Session::update_device_identity`.
 
 use qaros::{
     BlockingOptions, CancelToken, DeviceCategory, DeviceIdentity, OnboardMethod, PeerInfo,
@@ -15,11 +13,7 @@ fn render_for(_peer: &PeerInfo, _is_here: bool) {}
 fn read_presence(session: &Session) -> qaros::Result<()> {
     // ANCHOR: read_presence
     for peer in session.peers()? {
-        // `identity` is None only with bindings from a header without these getters.
-        let presence = peer
-            .identity
-            .as_ref()
-            .map_or(PeerPresence::Unknown, |identity| identity.presence);
+        let presence = peer.identity.presence;
         // Render for ONLINE peers and UNKNOWN ones (not reconciled yet); stop at OFFLINE,
         // LEAVING or RETIRED. OFFLINE and LEAVING peers may come back as ONLINE.
         let is_here = matches!(presence, PeerPresence::Online | PeerPresence::Unknown);
@@ -32,12 +26,14 @@ fn read_presence(session: &Session) -> qaros::Result<()> {
 fn show_targets(session: &Session) -> qaros::Result<()> {
     // ANCHOR: show_targets
     for peer in session.peers()? {
-        let Some(identity) = peer.identity else {
-            continue;
-        };
+        let identity = &peer.identity;
         if identity.role == PeerRole::Target {
             // "Meta Quest 3", "MetaQuest": your icon table, the category as the fallback
-            show_target(&identity.device_name, &identity.device_family, identity.category);
+            show_target(
+                &identity.device_name,
+                &identity.device_family,
+                identity.category,
+            );
         }
     }
     // ANCHOR_END: show_targets

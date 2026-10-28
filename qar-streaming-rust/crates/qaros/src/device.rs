@@ -1,20 +1,11 @@
 //! The device an application describes itself as (`QarPeerDeviceIdentity`), and the presence,
 //! role and device identity read back from a peer ([`PeerIdentity`]).
-//!
-//! Only the public header declares these structures and functions; where the bindings lack them
-//! (cfg `qaros_device_identity` unset, as with the header of runtime 0.9.0-dev.2916), a set
-//! [`crate::PeerPresentation::device_identity`] is refused with [`crate::Error::InvalidArgument`],
-//! `Session::update_device_identity` does not exist and [`crate::PeerInfo::identity`] is `None`.
 
-#[cfg(qaros_device_identity)]
 use std::ffi::CString;
 
-#[cfg(qaros_device_identity)]
 use qaros_sys::{self as sys, defaults};
 
-#[cfg(qaros_device_identity)]
 use crate::error::Result;
-#[cfg(qaros_device_identity)]
 use crate::strings;
 
 /// The device categories an application may declare (`QarDeviceCategory`). An application
@@ -32,7 +23,6 @@ pub enum SourceDeviceCategory {
 }
 
 impl SourceDeviceCategory {
-    #[cfg(qaros_device_identity)]
     pub(crate) fn to_raw(self) -> sys::QarDeviceCategory {
         match self {
             Self::DesktopPc => sys::QarDeviceCategory::QAR_DEVICE_CATEGORY_DESKTOP_PC,
@@ -62,7 +52,6 @@ pub struct DeviceIdentity {
 
 /// A [`DeviceIdentity`] as C strings and its stamped structure, which borrows them. The owner
 /// keeps it at a stable address (inside a `Box`) while the library may read it.
-#[cfg(qaros_device_identity)]
 #[derive(Debug)]
 pub(crate) struct DeviceIdentityStorage {
     pub(crate) raw: sys::QarPeerDeviceIdentity,
@@ -71,7 +60,6 @@ pub(crate) struct DeviceIdentityStorage {
     _device_name: Option<CString>,
 }
 
-#[cfg(qaros_device_identity)]
 impl DeviceIdentityStorage {
     pub(crate) fn new(identity: &DeviceIdentity) -> Result<Self> {
         let device_id = strings::to_c_string(&identity.device_id, "device id")?;
@@ -168,7 +156,6 @@ pub struct PeerIdentity {
     pub device_name: String,
 }
 
-#[cfg(qaros_device_identity)]
 impl PeerPresence {
     pub(crate) fn from_raw(raw: sys::QarPeerPresence) -> Self {
         match raw {
@@ -181,7 +168,6 @@ impl PeerPresence {
     }
 }
 
-#[cfg(qaros_device_identity)]
 impl PeerRole {
     pub(crate) fn from_raw(raw: sys::QarPeerRole) -> Self {
         match raw {
@@ -195,7 +181,6 @@ impl PeerRole {
     }
 }
 
-#[cfg(qaros_device_identity)]
 impl DeviceCategory {
     pub(crate) fn from_raw(raw: sys::QarDeviceCategory) -> Self {
         match raw {
@@ -215,7 +200,6 @@ impl DeviceCategory {
 /// # Safety
 ///
 /// `handle` is a live peer spec handle (owned, or borrowed for a callback).
-#[cfg(qaros_device_identity)]
 pub(crate) unsafe fn read_peer_identity(
     api: &sys::QarApi,
     handle: *mut sys::QarPeerSpec,

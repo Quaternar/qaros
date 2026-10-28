@@ -34,8 +34,8 @@ impl StatusCode {
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED);
     /// The render sender's depth format is one its graphics API cannot take; returned by the
     /// creation before any receiver is waited for, with the accepted formats in the message.
-    /// Named by value, since only the public header declares it.
-    pub const RENDERING_DEPTH_FORMAT_NOT_SUPPORTED: Self = Self(QarStatusCode(806));
+    pub const RENDERING_DEPTH_FORMAT_NOT_SUPPORTED: Self =
+        Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED);
     pub const PAKE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_PAKE_ERROR);
     pub const ONBOARDING_SESSION_NOT_FOUND: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND);
@@ -53,68 +53,89 @@ impl StatusCode {
     pub const ONBOARDING_APP_IDENTITY_MISMATCH: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH);
     /// The device's certificate expired or is no longer renewed, and the pairing credential given
-    /// did not replace it: pair the device again with a new code. Named by value, since only the
-    /// public header declares it.
-    pub const ONBOARDING_RE_PAIR_REQUIRED: Self = Self(QarStatusCode(1809));
+    /// did not replace it: pair the device again with a new code.
+    pub const ONBOARDING_RE_PAIR_REQUIRED: Self =
+        Self(QarStatusCode::QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED);
     /// The hub refused to renew the certificate because the renewal did not prove it holds the
-    /// certificate's key: update to the current SDK, else pair again. Named by value, since only
-    /// the public header declares it.
-    pub const ONBOARDING_RENEWAL_POSSESSION_UNPROVEN: Self = Self(QarStatusCode(1810));
+    /// certificate's key: update to the current SDK, else pair again.
+    pub const ONBOARDING_RENEWAL_POSSESSION_UNPROVEN: Self =
+        Self(QarStatusCode::QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN);
     /// The hub refused to mint a co-process invite: this session did not join as a local app
     /// (or as an app the QAROS launcher started). Final; nothing was minted.
     pub const ONBOARDING_INVITE_REFUSED: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_INVITE_REFUSED);
 
-    // The codes below are named by value, so they exist under both binding sets: the header of
-    // 0.9.0-dev.2916 may not declare them. `name()` gives the header's name.
-    pub const GUI_PANEL_CHANGE_NOT_PERMITTED: Self = Self(QarStatusCode(304));
-    pub const APP_VOLUME_GESTURE_CONFIGURATION_INVALID: Self = Self(QarStatusCode(326));
-    pub const APP_VOLUME_GESTURE_MODE_UNKNOWN: Self = Self(QarStatusCode(327));
-    pub const MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED: Self = Self(QarStatusCode(605));
-    pub const MEDIA_STREAMING_SEND_PIPELINE_FAILED: Self = Self(QarStatusCode(606));
-    pub const MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: Self = Self(QarStatusCode(607));
-    pub const HUB_TARGET_APP_DEVICE_NOT_INVITABLE: Self = Self(QarStatusCode(3100));
+    pub const GUI_PANEL_CHANGE_NOT_PERMITTED: Self =
+        Self(QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED);
+    pub const APP_VOLUME_GESTURE_CONFIGURATION_INVALID: Self =
+        Self(QarStatusCode::QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID);
+    pub const APP_VOLUME_GESTURE_MODE_UNKNOWN: Self =
+        Self(QarStatusCode::QAR_STATUS_APP_VOLUME_GESTURE_MODE_UNKNOWN);
+    pub const MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED);
+    pub const MEDIA_STREAMING_SEND_PIPELINE_FAILED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED);
+    pub const MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED);
+    pub const HUB_TARGET_APP_DEVICE_NOT_INVITABLE: Self =
+        Self(QarStatusCode::QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE);
     /// A declared device category other than desktop PC, server or camera.
-    pub const PEER_DEVICE_CATEGORY_NOT_ALLOWED: Self = Self(QarStatusCode(3101));
+    pub const PEER_DEVICE_CATEGORY_NOT_ALLOWED: Self =
+        Self(QarStatusCode::QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED);
     /// The hub is in the middle of another session-wide operation; retry.
-    pub const HUB_LIFECYCLE_OPERATION_RUNNING: Self = Self(QarStatusCode(3300));
-    pub const MEMBER_JOIN_PENDING: Self = Self(QarStatusCode(3400));
-    pub const MEMBER_JOIN_DENIED: Self = Self(QarStatusCode(3401));
+    pub const HUB_LIFECYCLE_OPERATION_RUNNING: Self =
+        Self(QarStatusCode::QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING);
+    pub const MEMBER_JOIN_PENDING: Self = Self(QarStatusCode::QAR_STATUS_MEMBER_JOIN_PENDING);
+    pub const MEMBER_JOIN_DENIED: Self = Self(QarStatusCode::QAR_STATUS_MEMBER_JOIN_DENIED);
     /// The hub on this PC hosts members of its own, is a member of another primary, or the
     /// invitation does not permit the join; the message names the reason.
-    pub const MEMBER_JOIN_REFUSED: Self = Self(QarStatusCode(3402));
-    pub const MEMBER_JOIN_REDIRECTED: Self = Self(QarStatusCode(3403));
+    pub const MEMBER_JOIN_REFUSED: Self = Self(QarStatusCode::QAR_STATUS_MEMBER_JOIN_REFUSED);
+    pub const MEMBER_JOIN_REDIRECTED: Self = Self(QarStatusCode::QAR_STATUS_MEMBER_JOIN_REDIRECTED);
     /// The primary removed this hub and the invitation does not permit readmitting it.
-    pub const MEMBER_REMOVED: Self = Self(QarStatusCode(3404));
+    pub const MEMBER_REMOVED: Self = Self(QarStatusCode::QAR_STATUS_MEMBER_REMOVED);
     /// None of the invitation's addresses of the primary hub answers.
-    pub const PRIMARY_UNREACHABLE: Self = Self(QarStatusCode(3405));
+    pub const PRIMARY_UNREACHABLE: Self = Self(QarStatusCode::QAR_STATUS_PRIMARY_UNREACHABLE);
     /// The hub on this PC is a member: create the member-hub invitation on its primary's PC.
-    pub const SESSION_WIDE_ACTION_ON_MEMBER: Self = Self(QarStatusCode(3406));
+    pub const SESSION_WIDE_ACTION_ON_MEMBER: Self =
+        Self(QarStatusCode::QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER);
     /// The app's approval does not allow it to bring in member hubs.
-    pub const MEMBER_SPONSOR_NOT_ALLOWED: Self = Self(QarStatusCode(3407));
+    pub const MEMBER_SPONSOR_NOT_ALLOWED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED);
     /// The app's approval has used its quota of member hubs.
-    pub const MEMBER_SPONSOR_QUOTA_EXCEEDED: Self = Self(QarStatusCode(3408));
-    pub const AUDIT_LOG_CORRUPT: Self = Self(QarStatusCode(3409));
-    pub const SECURE_STORAGE_ERROR: Self = Self(QarStatusCode(3500));
-    pub const SECURE_STORAGE_NOT_FOUND: Self = Self(QarStatusCode(3501));
-    pub const SECURE_STORAGE_TAMPERED: Self = Self(QarStatusCode(3502));
-    pub const SECURE_STORAGE_PROTECTOR_MISMATCH: Self = Self(QarStatusCode(3503));
-    pub const SECURE_STORAGE_PROTECTOR_UNAVAILABLE: Self = Self(QarStatusCode(3504));
-    pub const SECURE_STORAGE_INVALID_KEY: Self = Self(QarStatusCode(3505));
-    pub const SECURE_STORAGE_LOCKED: Self = Self(QarStatusCode(3506));
+    pub const MEMBER_SPONSOR_QUOTA_EXCEEDED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED);
+    pub const AUDIT_LOG_CORRUPT: Self = Self(QarStatusCode::QAR_STATUS_AUDIT_LOG_CORRUPT);
+    pub const SECURE_STORAGE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_ERROR);
+    pub const SECURE_STORAGE_NOT_FOUND: Self =
+        Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_NOT_FOUND);
+    pub const SECURE_STORAGE_TAMPERED: Self =
+        Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_TAMPERED);
+    pub const SECURE_STORAGE_PROTECTOR_MISMATCH: Self =
+        Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_PROTECTOR_MISMATCH);
+    pub const SECURE_STORAGE_PROTECTOR_UNAVAILABLE: Self =
+        Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_PROTECTOR_UNAVAILABLE);
+    pub const SECURE_STORAGE_INVALID_KEY: Self =
+        Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_INVALID_KEY);
+    pub const SECURE_STORAGE_LOCKED: Self = Self(QarStatusCode::QAR_STATUS_SECURE_STORAGE_LOCKED);
     /// The member-hub invitation's signature is wrong, its bytes are no invitation, or the
     /// primary does not know it.
-    pub const MEMBER_INVITATION_INVALID: Self = Self(QarStatusCode(3600));
+    pub const MEMBER_INVITATION_INVALID: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_INVALID);
     /// Ask the primary's app for a new member-hub invitation.
-    pub const MEMBER_INVITATION_EXPIRED: Self = Self(QarStatusCode(3601));
+    pub const MEMBER_INVITATION_EXPIRED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_EXPIRED);
     /// Ask the primary's app for a new member-hub invitation.
-    pub const MEMBER_INVITATION_USED_UP: Self = Self(QarStatusCode(3602));
+    pub const MEMBER_INVITATION_USED_UP: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_USED_UP);
     /// Ask the primary's app for a new member-hub invitation.
-    pub const MEMBER_INVITATION_REVOKED: Self = Self(QarStatusCode(3603));
+    pub const MEMBER_INVITATION_REVOKED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_REVOKED);
     /// This PC does not trust the invitation's primary hub.
-    pub const MEMBER_INVITATION_PRIMARY_NOT_ALLOWED: Self = Self(QarStatusCode(3604));
+    pub const MEMBER_INVITATION_PRIMARY_NOT_ALLOWED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_PRIMARY_NOT_ALLOWED);
     /// This PC's member-invitation policy can be written by a non-administrator.
-    pub const MEMBER_INVITATION_POLICY_NOT_PROTECTED: Self = Self(QarStatusCode(3605));
+    pub const MEMBER_INVITATION_POLICY_NOT_PROTECTED: Self =
+        Self(QarStatusCode::QAR_STATUS_MEMBER_INVITATION_POLICY_NOT_PROTECTED);
 
     pub(crate) fn from_raw(raw: QarStatusCode) -> Self {
         Self(raw)
@@ -402,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn the_codes_named_by_value_carry_the_public_headers_values_and_names() {
+    fn codes_carry_the_headers_values_and_names() {
         assert_eq!(
             StatusCode::ONBOARDING_RE_PAIR_REQUIRED.to_string(),
             "QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED (1809)"

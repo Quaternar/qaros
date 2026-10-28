@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use qaros_sys::{self as sys, QarApi, QarCancelToken, QarResult, defaults};
 
@@ -16,7 +16,7 @@ use crate::library::{Library, require_handle};
 use crate::panels::GuiPanels;
 use crate::peers::{PeerInfo, read_peer_info};
 use crate::pending::{self, AbandonedCall, CallSpec, Destroy, Keep, PendingCall, RawOutcome};
-use crate::pending_sender::{AbandonedCreation, CANCELLED_CREATION_WAIT, PendingRenderSender};
+use crate::pending_sender::PendingRenderSender;
 use crate::render::{
     RenderRequest, RenderSender, RenderSenderConfig, SenderGraphics, read_render_request,
 };
@@ -45,7 +45,6 @@ pub struct Session {
 pub(crate) struct SessionInner {
     pub(crate) handle: NonNull<sys::QarSession>,
     subscriptions: RefCell<Vec<SubscriptionSlot>>,
-    abandoned_creations: RefCell<Vec<AbandonedCreation>>,
     /// Async invites and target-app calls whose [`PendingCall`] was dropped before the callback.
     abandoned_calls: RefCell<Vec<AbandonedCall>>,
     pub(crate) runtime: Rc<RuntimeInner>,
@@ -163,7 +162,6 @@ impl Session {
             inner: Rc::new(SessionInner {
                 handle,
                 subscriptions: RefCell::new(Vec::new()),
-                abandoned_creations: RefCell::new(Vec::new()),
                 abandoned_calls: RefCell::new(Vec::new()),
                 runtime,
             }),
@@ -391,7 +389,7 @@ impl Session {
         timeout: Option<Duration>,
         wake: impl Fn() + Send + Sync + 'static,
     ) -> Result<PendingRenderSender> {
-        PendingRenderSender::start(
+        crate::pending_sender::start(
             &self.inner,
             config,
             &SenderGraphics::Cpu,
@@ -449,7 +447,7 @@ impl Session {
         timeout: Option<Duration>,
         wake: impl Fn() + Send + Sync + 'static,
     ) -> Result<PendingRenderSender> {
-        PendingRenderSender::start(
+        crate::pending_sender::start(
             &self.inner,
             config,
             &SenderGraphics::Vulkan(vulkan),
@@ -506,7 +504,7 @@ impl Session {
         timeout: Option<Duration>,
         wake: impl Fn() + Send + Sync + 'static,
     ) -> Result<PendingRenderSender> {
-        PendingRenderSender::start(
+        crate::pending_sender::start(
             &self.inner,
             config,
             &SenderGraphics::D3D11(d3d11),
@@ -515,12 +513,12 @@ impl Session {
         )
     }
 
-    /// Destroys the senders that creations dropped before their callback
-    /// delivered since. `start_*` and `PendingRenderSender::poll` do it too;
-    /// call this regularly (once per frame) so such a sender does not stay
-    /// connected to its target while no other creation runs.
+    /// Destroys what async calls dropped before their callback delivered since: a render
+    /// sender, an invite. Every `start_*` and every poll of a [`crate::PendingCall`] of this
+    /// session do it too; call this regularly (once per frame) so such a sender does not stay
+    /// connected to its target while no other call runs.
     pub fn release_abandoned_creations(&self) {
-        self.inner.release_delivered_abandoned_creations();
+        self.inner.release_delivered_abandoned_calls();
     }
 
     /// The session's app volume operations.
@@ -537,9 +535,7 @@ impl Session {
     /// (`qar_peer_update_device_identity`), as [`crate::PeerPresentation::device_identity`] sets
     /// it at onboard or rejoin. A category other than the [`crate::SourceDeviceCategory`] values
     /// cannot be expressed; an empty device id fails with
-    /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. Present where the bindings declare
-    /// `QarPeerDeviceIdentity` (cfg `qaros_device_identity`).
-    #[cfg(qaros_device_identity)]
+    /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`].
     pub fn update_device_identity(&self, identity: &crate::DeviceIdentity) -> Result<()> {
         let storage = crate::device::DeviceIdentityStorage::new(identity)?;
         let api = self.inner.api();
@@ -839,7 +835,7 @@ impl SessionInner {
                 drop(finish_session);
                 value
             }),
-            abandon: Box::new(move |call| abandon_session.abandoned_calls.borrow_mut().push(call)),
+            abandon: Box::new(move |call| abandon_session.abandon_call(call)),
             before_poll: Box::new(move || poll_session.release_delivered_abandoned_calls()),
             destroy,
         };
@@ -854,41 +850,9 @@ impl SessionInner {
             .retain(|call| !call.release_if_delivered(api));
     }
 
-    pub(crate) fn abandon_creation(&self, creation: AbandonedCreation) {
-        self.abandoned_creations.borrow_mut().push(creation);
-    }
-
-    /// Gives the abandoned creations still waiting for their callback until
-    /// [`CANCELLED_CREATION_WAIT`] from now, together, to call back.
-    fn wait_for_cancelled_creations(&self) {
-        let creations = self.abandoned_creations.borrow();
-        let unanswered = creations
-            .iter()
-            .filter(|creation| !creation.has_called_back())
-            .count();
-        if unanswered == 0 {
-            return;
-        }
-        let started = Instant::now();
-        let deadline = started + CANCELLED_CREATION_WAIT;
-        let still_unanswered = creations
-            .iter()
-            .filter(|creation| !creation.wait_for_callback_until(deadline))
-            .count();
-        log::info!(
-            "session teardown: {} of {unanswered} cancelled render sender creation(s) called back within {} ms",
-            unanswered - still_unanswered,
-            started.elapsed().as_millis()
-        );
-    }
-
-    /// Destroys the senders that abandoned creations delivered since the
-    /// last call.
-    pub(crate) fn release_delivered_abandoned_creations(&self) {
-        let api = self.api();
-        self.abandoned_creations
-            .borrow_mut()
-            .retain(|creation| !creation.release_if_delivered(api));
+    /// Keeps an async call dropped before its callback until the callback has come.
+    pub(crate) fn abandon_call(&self, call: AbandonedCall) {
+        self.abandoned_calls.borrow_mut().push(call);
     }
 
     /// Registers callback state and a cancel token, then subscribes. The
@@ -921,16 +885,11 @@ impl SessionInner {
 
 impl Drop for SessionInner {
     fn drop(&mut self) {
-        // Senders must go before their session; pending creations hold an
-        // Rc to this value, so only abandoned ones can be left. Those cancelled
-        // shortly before (at an application's stop, typically) get a bounded
-        // chance to call back, so the session can still be destroyed.
-        self.wait_for_cancelled_creations();
-        let mut orphaned_creations = 0_usize;
-        for creation in std::mem::take(self.abandoned_creations.get_mut()) {
-            if creation.release_or_orphan(self.api()) {
-                orphaned_creations += 1;
-            }
+        // Render senders and pending calls hold an Rc to this value, so only abandoned calls
+        // can be left. What they delivered is destroyed while the session lives.
+        let abandoned_calls = std::mem::take(self.abandoned_calls.get_mut());
+        for call in &abandoned_calls {
+            call.release_if_delivered(self.api());
         }
         let subscriptions = std::mem::take(self.subscriptions.get_mut());
         for slot in &subscriptions {
@@ -938,34 +897,15 @@ impl Drop for SessionInner {
                 log::warn!("cancelling a subscription during session teardown: {error}");
             }
         }
-        if orphaned_creations > 0 {
-            // A runtime older than the header's exactly-once rule for async
-            // calls can leave a cancelled creation without a callback, and
-            // its session destroy then waits for good; a process QAROS stops
-            // is killed 1.3 s later. The handle and the callback state the library may still
-            // call into are leaked instead, and with them the runtime and the
-            // library: a runtime destroyed under a live session, or a library
-            // unloaded under its threads, is no safer.
-            log::warn!(
-                "leaking the session, its runtime and the library: {orphaned_creations} cancelled render sender creation(s) had not called back, and destroying the session could wait for them for good"
-            );
-            std::mem::forget(subscriptions);
-            std::mem::forget(Rc::clone(&self.runtime));
-            return;
-        }
-        let abandoned_calls = std::mem::take(self.abandoned_calls.get_mut());
-        for call in &abandoned_calls {
-            call.release_if_delivered(self.api());
-        }
         // SAFETY: render senders hold an Rc to this value, so none is alive. Per the header,
-        // the destroy cancels the abandoned async calls still running and returns only after
-        // their callbacks have returned.
+        // the destroy ends the abandoned async calls still running with QAR_STATUS_TIMEOUT and
+        // returns only after their callbacks have returned.
         unsafe { (self.api().qar_impl_session_handle_destroy)(self.handle.as_ptr()) };
+        // Their tokens, init storage and device references are released only now, after the
+        // callbacks; so are the subscriptions' callback state and tokens.
         for call in abandoned_calls {
             call.leak_late_delivery();
         }
-        // Callback state and tokens are released only now, after the session
-        // handle is gone.
         drop(subscriptions);
     }
 }

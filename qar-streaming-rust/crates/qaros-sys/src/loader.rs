@@ -137,91 +137,6 @@ macro_rules! define_api_table {
 
 qar_impl_function_list!(define_api_table);
 
-/// The function that releases a runtime under these bindings, fixed when they are generated: the
-/// header of the runtimes up to 0.9.0-dev.2916 declares `qar_runtime_destroy`, the runtime's
-/// shutdown its samples call, and documents `qar_runtime_handle_destroy` as releasing the handle
-/// "without shutting down the runtime"; the public header drops `qar_runtime_destroy` and
-/// releases the runtime with `qar_runtime_handle_destroy`. A loaded table exports every declared
-/// symbol, so the call always exists in the library.
-pub const RUNTIME_RELEASE_SYMBOL: &str = if declares_symbol("qar_impl_runtime_destroy") {
-    "qar_impl_runtime_destroy"
-} else {
-    "qar_impl_runtime_handle_destroy"
-};
-
-const fn declares_symbol(name: &str) -> bool {
-    let mut index = 0;
-    while index < SYMBOL_NAMES.len() {
-        if same_name(SYMBOL_NAMES[index], name) {
-            return true;
-        }
-        index += 1;
-    }
-    false
-}
-
-const fn same_name(left: &str, right: &str) -> bool {
-    let (left, right) = (left.as_bytes(), right.as_bytes());
-    if left.len() != right.len() {
-        return false;
-    }
-    let mut index = 0;
-    while index < left.len() {
-        if left[index] != right[index] {
-            return false;
-        }
-        index += 1;
-    }
-    true
-}
-
-/// `qar_impl_runtime_destroy` when these bindings declare it; the override comes from the
-/// generated function list, so the table field it reads exists exactly then.
-trait DeclaredRuntimeDestroy {
-    fn declared_runtime_destroy(&self) -> Option<unsafe extern "C" fn(*mut QarRuntime)> {
-        None
-    }
-}
-
-macro_rules! override_when_runtime_destroy_is_declared {
-    (qar_impl_runtime_destroy) => {
-        fn declared_runtime_destroy(&self) -> Option<unsafe extern "C" fn(*mut QarRuntime)> {
-            Some(self.qar_impl_runtime_destroy)
-        }
-    };
-    ($other_function:ident) => {};
-}
-
-macro_rules! implement_declared_runtime_destroy {
-    ($(
-        pub fn $name:ident($($argument:ident : $argument_type:ty),* $(,)?) $(-> $return_type:ty)?;
-    )*) => {
-        impl DeclaredRuntimeDestroy for QarApi {
-            $(override_when_runtime_destroy_is_declared!($name);)*
-        }
-    };
-}
-
-qar_impl_function_list!(implement_declared_runtime_destroy);
-
-impl QarApi {
-    /// Releases a runtime with [`RUNTIME_RELEASE_SYMBOL`], the call these bindings' header
-    /// releases a runtime with.
-    ///
-    /// # Safety
-    ///
-    /// `runtime` comes from `qar_impl_runtime_create` of this table's library, every session of
-    /// it is destroyed, and it is not used afterwards.
-    pub unsafe fn release_runtime(&self, runtime: *mut QarRuntime) {
-        match self.declared_runtime_destroy() {
-            // SAFETY: forwarded to the caller.
-            Some(runtime_destroy) => unsafe { runtime_destroy(runtime) },
-            // SAFETY: forwarded to the caller.
-            None => unsafe { (self.qar_impl_runtime_handle_destroy)(runtime) },
-        }
-    }
-}
-
 impl QarApi {
     /// Opens the C API library file at `path` and resolves every `qar_impl_*` symbol. Only that
     /// file is tried, from its absolute path (a relative path is taken from the current
@@ -322,22 +237,5 @@ impl fmt::Debug for QarApi {
             .field("library_path", &self.library_path)
             .field("lookup_step", &self.lookup_step)
             .finish_non_exhaustive()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{RUNTIME_RELEASE_SYMBOL, SYMBOL_NAMES};
-
-    #[test]
-    fn the_runtime_is_released_with_runtime_destroy_exactly_when_the_bindings_declare_it() {
-        let declares_runtime_destroy = SYMBOL_NAMES.contains(&"qar_impl_runtime_destroy");
-        let expected = if declares_runtime_destroy {
-            "qar_impl_runtime_destroy"
-        } else {
-            "qar_impl_runtime_handle_destroy"
-        };
-        assert_eq!(RUNTIME_RELEASE_SYMBOL, expected);
-        assert!(SYMBOL_NAMES.contains(&RUNTIME_RELEASE_SYMBOL));
     }
 }

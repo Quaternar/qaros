@@ -17,11 +17,9 @@
 //!   callback (`keep`), wherever the header does not say it is copied during the start.
 //! - **Abandoned calls.** Dropping a [`PendingCall`] before its outcome is taken cancels the call
 //!   and hands it to its owner. A handle the callback still delivers (a session, an invite, a
-//!   frame info) is destroyed by the owner while it lives; the owner's destroy waits for the
-//!   callback, so nothing is left after it.
-//! - **Runtimes before the exactly-once rule.** A runtime that predates the rule (0.9.0 and
-//!   earlier) may never call back for a cancelled begin-frame. A render sender then waits at most
-//!   [`crate::CANCELLED_CREATION_WAIT`] for a dropped frame's callback before refusing new frames.
+//!   render sender, a frame info) is destroyed by the owner while it lives; the owner's destroy
+//!   waits for the callback, so nothing is left after it. What the library may still use until
+//!   the callback (a D3D11 device's references) stays with the abandoned call.
 
 use std::any::Any;
 use std::ffi::{CStr, c_char, c_void};
@@ -29,7 +27,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use qaros_sys::{self as sys, QarApi};
 
@@ -88,23 +86,12 @@ impl CallShared {
         Some(outcome)
     }
 
-    /// Blocks until the result callback has run or `deadline` passes; true when it ran.
-    fn wait_until(&self, deadline: Option<Instant>) -> bool {
-        let pending = |state: &mut CallState| matches!(*state, CallState::Pending);
-        let state = match deadline {
-            None => self
-                .called_back
-                .wait_while(self.lock(), pending)
-                .unwrap_or_else(PoisonError::into_inner),
-            Some(deadline) => {
-                let timeout = deadline.saturating_duration_since(Instant::now());
-                self.called_back
-                    .wait_timeout_while(self.lock(), timeout, pending)
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .0
-            }
-        };
-        !matches!(*state, CallState::Pending)
+    /// Blocks until the result callback has recorded its outcome.
+    fn wait(&self) {
+        let _state = self
+            .called_back
+            .wait_while(self.lock(), |state| matches!(*state, CallState::Pending))
+            .unwrap_or_else(PoisonError::into_inner);
     }
 }
 
@@ -225,6 +212,8 @@ pub(crate) struct AbandonedCall {
     _token: Rc<CancelTokenInner>,
     destroy: Option<Destroy>,
     function: &'static str,
+    /// What must outlive the callback on the owner's thread, released with this value.
+    owner_keep: Option<Box<dyn Any>>,
 }
 
 impl std::fmt::Debug for AbandonedCall {
@@ -251,10 +240,16 @@ impl AbandonedCall {
         true
     }
 
-    /// Waits until the callback has run or `deadline` passes, then releases what it delivered;
-    /// true when it ran.
-    pub(crate) fn settle(&self, api: &QarApi, deadline: Instant) -> bool {
-        self.shared.wait_until(Some(deadline)) && self.release_if_delivered(api)
+    /// Keeps `value` until this abandoned call is released, after its callback.
+    pub(crate) fn keep_until_released(&mut self, value: Box<dyn Any>) {
+        self.owner_keep = Some(value);
+    }
+
+    /// Waits for the callback, which the header guarantees and the cancel brings promptly, then
+    /// releases what it delivered.
+    pub(crate) fn settle(&self, api: &QarApi) {
+        self.shared.wait();
+        self.release_if_delivered(api);
     }
 
     /// After the owner's destroy, which waited for the callback: a handle delivered then has no
@@ -287,7 +282,8 @@ struct Call<T> {
     function: &'static str,
 }
 
-/// An async call in flight: an onboard or rejoin ([`crate::Runtime::start_onboard`],
+/// An async call in flight: a render sender creation ([`crate::Session::start_render_sender`]),
+/// an onboard or rejoin ([`crate::Runtime::start_onboard`],
 /// [`crate::Runtime::start_rejoin`]), a co-process invite
 /// ([`crate::Session::start_onboarding_invite`]), a target-app invite or kill
 /// ([`crate::Session::start_invite_target_app`], [`crate::Session::start_kill_target_app`]), or a
@@ -401,7 +397,7 @@ impl<T> PendingCall<T> {
         let Some(call) = &self.call else {
             return Err(already_taken());
         };
-        call.shared.wait_until(None);
+        call.shared.wait();
         self.poll().unwrap_or_else(|| Err(already_taken()))
     }
 
@@ -437,6 +433,7 @@ impl<T> Drop for PendingCall<T> {
             _token: call.token,
             destroy: call.destroy,
             function: call.function,
+            owner_keep: None,
         });
     }
 }

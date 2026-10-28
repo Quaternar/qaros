@@ -54,17 +54,6 @@ macro_rules! zero_id_return {
 
 zero_id_return!(QarPeerId, QarSessionId, QarGuiPanelId);
 
-/// `qar_impl_runtime_destroy` exists only in the bindings of the header of the runtimes up to
-/// 0.9.0-dev.2916, so its behaviour cannot live in the `StubApi` impl, which compiles against
-/// both binding sets: its default releases the runtime as `qar_impl_runtime_handle_destroy` does.
-macro_rules! default_behaviour {
-    (qar_impl_runtime_destroy($runtime:ident)) => {
-        // SAFETY: the caller upholds the C API contract.
-        unsafe { Self::qar_impl_runtime_handle_destroy($runtime) }
-    };
-    ($other_function:ident($($argument:ident),*)) => {};
-}
-
 macro_rules! define_stub_exports {
     ($(
         pub fn $name:ident($($argument:ident : $argument_type:ty),* $(,)?) $(-> $return_type:ty)?;
@@ -75,7 +64,6 @@ macro_rules! define_stub_exports {
         pub trait StubApi {
             $(
                 unsafe fn $name($($argument: $argument_type),*) $(-> $return_type)? {
-                    default_behaviour!($name($($argument),*));
                     $(return <$return_type as StubReturn>::not_implemented(stringify!($name));)?
                 }
             )*

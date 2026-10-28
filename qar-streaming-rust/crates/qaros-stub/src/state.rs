@@ -97,7 +97,8 @@ pub struct StubState {
     /// How long a cancelled async render sender creation takes to call back
     /// once its token is cancelled.
     pub render_sender_create_cancel_delay: Duration,
-    pub render_sender_create_completion: CreateCompletion,
+    /// An async render sender creation ignores its cancel token (not the session's destroy).
+    pub render_sender_create_ignores_cancel: bool,
     /// How long an async onboard or rejoin waits before it creates its session.
     pub onboard_async_delay: Duration,
     /// An async onboard or rejoin ignores its cancel token (not the runtime's destroy).
@@ -138,20 +139,6 @@ pub struct PendingStubCall {
 pub struct StartedTargetApp {
     pub family: &'static str,
     pub host: String,
-}
-
-/// How an async render sender creation ends.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CreateCompletion {
-    /// Calls back once: with the sender, or with an error when cancelled or
-    /// timed out first.
-    #[default]
-    CallsBack,
-    /// Never calls back and creates nothing, cancelled or not.
-    NeverCallsBack,
-    /// Ignores its cancel token and delivers a sender after the delay, as a
-    /// creation that completes while being cancelled.
-    IgnoresCancel,
 }
 
 #[derive(Clone, Copy, Debug)]

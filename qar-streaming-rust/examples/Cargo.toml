@@ -19,9 +19,6 @@ vulkan = ["qaros/vulkan", "dep:ash", "dep:glam"]
 # d3d11: d3d11_render_sender's safe D3D11 sender. It compiles to nothing where the bindings
 # carry no D3D11, so it costs nothing on Linux and needs no feature of its own here.
 qaros = { workspace = true, features = ["d3d11"] }
-# Only for its build-script metadata: which binding set qaros is built against
-# (`DEP_QAR_STREAMING_C_MEMBER_HUBS`, read by build.rs for remote_app_onboarding).
-qaros-sys.workspace = true
 log.workspace = true
 ash = { workspace = true, features = ["loaded"], optional = true }
 glam = { version = "0.30", optional = true }

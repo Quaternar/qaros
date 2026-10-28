@@ -11,7 +11,6 @@ use qaros_sys::{self as sys, defaults};
 use crate::adapter::GraphicsAdapter;
 use crate::callbacks::{BlockingOptions, Progress};
 use crate::device::DeviceIdentity;
-#[cfg(qaros_device_identity)]
 use crate::device::DeviceIdentityStorage;
 use crate::error::{Error, Result, check};
 use crate::invite::OnboardingInvite;
@@ -52,8 +51,7 @@ pub struct PeerPresentation {
     pub custom_info: Option<String>,
     /// The device this application describes itself as (`QarPeerDeviceIdentity`, chained on the
     /// presentation of the onboard or rejoin init). `None`: a desktop PC with the fixed id of the
-    /// host OS. Where the bindings lack the structure (cfg `qaros_device_identity` unset), a set
-    /// identity is [`Error::InvalidArgument`] before the call.
+    /// host OS.
     pub device_identity: Option<DeviceIdentity>,
 }
 
@@ -169,10 +167,9 @@ pub struct Onboarded {
     pub session: Session,
 }
 
-/// A `QarRuntime`. Sessions keep it alive; it is released after the last of them, with the call
-/// the bindings' header releases a runtime with ([`qaros_sys::RUNTIME_RELEASE_SYMBOL`]:
-/// `qar_runtime_handle_destroy` under the public header, `qar_runtime_destroy` under the header of
-/// the runtimes up to 0.9.0-dev.2916).
+/// A `QarRuntime`. Sessions keep it alive; it is released after the last of them
+/// (`qar_runtime_handle_destroy`), which ends its pending async onboards and rejoins and waits for
+/// their callbacks.
 #[derive(Debug)]
 pub struct Runtime {
     pub(crate) inner: Rc<RuntimeInner>,
@@ -194,18 +191,11 @@ struct PresentationStorage {
     display_name: Option<CString>,
     app_version: Option<CString>,
     custom_info: Option<CString>,
-    #[cfg(qaros_device_identity)]
     device_identity: Option<DeviceIdentityStorage>,
 }
 
 impl PresentationStorage {
     fn new(presentation: &PeerPresentation) -> Result<Self> {
-        #[cfg(not(qaros_device_identity))]
-        if presentation.device_identity.is_some() {
-            return Err(Error::InvalidArgument(
-                "these bindings come from a header without QarPeerDeviceIdentity".to_string(),
-            ));
-        }
         Ok(Self {
             display_name: strings::optional_c_string(
                 presentation.display_name.as_deref(),
@@ -219,7 +209,6 @@ impl PresentationStorage {
                 presentation.custom_info.as_deref(),
                 "custom peer info",
             )?,
-            #[cfg(qaros_device_identity)]
             device_identity: presentation
                 .device_identity
                 .as_ref()
@@ -233,7 +222,6 @@ impl PresentationStorage {
         raw.display_name = strings::pointer_or_null(self.display_name.as_ref());
         raw.app_version = strings::pointer_or_null(self.app_version.as_ref());
         raw.app_custom_peer_info = strings::pointer_or_null(self.custom_info.as_ref());
-        #[cfg(qaros_device_identity)]
         if let Some(identity) = self.device_identity.as_mut() {
             raw.header.next = (&raw mut identity.raw).cast();
         }
@@ -265,7 +253,6 @@ pub(crate) struct OnboardInitStorage {
     invite: sys::QarOnboardInviteExt,
     local_app: sys::QarOnboardLocalAppExt,
     app_tag: sys::QarOnboardLocalAppTagExt,
-    #[cfg(qaros_member_hubs)]
     remote_app_grant: sys::QarOnboardRemoteAppGrantExt,
     adapter: sys::QarGraphicsDeviceId,
     peer_id: sys::QarOnboardPeerIdExt,
@@ -296,7 +283,6 @@ impl OnboardInitStorage {
             invite: defaults::qar_onboard_invite_ext_default(),
             local_app: defaults::qar_onboard_local_app_ext_default(),
             app_tag: defaults::qar_onboard_local_app_tag_ext_default(),
-            #[cfg(qaros_member_hubs)]
             remote_app_grant: defaults::qar_onboard_remote_app_grant_ext_default(),
             adapter: defaults::qar_graphics_device_id_default(),
             peer_id: defaults::qar_onboard_peer_id_ext_default(),
@@ -348,7 +334,6 @@ impl OnboardInitStorage {
                 }
             }
         }
-        #[cfg(qaros_member_hubs)]
         if let Some(invitation) = extensions.remote_app_grant {
             this.remote_app_grant.invitation = invitation.as_ptr();
             chain.push(&raw mut this.remote_app_grant.header);
@@ -772,7 +757,7 @@ impl Drop for RuntimeInner {
         // SAFETY: every session holds an Rc to this value, so all session handles are already
         // destroyed; the handle is not used again. Per the header, the destroy returns only after
         // the callbacks of the onboards still running have returned (with QAR_STATUS_TIMEOUT).
-        unsafe { api.release_runtime(self.handle.as_ptr()) };
+        unsafe { (api.qar_impl_runtime_handle_destroy)(self.handle.as_ptr()) };
         for onboard in std::mem::take(self.abandoned_onboards.get_mut()) {
             onboard.leak_late_delivery();
         }

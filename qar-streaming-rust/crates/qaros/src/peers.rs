@@ -25,9 +25,8 @@ pub struct PeerInfo {
     /// streamer, visualizer): a peer to render for once it is
     /// [`AppState::Running`] (header "Basic flow", step 5).
     pub is_target_app: bool,
-    /// The presence, role and device identity. `None` where the bindings lack those functions
-    /// (cfg `qaros_device_identity` unset).
-    pub identity: Option<PeerIdentity>,
+    /// The presence, role and device identity.
+    pub identity: PeerIdentity,
 }
 
 pub(crate) fn read_peer_info(api: &QarApi, handle: *mut sys::QarPeerSpec) -> Result<PeerInfo> {
@@ -83,10 +82,7 @@ pub(crate) fn read_peer_info(api: &QarApi, handle: *mut sys::QarPeerSpec) -> Res
             "qar_peer_spec_get_room_tag",
         )?,
         is_target_app,
-        #[cfg(qaros_device_identity)]
         // SAFETY: handle is live (owned or borrowed for the callback).
-        identity: Some(unsafe { crate::device::read_peer_identity(api, handle) }?),
-        #[cfg(not(qaros_device_identity))]
-        identity: None,
+        identity: unsafe { crate::device::read_peer_identity(api, handle) }?,
     })
 }

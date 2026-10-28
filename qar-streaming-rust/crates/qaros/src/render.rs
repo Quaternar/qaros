@@ -3,7 +3,7 @@ use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use qaros_sys::{self as sys, QarApi, defaults};
 
@@ -11,7 +11,6 @@ use crate::callbacks::BlockingOptions;
 use crate::error::{Error, Result, check};
 use crate::library::require_handle;
 use crate::pending::{self, AbandonedCall, CallSpec, PendingCall, RawOutcome};
-use crate::pending_sender::CANCELLED_CREATION_WAIT;
 use crate::session::SessionInner;
 use crate::types::{
     AppVolumeId, Eye, Fov, FrameLayout, PeerId, PixelFormat, Pose, StreamId, ViewKind,
@@ -99,7 +98,6 @@ pub enum ColorEncoding {
     Linear,
 }
 
-#[cfg(qaros_color_extensions)]
 impl ColorAlphaMode {
     fn to_raw(self) -> sys::QarColorAlphaMode {
         match self {
@@ -111,7 +109,6 @@ impl ColorAlphaMode {
     }
 }
 
-#[cfg(qaros_color_extensions)]
 impl ColorEncoding {
     fn to_raw(self) -> sys::QarColorEncoding {
         match self {
@@ -332,18 +329,6 @@ pub(crate) struct GraphicsReferences {
     _d3d11: Option<crate::d3d11::DeviceReferences>,
 }
 
-impl GraphicsReferences {
-    /// For a creation the library may still complete at any time: the references are never
-    /// released, so the objects they hold stay valid for it.
-    #[allow(
-        clippy::forget_non_drop,
-        reason = "only the Windows D3D11 references have drop glue; the call is the same everywhere"
-    )]
-    pub(crate) fn keep_until_process_exit(self) {
-        std::mem::forget(self);
-    }
-}
-
 /// A `QarRenderSenderInit` together with the app volume id and the
 /// extensions it points to, so that one allocation keeps all of it valid for
 /// as long as the library may read it.
@@ -353,9 +338,7 @@ pub(crate) struct RenderSenderInitStorage {
     vulkan_params: Option<sys::QarStreamParamsVulkan>,
     #[cfg(qaros_d3d11)]
     d3d11_params: Option<sys::QarStreamParamsD3D11>,
-    #[cfg(qaros_color_extensions)]
     alpha_mode: Option<sys::QarRenderSenderAlphaModeExt>,
-    #[cfg(qaros_color_extensions)]
     color_encoding: Option<sys::QarRenderSenderColorEncodingExt>,
 }
 
@@ -387,21 +370,9 @@ impl RenderSenderInitStorage {
             vulkan_params: None,
             #[cfg(qaros_d3d11)]
             d3d11_params: None,
-            #[cfg(qaros_color_extensions)]
             alpha_mode: alpha_mode_extension(config.alpha_mode),
-            #[cfg(qaros_color_extensions)]
             color_encoding: color_encoding_extension(config.color_encoding),
         });
-        #[cfg(not(qaros_color_extensions))]
-        if config.alpha_mode != ColorAlphaMode::Unspecified
-            || config.color_encoding != ColorEncoding::Srgb
-        {
-            return Err(Error::InvalidArgument(
-                "an alpha mode or colour encoding needs bindings from a header that declares \
-                 the render sender's colour extensions"
-                    .to_owned(),
-            ));
-        }
         match graphics {
             SenderGraphics::Cpu => {
                 storage.init.graphics_api = sys::QarGraphicsAPI::QAR_GRAPHICS_API_CPU;
@@ -445,7 +416,6 @@ impl RenderSenderInitStorage {
         let graphics_extension = vulkan_extension
             .or(d3d11_extension)
             .unwrap_or(ptr::null_mut());
-        #[cfg(qaros_color_extensions)]
         let graphics_extension = self.chain_color_extensions_before(graphics_extension);
         self.init.header.next = graphics_extension;
         &raw mut self.init
@@ -453,7 +423,6 @@ impl RenderSenderInitStorage {
 
     /// Chains the colour extensions that are set in front of `next` and
     /// returns the start of the chain.
-    #[cfg(qaros_color_extensions)]
     fn chain_color_extensions_before(&mut self, mut next: *mut c_void) -> *mut c_void {
         if let Some(extension) = self.color_encoding.as_mut() {
             extension.header.next = next;
@@ -467,7 +436,6 @@ impl RenderSenderInitStorage {
     }
 }
 
-#[cfg(qaros_color_extensions)]
 fn alpha_mode_extension(alpha_mode: ColorAlphaMode) -> Option<sys::QarRenderSenderAlphaModeExt> {
     (alpha_mode != ColorAlphaMode::Unspecified).then(|| {
         let mut extension = defaults::qar_render_sender_alpha_mode_ext_default();
@@ -476,7 +444,6 @@ fn alpha_mode_extension(alpha_mode: ColorAlphaMode) -> Option<sys::QarRenderSend
     })
 }
 
-#[cfg(qaros_color_extensions)]
 fn color_encoding_extension(
     color_encoding: ColorEncoding,
 ) -> Option<sys::QarRenderSenderColorEncodingExt> {
@@ -649,8 +616,8 @@ impl RenderSender {
     /// arrived.
     ///
     /// Dropping the pending frame cancels it and returns at once. The next begin on this sender
-    /// first waits for its callback (at most [`CANCELLED_CREATION_WAIT`]) and destroys a frame
-    /// info it delivered; destroying the sender cancels it and waits for its callback. The
+    /// first waits for its callback and destroys a frame info it delivered; destroying the sender
+    /// cancels it and waits for its callback. The
     /// frame info the callback hands over is owned by the caller, as the runtime's tests use it;
     /// the header does not say so.
     pub fn start_owned_frame(
@@ -752,31 +719,22 @@ impl RenderSender {
 
 impl RenderSenderInner {
     fn refuse_if_frame_open(&self, message: &str) -> Result<()> {
-        self.settle_abandoned_frame()?;
+        self.settle_abandoned_frame();
         if self.frame_open.get() {
             return Err(Error::InvalidArgument(message.to_string()));
         }
         Ok(())
     }
 
-    /// Ends a dropped async begin-frame: waits at most [`CANCELLED_CREATION_WAIT`] for its
-    /// callback, which a cancel brings at once, then destroys a frame info it delivered and
-    /// closes the frame. A call still pending after that (a runtime older than the header's
-    /// exactly-once rule) keeps the frame open and is refused.
-    fn settle_abandoned_frame(&self) -> Result<()> {
-        let mut abandoned = self.abandoned_frame.borrow_mut();
-        let Some(call) = abandoned.as_ref() else {
-            return Ok(());
-        };
-        if !call.settle(self.session.api(), Instant::now() + CANCELLED_CREATION_WAIT) {
-            return Err(Error::InvalidArgument(
-                "a cancelled async begin-frame on this render sender has not called back yet"
-                    .to_string(),
-            ));
+    /// Ends a dropped async begin-frame: waits for its callback, which the cancel brings
+    /// promptly and the header guarantees, then destroys a frame info it delivered and closes the
+    /// frame. A cancel arriving as the begin finishes may still deliver a frame, so a new begin
+    /// must not start before this.
+    fn settle_abandoned_frame(&self) {
+        if let Some(call) = self.abandoned_frame.borrow_mut().take() {
+            call.settle(self.session.api());
+            self.frame_open.set(false);
         }
-        *abandoned = None;
-        self.frame_open.set(false);
-        Ok(())
     }
 
     #[cfg(feature = "vulkan")]

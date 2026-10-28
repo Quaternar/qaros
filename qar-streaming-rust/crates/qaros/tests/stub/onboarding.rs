@@ -324,7 +324,6 @@ fn a_slot_is_re_enrolled_under_its_own_id() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
-#[cfg(qaros_device_identity)]
 mod device_identity {
     use qaros::{DeviceIdentity, SourceDeviceCategory};
 
@@ -408,7 +407,6 @@ mod device_identity {
     }
 }
 
-#[cfg(qaros_member_hubs)]
 mod member_hubs {
     use std::num::NonZeroU32;
 

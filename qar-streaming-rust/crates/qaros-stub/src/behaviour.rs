@@ -14,16 +14,15 @@ use crate::Stub;
 use crate::exports::{StubApi, StubReturn};
 use crate::frame_stamp::{self, ViewArea};
 use crate::state::{
-    self, CreateCompletion, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubPanel,
-    StubSubscription, StubVolume, SubscriptionKind, destroy_handle, handle_value, new_handle, note,
-    success, write_c_string,
+    self, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubPanel, StubSubscription,
+    StubVolume, SubscriptionKind, destroy_handle, handle_value, new_handle, note, success,
+    write_c_string,
 };
 
 const RUNTIME: &str = "runtime";
 const SESSION: &str = "session";
 const CANCEL_TOKEN: &str = "cancel_token";
 const INVITE: &str = "invite";
-#[cfg(qaros_member_hubs)]
 const MEMBER_INVITATION: &str = "member_hub_invitation";
 const PEER_SPEC: &str = "peer_spec";
 const GUI_PANEL: &str = "gui_panel";
@@ -79,7 +78,6 @@ struct InviteValue {
 
 /// A member-hub invitation: what `qar_runtime_create_member_hub_invitation` was asked for, with
 /// the header's defaults applied.
-#[cfg(qaros_member_hubs)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MemberInvitationValue {
     expires_unix: i64,
@@ -89,10 +87,8 @@ struct MemberInvitationValue {
     label: String,
 }
 
-#[cfg(qaros_member_hubs)]
 const MEMBER_INVITATION_PREFIX: &str = "qaros-stub member invitation";
 
-#[cfg(qaros_member_hubs)]
 impl MemberInvitationValue {
     /// One field per line after the prefix; the label, which may hold anything, last.
     fn to_wire(&self) -> Vec<u8> {
@@ -136,12 +132,10 @@ struct PeerSpecValue {
     custom_info: String,
     app_state: QarAppState,
     is_target_app: bool,
-    #[cfg_attr(not(qaros_device_identity), allow(dead_code))]
     identity: PeerIdentityValue,
 }
 
-/// A peer's presence, role and device, as the header's enum values. Kept on every binding set;
-/// read only where the bindings declare the getters.
+/// A peer's presence, role and device, as the header's enum values.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PeerIdentityValue {
     presence: i32,
@@ -966,33 +960,6 @@ fn token_timed_out(state: &state::StubState, token_address: usize) -> bool {
         .is_some_and(|deadline| Instant::now() >= *deadline)
 }
 
-enum CancelReason {
-    Cancelled,
-    TimedOut,
-}
-
-/// Waits `delay`, ending early when the token (0 for none) is cancelled or
-/// times out.
-fn wait_unless_cancelled(delay: Duration, token_address: usize) -> Option<CancelReason> {
-    let deadline = Instant::now() + delay;
-    loop {
-        if token_address != 0 {
-            let guard = state::lock();
-            if guard.cancelled_tokens.contains(&token_address) {
-                return Some(CancelReason::Cancelled);
-            }
-            if token_timed_out(&guard, token_address) {
-                return Some(CancelReason::TimedOut);
-            }
-        }
-        let now = Instant::now();
-        if now >= deadline {
-            return None;
-        }
-        std::thread::sleep((deadline - now).min(Duration::from_millis(1)));
-    }
-}
-
 /// What `qar_runtime_onboard` decided before it starts, shared by the blocking and the async
 /// form.
 struct OnboardPlan {
@@ -1164,7 +1131,6 @@ unsafe fn check_presentation(presentation: &QarPeerPresentation) -> Result<(), Q
     while !next.is_null() {
         // SAFETY: forwarded to the caller.
         let header = unsafe { &*next };
-        #[cfg(qaros_device_identity)]
         if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY {
             // SAFETY: the type identifies the structure.
             let identity = unsafe { &*next.cast::<QarPeerDeviceIdentity>() };
@@ -1193,7 +1159,6 @@ unsafe fn check_presentation(presentation: &QarPeerPresentation) -> Result<(), Q
 ///
 /// The presentation's chain consists of checked, stamped structures.
 unsafe fn declared_device(presentation: &QarPeerPresentation) -> PeerIdentityValue {
-    #[cfg(qaros_device_identity)]
     {
         let mut next: *const QarStructureHeader = presentation.header.next.cast_const().cast();
         while !next.is_null() {
@@ -1206,8 +1171,6 @@ unsafe fn declared_device(presentation: &QarPeerPresentation) -> PeerIdentityVal
             next = header.next.cast_const().cast();
         }
     }
-    #[cfg(not(qaros_device_identity))]
-    let _ = presentation;
     PeerIdentityValue::desktop()
 }
 
@@ -1216,7 +1179,6 @@ unsafe fn declared_device(presentation: &QarPeerPresentation) -> PeerIdentityVal
 /// # Safety
 ///
 /// The identity's strings are C strings or NULL.
-#[cfg(qaros_device_identity)]
 unsafe fn device_value(identity: &QarPeerDeviceIdentity) -> PeerIdentityValue {
     #[allow(
         clippy::unnecessary_cast,
@@ -1242,7 +1204,6 @@ unsafe fn device_value(identity: &QarPeerDeviceIdentity) -> PeerIdentityValue {
 /// # Safety
 ///
 /// The identity's strings are C strings or NULL.
-#[cfg(qaros_device_identity)]
 unsafe fn check_device_identity(identity: &QarPeerDeviceIdentity) -> Result<String, QarResult> {
     let category = identity.category;
     let declarable = category == QarDeviceCategory::QAR_DEVICE_CATEGORY_DESKTOP_PC
@@ -1343,6 +1304,9 @@ fn spawn_async_call(
         }
         if let Some(reason) = reason {
             note(format!("{name} ended early: {reason}"));
+            if reason == "timed out" {
+                note(format!("{name} timed out"));
+            }
         }
         complete(reason);
         note(format!("{name} called back"));
@@ -1364,9 +1328,7 @@ fn wait_for_async_call(
     loop {
         {
             let guard = state::lock();
-            if guard.destroying_owners.contains(&owner) {
-                return Some("ended by its owner's destroy");
-            }
+            // The token first: a cancel that came before the owner's destroy is why it ended.
             if token_address != 0 {
                 if guard.cancelled_tokens.contains(&token_address) {
                     return Some("cancelled");
@@ -1377,6 +1339,9 @@ fn wait_for_async_call(
                 if guard.live_handles.get(&token_address) != Some(&CANCEL_TOKEN) {
                     return Some("ended by its token's destroy");
                 }
+            }
+            if guard.destroying_owners.contains(&owner) {
+                return Some("ended by its owner's destroy");
             }
         }
         let now = Instant::now();
@@ -1509,7 +1474,6 @@ unsafe fn format_target_connection(
 /// # Safety
 ///
 /// `handle` is null or a handle from this stub; `buffer` is null or writable for `size` bytes.
-#[cfg(qaros_device_identity)]
 unsafe fn write_spec_text(
     handle: *mut QarPeerSpec,
     buffer: *mut c_char,
@@ -1672,12 +1636,14 @@ unsafe fn create_sender_value(
     if init.peer_id.data == [0; 16] {
         return Err(invalid("peer_id is zero"));
     }
-    let combined_depth_stencil = [102, 103].contains(&init.depth_format.0);
+    let combined_depth_stencil = [
+        QarPixelFormat::QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT,
+        QarPixelFormat::QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT,
+    ]
+    .contains(&init.depth_format);
     if combined_depth_stencil && init.graphics_api != QarGraphicsAPI::QAR_GRAPHICS_API_VULKAN {
-        // QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED and the D24S8 and D32S8
-        // formats by value: only the public header declares them.
         return Err(state::error(
-            QarStatusCode(806),
+            QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED,
             "the depth format takes a stencil, which only OpenGL and Vulkan senders accept; \
              use QAR_PIXEL_FORMAT_D16_UNORM or QAR_PIXEL_FORMAT_D32_FLOAT",
         ));
@@ -1713,7 +1679,6 @@ unsafe fn create_sender_value(
 /// # Safety
 ///
 /// `init.header.next` must be null or a chain of stamped extension structures.
-#[cfg(qaros_color_extensions)]
 unsafe fn render_sender_graphics_extension(
     init: &QarRenderSenderInit,
 ) -> Result<*const QarStructureHeader, QarResult> {
@@ -1769,22 +1734,6 @@ unsafe fn render_sender_graphics_extension(
         ));
     }
     Ok(graphics_extension)
-}
-
-/// The bindings of a header without the colour extensions chain only the graphics extension.
-///
-/// # Safety
-///
-/// `init.header.next` must be null or a stamped extension structure.
-#[cfg(not(qaros_color_extensions))]
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "the same signature as the chain walk of bindings with the colour extensions"
-)]
-unsafe fn render_sender_graphics_extension(
-    init: &QarRenderSenderInit,
-) -> Result<*const QarStructureHeader, QarResult> {
-    Ok(init.header.next.cast_const().cast())
 }
 
 /// The deferred half of `qar_render_sender_create_async`: the outcome its
@@ -2390,7 +2339,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_runtime_create_member_hub_invitation(
         runtime: *mut QarRuntime,
         init: *const QarMemberHubInvitationInit,
@@ -2456,7 +2404,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_runtime_join_hub_as_member(
         runtime: *mut QarRuntime,
         init: *const QarJoinHubAsMemberInit,
@@ -2520,7 +2467,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_member_hub_invitation_serialized_size(
         invitation: *const QarMemberHubInvitation,
         out_size: *mut usize,
@@ -2545,7 +2491,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_member_hub_invitation_serialize(
         invitation: *const QarMemberHubInvitation,
         out_buffer: *mut u8,
@@ -2578,7 +2523,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_member_hub_invitation_deserialize(
         wire_data: *const u8,
         wire_data_size: usize,
@@ -2600,7 +2544,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_member_hubs)]
     unsafe fn qar_impl_member_hub_invitation_handle_destroy(
         invitation: *mut QarMemberHubInvitation,
     ) {
@@ -2613,7 +2556,6 @@ impl StubApi for Stub {
         };
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_update_device_identity(
         session: *mut QarSession,
         identity: *const QarPeerDeviceIdentity,
@@ -2719,6 +2661,7 @@ impl StubApi for Stub {
             .retain(|subscription| subscription.session != session_address);
         // SAFETY: session handles come from this stub.
         unsafe { destroy_handle::<SessionValue, QarSession>(session, SESSION) };
+        note("session destroyed".to_string());
     }
 
     unsafe fn qar_impl_session_get_id(
@@ -3134,64 +3077,70 @@ impl StubApi for Stub {
         }
         // SAFETY: init checked non-null; the caller keeps it alive until the callback.
         let target_peer = unsafe { (*init).peer_id.data };
-        let (delay, cancel_delay, completion, unanswered_after) = {
+        let (delay, cancel_delay, ignores_cancel, unanswered_after) = {
             let guard = state::lock();
             (
                 guard.render_sender_create_delay,
                 guard.render_sender_create_cancel_delay,
-                guard.render_sender_create_completion,
+                guard.render_sender_create_ignores_cancel,
                 guard.unanswering_peers.get(&target_peer).copied(),
             )
         };
         let session_address = session as usize;
         let init_address = init as usize;
         let user_state_address = user_state as usize;
-        let token_address = if completion == CreateCompletion::IgnoresCancel {
-            0
-        } else {
-            token as usize
-        };
-        // Not joined: the caller picks the sender up later.
-        std::thread::spawn(move || {
-            if completion == CreateCompletion::NeverCallsBack {
-                note("render_sender_create_async never calls back".to_string());
-                return;
-            }
-            let waited = match unanswered_after {
-                Some(after) => Some(
-                    wait_unless_cancelled(after, token_address).unwrap_or(CancelReason::TimedOut),
-                ),
-                None => wait_unless_cancelled(delay, token_address),
-            };
-            let (result, sender) = match waited {
-                Some(CancelReason::Cancelled) => {
-                    std::thread::sleep(cancel_delay);
-                    note("render_sender_create_async cancelled".to_string());
-                    (
-                        state::error(
-                            QarStatusCode::QAR_STATUS_UNCLASSIFIED,
-                            "render_sender_create cancelled",
-                        ),
-                        ptr::null_mut(),
-                    )
-                }
-                Some(CancelReason::TimedOut) => {
-                    note("render_sender_create_async timed out".to_string());
-                    (
+        // The header: the callback comes exactly once, with QAR_STATUS_TIMEOUT when the token is
+        // cancelled, times out or is destroyed, or the session is destroyed first, whose destroy
+        // waits for it.
+        spawn_async_call(
+            session_address,
+            token,
+            AsyncCallWait {
+                delay: unanswered_after.unwrap_or(delay),
+                ignores_cancel,
+                hold: None,
+            },
+            None,
+            "render_sender_create_async",
+            move |reason| {
+                let (result, sender) = match reason {
+                    Some("cancelled" | "ended by its token's destroy") => {
+                        std::thread::sleep(cancel_delay);
+                        note("render_sender_create_async cancelled".to_string());
+                        (
+                            state::error(
+                                QarStatusCode::QAR_STATUS_TIMEOUT,
+                                "render_sender_create cancelled",
+                            ),
+                            ptr::null_mut(),
+                        )
+                    }
+                    Some(reason) => (
                         state::error(
                             QarStatusCode::QAR_STATUS_TIMEOUT,
-                            "render_sender_create timed out",
+                            format!("render_sender_create {reason}"),
                         ),
                         ptr::null_mut(),
-                    )
-                }
-                // SAFETY: the caller keeps init and what it points to alive
-                // until this callback has run.
-                None => unsafe { create_sender_for_callback(session_address, init_address) },
-            };
-            // SAFETY: the callback and user state come from the caller; called once.
-            unsafe { callback(result, sender, user_state_address as *mut c_void) };
-        });
+                    ),
+                    // A receiver that does not answer: the creation ends without a sender.
+                    None if unanswered_after.is_some() => {
+                        note("render_sender_create_async timed out".to_string());
+                        (
+                            state::error(
+                                QarStatusCode::QAR_STATUS_TIMEOUT,
+                                "render_sender_create timed out",
+                            ),
+                            ptr::null_mut(),
+                        )
+                    }
+                    // SAFETY: the caller keeps init and what it points to alive until this
+                    // callback has run; the session's destroy waits for it.
+                    None => unsafe { create_sender_for_callback(session_address, init_address) },
+                };
+                // SAFETY: the callback and user state come from the caller; called once.
+                unsafe { callback(result, sender, user_state_address as *mut c_void) };
+            },
+        );
         success()
     }
 
@@ -3554,7 +3503,6 @@ impl StubApi for Stub {
         unsafe { format_target_connection("android", host, buffer, buffer_size) }
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_presence(
         handle: *mut QarPeerSpec,
         out_presence: *mut QarPeerPresence,
@@ -3569,7 +3517,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_role(
         handle: *mut QarPeerSpec,
         out_role: *mut QarPeerRole,
@@ -3584,7 +3531,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_category(
         handle: *mut QarPeerSpec,
         out_category: *mut QarDeviceCategory,
@@ -3599,7 +3545,6 @@ impl StubApi for Stub {
         success()
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_device_id(
         handle: *mut QarPeerSpec,
         out_buffer: *mut c_char,
@@ -3613,7 +3558,6 @@ impl StubApi for Stub {
         }
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_device_family(
         handle: *mut QarPeerSpec,
         out_buffer: *mut c_char,
@@ -3627,7 +3571,6 @@ impl StubApi for Stub {
         }
     }
 
-    #[cfg(qaros_device_identity)]
     unsafe fn qar_impl_peer_spec_get_device_name(
         handle: *mut QarPeerSpec,
         out_buffer: *mut c_char,
@@ -4602,7 +4545,6 @@ unsafe fn validate_optional_extensions(
             next = header.next.cast_const().cast();
             continue;
         }
-        #[cfg(qaros_member_hubs)]
         if extension_type
             == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT
             && allowed != OptionalExtensions::Rejoin
@@ -4662,7 +4604,6 @@ fn adapter_report(adapter: &QarGraphicsDeviceId) -> String {
 /// # Safety
 ///
 /// The extension's invitation is null or a pointer the caller passed as a handle.
-#[cfg(qaros_member_hubs)]
 unsafe fn check_remote_app_grant(grant: &QarOnboardRemoteAppGrantExt) -> Result<(), QarResult> {
     if grant.invitation.is_null() {
         return Err(invalid(
@@ -4697,7 +4638,6 @@ unsafe fn check_remote_app_grant(grant: &QarOnboardRemoteAppGrantExt) -> Result<
 /// # Safety
 ///
 /// `next` must be null or a chain of stamped extension structures.
-#[cfg(qaros_member_hubs)]
 unsafe fn member_invitation_grant(
     mut next: *const QarStructureHeader,
 ) -> Result<Option<String>, QarResult> {
@@ -4877,11 +4817,6 @@ unsafe fn create_vulkan_sender(
     }
     // SAFETY: the type identifies the structure.
     let params = unsafe { &*extension.cast::<QarStreamParamsVulkan>() };
-    // Where the bindings have the colour extensions, the chain walk has checked what follows.
-    #[cfg(not(qaros_color_extensions))]
-    if !params.header.next.is_null() {
-        return Err(invalid("QarStreamParamsVulkan header.next must be NULL"));
-    }
     let sizes: Vec<QarTextureSize> = sender.textures.iter().map(|texture| texture.size).collect();
     // SAFETY: the device handles are the caller's live device.
     unsafe { crate::vulkan::VulkanSender::create(params, &sender.views, &sizes) }
@@ -5397,26 +5332,12 @@ pub extern "C" fn qar_stub_set_render_sender_create_cancel_delay_ms(milliseconds
     state::lock().render_sender_create_cancel_delay = Duration::from_millis(milliseconds);
 }
 
-/// Nonzero: async render sender creations started from now on never call
-/// back and create nothing, cancelled or not (off by default).
-#[unsafe(no_mangle)]
-pub extern "C" fn qar_stub_set_render_sender_create_never_calls_back(never: u8) {
-    set_create_completion(never, CreateCompletion::NeverCallsBack);
-}
-
-/// Nonzero: async render sender creations started from now on ignore their
-/// cancel token and deliver a sender after the delay (off by default).
+/// An async render sender creation started from now on ignores its cancel token and delivers
+/// a sender after the delay, as a creation that completes while it is cancelled (the header
+/// allows it). The session's destroy still ends it.
 #[unsafe(no_mangle)]
 pub extern "C" fn qar_stub_set_render_sender_create_ignores_cancel(ignores: u8) {
-    set_create_completion(ignores, CreateCompletion::IgnoresCancel);
-}
-
-fn set_create_completion(enabled: u8, completion: CreateCompletion) {
-    state::lock().render_sender_create_completion = if enabled != 0 {
-        completion
-    } else {
-        CreateCompletion::CallsBack
-    };
+    state::lock().render_sender_create_ignores_cancel = ignores != 0;
 }
 
 /// Frames shown to the peer (16 bytes); 0 for NULL.

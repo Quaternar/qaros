@@ -7,24 +7,6 @@
 // compiles nothing: the header needs the Windows SDK there, and nothing is
 // linked.
 fn main() {
-    // The ports of types only the public header declares exist where qaros-sys's bindings
-    // declare them (see qaros-sys's build script).
-    for (cfg, variable) in [
-        (
-            "qaros_color_extensions",
-            "DEP_QAR_STREAMING_C_COLOR_EXTENSIONS",
-        ),
-        ("qaros_member_hubs", "DEP_QAR_STREAMING_C_MEMBER_HUBS"),
-        (
-            "qaros_device_identity",
-            "DEP_QAR_STREAMING_C_DEVICE_IDENTITY",
-        ),
-    ] {
-        println!("cargo::rustc-check-cfg=cfg({cfg})");
-        if std::env::var_os(variable).is_some() {
-            println!("cargo::rustc-cfg={cfg}");
-        }
-    }
     println!("cargo::rerun-if-changed=src/defaults.c");
     println!("cargo::rerun-if-changed=../../../qar-streaming-c/include/qar_streaming.h");
     println!("cargo::rerun-if-changed=../../xtask/shim-vulkan/vulkan/vulkan_core.h");

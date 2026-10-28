@@ -226,7 +226,6 @@ fn a_raw_onboard_chain_is_refused_where_the_header_refuses_it() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
-#[cfg(qaros_member_hubs)]
 #[test]
 fn a_raw_member_hub_call_reaches_the_invitation_of_the_safe_api() {
     let fixture = Fixture::new();

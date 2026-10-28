@@ -381,7 +381,6 @@ if let Some(begun) = pending.poll() {
 
 - **One frame at a time.** Begin the next frame only after showing (or dropping) this one.
 - **Destroying the sender** (or its session) cancels a pending begin-frame and waits for its callback, unless it is made from that very callback.
-- A runtime older than the exactly-once rule for async calls (0.9.0 and earlier) may never call back for a cancelled begin-frame.
 
 ## The D3D11 path
 

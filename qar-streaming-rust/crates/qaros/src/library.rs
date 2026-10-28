@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
@@ -6,7 +5,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use qaros_sys::{QarApi, QarCancelToken, defaults};
+use qaros_sys::{QarApi, defaults};
 
 use crate::cancel::CancelToken;
 use crate::error::{Error, Result, check};
@@ -87,10 +86,6 @@ pub(crate) struct LibraryInner {
     /// Never dropped: the table owns the opened DLL, which stays mapped for
     /// the rest of the process (see [`Library`]).
     pub(crate) api: ManuallyDrop<QarApi>,
-    /// Cancel tokens of operations that may still call back (a cancelled
-    /// sender creation whose callback never came): destroyed right before the
-    /// library, once no session that could run the operation is left.
-    pub(crate) tokens_destroyed_at_teardown: RefCell<Vec<NonNull<QarCancelToken>>>,
 }
 
 impl Library {
@@ -172,7 +167,6 @@ impl Library {
         Ok(Self {
             inner: Rc::new(LibraryInner {
                 api: ManuallyDrop::new(api),
-                tokens_destroyed_at_teardown: RefCell::new(Vec::new()),
             }),
         })
     }
@@ -315,11 +309,6 @@ impl Library {
 
 impl Drop for LibraryInner {
     fn drop(&mut self) {
-        for token in self.tokens_destroyed_at_teardown.get_mut().drain(..) {
-            // SAFETY: a live token handed over by its last owner; every
-            // session is gone, so no operation still uses it.
-            unsafe { (self.api.qar_impl_cancel_token_handle_destroy)(token.as_ptr()) };
-        }
         // SAFETY: every runtime, session and handle holds an Rc to this
         // value, so none is alive any more.
         let result = unsafe { (self.api.qar_impl_library_destroy)() };

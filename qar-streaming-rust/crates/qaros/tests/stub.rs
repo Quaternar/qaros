@@ -222,7 +222,7 @@ fn teardown_follows_sender_session_runtime_library_whatever_the_drop_order() {
     );
     let sender_destroyed = position_of(&calls, "render_stream_handle_destroy");
     let session_destroyed = position_of(&calls, "session_handle_destroy");
-    let runtime_destroyed = position_of(&calls, runtime_release_call());
+    let runtime_destroyed = position_of(&calls, RUNTIME_RELEASE_CALL);
     let library_destroyed = position_of(&calls, "library_destroy");
     assert!(sender_destroyed < session_destroyed);
     assert!(session_destroyed < runtime_destroyed);
@@ -1463,7 +1463,6 @@ fn try_begin_polls_a_cpu_frame_and_vulkan_access_is_refused_on_it() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
-#[cfg(qaros_color_extensions)]
 #[test]
 fn the_colour_declarations_are_chained_only_when_set() {
     let fixture = Fixture::new();
@@ -1497,28 +1496,6 @@ fn the_colour_declarations_are_chained_only_when_set() {
         ]
     );
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
-}
-
-#[cfg(not(qaros_color_extensions))]
-#[test]
-fn a_colour_declaration_is_refused_where_the_bindings_lack_the_extensions() {
-    let fixture = Fixture::new();
-    let library = load_stub();
-    let (_runtime, session) = onboarded_session(&fixture, &library);
-    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
-    config.color_encoding = ColorEncoding::Linear;
-    let refused = session.create_render_sender(&config, &BlockingOptions::default());
-    assert!(
-        matches!(&refused, Err(Error::InvalidArgument(message)) if message.contains("colour extensions")),
-        "{:?}",
-        refused.map(|_| ())
-    );
-    config.color_encoding = ColorEncoding::Srgb;
-    assert_eq!(config.alpha_mode, ColorAlphaMode::Unspecified);
-    let sender = session
-        .create_render_sender(&config, &BlockingOptions::default())
-        .expect("the defaults chain nothing");
-    drop(sender);
 }
 
 #[test]

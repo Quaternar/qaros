@@ -1,8 +1,6 @@
 //! Every Rust port in `qaros_sys::defaults` equals the header's C original,
 //! field by field (bindgen's derived `PartialEq`). The D3D11 ports exist where
-//! the bindings carry the D3D11 types, Windows and macOS, and are checked there;
-//! the colour extension, member-hub and device identity ports where the bindings
-//! declare those types.
+//! the bindings carry the D3D11 types, Windows and macOS, and are checked there.
 
 use std::mem::MaybeUninit;
 
@@ -98,45 +96,14 @@ conformance!(
     QarStreamParamsVulkan => qar_stream_params_vulkan_default,
     QarSyncFrameVulkan => qar_sync_frame_vulkan_default,
     QarVideoFrameVulkan => qar_video_frame_vulkan_default,
+    QarRenderSenderAlphaModeExt => qar_render_sender_alpha_mode_ext_default,
+    QarRenderSenderColorEncodingExt => qar_render_sender_color_encoding_ext_default,
+    QarMemberHubInvitationInit => qar_member_hub_invitation_init_default,
+    QarMemberHubInvitationAppGrantExt => qar_member_hub_invitation_app_grant_ext_default,
+    QarOnboardRemoteAppGrantExt => qar_onboard_remote_app_grant_ext_default,
+    QarJoinHubAsMemberInit => qar_join_hub_as_member_init_default,
+    QarPeerDeviceIdentity => qar_peer_device_identity_default,
 );
-
-#[cfg(qaros_color_extensions)]
-mod color_extensions {
-    use std::mem::MaybeUninit;
-
-    #[allow(clippy::wildcard_imports)]
-    use qaros_sys::*;
-
-    conformance!(
-        QarRenderSenderAlphaModeExt => qar_render_sender_alpha_mode_ext_default,
-        QarRenderSenderColorEncodingExt => qar_render_sender_color_encoding_ext_default,
-    );
-}
-
-#[cfg(qaros_member_hubs)]
-mod member_hubs {
-    use std::mem::MaybeUninit;
-
-    #[allow(clippy::wildcard_imports)]
-    use qaros_sys::*;
-
-    conformance!(
-        QarMemberHubInvitationInit => qar_member_hub_invitation_init_default,
-        QarMemberHubInvitationAppGrantExt => qar_member_hub_invitation_app_grant_ext_default,
-        QarOnboardRemoteAppGrantExt => qar_onboard_remote_app_grant_ext_default,
-        QarJoinHubAsMemberInit => qar_join_hub_as_member_init_default,
-    );
-}
-
-#[cfg(qaros_device_identity)]
-mod device_identity {
-    use std::mem::MaybeUninit;
-
-    #[allow(clippy::wildcard_imports)]
-    use qaros_sys::*;
-
-    conformance!(QarPeerDeviceIdentity => qar_peer_device_identity_default);
-}
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 mod d3d11 {

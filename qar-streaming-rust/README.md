@@ -126,10 +126,9 @@ Design rules, following the SDK's API conventions:
   `qar_library_init` is process-wide: a second `Library` is refused while one is alive. The DLL
   stays mapped for the rest of the process. After a clean `qar_library_destroy`, a later load
   initializes it again; after a failed one, it returns `Error::LibraryAlreadyLoaded`.
-- Teardown never blocks on a cancelled asynchronous call. A session dropped with cancelled sender
-  creations in flight waits at most `CANCELLED_CREATION_WAIT` (500 ms) for their callbacks. A
-  session still waiting after that is leaked with its runtime and the library instead of
-  destroyed, since destroying it would block.
+- Teardown never leaks. Destroying a runtime, session or render sender ends its async calls
+  still running with `StatusCode::TIMEOUT` and returns once their callbacks have come, so a
+  dropped pending call is always settled by its owner.
 - Runtime, session and the other handles are not `Send`: the SDK is single-threaded per runtime.
   A `CancelToken` is cancelled from another thread (a Ctrl+C handler, a stdin watcher) through
   its `cancel_handle()`.
@@ -142,16 +141,14 @@ Design rules, following the SDK's API conventions:
 - Every async call returns a `PendingCall` (`PendingOnboard`, `PendingFrame`, ...): `poll`,
   `wait` and `cancel_handle`. The library calls back exactly once, with `StatusCode::TIMEOUT`
   when the call is cancelled; dropping the pending value cancels it, and its owner releases what
-  it still delivers. A runtime older than that exactly-once rule (0.9.0 and earlier) may never
-  call back for a cancelled begin-frame: the sender then waits at most `CANCELLED_CREATION_WAIT`
-  before refusing new frames.
+  it still delivers. After a dropped `PendingFrame`, the sender's next begin waits for that
+  call's callback, since a cancel arriving as the begin finishes may still deliver a frame.
 - Several users are several senders: one `RenderSender` per target peer.
 - A sender declares its colour through `RenderSenderConfig`: `alpha_mode` (unspecified by
   default) and `color_encoding` (sRGB by default) chain their extension only when set to
   something else. `PixelFormat::D16Unorm` works on every graphics API, the depth-stencil formats
   on Vulkan only; a format the API cannot take is
-  `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`. With bindings from a header without the
-  colour extensions, such as that of 0.9.0-dev.2916, setting either is `Error::InvalidArgument`.
+  `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`.
 - Subscription callbacks run on library threads and receive owned snapshots. `qaros::channel()`
   forwards them into a `std::sync::mpsc` receiver.
 - The Vulkan render sender is behind the feature `vulkan`, with `ash` 0.38 types:
@@ -185,40 +182,34 @@ only means the function is in `qaros_sys::QarApi` for the header the bindings ar
 from, called with the `as_raw()` handle of the safe value it takes (a `Session`, `Runtime`,
 `RenderSender`, `CancelToken`, `OnboardingInvite` or `MemberHubInvitation`).
 
-\* These bindings are generated from the public header in this repository
-(`qar-streaming-c/include/qar_streaming.h`), which declares the functions marked \* (peer
-presence, role, category and device identity, member hubs, the Android Java VM) and the types
-of the render sender's colour and depth declarations. A runtime without those functions, such
-as 0.9.0-dev.2916, does not load. Bindings from such a header build without the safe member-hub
-functions (`MemberHubInvitation` then has no value, so `OnboardExtensions::remote_app_grant`
-stays `None`) and without `Session::update_device_identity`; a set
-`PeerPresentation::device_identity` is `Error::InvalidArgument` there, and `PeerInfo::identity` is
-`None`.
+The bindings come only from the public header in this repository
+(`qar-streaming-c/include/qar_streaming.h`) and are regenerated with it (`cargo xtask bindgen`).
+A runtime that lacks any function of that header does not load (`LoadError::MissingSymbols`).
 
 | Area | Safe in Rust | Raw only | C# has it |
 | --- | --- | --- | --- |
 | Dynamic loading | `Library::load_default`, `Library::load`, `Library::linked` (feature `link`), `installed_bin_folder` | | yes (`InstalledRuntime`) |
 | Library initialization, runtime info | `Library` (initialized on load, destroyed on drop), `Library::runtime_info` | | yes |
-| Android Java VM | | `qar_platform_set_android_java_vm` \* | no |
+| Android Java VM | | `qar_platform_set_android_java_vm` | no |
 | Error handling | `qaros::Error` with function, `StatusCode`, message and wrapped causes (`has_code`, `has_cause`) | the `qar_result_*` constructors and predicates, `qar_error_wrap_result`, `qar_result_log_if_error` | yes (`ResultInfo`, `StatusCode`) |
 | Cancellation | `CancelToken` with or without a timeout, `is_timed_out`, `CancelHandle` from another thread | `qar_cancel_token_cancel_after` | partly: a `CancellationToken` bridged to an internal native token; no timeout token or timeout query |
 | Runtime | `Runtime` | | yes |
-| Onboarding: pairing code, remote Hub, invite, local app and its app tag; rejoin; forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, the planned peer id, re-enrolling a slot, a remote-app grant \*), `rejoin`, `forget`, `OnboardMethod`, `RuntimeConfig::ephemeral_storage` | | yes |
+| Onboarding: pairing code, remote Hub, invite, local app and its app tag; rejoin; forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, the planned peer id, re-enrolling a slot, a remote-app grant), `rejoin`, `forget`, `OnboardMethod`, `RuntimeConfig::ephemeral_storage` | | yes |
 | Co-process invites and the invite handle | `Session::request_onboarding_invite`, `start_onboarding_invite`, `OnboardingInvite` (serialize, deserialize, expiry, method, `code`) | `qar_onboarding_invite_handle_is_valid` (an `OnboardingInvite` is always valid) | yes |
-| Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` \* | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
-| Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` \* | | yes |
+| Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
+| Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` | | yes |
 | Async calls | `PendingCall` from `Runtime::start_onboard`, `start_rejoin` (`PendingOnboard`), `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, `RenderSender::start_owned_frame` (`PendingFrame`); `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | | yes (`Task` forms) |
 | Session | `Session::id`, `Session::graphics_adapter`, `Session::find_render_target` | | yes |
 | Session lifecycle | `Session::lifecycle`, `Session::subscribe_lifecycle`, `SessionLifecycle` | | yes |
 | Target apps | `Session::invite_target_app`, `kill_target_app` and their `start_` forms, `Library::target_app_connection_string` (`TargetDevice`) | | yes |
 | Peers: list, own spec, display name, updates | `Session::peers`, `my_peer`, `set_display_name`, `subscribe_peer_updates`; `PeerInfo` with the app state and `is_target_app` | | yes |
-| Peers: presence, role, category, device identity | `PeerInfo::identity` (`PeerIdentity`: `PeerPresence`, `PeerRole`, `DeviceCategory`, device id, family and name) \* | | yes |
+| Peers: presence, role, category, device identity | `PeerInfo::identity` (`PeerIdentity`: `PeerPresence`, `PeerRole`, `DeviceCategory`, device id, family and name) | | yes |
 | Render requests | `Session::subscribe_render_requests`, `RenderRequest` | | yes |
 | CPU render sender | creation (blocking and polled), layout, begin, try-begin, async begin (`start_owned_frame`), `CpuFrame`, show | | yes |
 | Vulkan render sender | feature `vulkan`: `create_vulkan_render_sender`, `VulkanFrame` | | yes |
 | D3D11 render sender | feature `d3d11` (Windows; on macOS only for the tests against `qaros-stub`): `create_d3d11_render_sender`, `D3D11Frame` | | yes |
 | OpenGL render sender | not bound: the bindings are generated without `QAR_ENABLE_OPENGL` | | yes |
-| Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` \* | | yes |
+| Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |

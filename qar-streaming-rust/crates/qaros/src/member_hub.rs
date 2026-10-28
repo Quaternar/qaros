@@ -11,36 +11,22 @@
 //!
 //! An invitation is a secret bearer credential until it expires or is used up: never log it.
 //! Windows only; elsewhere the calls fail with [`crate::StatusCode::NOT_IMPLEMENTED`].
-//!
-//! Only the public header declares these functions and types: where the bindings lack them (cfg
-//! `qaros_member_hubs` unset), [`MemberHubInvitation`] is an empty enum, so no value of it exists,
-//! and the functions are absent.
 
 use std::num::NonZeroU32;
 use std::ops::{BitOr, BitOrAssign};
 use std::time::Duration;
 
-#[cfg(qaros_member_hubs)]
 use std::ffi::CString;
-#[cfg(qaros_member_hubs)]
 use std::ptr::{self, NonNull};
-#[cfg(qaros_member_hubs)]
 use std::rc::Rc;
 
-#[cfg(qaros_member_hubs)]
 use qaros_sys::{self as sys, defaults};
 
-#[cfg(qaros_member_hubs)]
 use crate::callbacks::BlockingOptions;
-#[cfg(qaros_member_hubs)]
 use crate::cancel::CancelToken;
-#[cfg(qaros_member_hubs)]
 use crate::error::{Error, Result, StatusCode, check};
-#[cfg(qaros_member_hubs)]
 use crate::library::{Library, LibraryInner, require_handle};
-#[cfg(qaros_member_hubs)]
 use crate::runtime::{Runtime, optional_milliseconds};
-#[cfg(qaros_member_hubs)]
 use crate::strings;
 
 /// The permissions a member-hub invitation grants at the primary hub
@@ -133,20 +119,12 @@ pub struct JoinHubAsMemberConfig {
 /// (`qar_member_hub_invitation_handle_destroy`). A secret bearer credential: send its bytes only
 /// over a trusted channel and never log them. The primary hub's operator sees it in the
 /// visualizer and can revoke it.
-#[cfg(qaros_member_hubs)]
 #[derive(Debug)]
 pub struct MemberHubInvitation {
     handle: NonNull<sys::QarMemberHubInvitation>,
     library: Rc<LibraryInner>,
 }
 
-/// A member-hub invitation. These bindings come from a header without member hubs, so no value
-/// of this type exists.
-#[cfg(not(qaros_member_hubs))]
-#[derive(Debug)]
-pub enum MemberHubInvitation {}
-
-#[cfg(qaros_member_hubs)]
 impl MemberHubInvitation {
     fn from_handle(
         library: &Rc<LibraryInner>,
@@ -209,7 +187,6 @@ impl MemberHubInvitation {
     }
 }
 
-#[cfg(qaros_member_hubs)]
 impl Drop for MemberHubInvitation {
     fn drop(&mut self) {
         // SAFETY: owned handle, destroyed once; the calls that take it borrow it only for the
@@ -223,7 +200,6 @@ impl Drop for MemberHubInvitation {
     }
 }
 
-#[cfg(qaros_member_hubs)]
 impl Library {
     /// Reads an invitation from the bytes [`MemberHubInvitation::serialize`] wrote
     /// (`qar_member_hub_invitation_deserialize`). Strict: an invitation with an unknown or missing
@@ -253,7 +229,6 @@ impl Library {
     }
 }
 
-#[cfg(qaros_member_hubs)]
 impl Runtime {
     /// Asks the QAROS hub on this PC, the session's primary hub, for a member-hub invitation
     /// (`qar_runtime_create_member_hub_invitation`). Needs no session: the hub identifies this
@@ -363,7 +338,6 @@ impl Runtime {
     }
 }
 
-#[cfg(qaros_member_hubs)]
 fn lifetime_seconds(lifetime: Option<Duration>) -> Result<u32> {
     let Some(lifetime) = lifetime else {
         return Ok(0);

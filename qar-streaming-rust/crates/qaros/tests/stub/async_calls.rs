@@ -231,14 +231,11 @@ fn a_target_app_is_invited_found_and_killed_on_this_machines_hub() {
         .find(|info| info.id == peer)
         .expect("the target app is listed");
     assert!(target.is_target_app);
-    #[cfg(qaros_device_identity)]
-    {
-        let identity = target.identity.expect("identity");
-        assert_eq!(identity.role, PeerRole::Target);
-        assert_eq!(identity.presence, PeerPresence::Online);
-        assert_eq!(identity.category, DeviceCategory::Headset);
-        assert_eq!(identity.device_family, "HoloLens");
-    }
+    let identity = target.identity;
+    assert_eq!(identity.role, PeerRole::Target);
+    assert_eq!(identity.presence, PeerPresence::Online);
+    assert_eq!(identity.category, DeviceCategory::Headset);
+    assert_eq!(identity.device_family, "HoloLens");
 
     session
         .kill_target_app(peer, &BlockingOptions::default())
@@ -301,7 +298,6 @@ fn a_target_app_is_invited_found_and_killed_on_this_machines_hub() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
-#[cfg(qaros_device_identity)]
 #[test]
 fn a_joined_devices_declared_identity_is_read_back() {
     use qaros::{DeviceIdentity, SourceDeviceCategory};
@@ -319,11 +315,7 @@ fn a_joined_devices_declared_identity_is_read_back() {
         )
         .expect("onboard")
         .session;
-    let desktop = plain
-        .my_peer()
-        .expect("own peer")
-        .identity
-        .expect("identity");
+    let desktop = plain.my_peer().expect("own peer").identity;
     assert_eq!(desktop.role, PeerRole::Source);
     assert_eq!(desktop.category, DeviceCategory::DesktopPc);
     drop(plain);
@@ -344,11 +336,7 @@ fn a_joined_devices_declared_identity_is_read_back() {
         )
         .expect("onboard as a camera")
         .session;
-    let declared = camera
-        .my_peer()
-        .expect("own peer")
-        .identity
-        .expect("identity");
+    let declared = camera.my_peer().expect("own peer").identity;
     assert_eq!(declared.category, DeviceCategory::Camera);
     assert_eq!(
         (
@@ -365,11 +353,7 @@ fn a_joined_devices_declared_identity_is_read_back() {
             ..DeviceIdentity::default()
         })
         .expect("update");
-    let updated = camera
-        .my_peer()
-        .expect("own peer")
-        .identity
-        .expect("identity");
+    let updated = camera.my_peer().expect("own peer").identity;
     assert_eq!(updated.category, DeviceCategory::Server);
     assert_eq!(updated.device_id, "RenderNode");
     drop(camera);

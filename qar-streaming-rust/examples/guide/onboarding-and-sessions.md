@@ -28,7 +28,7 @@
 
 ## Remote app: through a member hub
 
-`MemberHubInvitationConfig::app_grant_tag` chains the grant; `OnboardExtensions::remote_app_grant` redeems it next to `OnboardMethod::LocalApp`. The member-hub calls exist where the bindings declare them (cfg `qaros_member_hubs`).
+`MemberHubInvitationConfig::app_grant_tag` chains the grant; `OnboardExtensions::remote_app_grant` redeems it next to `OnboardMethod::LocalApp`.
 
 ```rust
 {{#include ../tests/guide/onboarding_and_sessions.rs:remote_app_grant}}

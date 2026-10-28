@@ -113,11 +113,7 @@ for peer in session.peers()? {
 
 ```rust
 for peer in session.peers()? {
-    // `identity` is None only with bindings from a header without these getters.
-    let presence = peer
-        .identity
-        .as_ref()
-        .map_or(PeerPresence::Unknown, |identity| identity.presence);
+    let presence = peer.identity.presence;
     // Render for ONLINE peers and UNKNOWN ones (not reconciled yet); stop at OFFLINE,
     // LEAVING or RETIRED. OFFLINE and LEAVING peers may come back as ONLINE.
     let is_here = matches!(presence, PeerPresence::Online | PeerPresence::Unknown);
@@ -198,12 +194,14 @@ The device id and name can change while a peer runs: read them again from a peer
 
 ```rust
 for peer in session.peers()? {
-    let Some(identity) = peer.identity else {
-        continue;
-    };
+    let identity = &peer.identity;
     if identity.role == PeerRole::Target {
         // "Meta Quest 3", "MetaQuest": your icon table, the category as the fallback
-        show_target(&identity.device_name, &identity.device_family, identity.category);
+        show_target(
+            &identity.device_name,
+            &identity.device_family,
+            identity.category,
+        );
     }
 }
 ```

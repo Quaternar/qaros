@@ -231,7 +231,6 @@ fn teardown(runtime: &Runtime, session: Session, saved_id: OnboardingId) -> qaro
 
 fn send_over_your_channel(_bytes: &[u8]) {}
 
-#[cfg(qaros_member_hubs)]
 fn remote_app_grant(library: &Library, runtime: &Runtime, received: &[u8]) -> qaros::Result<()> {
     // ANCHOR: remote_app_grant
     // On the primary's PC:
