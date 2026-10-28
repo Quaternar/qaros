@@ -22,13 +22,14 @@ origin for every device that sees it.
 |---|---|---|---|
 | **HoloLens 2** | Yes | Look at the code with the player running | *Headset is not anchored! Look at QR code.* until it is anchored |
 | **METALENSE 2** | Yes | Look at the code with the player running | A green outline on the code when it is picked up |
-| **Meta Quest** | Yes | Look at the code with the player running | A green outline on the code when it is picked up |
+| **Meta Quest** | Yes, on a recent Horizon OS | Allow the player's **spatial data** permission on its first start, then look at the code with the player running | A green outline on the code when it is picked up |
 
-:::caution Meta Quest and METALENSE 2 take any QR code
-The Meta Quest and METALENSE 2 player moves the scene to **any** QR code it sees, not only a QAROS
-origin code. Keep other QR codes (posters, badges, labels, the Visualizer's pairing code) out of
-view while wearing the headset.
-:::
+- Every player anchors only to a QAROS scene origin code. Other QR codes in view (posters, badges,
+  the Visualizer's pairing code) are ignored.
+- **Meta Quest** reads QR codes through Meta's QR detection, which Meta still calls experimental.
+  A headset on an older Horizon OS does not detect codes at all; update it. Denying the spatial data
+  permission has the same effect: allow it again for the QAROS Player in the headset's app
+  permission settings.
 
 ## 1. Create a room for each physical space
 
