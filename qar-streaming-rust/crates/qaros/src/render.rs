@@ -1,14 +1,17 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use qaros_sys::{self as sys, QarApi, defaults};
 
 use crate::callbacks::BlockingOptions;
 use crate::error::{Error, Result, check};
 use crate::library::require_handle;
+use crate::pending::{self, AbandonedCall, CallSpec, PendingCall, RawOutcome};
+use crate::pending_sender::CANCELLED_CREATION_WAIT;
 use crate::session::SessionInner;
 use crate::types::{
     AppVolumeId, Eye, Fov, FrameLayout, PeerId, PixelFormat, Pose, StreamId, ViewKind,
@@ -16,6 +19,11 @@ use crate::types::{
 
 const FRAME_ALREADY_OPEN: &str =
     "a frame is already open on this render sender; show or drop it first";
+const BEGIN_FRAME_ASYNC: &str = "qar_render_sender_begin_frame_async";
+
+/// A begin-frame in flight from [`RenderSender::start_owned_frame`], delivering an
+/// [`OwnedFrame`].
+pub type PendingFrame = PendingCall<OwnedFrame>;
 
 /// A render stream request from a peer that wants this application's
 /// frames, read inside the callback.
@@ -277,7 +285,11 @@ pub struct RenderSender {
 struct RenderSenderInner {
     handle: NonNull<sys::QarRenderSender>,
     session: Rc<SessionInner>,
+    /// A frame is open, or a begin-frame is in flight (pending or abandoned).
     frame_open: Cell<bool>,
+    /// An async begin-frame whose [`PendingFrame`] was dropped before the callback; the frame
+    /// stays "open" until it is settled.
+    abandoned_frame: RefCell<Option<AbandonedCall>>,
     // Read only by the Vulkan and D3D11 frame access, to refuse a sender of another API.
     #[cfg_attr(not(any(feature = "vulkan", qaros_d3d11)), expect(dead_code))]
     graphics_api: sys::QarGraphicsAPI,
@@ -520,6 +532,7 @@ impl RenderSender {
                 handle,
                 session: Rc::clone(session),
                 frame_open: Cell::new(false),
+                abandoned_frame: RefCell::new(None),
                 graphics_api,
                 _graphics: graphics,
             }),
@@ -624,6 +637,87 @@ impl RenderSender {
         })
     }
 
+    /// Starts a frame without blocking (`qar_render_sender_begin_frame_async`) and returns at
+    /// once; [`PendingCall::poll`] or [`PendingCall::wait`] picks up the [`OwnedFrame`], which
+    /// behaves like one from [`RenderSender::begin_owned_frame`] (CPU, Vulkan and D3D11 access
+    /// alike). Same poses, failures and wait through a paused stream as the blocking begin.
+    ///
+    /// The frame counts as open from the start: another begin on this sender fails without a
+    /// library call until the pending frame is taken and shown or dropped. `timeout` cancels
+    /// the call through its token, after which the library calls back with
+    /// [`crate::StatusCode::TIMEOUT`]. `wake` runs on a library thread right after the result
+    /// arrived.
+    ///
+    /// Dropping the pending frame cancels it and returns at once. The next begin on this sender
+    /// first waits for its callback (at most [`CANCELLED_CREATION_WAIT`]) and destroys a frame
+    /// info it delivered; destroying the sender cancels it and waits for its callback. The
+    /// frame info the callback hands over is owned by the caller, as the runtime's tests use it;
+    /// the header does not say so.
+    pub fn start_owned_frame(
+        &mut self,
+        timeout: Option<Duration>,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Result<PendingFrame> {
+        self.inner.refuse_if_frame_open(FRAME_ALREADY_OPEN)?;
+        let finish_sender = Rc::clone(&self.inner);
+        let abandon_sender = Rc::clone(&self.inner);
+        let poll_sender = Rc::clone(&self.inner);
+        let spec = CallSpec {
+            function: BEGIN_FRAME_ASYNC,
+            progress: None,
+            timeout,
+            wake: Box::new(wake),
+            keep: None,
+            finish: Box::new(move |outcome: RawOutcome| {
+                let api = finish_sender.session.api();
+                let delivered = check(api, BEGIN_FRAME_ASYNC, outcome.result).and_then(|()| {
+                    require_handle(
+                        outcome.handle as *mut sys::QarRenderFrameInfo,
+                        BEGIN_FRAME_ASYNC,
+                    )
+                });
+                match delivered {
+                    Ok(info) => Ok(OwnedFrame {
+                        info,
+                        sender: finish_sender,
+                    }),
+                    Err(error) => {
+                        release_frame_info(api, outcome.handle);
+                        finish_sender.frame_open.set(false);
+                        Err(error)
+                    }
+                }
+            }),
+            abandon: Box::new(move |call| {
+                *abandon_sender.abandoned_frame.borrow_mut() = Some(call);
+            }),
+            before_poll: Box::new(move || {
+                poll_sender.session.release_delivered_abandoned_calls();
+            }),
+            destroy: Some(release_frame_info),
+        };
+        let sender = self.inner.handle.as_ptr();
+        let api = self.inner.session.api();
+        let pending = pending::start(
+            self.inner.session.library(),
+            spec,
+            |user_state, _progress, token| {
+                // SAFETY: live sender; the token outlives the call (the pending frame or the
+                // sender keeps it).
+                unsafe {
+                    (api.qar_impl_render_sender_begin_frame_async)(
+                        sender,
+                        Some(pending::handle_result_trampoline::<sys::QarRenderFrameInfo>),
+                        user_state,
+                        token,
+                    )
+                }
+            },
+        )?;
+        self.inner.frame_open.set(true);
+        Ok(pending)
+    }
+
     /// Polls for a frame without blocking (`qar_render_sender_try_begin_frame`,
     /// the call QuaternAR's Vulkan cube uses). The first call starts the
     /// library's begin-frame wait; `Ok(None)` means not ready yet, poll again
@@ -658,9 +752,30 @@ impl RenderSender {
 
 impl RenderSenderInner {
     fn refuse_if_frame_open(&self, message: &str) -> Result<()> {
+        self.settle_abandoned_frame()?;
         if self.frame_open.get() {
             return Err(Error::InvalidArgument(message.to_string()));
         }
+        Ok(())
+    }
+
+    /// Ends a dropped async begin-frame: waits at most [`CANCELLED_CREATION_WAIT`] for its
+    /// callback, which a cancel brings at once, then destroys a frame info it delivered and
+    /// closes the frame. A call still pending after that (a runtime older than the header's
+    /// exactly-once rule) keeps the frame open and is refused.
+    fn settle_abandoned_frame(&self) -> Result<()> {
+        let mut abandoned = self.abandoned_frame.borrow_mut();
+        let Some(call) = abandoned.as_ref() else {
+            return Ok(());
+        };
+        if !call.settle(self.session.api(), Instant::now() + CANCELLED_CREATION_WAIT) {
+            return Err(Error::InvalidArgument(
+                "a cancelled async begin-frame on this render sender has not called back yet"
+                    .to_string(),
+            ));
+        }
+        *abandoned = None;
+        self.frame_open.set(false);
         Ok(())
     }
 
@@ -707,8 +822,28 @@ impl RenderSenderInner {
 
 impl Drop for RenderSenderInner {
     fn drop(&mut self) {
-        // SAFETY: open frames hold an Rc to this value, so none is alive.
-        unsafe { (self.session.api().qar_impl_render_stream_handle_destroy)(self.handle.as_ptr()) };
+        let api = self.session.api();
+        let abandoned = self.abandoned_frame.get_mut().take();
+        if let Some(call) = &abandoned {
+            call.release_if_delivered(api);
+        }
+        // SAFETY: open frames and pending begin-frames hold an Rc to this value, so none is
+        // alive. Per the header, the destroy cancels an abandoned begin-frame still running and
+        // returns only after its callback has returned.
+        unsafe { (api.qar_impl_render_stream_handle_destroy)(self.handle.as_ptr()) };
+        if let Some(call) = abandoned {
+            call.leak_late_delivery();
+        }
+    }
+}
+
+/// Destroys a frame info an async begin-frame delivered that nobody takes.
+fn release_frame_info(api: &QarApi, info: usize) {
+    if info != 0 {
+        // SAFETY: delivered to us, used by nobody, and its sender is alive.
+        unsafe {
+            (api.qar_impl_render_frame_info_handle_destroy)(info as *mut sys::QarRenderFrameInfo);
+        };
     }
 }
 

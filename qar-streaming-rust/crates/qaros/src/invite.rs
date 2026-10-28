@@ -52,6 +52,17 @@ impl OnboardingInvite {
         })
     }
 
+    /// Takes ownership of an invite handle the library handed over.
+    pub(crate) fn from_handle(
+        handle: NonNull<sys::QarOnboardingInvite>,
+        library: &Rc<LibraryInner>,
+    ) -> Self {
+        Self {
+            handle,
+            library: Rc::clone(library),
+        }
+    }
+
     pub(crate) fn deserialize(library: &Rc<LibraryInner>, wire_bytes: &[u8]) -> Result<Self> {
         let api = &library.api;
         let mut handle: *mut sys::QarOnboardingInvite = ptr::null_mut();

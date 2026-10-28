@@ -131,13 +131,15 @@ Read them in order the first time: each builds on the session the earlier ones e
    Hub with a pairing code once, then rejoin with the stored onboarding id.
 3. [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding): join the
    Hub from the Hub machine as a local app, after the user clicks Allow.
-4. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
+4. [Remote App on Another PC](/docs/developer-guide/tutorials/rust/remote-app-onboarding): grant
+   one app on another PC through a member-hub invitation, and join it there with no prompt.
+5. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
    the peer list and stream frames rendered on the CPU to each.
-5. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
+6. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
    drawn with Direct3D 11 into the sender's shared textures.
-6. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
+7. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
    cube rendered with Vulkan into every running target app.
-7. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
+8. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
    room, follow its updates and end a subscription safely.
-8. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
+9. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
    lives in, move the content inside it, and handle an unresolved volume when rendering.

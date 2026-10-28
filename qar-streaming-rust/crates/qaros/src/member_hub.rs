@@ -105,7 +105,8 @@ pub struct MemberHubInvitationConfig {
     pub label: Option<String>,
     /// Also grant one remote app on the joining PC (`QarMemberHubInvitationAppGrantExt`), under
     /// this app tag, with the app tag rules of [`crate::OnboardMethod::LocalApp`]. The grant is
-    /// bound to the calling app's approval and the tag. On a member hub of this primary, the first
+    /// bound to the calling app's approval and the tag. Only a member hub of this primary redeems
+    /// it (a hub that is not a member ignores it and prompts its operator). There, the first
     /// executable that onboards as a local app with the invitation
     /// ([`crate::OnboardExtensions::remote_app_grant`]) is approved there without a prompt;
     /// later starts of that executable onboard with no invitation and no prompt, under the same

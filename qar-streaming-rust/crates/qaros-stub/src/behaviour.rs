@@ -61,6 +61,9 @@ struct SessionValue {
     /// mints co-process invites for. (The runtime's hub also mints them for a process its
     /// launcher started, which the stub cannot tell from another invite.)
     local_app: bool,
+    /// This application's own presence, role and device: the desktop default, or what it
+    /// declared at onboard, rejoin or `qar_peer_update_device_identity`.
+    device: PeerIdentityValue,
 }
 
 /// Not zero-sized, so every token gets its own heap address and the live-handle map tells
@@ -133,6 +136,59 @@ struct PeerSpecValue {
     custom_info: String,
     app_state: QarAppState,
     is_target_app: bool,
+    #[cfg_attr(not(qaros_device_identity), allow(dead_code))]
+    identity: PeerIdentityValue,
+}
+
+/// A peer's presence, role and device, as the header's enum values. Kept on every binding set;
+/// read only where the bindings declare the getters.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PeerIdentityValue {
+    presence: i32,
+    role: i32,
+    category: i32,
+    device_id: String,
+    device_family: String,
+    device_name: String,
+}
+
+const PRESENCE_ONLINE: i32 = 1;
+const PRESENCE_LEAVING: i32 = 3;
+const PRESENCE_RETIRED: i32 = 4;
+const ROLE_SOURCE: i32 = 1;
+const ROLE_TARGET: i32 = 2;
+const CATEGORY_DESKTOP_PC: i32 = 1;
+const CATEGORY_HEADSET: i32 = 3;
+const CATEGORY_VISUALIZER: i32 = 4;
+
+impl PeerIdentityValue {
+    /// What an application joins as without a declared device: a desktop PC with the fixed id
+    /// of the host OS.
+    fn desktop() -> Self {
+        Self {
+            presence: PRESENCE_ONLINE,
+            role: ROLE_SOURCE,
+            category: CATEGORY_DESKTOP_PC,
+            device_id: if cfg!(windows) {
+                "DesktopWindows"
+            } else {
+                "DesktopLinux"
+            }
+            .to_string(),
+            device_family: String::new(),
+            device_name: String::new(),
+        }
+    }
+}
+
+fn presence_of(app_state: QarAppState) -> i32 {
+    if app_state == QarAppState::QAR_APP_STATE_RETIRED {
+        PRESENCE_RETIRED
+    } else if app_state == QarAppState::QAR_APP_STATE_SHUTTING_DOWN {
+        PRESENCE_LEAVING
+    } else {
+        PRESENCE_ONLINE
+    }
 }
 
 struct RenderRequestValue {
@@ -351,18 +407,50 @@ fn own_peer_spec(session: &SessionValue) -> PeerSpecValue {
         custom_info: session.custom_info.clone(),
         app_state: QarAppState::QAR_APP_STATE_RUNNING,
         is_target_app: false,
+        identity: session.device.clone(),
     }
 }
 
-/// The simulated visualizer and joined peers are viewers, so target apps.
+/// The simulated visualizer and joined peers are viewers, so target apps. The visualizer is a
+/// Visualizer receiver; a target app the stub's hub started is a device of its family whose
+/// custom info is its host, as the runtime matches it; any other joined peer is a headset.
 fn remote_peer_spec(id: [u8; 16], display_name: &str, app_state: QarAppState) -> PeerSpecValue {
+    let started = state::lock().started_target_apps.get(&id).cloned();
+    let (category, device_id, family, custom_info) = match (id == VISUALIZER_PEER, started) {
+        (true, _) => (
+            CATEGORY_VISUALIZER,
+            "Visualizer".to_string(),
+            String::new(),
+            String::new(),
+        ),
+        (false, Some(app)) => (
+            CATEGORY_HEADSET,
+            app.family.to_string(),
+            app.family.to_string(),
+            app.host,
+        ),
+        (false, None) => (
+            CATEGORY_HEADSET,
+            "StubHeadset".to_string(),
+            "Headset".to_string(),
+            String::new(),
+        ),
+    };
     PeerSpecValue {
         id,
         display_name: display_name.to_string(),
         app_version: "0".to_string(),
-        custom_info: String::new(),
+        custom_info,
         app_state,
         is_target_app: true,
+        identity: PeerIdentityValue {
+            presence: presence_of(app_state),
+            role: ROLE_TARGET,
+            category,
+            device_id,
+            device_family: family,
+            device_name: display_name.to_string(),
+        },
     }
 }
 
@@ -377,11 +465,14 @@ fn peer_specs_for(session: &SessionValue) -> Vec<PeerSpecValue> {
                 .map(|peer| (peer.id, peer.display_name.clone())),
         )
         .filter(|(id, _)| !guard.departed_peers.contains(id))
-        .map(|(id, name)| remote_peer_spec(id, &name, QarAppState::QAR_APP_STATE_RUNNING))
         .collect::<Vec<_>>();
     drop(guard);
     std::iter::once(own_peer_spec(session))
-        .chain(remote)
+        .chain(
+            remote
+                .into_iter()
+                .map(|(id, name)| remote_peer_spec(id, &name, QarAppState::QAR_APP_STATE_RUNNING)),
+        )
         .collect()
 }
 
@@ -809,6 +900,8 @@ unsafe fn create_session(
             app_version,
             custom_info,
             local_app,
+            // SAFETY: the presentation's chain was checked by check_presentation.
+            device: unsafe { declared_device(presentation) },
         },
         SESSION,
     )
@@ -1093,6 +1186,55 @@ unsafe fn check_presentation(presentation: &QarPeerPresentation) -> Result<(), Q
     Ok(())
 }
 
+/// The device a presentation declares (its chained `QarPeerDeviceIdentity`), else the desktop
+/// default.
+///
+/// # Safety
+///
+/// The presentation's chain consists of checked, stamped structures.
+unsafe fn declared_device(presentation: &QarPeerPresentation) -> PeerIdentityValue {
+    #[cfg(qaros_device_identity)]
+    {
+        let mut next: *const QarStructureHeader = presentation.header.next.cast_const().cast();
+        while !next.is_null() {
+            // SAFETY: forwarded to the caller.
+            let header = unsafe { &*next };
+            if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY {
+                // SAFETY: the type identifies the structure; its strings are C strings or NULL.
+                return unsafe { device_value(&*next.cast::<QarPeerDeviceIdentity>()) };
+            }
+            next = header.next.cast_const().cast();
+        }
+    }
+    #[cfg(not(qaros_device_identity))]
+    let _ = presentation;
+    PeerIdentityValue::desktop()
+}
+
+/// A declared `QarPeerDeviceIdentity` as the peer's identity.
+///
+/// # Safety
+///
+/// The identity's strings are C strings or NULL.
+#[cfg(qaros_device_identity)]
+unsafe fn device_value(identity: &QarPeerDeviceIdentity) -> PeerIdentityValue {
+    #[allow(
+        clippy::unnecessary_cast,
+        reason = "the enum's width differs per target"
+    )]
+    let category = identity.category.0 as i32;
+    // SAFETY: forwarded to the caller.
+    unsafe {
+        PeerIdentityValue {
+            category,
+            device_id: text_or_empty(identity.device_id),
+            device_family: text_or_empty(identity.device_family),
+            device_name: text_or_empty(identity.device_name),
+            ..PeerIdentityValue::desktop()
+        }
+    }
+}
+
 /// The header's rules for a declared device: the category is desktop PC, server or camera
 /// (`QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED`), the device id is non-empty
 /// (`QAR_STATUS_ARGUMENT_NOT_SUPPORTED`). Returns its description for the log.
@@ -1129,99 +1271,101 @@ unsafe fn check_device_identity(identity: &QarPeerDeviceIdentity) -> Result<Stri
     ))
 }
 
-/// Starts an async onboard or rejoin of `runtime` on a thread of its own, as the runtime does,
-/// with the header's rules: one progress report, then the result callback exactly once, with
-/// `finish`'s outcome, or `QAR_STATUS_TIMEOUT` when the token is cancelled, times out or is
-/// destroyed, or the runtime is destroyed first (its destroy waits for the callback).
-fn start_runtime_call(
-    runtime: *mut QarRuntime,
+/// How an async call of the stub waits before it completes.
+struct AsyncCallWait {
+    delay: Duration,
+    /// Ignores the token, as a call finishing while it is cancelled; the owner's destroy still
+    /// ends it.
+    ignores_cancel: bool,
+    /// Keeps waiting past the delay while it returns true, as a begin-frame waits through a
+    /// paused stream.
+    hold: Option<Box<dyn Fn() -> bool + Send>>,
+}
+
+/// Runs an async call of `owner` (a runtime, session or render sender) on a thread of its own,
+/// as the runtime does, with the header's rules: the progress report, if any, then `complete`
+/// exactly once. `complete` gets why the call ended early (it then reports
+/// `QAR_STATUS_TIMEOUT`): its token was cancelled, timed out or destroyed, or its owner is being
+/// destroyed. The call is registered before this returns, so the owner's destroy waits for it.
+fn spawn_async_call(
+    owner: usize,
     token: *mut QarCancelToken,
-    progress: qar_progress_callback_t,
-    callback: unsafe extern "C" fn(QarResult, *const QarOnboardingId, *mut QarSession, *mut c_void),
-    user_state: *mut c_void,
+    wait: AsyncCallWait,
+    progress: Option<(
+        unsafe extern "C" fn(QarActionSeverity, f32, *const c_char, *mut c_void),
+        usize,
+    )>,
     name: &'static str,
-    finish: impl FnOnce() -> Result<([u8; 16], usize), QarResult> + Send + 'static,
-) -> QarResult {
-    let runtime_address = runtime as usize;
-    let token_address = token as usize;
-    let user_state_address = user_state as usize;
-    let (delay, ignores_cancel) = {
+    complete: impl FnOnce(Option<&'static str>) + Send + 'static,
+) {
+    let token_address = if wait.ignores_cancel {
+        0
+    } else {
+        token as usize
+    };
+    let call_id = {
         let mut guard = state::lock();
-        *guard
-            .pending_runtime_calls
-            .entry(runtime_address)
-            .or_default() += 1;
-        (
-            guard.onboard_async_delay,
-            guard.onboard_async_ignores_cancel,
-        )
+        guard.next_call_id += 1;
+        let call_id = guard.next_call_id;
+        guard
+            .pending_calls
+            .entry(owner)
+            .or_default()
+            .push(state::PendingStubCall {
+                id: call_id,
+                callback_thread: None,
+            });
+        call_id
     };
     // Not joined: the caller picks the outcome up later.
     std::thread::spawn(move || {
-        if let Some(progress) = progress {
+        if let Some((progress, user_state)) = progress {
             // SAFETY: the caller's callback and state, valid until the result callback.
             unsafe {
                 progress(
                     QarActionSeverity::QAR_ACTION_SEVERITY_INFO,
                     50.0,
-                    c"stub async onboarding".as_ptr(),
-                    user_state_address as *mut c_void,
+                    c"stub async call".as_ptr(),
+                    user_state as *mut c_void,
                 );
             }
         }
-        let watched_token = if ignores_cancel { 0 } else { token_address };
-        let (result, onboarding_id, session) =
-            match wait_for_runtime_call(delay, watched_token, runtime_address) {
-                Some(reason) => {
-                    note(format!("{name} ended early: {reason}"));
-                    (
-                        state::error(
-                            QarStatusCode::QAR_STATUS_TIMEOUT,
-                            format!("{name} {reason}"),
-                        ),
-                        [0; 16],
-                        0,
-                    )
-                }
-                None => match finish() {
-                    Ok((onboarding_id, session)) => (success(), onboarding_id, session),
-                    Err(failure) => (failure, [0; 16], 0),
-                },
-            };
-        let onboarding_id = QarOnboardingId {
-            data: onboarding_id,
-        };
-        // SAFETY: the caller's callback and user state; called once.
-        unsafe {
-            callback(
-                result,
-                &raw const onboarding_id,
-                session as *mut QarSession,
-                user_state_address as *mut c_void,
-            );
+        let reason = wait_for_async_call(&wait, token_address, owner);
+        {
+            let mut guard = state::lock();
+            if let Some(call) = guard
+                .pending_calls
+                .get_mut(&owner)
+                .and_then(|calls| calls.iter_mut().find(|call| call.id == call_id))
+            {
+                call.callback_thread = Some(std::thread::current().id());
+            }
         }
+        if let Some(reason) = reason {
+            note(format!("{name} ended early: {reason}"));
+        }
+        complete(reason);
         note(format!("{name} called back"));
         let mut guard = state::lock();
-        if let Some(count) = guard.pending_runtime_calls.get_mut(&runtime_address) {
-            *count -= 1;
+        if let Some(calls) = guard.pending_calls.get_mut(&owner) {
+            calls.retain(|call| call.id != call_id);
         }
     });
-    success()
 }
 
-/// Waits `delay`; ends early, with why, when the token (0 for none) is cancelled, times out or is
-/// destroyed, or the runtime is being destroyed.
-fn wait_for_runtime_call(
-    delay: Duration,
+/// Waits `wait.delay` (and while `wait.hold` holds); ends early, with why, when the token (0 for
+/// none) is cancelled, times out or is destroyed, or the owner is being destroyed.
+fn wait_for_async_call(
+    wait: &AsyncCallWait,
     token_address: usize,
-    runtime_address: usize,
+    owner: usize,
 ) -> Option<&'static str> {
-    let deadline = Instant::now() + delay;
+    let deadline = Instant::now() + wait.delay;
     loop {
         {
             let guard = state::lock();
-            if guard.destroying_runtimes.contains(&runtime_address) {
-                return Some("ended by the runtime's destroy");
+            if guard.destroying_owners.contains(&owner) {
+                return Some("ended by its owner's destroy");
             }
             if token_address != 0 {
                 if guard.cancelled_tokens.contains(&token_address) {
@@ -1236,11 +1380,269 @@ fn wait_for_runtime_call(
             }
         }
         let now = Instant::now();
-        if now >= deadline {
+        let held = wait.hold.as_ref().is_some_and(|hold| hold());
+        if now >= deadline && !held {
             return None;
         }
-        std::thread::sleep((deadline - now).min(Duration::from_millis(1)));
+        std::thread::sleep(
+            deadline
+                .saturating_duration_since(now)
+                .clamp(Duration::from_micros(100), Duration::from_millis(1)),
+        );
     }
+}
+
+/// An owner's destroy, as the header says: its async calls end with `QAR_STATUS_TIMEOUT`, and
+/// the destroy returns once their callbacks have returned, except a call whose callback is the
+/// one destroying the owner.
+fn wait_for_owner_calls(owner: usize) {
+    state::lock().destroying_owners.insert(owner);
+    let this_thread = std::thread::current().id();
+    while state::lock()
+        .pending_calls
+        .get(&owner)
+        .is_some_and(|calls| {
+            calls
+                .iter()
+                .any(|call| call.callback_thread != Some(this_thread))
+        })
+    {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    state::lock().destroying_owners.remove(&owner);
+}
+
+/// Starts an async onboard or rejoin of `runtime` (see [`spawn_async_call`]): `finish` makes the
+/// onboarding id and session.
+fn start_runtime_call(
+    runtime: *mut QarRuntime,
+    token: *mut QarCancelToken,
+    progress: qar_progress_callback_t,
+    callback: unsafe extern "C" fn(QarResult, *const QarOnboardingId, *mut QarSession, *mut c_void),
+    user_state: *mut c_void,
+    name: &'static str,
+    finish: impl FnOnce() -> Result<([u8; 16], usize), QarResult> + Send + 'static,
+) -> QarResult {
+    let user_state_address = user_state as usize;
+    let (delay, ignores_cancel) = {
+        let guard = state::lock();
+        (
+            guard.onboard_async_delay,
+            guard.onboard_async_ignores_cancel,
+        )
+    };
+    spawn_async_call(
+        runtime as usize,
+        token,
+        AsyncCallWait {
+            delay,
+            ignores_cancel,
+            hold: None,
+        },
+        progress.map(|progress| (progress, user_state_address)),
+        name,
+        move |reason| {
+            let (result, onboarding_id, session) = match reason {
+                Some(reason) => (
+                    state::error(
+                        QarStatusCode::QAR_STATUS_TIMEOUT,
+                        format!("{name} {reason}"),
+                    ),
+                    [0; 16],
+                    0,
+                ),
+                None => match finish() {
+                    Ok((onboarding_id, session)) => (success(), onboarding_id, session),
+                    Err(failure) => (failure, [0; 16], 0),
+                },
+            };
+            let onboarding_id = QarOnboardingId {
+                data: onboarding_id,
+            };
+            // SAFETY: the caller's callback and user state; called once.
+            unsafe {
+                callback(
+                    result,
+                    &raw const onboarding_id,
+                    session as *mut QarSession,
+                    user_state_address as *mut c_void,
+                );
+            }
+        },
+    );
+    success()
+}
+
+/// `qar_target_app_connection_string_*`: `<scheme>:<host>` into the caller's buffer.
+///
+/// # Safety
+///
+/// `host` is null or a C string; `buffer` is null or writable for `buffer_size` bytes.
+unsafe fn format_target_connection(
+    scheme: &str,
+    host: *const c_char,
+    buffer: *mut c_char,
+    buffer_size: usize,
+) -> QarResult {
+    if host.is_null() || buffer.is_null() || buffer_size == 0 {
+        return invalid("A host and an output buffer are required to build a connection string");
+    }
+    // SAFETY: forwarded to the caller.
+    let host = unsafe { text_or_empty(host) };
+    if host.is_empty() {
+        return invalid("A target connection string needs the device's hostname or IP address");
+    }
+    let formatted = format!("{scheme}:{host}");
+    if formatted.len() + 1 > buffer_size {
+        return invalid("the output buffer is too small for the connection string");
+    }
+    // SAFETY: the buffer holds buffer_size > formatted.len() bytes.
+    unsafe {
+        ptr::copy_nonoverlapping(formatted.as_ptr().cast::<c_char>(), buffer, formatted.len());
+        *buffer.add(formatted.len()) = 0;
+    }
+    success()
+}
+
+/// Writes one of a peer spec's identity strings, NUL-terminated and truncated to the buffer.
+///
+/// # Safety
+///
+/// `handle` is null or a handle from this stub; `buffer` is null or writable for `size` bytes.
+#[cfg(qaros_device_identity)]
+unsafe fn write_spec_text(
+    handle: *mut QarPeerSpec,
+    buffer: *mut c_char,
+    size: usize,
+    field: impl Fn(&PeerSpecValue) -> &String,
+) -> QarResult {
+    // SAFETY: forwarded to the caller.
+    let Some(spec) = (unsafe { handle_value::<PeerSpecValue, QarPeerSpec>(handle, PEER_SPEC) })
+    else {
+        return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "invalid peer spec");
+    };
+    if buffer.is_null() || size == 0 {
+        return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "invalid buffer");
+    }
+    // SAFETY: forwarded to the caller.
+    unsafe { write_c_string(field(spec), buffer, size) };
+    success()
+}
+
+/// A target-app connection string, parsed as the runtime parses it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum TargetConnection {
+    /// A device kind's family (`HoloLens`, `Headset`) and its host.
+    Device { family: &'static str, host: String },
+    /// `visualizer:<index>`: an already-connected Visualizer receiver, which only
+    /// `qar_session_find_render_target` resolves.
+    Visualizer(usize),
+}
+
+fn parse_target_connection(connection: &str) -> Result<TargetConnection, QarResult> {
+    if connection.is_empty() {
+        return Err(invalid("A target connection string is required"));
+    }
+    let Some((scheme, remainder)) = connection.split_once(':') else {
+        return Ok(TargetConnection::Device {
+            family: "HoloLens",
+            host: connection.to_string(),
+        });
+    };
+    let family = match scheme {
+        "hololens" => "HoloLens",
+        "headset" | "quest" | "android" => "Headset",
+        "visualizer" => {
+            return remainder
+                .parse()
+                .map(TargetConnection::Visualizer)
+                .map_err(|_| invalid("A visualizer connection must contain a numeric index"));
+        }
+        _ => {
+            return Err(invalid(&format!(
+                "Unsupported target connection string '{connection}'"
+            )));
+        }
+    };
+    if remainder.is_empty() {
+        return Err(invalid(&format!(
+            "The target connection string '{connection}' names a device kind but no host"
+        )));
+    }
+    Ok(TargetConnection::Device {
+        family,
+        host: remainder.to_string(),
+    })
+}
+
+/// The checks of `qar_session_invite_target_app`: the init and its connection string. The stub's
+/// hub has no target app for a host named `uninvitable`.
+///
+/// # Safety
+///
+/// `init` is null or a stamped `QarSessionInviteTargetAppInit` whose string is a C string or NULL.
+unsafe fn check_target_app_invite(
+    session: *mut QarSession,
+    init: *const QarSessionInviteTargetAppInit,
+) -> Result<(&'static str, String), QarResult> {
+    if let Some(failure) = header_mismatch(
+        init.cast(),
+        QarStructureType::QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT,
+        "QarSessionInviteTargetAppInit",
+    ) {
+        return Err(failure);
+    }
+    // SAFETY: session comes from this stub.
+    if unsafe { session_value(session) }.is_none() {
+        return Err(invalid("session is not a live handle"));
+    }
+    // SAFETY: header checked; the string is a C string or NULL.
+    let connection = unsafe { text_or_empty((*init).connection_string) };
+    match parse_target_connection(&connection)? {
+        TargetConnection::Visualizer(_) => Err(invalid(
+            "a visualizer connection names no host; qar_session_find_render_target resolves it",
+        )),
+        TargetConnection::Device { host, .. } if host == "uninvitable" => Err(state::error(
+            QarStatusCode::QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE,
+            "the hub has no target app for this device family",
+        )),
+        TargetConnection::Device { family, host } => Ok((family, host)),
+    }
+}
+
+/// The stub's hub starts the target app: its peer joins the session and is remembered as one
+/// this hub started.
+fn start_target_app(family: &'static str, host: &str) -> [u8; 16] {
+    let peer = derive_id(&format!("target-app:{host}"));
+    {
+        let mut guard = state::lock();
+        guard.departed_peers.remove(&peer);
+        guard.started_target_apps.insert(
+            peer,
+            state::StartedTargetApp {
+                family,
+                host: host.to_string(),
+            },
+        );
+    }
+    note(format!("target app started family={family} host={host}"));
+    peer_join(peer, &format!("{family} {host}"));
+    peer
+}
+
+/// The stub's hub stops a target app it started; one it did not start is served by no hub, so
+/// the request times out.
+fn stop_target_app(peer: [u8; 16]) -> QarResult {
+    let started = state::lock().started_target_apps.remove(&peer).is_some();
+    if !started {
+        return state::error(
+            QarStatusCode::QAR_STATUS_TIMEOUT,
+            "no hub serves a kill for a target app this machine's hub did not start",
+        );
+    }
+    note(format!("target app stopped {}", short_hex(peer)));
+    peer_leave(peer, QarAppState::QAR_APP_STATE_SHUTTING_DOWN);
+    success()
 }
 
 /// The checks and value of `qar_render_sender_create`, shared by the
@@ -1564,19 +1966,7 @@ impl StubApi for Stub {
         let runtime_address = runtime as usize;
         // As the header says: the destroy ends the runtime's async onboards and rejoins with
         // QAR_STATUS_TIMEOUT and returns only after their callbacks have returned.
-        state::lock().destroying_runtimes.insert(runtime_address);
-        while state::lock()
-            .pending_runtime_calls
-            .get(&runtime_address)
-            .is_some_and(|count| *count > 0)
-        {
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        {
-            let mut guard = state::lock();
-            guard.destroying_runtimes.remove(&runtime_address);
-            guard.pending_runtime_calls.remove(&runtime_address);
-        }
+        wait_for_owner_calls(runtime_address);
         let sessions = live_handles_of(SESSION, |address| {
             // SAFETY: live session handle created by this stub.
             unsafe { session_value(address as *const QarSession) }
@@ -2126,6 +2516,7 @@ impl StubApi for Stub {
             "joined as member hub_start_timeout_ms={} restart_timeout_ms={}",
             init.hub_start_timeout_ms, init.restart_timeout_ms
         ));
+        state::lock().member_of_primary = true;
         success()
     }
 
@@ -2242,6 +2633,12 @@ impl StubApi for Stub {
         match unsafe { check_device_identity(&*identity) } {
             Ok(description) => {
                 note(format!("updated device {description}"));
+                // SAFETY: session and identity checked above.
+                unsafe {
+                    if let Some(value) = session_value(session) {
+                        value.device = device_value(&*identity);
+                    }
+                }
                 success()
             }
             Err(failure) => failure,
@@ -2301,6 +2698,9 @@ impl StubApi for Stub {
 
     unsafe fn qar_impl_session_handle_destroy(session: *mut QarSession) {
         let session_address = session as usize;
+        // The header: the destroy ends the session's async calls with QAR_STATUS_TIMEOUT and
+        // returns once their callbacks have returned.
+        wait_for_owner_calls(session_address);
         let senders = live_handles_of(RENDER_SENDER, |address| {
             // SAFETY: live render sender created by this stub.
             unsafe {
@@ -2795,8 +3195,458 @@ impl StubApi for Stub {
         success()
     }
 
+    unsafe fn qar_impl_render_sender_begin_frame_async(
+        stream: *mut QarRenderSender,
+        callback: qar_render_sender_begin_frame_callback_t,
+        user_state: *mut c_void,
+        token: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(callback) = callback else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
+            );
+        };
+        // SAFETY: stream comes from this stub, else refused.
+        let Some(target) =
+            (unsafe { handle_value::<RenderSenderValue, QarRenderSender>(stream, RENDER_SENDER) })
+                .map(|sender| sender.target_peer)
+        else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Invalid render sender handle",
+            );
+        };
+        let stream_address = stream as usize;
+        let user_state_address = user_state as usize;
+        let delay = state::lock().async_call_delay;
+        spawn_async_call(
+            stream_address,
+            token,
+            AsyncCallWait {
+                delay,
+                ignores_cancel: false,
+                // The same wait through a paused stream as the blocking begin.
+                hold: Some(Box::new(move || {
+                    let guard = state::lock();
+                    guard.paused_peers.contains(&target) && !guard.departed_peers.contains(&target)
+                })),
+            },
+            None,
+            "begin_frame_async",
+            move |reason| {
+                let (result, info) = match reason {
+                    Some(reason) => (
+                        state::error(
+                            QarStatusCode::QAR_STATUS_TIMEOUT,
+                            format!("begin_frame_async {reason}"),
+                        ),
+                        ptr::null_mut(),
+                    ),
+                    // SAFETY: the sender's destroy waits for this call, so it is live.
+                    None => {
+                        match unsafe { open_frame_info(stream_address as *mut QarRenderSender) } {
+                            Ok(info) => (success(), info),
+                            Err(failure) => (failure, ptr::null_mut()),
+                        }
+                    }
+                };
+                // SAFETY: the caller's callback and user state; called once. The caller owns
+                // the frame info.
+                unsafe { callback(result, info, user_state_address as *mut c_void) };
+            },
+        );
+        success()
+    }
+
+    unsafe fn qar_impl_session_request_onboarding_invite_async(
+        session: *mut QarSession,
+        init: *const QarRequestInviteInit,
+        result_callback: qar_session_request_invite_result_callback_t,
+        update_callback: qar_progress_callback_t,
+        user_state: *mut c_void,
+        cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(result_callback) = result_callback else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
+            );
+        };
+        if let Some(failure) = header_mismatch(
+            init.cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT,
+            "QarRequestInviteInit",
+        ) {
+            return failure;
+        }
+        // SAFETY: session comes from this stub.
+        let Some(local_app) = (unsafe { session_value(session) }).map(|value| value.local_app)
+        else {
+            return invalid("session invalid");
+        };
+        // The header: the init is validated and the tag copied before the call returns.
+        // SAFETY: header checked; app_tag is a C string or NULL.
+        let app_tag = unsafe { text_or_empty((*init).app_tag) };
+        if let Err(failure) = validate_app_tag(&app_tag) {
+            return failure;
+        }
+        let user_state_address = user_state as usize;
+        let delay = state::lock().async_call_delay;
+        spawn_async_call(
+            session as usize,
+            cancel,
+            AsyncCallWait {
+                delay,
+                ignores_cancel: false,
+                hold: None,
+            },
+            update_callback.map(|progress| (progress, user_state_address)),
+            "request_onboarding_invite_async",
+            move |reason| {
+                let (result, invite) = match reason {
+                    Some(reason) => (
+                        state::error(
+                            QarStatusCode::QAR_STATUS_TIMEOUT,
+                            format!("request_onboarding_invite_async {reason}"),
+                        ),
+                        ptr::null_mut(),
+                    ),
+                    None if !local_app => (
+                        state::error(
+                            QarStatusCode::QAR_STATUS_ONBOARDING_INVITE_REFUSED,
+                            "co-process invites are minted only for a local app",
+                        ),
+                        ptr::null_mut(),
+                    ),
+                    None => {
+                        note(format!("invite app_tag={app_tag}"));
+                        let invite: *mut QarOnboardingInvite = new_handle(
+                            InviteValue {
+                                expires_unix: unix_now() + 60,
+                            },
+                            INVITE,
+                        );
+                        (success(), invite)
+                    }
+                };
+                // SAFETY: the caller's callback and user state; called once.
+                unsafe { result_callback(result, invite, user_state_address as *mut c_void) };
+            },
+        );
+        success()
+    }
+
+    unsafe fn qar_impl_session_invite_target_app(
+        session: *mut QarSession,
+        init: *const QarSessionInviteTargetAppInit,
+        _on_progress: qar_progress_callback_t,
+        _progress_state: *mut c_void,
+        _cancel: *mut QarCancelToken,
+        out_peer: *mut QarPeerId,
+    ) -> QarResult {
+        // SAFETY: init is null or stamped by the caller.
+        let (family, host) = match unsafe { check_target_app_invite(session, init) } {
+            Ok(target) => target,
+            Err(failure) => return failure,
+        };
+        if out_peer.is_null() {
+            return invalid("out_peer is NULL");
+        }
+        let peer = start_target_app(family, &host);
+        // SAFETY: out_peer is writable.
+        unsafe { (*out_peer).data = peer };
+        success()
+    }
+
+    unsafe fn qar_impl_session_invite_target_app_async(
+        session: *mut QarSession,
+        init: *const QarSessionInviteTargetAppInit,
+        result_callback: qar_target_app_invite_result_callback_t,
+        update_callback: qar_progress_callback_t,
+        user_state: *mut c_void,
+        cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(result_callback) = result_callback else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
+            );
+        };
+        // SAFETY: init is null or stamped by the caller.
+        let (family, host) = match unsafe { check_target_app_invite(session, init) } {
+            Ok(target) => target,
+            Err(failure) => return failure,
+        };
+        let user_state_address = user_state as usize;
+        let delay = state::lock().async_call_delay;
+        spawn_async_call(
+            session as usize,
+            cancel,
+            AsyncCallWait {
+                delay,
+                ignores_cancel: false,
+                hold: None,
+            },
+            update_callback.map(|progress| (progress, user_state_address)),
+            "invite_target_app_async",
+            move |reason| {
+                let (result, peer) = match reason {
+                    Some(reason) => (
+                        state::error(
+                            QarStatusCode::QAR_STATUS_TIMEOUT,
+                            format!("invite_target_app_async {reason}"),
+                        ),
+                        [0; 16],
+                    ),
+                    None => (success(), start_target_app(family, &host)),
+                };
+                let peer = QarPeerId { data: peer };
+                // SAFETY: the caller's callback and user state; called once.
+                unsafe {
+                    result_callback(result, &raw const peer, user_state_address as *mut c_void);
+                }
+            },
+        );
+        success()
+    }
+
+    unsafe fn qar_impl_session_kill_target_app(
+        session: *mut QarSession,
+        target_app: *const QarPeerId,
+        _on_progress: qar_progress_callback_t,
+        _progress_state: *mut c_void,
+        _cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        // SAFETY: session comes from this stub.
+        if unsafe { session_value(session) }.is_none() || target_app.is_null() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "session and target app are required",
+            );
+        }
+        // SAFETY: target_app checked non-null.
+        stop_target_app(unsafe { (*target_app).data })
+    }
+
+    unsafe fn qar_impl_session_kill_target_app_async(
+        session: *mut QarSession,
+        target_app: *const QarPeerId,
+        result_callback: qar_target_app_kill_result_callback_t,
+        update_callback: qar_progress_callback_t,
+        user_state: *mut c_void,
+        cancel: *mut QarCancelToken,
+    ) -> QarResult {
+        let Some(result_callback) = result_callback else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Null pointer arguments",
+            );
+        };
+        // SAFETY: session comes from this stub.
+        if unsafe { session_value(session) }.is_none() || target_app.is_null() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "session and target app are required",
+            );
+        }
+        // SAFETY: target_app checked non-null; read during the start.
+        let peer = unsafe { (*target_app).data };
+        let user_state_address = user_state as usize;
+        let delay = state::lock().async_call_delay;
+        spawn_async_call(
+            session as usize,
+            cancel,
+            AsyncCallWait {
+                delay,
+                ignores_cancel: false,
+                hold: None,
+            },
+            update_callback.map(|progress| (progress, user_state_address)),
+            "kill_target_app_async",
+            move |reason| {
+                let result = match reason {
+                    Some(reason) => state::error(
+                        QarStatusCode::QAR_STATUS_TIMEOUT,
+                        format!("kill_target_app_async {reason}"),
+                    ),
+                    None => stop_target_app(peer),
+                };
+                let peer = QarPeerId { data: peer };
+                // SAFETY: the caller's callback and user state; called once.
+                unsafe {
+                    result_callback(result, &raw const peer, user_state_address as *mut c_void);
+                }
+            },
+        );
+        success()
+    }
+
+    unsafe fn qar_impl_session_find_render_target(
+        session: *const QarSession,
+        connection: *const c_char,
+        out_peer: *mut QarPeerId,
+    ) -> QarResult {
+        // SAFETY: session comes from this stub.
+        if unsafe { session_value(session) }.is_none() || connection.is_null() || out_peer.is_null()
+        {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "Session, connection, and output peer are required",
+            );
+        }
+        // SAFETY: out_peer is writable; connection is a C string.
+        let connection = unsafe {
+            (*out_peer).data = [0; 16];
+            text_or_empty(connection)
+        };
+        let target = match parse_target_connection(&connection) {
+            Ok(target) => target,
+            Err(failure) => return failure,
+        };
+        let found = {
+            let guard = state::lock();
+            match &target {
+                // The stub's one Visualizer receiver is index 0.
+                TargetConnection::Visualizer(0) => Some(VISUALIZER_PEER),
+                TargetConnection::Visualizer(_) => None,
+                TargetConnection::Device { host, .. } => guard
+                    .started_target_apps
+                    .iter()
+                    .find(|(peer, app)| &app.host == host && !guard.departed_peers.contains(*peer))
+                    .map(|(peer, _)| *peer),
+            }
+        };
+        let Some(peer) = found else {
+            return invalid(&format!(
+                "No connected render target matches '{connection}'"
+            ));
+        };
+        // SAFETY: out_peer is writable.
+        unsafe { (*out_peer).data = peer };
+        success()
+    }
+
+    unsafe fn qar_impl_target_app_connection_string_hololens(
+        host: *const c_char,
+        buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: forwarded to the caller.
+        unsafe { format_target_connection("hololens", host, buffer, buffer_size) }
+    }
+
+    unsafe fn qar_impl_target_app_connection_string_quest(
+        host: *const c_char,
+        buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: forwarded to the caller.
+        unsafe { format_target_connection("quest", host, buffer, buffer_size) }
+    }
+
+    unsafe fn qar_impl_target_app_connection_string_android(
+        host: *const c_char,
+        buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: forwarded to the caller.
+        unsafe { format_target_connection("android", host, buffer, buffer_size) }
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_presence(
+        handle: *mut QarPeerSpec,
+        out_presence: *mut QarPeerPresence,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub.
+        let Some(spec) = (unsafe { handle_value::<PeerSpecValue, QarPeerSpec>(handle, PEER_SPEC) })
+        else {
+            return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "invalid peer spec");
+        };
+        // SAFETY: out_presence is writable.
+        unsafe { *out_presence = QarPeerPresence(spec.identity.presence as _) };
+        success()
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_role(
+        handle: *mut QarPeerSpec,
+        out_role: *mut QarPeerRole,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub.
+        let Some(spec) = (unsafe { handle_value::<PeerSpecValue, QarPeerSpec>(handle, PEER_SPEC) })
+        else {
+            return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "invalid peer spec");
+        };
+        // SAFETY: out_role is writable.
+        unsafe { *out_role = QarPeerRole(spec.identity.role as _) };
+        success()
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_category(
+        handle: *mut QarPeerSpec,
+        out_category: *mut QarDeviceCategory,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub.
+        let Some(spec) = (unsafe { handle_value::<PeerSpecValue, QarPeerSpec>(handle, PEER_SPEC) })
+        else {
+            return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "invalid peer spec");
+        };
+        // SAFETY: out_category is writable.
+        unsafe { *out_category = QarDeviceCategory(spec.identity.category as _) };
+        success()
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_device_id(
+        handle: *mut QarPeerSpec,
+        out_buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub; the buffer is the caller's.
+        unsafe {
+            write_spec_text(handle, out_buffer, buffer_size, |spec| {
+                &spec.identity.device_id
+            })
+        }
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_device_family(
+        handle: *mut QarPeerSpec,
+        out_buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub; the buffer is the caller's.
+        unsafe {
+            write_spec_text(handle, out_buffer, buffer_size, |spec| {
+                &spec.identity.device_family
+            })
+        }
+    }
+
+    #[cfg(qaros_device_identity)]
+    unsafe fn qar_impl_peer_spec_get_device_name(
+        handle: *mut QarPeerSpec,
+        out_buffer: *mut c_char,
+        buffer_size: usize,
+    ) -> QarResult {
+        // SAFETY: handle comes from this stub; the buffer is the caller's.
+        unsafe {
+            write_spec_text(handle, out_buffer, buffer_size, |spec| {
+                &spec.identity.device_name
+            })
+        }
+    }
+
     unsafe fn qar_impl_render_stream_handle_destroy(handle: *mut QarRenderSender) {
         let sender_address = handle as usize;
+        // The header: the destroy cancels the sender's async begin-frames, which report
+        // QAR_STATUS_TIMEOUT, and returns once their callbacks have returned (unless it is made
+        // from one of them).
+        wait_for_owner_calls(sender_address);
         let frames = live_handles_of(FRAME_INFO, |address| {
             // SAFETY: live frame info created by this stub.
             unsafe {
@@ -2821,6 +3671,7 @@ impl StubApi for Stub {
         }
         // SAFETY: sender handles come from this stub.
         unsafe { destroy_handle::<RenderSenderValue, QarRenderSender>(handle, RENDER_SENDER) };
+        note("render sender destroyed".to_string());
     }
 
     unsafe fn qar_impl_render_sender_layout(
@@ -3804,7 +4655,9 @@ fn adapter_report(adapter: &QarGraphicsDeviceId) -> String {
 }
 
 /// The remote-app grant chained after the local-app mode: its invitation must be a live
-/// member-hub invitation of this stub; the grant's tag is logged.
+/// member-hub invitation of this stub; the grant's tag is logged. As the runtime's hub does, a hub
+/// that is not a member (no `qar_runtime_join_hub_as_member` yet) ignores the grant and admits
+/// the app as any local app (the stub's approval needs no prompt).
 ///
 /// # Safety
 ///
@@ -3827,10 +4680,14 @@ unsafe fn check_remote_app_grant(grant: &QarOnboardRemoteAppGrantExt) -> Result<
             "QarOnboardRemoteAppGrantExt.invitation is not a valid handle",
         ));
     };
-    note(format!(
-        "local app remote app grant tag={}",
-        invitation.app_grant_tag.as_deref().unwrap_or("-")
-    ));
+    let tag = invitation.app_grant_tag.as_deref().unwrap_or("-");
+    if state::lock().member_of_primary {
+        note(format!("local app remote app grant tag={tag}"));
+    } else {
+        note(format!(
+            "local app remote app grant ignored: this hub is not a member (tag={tag})"
+        ));
+    }
     Ok(())
 }
 
@@ -4498,6 +5355,15 @@ pub unsafe extern "C" fn qar_stub_set_peer_version_id(peer: *const u8, version_i
 #[unsafe(no_mangle)]
 pub extern "C" fn qar_stub_set_try_begin_frame_delay_ms(milliseconds: u64) {
     state::lock().try_begin_frame_delay = Duration::from_millis(milliseconds);
+}
+
+/// Delay before an async begin-frame, co-process invite request or target-app invite or kill
+/// started from now on completes (0 by default); cancellation, timeout, the token's or the
+/// owner's destroy end it early with `QAR_STATUS_TIMEOUT`. A begin-frame also waits while its
+/// target peer is paused.
+#[unsafe(no_mangle)]
+pub extern "C" fn qar_stub_set_async_call_delay_ms(milliseconds: u64) {
+    state::lock().async_call_delay = Duration::from_millis(milliseconds);
 }
 
 /// Delay before an async onboard or rejoin started from now on creates its session and calls back

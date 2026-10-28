@@ -1,87 +1,47 @@
 //! Snippets of the peer presence, role, category and device identity functions, which only
 //! bindings generated from a header that declares them have; `main.rs` compiles this module
-//! there. Declaring the device is safe (`PeerPresentation::device_identity`,
-//! `Session::update_device_identity`); the getters are raw only.
+//! there. All of it is in the safe API: `PeerInfo::identity`, `PeerPresentation::device_identity`
+//! and `Session::update_device_identity`.
 
-use std::ffi::{CStr, c_char};
-
-use qaros::qaros_sys::{QarDeviceCategory, QarPeerPresence, QarPeerRole, QarPeerSpec};
 use qaros::{
-    BlockingOptions, CancelToken, DeviceIdentity, Library, OnboardMethod, PeerPresentation,
-    Runtime, Session, SourceDeviceCategory,
+    BlockingOptions, CancelToken, DeviceCategory, DeviceIdentity, OnboardMethod, PeerInfo,
+    PeerPresence, PeerPresentation, PeerRole, Runtime, Session, SourceDeviceCategory,
 };
 
-fn show_target(_name: &str, _family: &str, _category: QarDeviceCategory) {}
+fn show_target(_name: &str, _family: &str, _category: DeviceCategory) {}
 
-fn render_for(_peer: *mut QarPeerSpec, _is_here: bool) {}
+fn render_for(_peer: &PeerInfo, _is_here: bool) {}
 
-fn read_presence(library: &Library, session: &Session) {
+fn read_presence(session: &Session) -> qaros::Result<()> {
     // ANCHOR: read_presence
-    // The presence is raw only: query the peer specs through the raw table with the session's
-    // handle. Every peer spec the query hands out is yours to destroy.
-    let api = library.raw_api();
-    let mut peers: [*mut QarPeerSpec; 64] = [std::ptr::null_mut(); 64];
-    let mut written = 0_usize;
-    // SAFETY: the session is alive and used on this thread; each spec handle is used before
-    // it is destroyed, and every buffer is writable for the length passed with it.
-    unsafe {
-        let result = (api.qar_impl_query_peer_specs)(
-            session.as_raw(),
-            peers.as_mut_ptr(),
-            peers.len(),
-            &raw mut written,
-        );
-        (api.qar_impl_result_log_if_error)(result);
-        for &peer in &peers[..written] {
-            let mut presence = QarPeerPresence::QAR_PEER_PRESENCE_UNKNOWN;
-            (api.qar_impl_peer_spec_get_presence)(peer, &raw mut presence);
-            // Render for ONLINE peers and UNKNOWN ones (not reconciled yet); stop at OFFLINE,
-            // LEAVING or RETIRED. OFFLINE and LEAVING peers may come back as ONLINE.
-            let is_here = presence == QarPeerPresence::QAR_PEER_PRESENCE_ONLINE
-                || presence == QarPeerPresence::QAR_PEER_PRESENCE_UNKNOWN;
-            render_for(peer, is_here);
-            (api.qar_impl_peer_spec_handle_destroy)(peer);
-        }
+    for peer in session.peers()? {
+        // `identity` is None only with bindings from a header without these getters.
+        let presence = peer
+            .identity
+            .as_ref()
+            .map_or(PeerPresence::Unknown, |identity| identity.presence);
+        // Render for ONLINE peers and UNKNOWN ones (not reconciled yet); stop at OFFLINE,
+        // LEAVING or RETIRED. OFFLINE and LEAVING peers may come back as ONLINE.
+        let is_here = matches!(presence, PeerPresence::Online | PeerPresence::Unknown);
+        render_for(&peer, is_here);
     }
     // ANCHOR_END: read_presence
+    Ok(())
 }
 
-fn show_targets(library: &Library, session: &Session) {
+fn show_targets(session: &Session) -> qaros::Result<()> {
     // ANCHOR: show_targets
-    // The role, category and device getters are raw only: call the raw table with the
-    // session's handle. Every peer spec the query hands out is yours to destroy.
-    let api = library.raw_api();
-    let mut peers: [*mut QarPeerSpec; 64] = [std::ptr::null_mut(); 64];
-    let mut written = 0_usize;
-    // SAFETY: the session is alive and used on this thread; each spec handle is used before
-    // it is destroyed, and every buffer is writable for the length passed with it.
-    unsafe {
-        let result = (api.qar_impl_query_peer_specs)(
-            session.as_raw(),
-            peers.as_mut_ptr(),
-            peers.len(),
-            &raw mut written,
-        );
-        (api.qar_impl_result_log_if_error)(result);
-        for &peer in &peers[..written] {
-            let mut role = QarPeerRole::QAR_PEER_ROLE_INTERNAL;
-            let mut category = QarDeviceCategory::QAR_DEVICE_CATEGORY_UNKNOWN;
-            let (mut name, mut family) = ([0 as c_char; 128], [0 as c_char; 64]);
-            let role_read = (api.qar_impl_peer_spec_get_role)(peer, &raw mut role);
-            if (api.qar_impl_result_is_success)(role_read)
-                && role == QarPeerRole::QAR_PEER_ROLE_TARGET
-            {
-                (api.qar_impl_peer_spec_get_category)(peer, &raw mut category);
-                (api.qar_impl_peer_spec_get_device_name)(peer, name.as_mut_ptr(), name.len());
-                (api.qar_impl_peer_spec_get_device_family)(peer, family.as_mut_ptr(), family.len());
-                let name = CStr::from_ptr(name.as_ptr()).to_string_lossy(); // "Meta Quest 3"
-                let family = CStr::from_ptr(family.as_ptr()).to_string_lossy(); // "MetaQuest"
-                show_target(&name, &family, category); // your icon table, category as fallback
-            }
-            (api.qar_impl_peer_spec_handle_destroy)(peer);
+    for peer in session.peers()? {
+        let Some(identity) = peer.identity else {
+            continue;
+        };
+        if identity.role == PeerRole::Target {
+            // "Meta Quest 3", "MetaQuest": your icon table, the category as the fallback
+            show_target(&identity.device_name, &identity.device_family, identity.category);
         }
     }
     // ANCHOR_END: show_targets
+    Ok(())
 }
 
 fn onboard_as_camera(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> {

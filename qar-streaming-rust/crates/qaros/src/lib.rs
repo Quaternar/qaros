@@ -59,7 +59,7 @@ mod library;
 mod member_hub;
 mod panels;
 mod peers;
-mod pending_onboard;
+mod pending;
 mod pending_sender;
 mod render;
 mod runtime;
@@ -73,17 +73,20 @@ pub mod vulkan;
 pub use adapter::GraphicsAdapter;
 pub use callbacks::{BlockingOptions, Progress, channel};
 pub use cancel::{CancelHandle, CancelToken};
-pub use device::{DeviceIdentity, SourceDeviceCategory};
+pub use device::{
+    DeviceCategory, DeviceIdentity, PeerIdentity, PeerPresence, PeerRole, SourceDeviceCategory,
+};
 pub use error::{Error, Result, StatusCode};
 pub use invite::OnboardingInvite;
-pub use library::{Library, LibraryConfig, RuntimeInfo};
+pub use library::{Library, LibraryConfig, RuntimeInfo, TargetDevice};
 pub use member_hub::{
     JoinHubAsMemberConfig, MemberHubInvitation, MemberHubInvitationConfig, MemberHubPermissions,
 };
 pub use panels::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanels};
 pub use peers::PeerInfo;
-pub use pending_onboard::PendingOnboard;
+pub use pending::{PendingCall, PendingOnboard};
 pub use pending_sender::{CANCELLED_CREATION_WAIT, PendingRenderSender};
+pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
     RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,

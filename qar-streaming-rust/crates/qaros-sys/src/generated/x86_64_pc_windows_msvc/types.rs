@@ -2631,13 +2631,19 @@ on another PC, chained into QarOnboardInit.header.next next to
 QarOnboardLocalAppExt (with any other mode:
 QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
 
-The hub on this PC must already be a member of the invitation's primary
-(qar_runtime_join_hub_as_member). When no approval admits this executable
-there yet, the primary records it as the app the invitation's grant admits,
-without a prompt; once redeemed by another executable the onboarding fails
-with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
-it, the invitation is not used. The app tag of the grant applies; a
-QarOnboardLocalAppTagExt is not needed.*/
+Only a member hub redeems a grant: join the hub on this PC to the
+invitation's primary first (qar_runtime_join_hub_as_member). A hub that is
+not a member ignores the grant, with no error of its own, and asks its own
+operator as for any local app: the approval prompt, then
+QAR_STATUS_ONBOARDING_APPROVAL_DENIED or
+QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT when nobody allows it.
+
+On a member hub, when no approval admits this executable there yet, the
+primary records it as the app the invitation's grant admits, without a
+prompt; once redeemed by another executable, or when the primary refuses
+the grant, the onboarding fails with QAR_STATUS_ONBOARDING_APPROVAL_DENIED.
+When an approval already admits it, the invitation is not used. The app tag
+of the grant applies; a QarOnboardLocalAppTagExt is not needed.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarOnboardRemoteAppGrantExt {

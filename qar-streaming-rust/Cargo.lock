@@ -217,6 +217,7 @@ dependencies = [
  "log",
  "qaros",
  "qaros-stub",
+ "qaros-sys",
  "windows",
 ]
 

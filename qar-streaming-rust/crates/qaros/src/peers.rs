@@ -1,5 +1,6 @@
 use qaros_sys::{self as sys, QarApi, defaults};
 
+use crate::device::PeerIdentity;
 use crate::error::{Result, check};
 use crate::strings;
 use crate::types::{AppState, PeerId};
@@ -16,8 +17,7 @@ pub struct PeerInfo {
     /// (`UNKNOWN`), reads as what it claimed, which every current peer claims as
     /// [`AppState::Running`] once it joins; `OFFLINE` and `LEAVING` read as
     /// [`AppState::ShuttingDown`], and the peer may come back as `Running`; `RETIRED` reads as
-    /// [`AppState::Retired`]. The presence itself is raw only: `qar_peer_spec_get_presence`
-    /// through [`crate::Library::raw_api`] with [`crate::Session::as_raw`].
+    /// [`AppState::Retired`]. [`PeerInfo::identity`] carries the presence itself.
     pub app_state: AppState,
     pub version_id: String,
     pub room_tag: String,
@@ -25,6 +25,9 @@ pub struct PeerInfo {
     /// streamer, visualizer): a peer to render for once it is
     /// [`AppState::Running`] (header "Basic flow", step 5).
     pub is_target_app: bool,
+    /// The presence, role and device identity. `None` where the bindings lack those functions
+    /// (cfg `qaros_device_identity` unset).
+    pub identity: Option<PeerIdentity>,
 }
 
 pub(crate) fn read_peer_info(api: &QarApi, handle: *mut sys::QarPeerSpec) -> Result<PeerInfo> {
@@ -80,5 +83,10 @@ pub(crate) fn read_peer_info(api: &QarApi, handle: *mut sys::QarPeerSpec) -> Res
             "qar_peer_spec_get_room_tag",
         )?,
         is_target_app,
+        #[cfg(qaros_device_identity)]
+        // SAFETY: handle is live (owned or borrowed for the callback).
+        identity: Some(unsafe { crate::device::read_peer_identity(api, handle) }?),
+        #[cfg(not(qaros_device_identity))]
+        identity: None,
     })
 }

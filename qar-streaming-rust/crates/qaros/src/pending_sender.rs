@@ -7,12 +7,14 @@
 //! - **Callback thread.** The callback may run on any library thread, during
 //!   or after the start call. It only records the outcome under a mutex; the
 //!   [`RenderSender`] (not `Send`) is built on the thread that polls.
-//! - **Cancellation.** A cancelled creation may never call back, as the
-//!   runtime's async `begin_frame` does not. Dropping a
-//!   pending creation never waits for the callback; session teardown waits
-//!   at most [`CANCELLED_CREATION_WAIT`] for the callbacks still due.
-//!   Everything the callback touches stays allocated until it comes, which
-//!   may be never.
+//! - **Cancellation.** The header promises exactly one callback, with
+//!   `QAR_STATUS_TIMEOUT` on cancel, and a session destroy that waits for it.
+//!   A runtime older than that promise (0.9.0 and earlier) may never call back
+//!   for a cancelled call, so this module still guards against it: dropping a
+//!   pending creation never waits for the callback; session teardown waits at
+//!   most [`CANCELLED_CREATION_WAIT`] for the callbacks still due. Everything
+//!   the callback touches stays allocated until it comes, which on such a
+//!   runtime may be never.
 //! - **`init` lifetime.** The library may read `init` and what it points to
 //!   until it calls back. They live inside the callback state, whose last
 //!   reference the library's callback releases, so they are freed only after
@@ -290,8 +292,8 @@ impl Creation {
 /// start, or teardown, whichever comes first. Session teardown waits up to
 /// [`CANCELLED_CREATION_WAIT`] for the callbacks of such creations, so the
 /// session can still be destroyed when they come soon after the cancel. If
-/// the callback never comes (as for a cancelled async `begin_frame` on the
-/// real runtime), its state stays allocated, its cancel token is
+/// the callback never comes (a runtime older than the header's exactly-once
+/// rule), its state stays allocated, its cancel token is
 /// destroyed right before the library, and its device references are never
 /// released.
 pub struct PendingRenderSender {

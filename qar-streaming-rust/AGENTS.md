@@ -226,18 +226,24 @@ if let Some(extension) = adapter_extension.as_mut() {
   DLL: unloading it after `qar_library_destroy` has crashed processes at exit. After a clean
   destroy a later load initializes it again; after a failed one every load is
   `Error::LibraryAlreadyLoaded` (`stub_library_stays_loaded.rs`).
-- Do not wrap a call whose cancellation never calls back: `qar_render_sender_begin_frame_async`
-  stays raw; `try_begin_owned_frame` is the non-blocking begin.
+- Do not wrap a call whose cancellation may never call back: a wrapper could neither free its
+  state nor tear its owner down. The header now promises every `_async` call exactly one
+  callback (`QAR_STATUS_TIMEOUT` on cancel, token destroy or owner destroy, whose destroy waits
+  for it); keep a bounded wait wherever a runtime older than that promise could still hang
+  (`CANCELLED_CREATION_WAIT`).
 
 ## Callbacks
 
 - **One-shot async** (`_async`, a final `QarResult` once): the callback runs on a library
   thread, during or after the call. It records the outcome under a mutex, notifies waiters and
   runs the caller's `wake` closure there (panics caught), nothing more; the owner's thread
-  builds the non-`Send` wrapper when it polls (`PendingRenderSender::poll`). Dropping the
-  pending value cancels and returns at once; the session keeps the creation until its callback
-  and applies the bounded wait at teardown. The library holds one `Arc` reference to the state
-  until the callback reclaims it; a callback that never comes leaks it.
+  builds the non-`Send` wrapper when it polls. Every one goes through `PendingCall`
+  (`crates/qaros/src/pending.rs`): the start call, the init kept until the callback, the result
+  trampoline per callback signature, and the abandoned call its owner (runtime, session or
+  render sender) keeps after the pending value is dropped, releasing a handle it still delivers
+  while the owner lives. Dropping the pending value cancels and returns at once. The library
+  holds one `Arc` reference to the state until the callback reclaims it. The render sender's
+  creation is older and has its own `PendingRenderSender`, with the bounded wait at teardown.
 - **Continuous subscription** (`subscribe`, `updates`): callbacks run on library threads,
   possibly concurrently, until the subscription ends. Wrap it as a method taking
   `impl Fn(Event) + Send + Sync + 'static` and returning a `Subscription` guard
@@ -551,7 +557,8 @@ is never evidence of what QAROS does where the header is silent.
   release them with `destroy_handle`, run callbacks on threads of their own as the runtime does.
 - **Fault controls** are the `qar_stub_*` exports in `behaviour.rs` (`qar_stub_fail_next`;
   peers that join, leave, retire, pause, stop answering or restart; delayed, unanswered or
-  cancel-ignoring creations; begin-frame delay; reported adapter; render requests; call log)
+  cancel-ignoring creations; begin-frame delay; async-call and async-onboard delays,
+  cancel-ignoring onboards; reported adapter; render requests; call log)
   and `QAROS_STUB_SCENARIO`, `QAROS_STUB_REPORT`, `QAROS_STUB_VULKAN_LIBRARY`,
   `QAROS_STUB_VULKAN_QUEUE_FAMILY`. Tests reach them through `StubControl` in
   `crates/qaros/tests/support/mod.rs`. A failure mode the safe layer handles gets a control and

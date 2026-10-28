@@ -54,7 +54,7 @@ fn an_async_onboard_delivers_its_session_and_progress_and_an_async_rejoin_echoes
     assert!(!onboarded.onboarding_id.is_zero());
     assert_eq!(wakes.load(Ordering::SeqCst), 1);
     let report = reports.try_recv().expect("a progress report");
-    assert_eq!(report.message, "stub async onboarding");
+    assert_eq!(report.message, "stub async call");
     let onboarding_id = onboarded.onboarding_id;
     drop(onboarded.session);
 
@@ -511,6 +511,36 @@ mod member_hubs {
         assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
         drop(library);
         assert_eq!(fixture.control.live_handle_count(), 0);
+    }
+
+    #[test]
+    fn a_hub_that_is_not_a_member_ignores_the_grant() {
+        let fixture = Fixture::new();
+        let library = load_stub();
+        let runtime = library
+            .create_runtime(&fixture.runtime_config())
+            .expect("runtime");
+        let invitation = runtime
+            .create_member_hub_invitation(&granting("left.member.qaros"), None)
+            .expect("invitation");
+        let onboarded = runtime
+            .onboard_with(
+                &local_app(),
+                &PeerPresentation::default(),
+                &OnboardExtensions {
+                    remote_app_grant: Some(&invitation),
+                    ..OnboardExtensions::default()
+                },
+                &BlockingOptions::default(),
+            )
+            .expect("admitted as any local app");
+        assert_eq!(
+            fixture.control.entries_starting_with("local app remote app grant"),
+            vec!["local app remote app grant ignored: this hub is not a member (tag=left.member.qaros)".to_string()]
+        );
+        drop(onboarded);
+        drop(invitation);
+        assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
     }
 
     #[test]

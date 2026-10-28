@@ -184,6 +184,12 @@ impl StubControl {
         set_delay(milliseconds);
     }
 
+    pub(crate) fn set_async_call_delay(&self, milliseconds: u64) {
+        let set_delay: unsafe extern "C" fn(u64) = self.symbol("qar_stub_set_async_call_delay_ms");
+        // SAFETY: plain value argument.
+        unsafe { set_delay(milliseconds) };
+    }
+
     pub(crate) fn set_onboard_async_delay(&self, milliseconds: u64) {
         let set_delay: unsafe extern "C" fn(u64) =
             self.symbol("qar_stub_set_onboard_async_delay_ms");

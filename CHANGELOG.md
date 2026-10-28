@@ -86,10 +86,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Scene Origin: Anchor Several Devices Together* says every player ignores QR codes other
   than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
   that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
-- **Docs:** the Rust tabs of *Peers* declare the device with the safe API
-  (`PeerPresentation::device_identity`, `Session::update_device_identity`) instead of raw calls,
-  and *API Conventions* names the wrapped async onboard and rejoin (`Runtime::start_onboard`,
-  `Runtime::start_rejoin`, `PendingOnboard`).
+- **Docs:** *Onboarding and Sessions* has C, C# and Rust tabs for remote apps through a member
+  hub, and new sections on re-enrolling a slot and onboarding without blocking; it says that a hub
+  that is not a member ignores a remote-app grant and prompts as for any local app. *Rendering
+  Streams* has a section on beginning a frame without blocking. The Rust tabs of *Peers* read the
+  presence and device identity and declare the device with the safe API instead of raw calls, and
+  *API Conventions* names the wrapped async calls. A Rust tutorial, *Remote App on Another PC*,
+  ports the C one.
 
 - **Docs:** the operator guide names the program to start `qaros.exe` and explains turning off the
   start at sign-in per user.

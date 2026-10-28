@@ -17,7 +17,7 @@ use crate::error::{Error, Result, check};
 use crate::invite::OnboardingInvite;
 use crate::library::{LibraryInner, require_handle};
 use crate::member_hub::MemberHubInvitation;
-use crate::pending_onboard::{AbandonedOnboard, PendingOnboard};
+use crate::pending::{self, AbandonedCall, CallSpec, PendingOnboard, RawOutcome};
 use crate::session::Session;
 use crate::strings;
 use crate::types::{OnboardingId, PeerId};
@@ -143,11 +143,15 @@ pub struct OnboardExtensions<'a> {
     /// Redeems a member hub's remote-app grant (`QarOnboardRemoteAppGrantExt`): the invitation
     /// the primary's app created with [`crate::MemberHubInvitationConfig::app_grant_tag`]. With
     /// [`OnboardMethod::LocalApp`] only, else [`Error::InvalidArgument`] before the call (the C
-    /// API refuses it with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]). The hub on this PC must
-    /// already be a member of the invitation's primary (`Runtime::join_hub_as_member`). When no
-    /// approval admits this executable there yet, the primary records it as the app the grant
-    /// admits, without a prompt; once another executable redeemed the grant, onboarding fails
-    /// with [`crate::StatusCode::ONBOARDING_APPROVAL_DENIED`]. When an approval already admits
+    /// API refuses it with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]). Only a member hub
+    /// redeems a grant: join the hub on this PC to the invitation's primary first
+    /// (`Runtime::join_hub_as_member`). A hub that is not a member ignores the grant, with no
+    /// error of its own, and asks its operator as for any local app: the approval prompt, then
+    /// [`crate::StatusCode::ONBOARDING_APPROVAL_DENIED`] or
+    /// [`crate::StatusCode::ONBOARDING_APPROVAL_TIMEOUT`] when nobody allows it. On a member hub,
+    /// when no approval admits this executable yet, the primary records it as the app the grant
+    /// admits, without a prompt; once another executable redeemed the grant, or when the primary
+    /// refuses it, onboarding fails with [`crate::StatusCode::ONBOARDING_APPROVAL_DENIED`]. When an approval already admits
     /// it, the invitation is not used. The grant's app tag applies; the method's `app_tag` is not
     /// needed. The invitation is borrowed for the call (for [`Runtime::start_onboard`], for the
     /// start call, during which the library copies it). Always `None` where the bindings lack
@@ -178,7 +182,7 @@ pub struct Runtime {
 pub(crate) struct RuntimeInner {
     handle: NonNull<sys::QarRuntime>,
     /// Async onboards and rejoins whose [`PendingOnboard`] was dropped before the callback.
-    abandoned_onboards: RefCell<Vec<AbandonedOnboard>>,
+    abandoned_onboards: RefCell<Vec<AbandonedCall>>,
     pub(crate) library: Rc<LibraryInner>,
 }
 
@@ -613,7 +617,30 @@ impl Runtime {
     ) -> Result<PendingOnboard> {
         self.inner.release_delivered_abandoned_onboards();
         let storage = OnboardInitStorage::new(method, presentation, extensions)?;
-        PendingOnboard::start_onboard(&self.inner, storage, progress, timeout, Box::new(wake))
+        let init = storage.init();
+        let runtime = self.inner.handle();
+        let api = &self.inner.library.api;
+        self.start_session_call(
+            "qar_runtime_onboard_async",
+            Box::new(storage),
+            progress,
+            timeout,
+            Box::new(wake),
+            |user_state, progress_callback, token| {
+                // SAFETY: live runtime; init lives in the call's state until the callback; the
+                // token outlives the call (the pending call or its owner keeps it).
+                unsafe {
+                    (api.qar_impl_runtime_onboard_async)(
+                        runtime,
+                        init,
+                        Some(pending::onboard_result_trampoline),
+                        progress_callback,
+                        user_state,
+                        token,
+                    )
+                }
+            },
+        )
     }
 
     /// Starts [`Runtime::rejoin_on_adapter`] without blocking (`qar_runtime_rejoin_async`), as
@@ -630,7 +657,71 @@ impl Runtime {
     ) -> Result<PendingOnboard> {
         self.inner.release_delivered_abandoned_onboards();
         let storage = RejoinInitStorage::new(onboarding_id, presentation, adapter)?;
-        PendingOnboard::start_rejoin(&self.inner, storage, progress, timeout, Box::new(wake))
+        let init = storage.init();
+        let runtime = self.inner.handle();
+        let api = &self.inner.library.api;
+        self.start_session_call(
+            "qar_runtime_rejoin_async",
+            Box::new(storage),
+            progress,
+            timeout,
+            Box::new(wake),
+            |user_state, progress_callback, token| {
+                // SAFETY: as in start_onboard.
+                unsafe {
+                    (api.qar_impl_runtime_rejoin_async)(
+                        runtime,
+                        init,
+                        Some(pending::onboard_result_trampoline),
+                        progress_callback,
+                        user_state,
+                        token,
+                    )
+                }
+            },
+        )
+    }
+
+    /// Starts an async onboard or rejoin whose callback hands over a session.
+    fn start_session_call(
+        &self,
+        function: &'static str,
+        keep: Box<dyn std::any::Any + Send + Sync>,
+        progress: Option<Sender<Progress>>,
+        timeout: Option<Duration>,
+        wake: Box<dyn Fn() + Send + Sync>,
+        start_call: impl FnOnce(
+            *mut std::ffi::c_void,
+            sys::qar_progress_callback_t,
+            *mut sys::QarCancelToken,
+        ) -> sys::QarResult,
+    ) -> Result<PendingOnboard> {
+        let finish_runtime = Rc::clone(&self.inner);
+        let abandon_runtime = Rc::clone(&self.inner);
+        let poll_runtime = Rc::clone(&self.inner);
+        let spec = CallSpec {
+            function,
+            progress,
+            timeout,
+            wake,
+            keep: Some(keep),
+            finish: Box::new(move |outcome: RawOutcome| {
+                let api = &finish_runtime.library.api;
+                if let Err(error) = check(api, function, outcome.result) {
+                    release_session(api, outcome.handle);
+                    return Err(error);
+                }
+                let session = require_handle(outcome.handle as *mut sys::QarSession, function)?;
+                Ok(Onboarded {
+                    onboarding_id: OnboardingId(outcome.id),
+                    session: Session::from_handle(session, finish_runtime),
+                })
+            }),
+            abandon: Box::new(move |call| abandon_runtime.abandon_onboard(call)),
+            before_poll: Box::new(move || poll_runtime.release_delivered_abandoned_onboards()),
+            destroy: Some(release_session),
+        };
+        pending::start(&self.inner.library, spec, start_call)
     }
 
     /// Erases a persisted identity slot (`qar_runtime_forget`): its certificate, persisted
@@ -658,7 +749,7 @@ impl RuntimeInner {
         self.handle.as_ptr()
     }
 
-    pub(crate) fn abandon_onboard(&self, onboard: AbandonedOnboard) {
+    pub(crate) fn abandon_onboard(&self, onboard: AbandonedCall) {
         self.abandoned_onboards.borrow_mut().push(onboard);
     }
 
@@ -683,8 +774,16 @@ impl Drop for RuntimeInner {
         // the callbacks of the onboards still running have returned (with QAR_STATUS_TIMEOUT).
         unsafe { api.release_runtime(self.handle.as_ptr()) };
         for onboard in std::mem::take(self.abandoned_onboards.get_mut()) {
-            onboard.leak_session_delivered_late();
+            onboard.leak_late_delivery();
         }
+    }
+}
+
+/// Destroys a session an async onboard or rejoin delivered that nobody takes.
+fn release_session(api: &sys::QarApi, session: usize) {
+    if session != 0 {
+        // SAFETY: delivered to us, used by nobody, and its runtime is alive.
+        unsafe { (api.qar_impl_session_handle_destroy)(session as *mut sys::QarSession) };
     }
 }
 

@@ -22,6 +22,8 @@ mod support;
 #[allow(clippy::wildcard_imports)]
 use support::*;
 
+#[path = "stub/async_calls.rs"]
+mod async_calls;
 #[path = "stub/async_create.rs"]
 mod async_create;
 #[cfg(qaros_d3d11)]

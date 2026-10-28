@@ -31,7 +31,8 @@ fn wait_for_log_entry(control: &StubControl, entry: &str) {
     }
 }
 
-/// One creation never calls back, as a cancelled async `begin_frame` on the real runtime;
+/// One creation never calls back, as a cancelled one may on a runtime older than the header's
+/// exactly-once rule;
 /// another delivers its sender only after the session's wait for them ran out. Dropping the
 /// creations and the session blocks no longer than that wait, destroys nothing the library may
 /// still call into, and leaves the late sender alone.

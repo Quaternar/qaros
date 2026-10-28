@@ -10,17 +10,15 @@
 {{#include ../tests/guide/peers.rs:query_peers}}
 ```
 
-The binding does not wrap the presence, role, category and device identity getters (`qar_peer_spec_get_presence` and the others): they are raw only, through `library.raw_api()` with the session's `as_raw()`. `PeerInfo` carries the app state, which the header derives from the presence. Reading the presence itself, raw:
+`PeerInfo::identity` carries the presence, role, category and device identity (`qar_peer_spec_get_presence` and the others), where the bindings declare them; `PeerInfo::app_state` is what the header derives from the presence.
 
 ```rust
 {{#include ../tests/guide/peers_identity.rs:read_presence}}
 ```
 
-The role, category and device getters follow in the next sections.
-
 ## Show the user what each target is
 
-The role, category and device getters are raw only: call them through `library.raw_api()` with the session's `as_raw()`.
+The device id and name can change while a peer runs: read them again from a peer update.
 
 ```rust
 {{#include ../tests/guide/peers_identity.rs:show_targets}}

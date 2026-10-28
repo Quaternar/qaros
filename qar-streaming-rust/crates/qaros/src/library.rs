@@ -48,6 +48,19 @@ pub struct RuntimeInfo {
     pub c_api: String,
 }
 
+/// The device kind a target-app connection string names
+/// ([`Library::target_app_connection_string`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetDevice {
+    /// `"hololens:<host>"`.
+    HoloLens,
+    /// `"quest:<host>"`, an alias of `"headset:<host>"`: the headset reports its exact model
+    /// itself.
+    Quest,
+    /// `"android:<host>"`, an alias of `"headset:<host>"`.
+    Android,
+}
+
 /// The loaded and initialized C API library.
 ///
 /// Process-wide: at most one may be alive at a time. Cloning shares the same
@@ -188,6 +201,33 @@ impl Library {
     /// `timeout`.
     pub fn create_cancel_token(&self, timeout: Option<Duration>) -> Result<CancelToken> {
         CancelToken::create(&self.inner, timeout)
+    }
+
+    /// The connection string for a target app on `host`, a hostname or IP address
+    /// (`qar_target_app_connection_string_hololens`, `_quest`, `_android`), for
+    /// [`crate::Session::invite_target_app`]. An empty host fails in the library.
+    pub fn target_app_connection_string(&self, device: TargetDevice, host: &str) -> Result<String> {
+        let api = &self.inner.api;
+        let (builder, function) = match device {
+            TargetDevice::HoloLens => (
+                api.qar_impl_target_app_connection_string_hololens,
+                "qar_target_app_connection_string_hololens",
+            ),
+            TargetDevice::Quest => (
+                api.qar_impl_target_app_connection_string_quest,
+                "qar_target_app_connection_string_quest",
+            ),
+            TargetDevice::Android => (
+                api.qar_impl_target_app_connection_string_android,
+                "qar_target_app_connection_string_android",
+            ),
+        };
+        let host = crate::strings::to_c_string(host, "host")?;
+        crate::strings::read_string(|buffer, size| {
+            // SAFETY: host is a C string; the buffer is writable for size bytes.
+            let result = unsafe { builder(host.as_ptr(), buffer, size) };
+            check(api, function, result)
+        })
     }
 
     /// Parses an invite serialized by [`OnboardingInvite::serialize`].

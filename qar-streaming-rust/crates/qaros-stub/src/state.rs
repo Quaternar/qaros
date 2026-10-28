@@ -53,6 +53,10 @@ pub struct StubVolume {
 }
 
 #[derive(Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent test switches, not a state machine"
+)]
 pub struct StubState {
     pub calls: Vec<String>,
     pub messages: HashMap<u32, String>,
@@ -98,10 +102,20 @@ pub struct StubState {
     pub onboard_async_delay: Duration,
     /// An async onboard or rejoin ignores its cancel token (not the runtime's destroy).
     pub onboard_async_ignores_cancel: bool,
-    /// Async onboards and rejoins whose callback has not returned, per runtime address.
-    pub pending_runtime_calls: HashMap<usize, usize>,
-    /// Runtimes whose destroy is waiting for their async calls, which end at once.
-    pub destroying_runtimes: HashSet<usize>,
+    /// Async calls whose callback has not returned, per owner address (a runtime, session or
+    /// render sender).
+    pub pending_calls: HashMap<usize, Vec<PendingStubCall>>,
+    /// Owners whose destroy is waiting for their async calls, which end at once.
+    pub destroying_owners: HashSet<usize>,
+    pub next_call_id: u64,
+    /// How long an async begin-frame, invite request or target-app call waits before it
+    /// completes.
+    pub async_call_delay: Duration,
+    /// The stub's hub joined a primary (`qar_runtime_join_hub_as_member`): only then does it
+    /// redeem remote-app grants.
+    pub member_of_primary: bool,
+    /// Target apps the stub's hub started, by peer id.
+    pub started_target_apps: HashMap<[u8; 16], StartedTargetApp>,
     /// Every successful `show_frame`, across all senders.
     pub frames_shown: u64,
     pub frames_shown_by_peer: HashMap<[u8; 16], u64>,
@@ -110,6 +124,20 @@ pub struct StubState {
     /// What `qar_session_get_graphics_device_id` reports, set through
     /// `qar_stub_set_reported_adapter`; `None` reports no adapter.
     pub reported_adapter: Option<ReportedAdapter>,
+}
+
+/// An async call in flight: its id and, while its result callback runs, that thread.
+#[derive(Clone, Copy, Debug)]
+pub struct PendingStubCall {
+    pub id: u64,
+    pub callback_thread: Option<std::thread::ThreadId>,
+}
+
+/// A target app the stub's hub started: its device family and host.
+#[derive(Clone, Debug)]
+pub struct StartedTargetApp {
+    pub family: &'static str,
+    pub host: String,
 }
 
 /// How an async render sender creation ends.

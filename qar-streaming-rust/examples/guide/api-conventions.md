@@ -28,7 +28,7 @@ The safe API builds the init structs, stamps them with ports of the `qar_*_defau
 ## Blocking / async pairs
 
 - **Blocking**: `Runtime::onboard`, `Runtime::rejoin` and `Session::create_render_sender` block until done. Their `BlockingOptions` take an optional progress channel, fed from a library thread while you wait, and an optional `CancelToken` (`library.create_cancel_token`, with or without a timeout), which the borrow keeps alive for the call. Its `cancel_handle()` cancels it from another thread.
-- **Async**: `Runtime::start_onboard` and `Runtime::start_rejoin` return a `PendingOnboard`, `Session::start_render_sender` a `PendingRenderSender`, at once; `poll()` hands over the outcome once the library called back (`PendingOnboard::wait` blocks for it). The library calls back exactly once, with `StatusCode::TIMEOUT` when the call is cancelled; dropping the pending value cancels it. The async begin-frame is not wrapped: `library.raw_api()` reaches it with the sender's `as_raw()`.
+- **Async**: `Runtime::start_onboard` and `Runtime::start_rejoin` return a `PendingOnboard`, `Session::start_render_sender` a `PendingRenderSender`, at once; `poll()` hands over the outcome once the library called back (`PendingOnboard::wait` blocks for it). The library calls back exactly once, with `StatusCode::TIMEOUT` when the call is cancelled; dropping the pending value cancels it. `RenderSender::start_owned_frame` is the async begin-frame (`PendingFrame`).
 
 ```rust
 {{#include ../tests/guide/api_conventions.rs:blocking_call}}
