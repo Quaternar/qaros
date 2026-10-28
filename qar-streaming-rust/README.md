@@ -432,14 +432,26 @@ and never ships in a release package.
 
 `tests/qar-streaming-rust-ext` holds the Rust layer of that DLL, mirrored by hand like the C#
 tests' `Ext` layer, and the tests. It is test-only: not a default member of the workspace, never
-published, and no other crate depends on it. Point the tests at the `bin` folder of a Debug or
-RelWithDebInfo SDK build that includes `qar-streaming-c-ext.dll`; without the variable they print
-`skipped` and pass.
+published, and no other crate depends on it. Point `QAROS_NATIVE_BIN` at the folder holding
+`qar-streaming-c.dll`, `qar-streaming-c-ext.dll` and every DLL they load: the `bin` folder of a
+Debug or RelWithDebInfo SDK build. Without the variable the tests print `skipped` and pass; a set
+variable naming a folder without both DLLs fails them.
 
 ```powershell
-$env:QAROS_PACKAGE_BIN = "<SDK build>\bin"
+$env:QAROS_NATIVE_BIN = "<SDK build>\bin"
 cargo test -p qar-streaming-rust-ext --features e2e -- --nocapture
+# or, with the same variable, as CI's script runs its checks:
+..\ci\rust-binding.ps1 -Step E2E
 ```
+
+Inside the Quaternar repository the variable needs no setting: its `.cargo/config.toml` points it at
+that repository's `windows-x64-relWithDebInfo` build (a variable set in the environment wins), and a
+missing build fails the tests with the command that builds it. From the Quaternar root,
+`.\utils\Invoke-QarosBindingTests.ps1` builds the native targets and runs these tests and the C#
+tests.
+
+`ci/rust-binding.ps1` (in the repository root) runs CI's checks: format, clippy, the workspace
+tests, the tutorial pages and the guide tabs; `-Step` picks some of them.
 
 | Test | What it checks |
 | --- | --- |

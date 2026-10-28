@@ -36,7 +36,7 @@ struct User {
 
 #[test]
 fn two_users_get_their_own_streams_and_one_can_leave() {
-    let Some(bin) = common::package_bin() else {
+    let Some(bin) = common::native_bin() else {
         return;
     };
     let (eye_width, eye_height) = common::eye_size_from_environment();

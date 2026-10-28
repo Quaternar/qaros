@@ -24,7 +24,7 @@ use qaros::vulkan::VulkanStreamParams;
 
 #[test]
 fn vulkan_frames_on_the_extension_device_reach_the_receiver() {
-    let Some(bin) = common::package_bin() else {
+    let Some(bin) = common::native_bin() else {
         return;
     };
     let (eye_width, eye_height) = common::eye_size_from_environment();

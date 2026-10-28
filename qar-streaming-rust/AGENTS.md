@@ -68,6 +68,9 @@ cargo xtask tutorials --check
 cargo xtask guide --check
 ```
 
+`../ci/rust-binding.ps1` runs the checks (with `fmt -- --check`) exactly as CI does; `-Step E2E`
+runs the integration tests against `QAROS_NATIVE_BIN`. Change a check there, not in the workflow.
+
 As the change needs: on a host without Windows the same clippy with
 `--target x86_64-pc-windows-msvc`; for Vulkan code
 `QAROS_REQUIRE_VULKAN=1 cargo test -p qaros --features vulkan` (without the variable, a host

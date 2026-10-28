@@ -21,6 +21,8 @@ on:
       - "qar-streaming-sharp/**"
       - "qar-streaming-c/include/**"
       - ".github/workflows/csharp-binding-tests.yml"
+      - "ci/csharp-binding-tests.ps1"
+      - "ci/common.ps1"
 
 permissions:
   contents: read
@@ -45,29 +47,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download the C API runtime
+      # Downloads the release's C API runtime and runs the tests against it; run the script locally
+      # the same way, or with QAROS_NATIVE_BIN set to a native folder of your own.
+      - name: Download the C API runtime and test
         env:
           GH_TOKEN: ${{ secrets.QAR_RELEASES_TOKEN }}
         run: |
-          if (Test-Path $env:RUNTIME_DIR) { Remove-Item -LiteralPath $env:RUNTIME_DIR -Recurse -Force }
-          New-Item -ItemType Directory -Path $env:RUNTIME_DIR | Out-Null
-          gh release download $env:QAROS_RUNTIME_RELEASE --repo Quaternar/Quaternar `
-            --pattern 'QAROS-CApi-*-RelWithDebInfo.zip' --dir $env:RUNTIME_DIR
-          $zip = Get-ChildItem $env:RUNTIME_DIR -Filter 'QAROS-CApi-*-RelWithDebInfo.zip' | Select-Object -First 1
-          if (-not $zip) { throw "No QAROS-CApi ZIP in release $env:QAROS_RUNTIME_RELEASE" }
-          Expand-Archive -LiteralPath $zip.FullName -DestinationPath $env:RUNTIME_DIR
-          # The ZIP holds one folder named after itself.
-          $bin = Join-Path $env:RUNTIME_DIR (Join-Path $zip.BaseName 'bin')
-          if (-not (Test-Path (Join-Path $bin 'qar-streaming-c.dll'))) { throw "qar-streaming-c.dll missing in $bin" }
-          "QAROS_NATIVE_BIN=$bin" >> $env:GITHUB_ENV
-          Write-Host "Testing against $($zip.Name)"
-
-      - name: Test
-        working-directory: qar-streaming-sharp
-        run: |
-          dotnet test tests/QarStreaming.Tests/QarStreaming.Tests.csproj -c Release -f net8.0 `
-            "-p:QarStreamingNativeBinDir=$env:QAROS_NATIVE_BIN" `
-            --logger "trx;LogFileName=csharp-binding-tests.trx" --results-directory "$env:RUNNER_TEMP\test-results"
+          ./ci/csharp-binding-tests.ps1 -Release $env:QAROS_RUNTIME_RELEASE -RuntimeDirectory $env:RUNTIME_DIR `
+            -ResultsDirectory "$env:RUNNER_TEMP\test-results"
 
       - name: Upload the test results
         if: always()

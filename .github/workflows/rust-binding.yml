@@ -3,7 +3,9 @@ name: Rust binding
 # Format, clippy, the tests of qar-streaming-rust and the freshness of its tutorial pages and of
 # the developer guide's Rust tabs on a hosted Windows runner. The tests run against qaros-stub,
 # an in-memory stand-in for the runtime, so they need no QAROS build, runner or secret. The
-# integration tests against qar-streaming-c-ext are built and skip without QAROS_PACKAGE_BIN.
+# integration tests against qar-streaming-c-ext are built and skip without QAROS_NATIVE_BIN.
+# Every check is a step of ci/rust-binding.ps1; run it locally the same way (`-Step E2E` adds the
+# integration tests, with QAROS_NATIVE_BIN set).
 
 on:
   push:
@@ -13,12 +15,16 @@ on:
       - "qar-streaming-c/include/**"
       - "docs/website/docs/developer-guide/**"
       - ".github/workflows/rust-binding.yml"
+      - "ci/rust-binding.ps1"
+      - "ci/common.ps1"
   pull_request:
     paths:
       - "qar-streaming-rust/**"
       - "qar-streaming-c/include/**"
       - "docs/website/docs/developer-guide/**"
       - ".github/workflows/rust-binding.yml"
+      - "ci/rust-binding.ps1"
+      - "ci/common.ps1"
 
 permissions:
   contents: read
@@ -34,7 +40,6 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: qar-streaming-rust
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -45,18 +50,18 @@ jobs:
           rustup default stable
 
       - name: Format
-        run: cargo fmt --all -- --check
+        run: ./ci/rust-binding.ps1 -Step Format
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --features qaros/vulkan,qaros-examples/vulkan,qar-streaming-rust-ext/e2e -- -D warnings
+        run: ./ci/rust-binding.ps1 -Step Clippy
 
       - name: Test
-        run: cargo test --workspace
+        run: ./ci/rust-binding.ps1 -Step Test
 
       # The Rust tutorial pages of the developer guide are generated from examples/tutorials/
       # and the examples' anchored regions; a stale page or a broken include fails here.
       - name: Tutorials
-        run: cargo xtask tutorials --check
+        run: ./ci/rust-binding.ps1 -Step Tutorials
 
       # Every code tab of the developer guide with a C tab carries a Rust tab, generated from
       # examples/guide/ and the anchored snippets in examples/tests/guide/; a stale tab, a page
@@ -67,4 +72,4 @@ jobs:
       # qar-streaming-rust/examples/tests/guide/<module>.rs), then run `cargo xtask guide` from
       # qar-streaming-rust/ and commit the regenerated page; or ask the Rust binding's maintainers.
       - name: Guide code tabs
-        run: cargo xtask guide --check
+        run: ./ci/rust-binding.ps1 -Step Guide
