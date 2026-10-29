@@ -29,8 +29,9 @@
  * 1. `qar-streaming-c.dll` beside the module that calls it: the executable, or
  *    the plugin DLL that loads QAROS (a test binary, a development ZIP, an app
  *    built into a QAROS tree);
- * 2. the folder named by the `QAROS_RUNTIME_DIR` environment variable; when it
- *    is set, a runtime missing there is an error, not a reason to go on;
+ * 2. the runtime of the QAROS development build that started the application,
+ *    which names it to the processes it starts; a runtime missing there is an
+ *    error, not a reason to go on;
  * 3. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll` (Windows);
  *    an installed copy that fails to load is an error;
  * 4. `qar-streaming-c.dll` in a folder on `PATH` (Linux: the dynamic linker's
@@ -182,7 +183,7 @@
  * - **Texture pixels.** Positions inside a video texture, for frame layouts.
  *   See QarVideoFrameView.
  *
- * The rule (ADR-0253): what a render sender hands its application is in app
+ * The rule: what a render sender hands its application is in app
  * content space. What arrives through data streams and shared objects - app
  * volume and GUI panel state, another peer's published data - is in the
  * publishing peer's room space, and is never converted for you.
@@ -391,6 +392,11 @@ typedef enum QarStatusCode
 	 * Recoverable: keep calling begin-frame, it succeeds once the volume
 	 * resolves. A volume that was removed never does; recreate it. */
 	QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED = 805,
+	/** QarRenderSenderInit::depth_format names a format the chosen
+	 * graphics_api cannot take as a depth plane. Returned by
+	 * qar_render_sender_create() before any receiver is waited for; nothing
+	 * was created. The result's message lists the accepted formats. */
+	QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED = 806,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
@@ -824,8 +830,64 @@ typedef enum QarPixelFormat
 	// Four-byte BGR color with an unused X byte. X is not alpha.
 	QAR_PIXEL_FORMAT_B8G8R8X8 = 56,
 
-	QAR_PIXEL_FORMAT_D32_FLOAT = 101
+	// 16-bit normalized depth. Accepted only as a render sender's
+	// depth_format; the sender widens it to 32-bit float before the frame
+	// leaves the application, so receivers never get it.
+	QAR_PIXEL_FORMAT_D16_UNORM = 100,
+	QAR_PIXEL_FORMAT_D32_FLOAT = 101,
+	// Combined depth-stencil, accepted only as an OpenGL or Vulkan render
+	// sender's depth_format (CPU and D3D11 senders refuse them; D3D11 cannot
+	// share such a texture). Only the depth is streamed, widened to 32-bit
+	// float; the stencil is dropped.
+	QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT = 102,
+	QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT = 103
 } QarPixelFormat;
+
+/**
+ * @brief What a stream's colour alpha means.
+ *
+ * Declared by a render sender through QarRenderSenderAlphaModeExt and
+ * published with the stream, so a receiver composites by it instead of
+ * guessing. Values are appended, never reused.
+ */
+typedef enum QarColorAlphaMode
+{
+	/// Not declared: a receiver keeps its own default. What a render sender
+	/// without QarRenderSenderAlphaModeExt declares.
+	QAR_COLOR_ALPHA_MODE_UNSPECIFIED = 0,
+	/// The alpha channel means nothing; every pixel is fully covered.
+	QAR_COLOR_ALPHA_MODE_OPAQUE = 1,
+	/// The colour is premultiplied by the alpha, and the alpha is the pixel's
+	/// coverage: what a renderer produces drawing over a transparent-black
+	/// clear with ordinary alpha blending.
+	QAR_COLOR_ALPHA_MODE_PREMULTIPLIED = 2,
+	/// The colour is not multiplied by the alpha, and the alpha is the pixel's
+	/// coverage. The sender premultiplies the colour before the frame leaves
+	/// the application, so the stream publishes
+	/// QAR_COLOR_ALPHA_MODE_PREMULTIPLIED. Costs one shader pass per frame,
+	/// even when no other conversion is needed.
+	QAR_COLOR_ALPHA_MODE_STRAIGHT = 3,
+} QarColorAlphaMode;
+
+/**
+ * @brief What the numbers in a render sender's colour texture mean.
+ *
+ * Declared through QarRenderSenderColorEncodingExt. Whatever is declared, the
+ * stream carries sRGB-encoded colour: a linear colour is encoded by the sender
+ * before the frame leaves the application. Values are appended, never reused.
+ */
+typedef enum QarColorEncoding
+{
+	/// sRGB-encoded, as a display shows it: what a renderer stores in an sRGB
+	/// render target, or encodes in its last pass. The default; nothing is
+	/// converted.
+	QAR_COLOR_ENCODING_SRGB = 0,
+	/// Linear light, as a renderer stores it in a plain UNORM render target
+	/// without encoding. The sender encodes it, at one GPU pass per frame.
+	/// 8-bit linear values have already lost precision in the darks, which then
+	/// band slightly; QAR_PIXEL_FORMAT_R16G16B16A16 keeps them.
+	QAR_COLOR_ENCODING_LINEAR = 1,
+} QarColorEncoding;
 
 // ============================================================================
 // VIDEO STREAM LAYOUT TYPES
@@ -1068,11 +1130,11 @@ typedef struct QarGuiPanelSize
 	/// zoom, as a desktop browser's Ctrl+ and Ctrl- do: the page is drawn that
 	/// much larger and reflowed to the panel's width, so nothing is cut off at
 	/// the sides. Only the application sets it; the panel's + and - buttons
-	/// resize the panel instead (ADR-0165, ADR-0167).
+	/// resize the panel instead.
 	///
 	/// A QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID panel ignores it: its video is
 	/// always drawn at the full panel width and scrolled vertically by the
-	/// renderer when it is taller than the panel (ADR-0150).
+	/// renderer when it is taller than the panel.
 	float content_scale;
 } QarGuiPanelSize;
 
@@ -1120,9 +1182,9 @@ typedef enum QarGuiPanelGestureKind
  * increasing down. Both are clamped to the image, so x_pixels is in [0,
  * content_width - 1] and y_pixels in [0, content_height - 1] of the image the
  * renderer is currently displaying - for a stream panel, the video exactly as
- * its sender draws it: the renderer receives it at the sender's own resolution
- * (ADR-0149), and a position on a video the renderer has scrolled is the pixel
- * under the finger, not one relative to the visible part (ADR-0150).
+ * its sender draws it: the renderer receives it at the sender's own resolution,
+ * and a position on a video the renderer has scrolled is the pixel under the
+ * finger, not one relative to the visible part.
  *
  * Signed for headroom, and a closed pair: a contact's depth off the glass, if
  * it is ever reported, arrives as its own accessor rather than as a member
@@ -1347,6 +1409,8 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME_VIEW_OVERRIDES_EXT = 0x3004,
 	QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT = 0x3005,
+	QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT = 0x3006,
+	QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT = 0x3007,
 	QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT = 0x4000,
 	/// 0x4001 was QarStreamParamsOpenGl, one struct for all three context
 	/// types. Retired rather than reused: the layout behind it changed.
@@ -2128,8 +2192,10 @@ typedef struct QarAppVolumeInit
  *   QarStreamParamsOpenGlEgl, QarStreamParamsOpenGlWgl or
  *   QarStreamParamsOpenGlGlx, whichever matches the context you own.
  * - QAR_GRAPHICS_API_VULKAN requires QarStreamParamsVulkan.
- * QAR_GRAPHICS_API_CPU supports no extension and requires `header.next` to be
- * null. The selected extension's `header.next` must also be null.
+ * QAR_GRAPHICS_API_CPU supports no graphics extension.
+ *
+ * The chain may also hold one QarRenderSenderAlphaModeExt, in any position.
+ * Nothing else may be chained, and no type may appear twice.
  */
 typedef struct QarRenderSenderInit
 {
@@ -2196,6 +2262,50 @@ typedef struct QarRenderSenderInit
 typedef void (*qar_render_sender_request_callback_t)(
 	QarRenderStreamRequest* request, void* user_state
 );
+
+/**
+ * @brief Declares what a render sender's colour alpha means.
+ *
+ * Chain it on QarRenderSenderInit::header.next, in any position beside the
+ * graphics extension. The stream publishes the mode, and a receiver composites
+ * by it: the QAROS mixer draws a QAR_COLOR_ALPHA_MODE_PREMULTIPLIED stream with
+ * its alpha as coverage, and a QAR_COLOR_ALPHA_MODE_OPAQUE one fully covered,
+ * whatever its alpha channel holds. A QAR_COLOR_ALPHA_MODE_STRAIGHT colour is
+ * premultiplied by the sender and published as PREMULTIPLIED. Without this
+ * extension the stream declares QAR_COLOR_ALPHA_MODE_UNSPECIFIED and the
+ * receiver keeps its own default.
+ *
+ * A B8G8R8X8 colour has no alpha; declare nothing, or OPAQUE.
+ */
+typedef struct QarRenderSenderAlphaModeExt
+{
+	/// QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT. Set with
+	/// qar_render_sender_alpha_mode_ext_default().
+	QarStructureHeader header;
+	/// The declared mode. A value this library does not know is rejected with
+	/// QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+	QarColorAlphaMode alpha_mode;
+} QarRenderSenderAlphaModeExt;
+
+/**
+ * @brief Declares what the numbers in a render sender's colour texture mean.
+ *
+ * Chain it on QarRenderSenderInit::header.next, in any position beside the
+ * graphics extension and QarRenderSenderAlphaModeExt. Without it the colour is
+ * read as QAR_COLOR_ENCODING_SRGB. Declare QAR_COLOR_ENCODING_LINEAR when the
+ * application renders linear light into the sender's texture without encoding
+ * it: every QAROS device shows the stream as sRGB-encoded, so linear values
+ * would look too dark.
+ */
+typedef struct QarRenderSenderColorEncodingExt
+{
+	/// QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT. Set with
+	/// qar_render_sender_color_encoding_ext_default().
+	QarStructureHeader header;
+	/// The declared encoding. A value this library does not know is rejected
+	/// with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+	QarColorEncoding color_encoding;
+} QarRenderSenderColorEncodingExt;
 
 #ifdef QAR_ENABLE_D3D11
 typedef struct QarStreamParamsD3D11
@@ -2438,12 +2548,13 @@ typedef struct QarRenderFrameShowViewOverridesExt
  * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
  * @param library_path NULL is the normal call: the library beside the calling
- *        module, else `QAROS_RUNTIME_DIR`, else the installed QAROS, else one
- *        on `PATH` (see "Prefer dynamic loading" above for the full order). A
- * non-NULL path names the library **file** itself, absolute or relative to the
- * current working directory, and only that file is tried. The runtime's
- *        dependency libraries are resolved from the library's own folder and
- *        System32. UTF-8, like every path in this API (see
+ *        module, else that of the QAROS development build that started the
+ *        application, else the installed QAROS, else one on `PATH` (see "Prefer
+ * dynamic loading" above for the full order). A non-NULL path names the library
+ * **file** itself, absolute or relative to the current working directory, and
+ * only that file is tried. The runtime's dependency libraries are resolved from
+ * the library's own folder and System32. UTF-8, like every path in this API
+ * (see
  *        @ref qar_text_encoding).
  * @return true on success; false, with a printed reason, when no runtime is
  *         found or the library fails to load. Call this before
@@ -3880,7 +3991,7 @@ static inline QarResult qar_render_sender_frame_vulkan(
  * @brief Begin producing a new frame.
  *
  * Returns per-frame information such as per-eye pose/FOV to render with. The
- * poses are in the bound app volume's app content space (ADR-0253).
+ * poses are in the bound app volume's app content space.
  *
  * Fails with QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED, without
  * beginning a frame, while the app volume does not resolve: app content space
@@ -3944,7 +4055,7 @@ static inline QarResult qar_render_sender_show_frame(
  * Drains everything that arrived and returns the last sample. The poses are in
  * the bound app volume's app content space, like the view poses, and so are
  * the joint radii and velocities measured beside them: radii in app units,
- * velocities in app axes, linear ones in app units per second (ADR-0253).
+ * velocities in app axes, linear ones in app units per second.
  * Never room space - hand data a peer publishes on a data stream is in that
  * peer's room space, but this call converts it.
  * Samples arrive only while the target peer is focused on the volume and not
@@ -5184,6 +5295,16 @@ static inline QarResult qar_app_volume_get_active_gesture_mode(
 /** @brief Default init for QarRenderSenderInit (sets header, sensible
  * defaults). */
 static inline QarRenderSenderInit qar_render_sender_init_default(void);
+/** @brief A QarRenderSenderAlphaModeExt with its header set and
+ * QAR_COLOR_ALPHA_MODE_UNSPECIFIED; set alpha_mode and chain it on
+ * QarRenderSenderInit::header.next. */
+static inline QarRenderSenderAlphaModeExt
+qar_render_sender_alpha_mode_ext_default(void);
+/** @brief A QarRenderSenderColorEncodingExt with its header set and
+ * QAR_COLOR_ENCODING_SRGB; set color_encoding and chain it on
+ * QarRenderSenderInit::header.next. */
+static inline QarRenderSenderColorEncodingExt
+qar_render_sender_color_encoding_ext_default(void);
 /** @brief Default init for QarLibraryInit. */
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
@@ -6741,6 +6862,26 @@ qar_render_sender_init_default(void)
 	return init;
 }
 
+static inline QarRenderSenderAlphaModeExt
+qar_render_sender_alpha_mode_ext_default(void)
+{
+	QarRenderSenderAlphaModeExt extension = {
+		{ QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT, NULL }, // header
+		QAR_COLOR_ALPHA_MODE_UNSPECIFIED						   // alpha_mode
+	};
+	return extension;
+}
+
+static inline QarRenderSenderColorEncodingExt
+qar_render_sender_color_encoding_ext_default(void)
+{
+	QarRenderSenderColorEncodingExt extension = {
+		{ QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT, NULL }, // header
+		QAR_COLOR_ENCODING_SRGB // color_encoding
+	};
+	return extension;
+}
+
 static inline QarGuiPanelInit
 qar_gui_panel_init_default(void)
 {
@@ -8279,7 +8420,7 @@ qar_installed_bin_folder(char* out, size_t capacity)
 }
 
 /// qar_library_load(NULL): the runtime lookup every QAROS binding follows
-/// (docs: authoring a binding, ADR-0339). The first match wins:
+/// (docs: authoring a binding). The first match wins:
 ///   0. a qar-streaming-c.dll already loaded in this process: nothing is
 ///   loaded;
 ///   1. the folder of the module this header is compiled into (the

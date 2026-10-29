@@ -1,0 +1,187 @@
+---
+sidebar_position: 3
+title: Local App Onboarding
+description: Join QAROS from Rust as a local app on the Hub machine, with nothing to type and nothing to store, and tell the user why joining failed.
+---
+
+## What you build
+
+The smallest source app that joins QAROS on the Hub machine. It loads the installed runtime, asks the Hub to let it in, and exits with a code that says what happened. The first time, QAROS asks the user to allow the app; later starts of the same executable join silently.
+
+This is how a source app on the Hub machine joins QAROS.[^code] There is nothing to type and no onboarding id to store.
+
+What you will learn:
+
+- how `OnboardMethod::LocalApp` joins, and what the user sees during the approval
+- why a local app always loads the installed runtime
+- how to follow the approval wait through progress reports
+- which status codes a refusal comes with, and what to tell the user for each
+
+## Before you start
+
+- **Windows.** Local app onboarding is available on Windows; elsewhere the call fails with `NOT_IMPLEMENTED`.
+- **QAROS installed** on the machine the app runs on. When the Hub is not running, joining as a local app starts it (`qaros-hub-service` from the installation's `bin/`, else from `QarRuntimeInit::runtime_binaries_folder_path`, which is `RuntimeConfig::runtime_binaries_directory` in Rust); a running Hub is left as it is, and the Hub keeps running after the app exits. The Hub refuses a runtime of another version or flavor than its own, so the app must load the runtime of the QAROS that runs.
+- **Someone at the Hub machine** to click **Allow** on the first run. The prompt waits up to 120 seconds by default.
+- **macOS or Linux:** the example runs against `qaros-stub`, which lets every app in at once, with no prompt.
+- **The latest stable Rust.** Run the commands from `qar-streaming-rust/`.
+
+## Run it
+
+```powershell
+cargo run -p qaros-examples --bin local_app_onboarding
+
+# Wait up to 90 s for the approval instead of the Hub's default.
+cargo run -p qaros-examples --bin local_app_onboarding -- 90000
+```
+
+The only argument is the approval timeout in milliseconds. Absent or `0` means the Hub's default of 120 s; the Hub caps longer waits at 10 minutes. The example takes no library path: like a shipped app, it always uses the default lookup.
+
+On the first run, while the approval prompt is open and after the user clicks **Allow**, the example prints this (the runtime may add log lines of its own):
+
+```text
+Connecting to the local QAROS hub.
+Waiting for approval in QAROS hub
+Certificate signed.
+Onboarding complete.
+Joined QAROS.
+```
+
+It exits with 0. Later starts of the same executable print the same lines without `Waiting for approval in QAROS hub`.
+
+Without Windows, the stub must be found by the default lookup, under the runtime's file name. Put a copy in `target/stub-runtime`, inside the build folder, which git ignores. On macOS:
+
+```sh
+cargo build -p qaros-stub
+mkdir -p target/stub-runtime
+cp target/debug/libqaros_stub.dylib target/stub-runtime/libqar-streaming-c.dylib
+QAROS_RUNTIME_DIR="$PWD/target/stub-runtime" cargo run -p qaros-examples --bin local_app_onboarding
+```
+
+```text
+stub onboarding complete
+Joined QAROS.
+```
+
+## Walkthrough
+
+### 1. Read the approval timeout
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:timeout}}
+```
+
+The wrapper takes `Option<Duration>`: `None` is the Hub's default. It refuses `Some(Duration::ZERO)` with `Error::InvalidArgument`, because the C API reads a zero timeout as "the default" and a zero you meant literally would silently become 120 s. So the example turns `0` into `None` itself. Text that is not a number is refused with exit code 1, as in the C sample.
+
+### 2. Load the installed runtime
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:load}}
+```
+
+A local app always uses `Library::load_default`, never a path of its own ([Load the installed runtime](/docs/developer-guide/getting-started#load-the-installed-runtime)). The Hub refuses a runtime of another version or flavor than its own, such as a private copy shipped with the app, with `ONBOARDING_FAILED` and the reason in the message. [Dynamic Loading](/docs/developer-guide/tutorials/rust/dynamic-loading) explains the lookup.
+
+Console logging is off: this app talks to a user, not a developer. Any `Error::Load` becomes exit code 2, "QAROS is not installed on this PC", followed by the load error itself; read the second line, since a runtime that lacks functions ends here too. A failing `qar_library_init` becomes exit code 1.
+
+### 3. Create a runtime
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:runtime}}
+```
+
+`RuntimeConfig::default()` is all a local app needs. It stores no identity, so it needs no storage folder of its own. The runtime binaries folder stays empty, so the runtime uses the folder it was loaded from.
+
+### 4. Join, and follow the approval
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:onboard}}
+```
+
+`OnboardMethod::LocalApp` asks the Hub on the same machine to let the process in ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)). The Hub identifies the process from Windows: its path, file hash, signature and user. Your `display_name` is shown to the user separately, labelled "App says:".
+
+- **Approved before and unchanged:** the session comes back at once, with no prompt.
+- **Otherwise** QAROS shows "Allow `local_app_onboarding.exe` to join QAROS?" in the Visualizer and as a tray window, in front of every other window. **Deny** is the default button, and closing the prompt counts as Deny.
+- **Allow** saves a trust record on the Hub. For an unsigned executable it holds the exact path and file hash, so every `cargo build` that changes the executable asks again. That is expected during development; sign release builds and users approve them once ([The trust record](/docs/developer-guide/onboarding-and-sessions#the-trust-record)).
+
+The call blocks until the Hub answers, which can take minutes. The progress reports show what it is waiting for. They arrive on a library thread, so the example passes the sending half of a channel in `BlockingOptions::progress` and prints from a thread of its own. When the call returns, the options and with them the sender are dropped, the channel closes, and the printer thread ends; `join` waits for its last line.
+
+The example passes no cancel token, so it can only wait. An application passes a `CancelToken` in `BlockingOptions::cancel` and cancels it when the user quits; `CancelToken::cancel_handle` gives a handle that cancels from another thread, such as a Ctrl+C handler.
+
+A local app is **stateless**. `Onboarded::onboarding_id` is the zero id, and there is nothing to save: every start calls onboard again, and the Hub remembers the approval. `Runtime::rejoin` and `Runtime::forget` refuse the zero id with `Error::InvalidArgument`.
+
+### 5. Tell the user what happened
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:explain}}
+```
+
+Each refusal comes with its own status code, and each needs a different answer from the user. The example maps them to the exit codes of the C sample, so scripts can rely on them:
+
+| Exit | Status | Meaning |
+|---|---|---|
+| 0 | | joined |
+| 1 | any other | other error, printed as `qar_runtime_onboard: ERROR ...` |
+| 2 | | QAROS is not installed: no runtime loaded |
+| 3 | `ONBOARDING_HUB_UNREACHABLE` (1802) | no QAROS Hub answers on this machine, and none could be started |
+| 4 | `ONBOARDING_APPROVAL_DENIED` (1805) | Deny, a closed prompt, or a revoked approval |
+| 5 | `ONBOARDING_APPROVAL_TIMEOUT` (1806) | nobody answered in time |
+| 6 | `ONBOARDING_HUB_NOT_AUTHENTIC` (1807) | the program answering on this machine is not the installed QAROS |
+| 7 | `ONBOARDING_APP_IDENTITY_MISMATCH` (1808) | the executable no longer matches its approval |
+
+None of these is worth retrying silently. A timeout may be offered again; a denial is retried only when the user asks; a Hub that is not authentic is never retried ([Status codes and what to tell the user](/docs/developer-guide/onboarding-and-sessions#status-codes-and-what-to-tell-the-user)). When you print the error itself, its text already ends with what the user has to do for codes 1805 to 1808 (`StatusCode::user_action`).
+
+### 6. Leave
+
+```rust
+{{#include ../src/bin/local_app_onboarding.rs:teardown}}
+```
+
+The exit code is computed while the result is still alive, then the session, the runtime and the library go in that order. Nothing is written to disk by the app.
+
+## Ownership and teardown
+
+- **The result owns the session.** `joined` is a `Result<Onboarded>`; on success its `session` is the only handle. Dropping it calls `qar_session_handle_destroy`. The Hub keeps the approval, not the session.
+- **Each handle keeps its parent alive.** The explicit drops document the order, but they are not what makes it safe: the session keeps the runtime alive and the runtime the library, so any drop order ends in session, runtime, library.
+- **The progress sender lives as long as the call.** The C callback reaches the `Sender` through a pointer that is valid only during the blocking call. The library promises no progress callback after the call returns, and the borrow of `BlockingOptions` ensures the sender is still there until then.
+- **The library stays loaded.** As in every Rust example, dropping the `Library` destroys it and leaves `qar-streaming-c` mapped until the process exits ([Dynamic Loading](/docs/developer-guide/tutorials/rust/dynamic-loading#ownership-and-teardown)).
+- **What the wrapper does not do for you:** cancel a pending approval when your app is asked to stop. Pass a `CancelToken` for that.
+
+## Troubleshooting
+
+| What you see | Cause | What to do |
+|---|---|---|
+| exit 2, `QAROS is not installed on this PC.` and `no loadable QAROS runtime ...; looked at:` | no runtime in any place of the lookup | install QAROS ([Installation](/docs/operator-guide/installation)) |
+| exit 2, `QAROS is not installed on this PC.` and `... lacks N of M required symbols` | the runtime is older than the QAROS version the bindings were generated from | install a QAROS of the same version as the repository's `qar-streaming-c/include/qar_streaming.h` |
+| exit 3 | QAROS is installed but its Hub does not answer, and the runtime did not start it | start **QAROS** from the Start menu, then the app again |
+| exit 4 | someone clicked **Deny**, closed the prompt, or an operator revoked the app | start the app again and click **Allow** |
+| exit 5 | nobody answered within the timeout | answer the prompt in the Visualizer or the tray window; pass a longer timeout if users need it |
+| exit 6 | the program serving the local enrollment is not the installed, signed QAROS | do not retry; reinstall QAROS from the official installer |
+| exit 7 | the executable was moved, copied, re-signed or changed since its approval | revoke the old approval in the Visualizer ([Approved local apps](/docs/operator-guide/source-applications#approved-local-apps)) and start again |
+| exit 1, `ONBOARDING_FAILED` with a runtime version or flavor in the message | the app loaded a runtime other than the one the Hub installed, for example through `QAROS_RUNTIME_DIR` or a copy beside the executable | load the installed runtime: unset the variable, remove the copy |
+| exit 1, `NOT_IMPLEMENTED` | not Windows | run the app on Windows, on the Hub machine |
+| exit 1, `approval timeout '...' is not a number of milliseconds` | the argument is not a number | pass milliseconds, or nothing |
+| the prompt comes back after every build | the executable is unsigned, so its approval is for one exact file | expected during development |
+
+More in [Troubleshooting: Joining QAROS as a local app](/docs/developer-guide/troubleshooting#joining-qaros-as-a-local-app).
+
+## From C
+
+The C tutorial is [Local App Onboarding](/docs/developer-guide/tutorials/c/local-app-onboarding). The Rust port keeps its exit codes and what its messages tell the user; the wording differs in places, the 1802 message among them.
+
+| C | Rust |
+|---|---|
+| `qar_library_load(NULL)`, then `qar_library_init` with `enable_console_logging = false` | `Library::load_default(&LibraryConfig { console_logging: false, .. })` |
+| `qar_runtime_create` with `qar_runtime_init_default()` | `Library::create_runtime(&RuntimeConfig::default())` |
+| `QarOnboardLocalAppExt` chained into `QarOnboardInit`, `approval_timeout_ms` | `OnboardMethod::LocalApp { approval_timeout }`, an `Option<Duration>` |
+| `init.presentation.display_name` | `PeerPresentation { display_name, .. }` |
+| a progress callback and its state pointer | `BlockingOptions { progress: Some(sender), .. }`, reports as `Progress { severity, percent, message }` |
+| `qar_result_has_code(result, QAR_STATUS_ONBOARDING_...)` | `error.has_code(StatusCode::ONBOARDING_...)` |
+| `qar_session_handle_destroy`, `qar_runtime_handle_destroy`, `qar_library_destroy` and `qar_library_unload` | drop the values; the library is destroyed, not unloaded |
+| `strtoull` on the argument, refused when it is not a whole number of milliseconds | parsed and refused when it is not a number |
+
+## Next
+
+- [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps): what changes when QAROS itself starts your app.
+- [Rendering Streams](/docs/developer-guide/rendering-streams): send frames to the devices once you have a session.
+- [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): join the same way, then stream frames to the target apps.
+
+[^code]: `cpu_rendering_visualizer`, `d3d11_render_sender`, `gui_panel_operations` and `app_volume_management` also accept a pairing code as their first argument, as their C originals do, and `onboarding_and_rejoin` always pairs with one ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)). This example and `vulkan_cube` join as a local app only.

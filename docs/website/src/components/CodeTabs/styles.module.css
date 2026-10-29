@@ -31,6 +31,13 @@
   border-bottom-color: var(--ifm-color-primary);
 }
 
+.fallbackNote {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--ifm-color-content-secondary);
+}
+
 .panel > :last-child {
   margin-bottom: 0;
 }

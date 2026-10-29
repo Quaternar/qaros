@@ -1,0 +1,28 @@
+[package]
+name = "qaros-sys"
+description = "Raw FFI bindings to the QAROS streaming C API (qar_streaming.h), with runtime loading or import-library linking."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+keywords = ["qaros", "quaternar", "xr", "streaming", "ffi"]
+categories = ["external-ffi-bindings"]
+links = "qar-streaming-c"
+build = "build.rs"
+
+[features]
+default = []
+# Declare the qar_impl_* functions as extern "C" and link the import library
+# qar-streaming-c.lib (directory from QAROS_LIB_DIR). The DLL must then be
+# present at process start. Without this feature the library is loaded at
+# runtime with QarApi::load.
+link = []
+
+[dependencies]
+libloading.workspace = true
+
+[lints]
+workspace = true
