@@ -220,9 +220,15 @@ The package streams under Direct3D 11 and under Vulkan, in the Editor and in pla
   for sharing frames. Keep **Load on startup** set in its import settings. Without it a Vulkan
   player cannot stream, and the runtime refuses to start with a `NotSupportedException` that says
   why.
-- **Under Vulkan the streamed frame rate depends on Unity's frame pacing.** A Vulkan frame is
-  shown only after Unity's render thread has handed it over, so a capped frame rate hurts it more
-  than Direct3D 11. In our measurements, uncapped Vulkan streamed nearly as many frames as
-  Direct3D 11 (72 against 83 per second) at the same latency. Capped at 60 fps, or under VSync,
-  it streamed about half (around 30 per second) with about twice the latency. Where streaming
-  matters, leave the frame rate uncapped or use Direct3D 11.
+- **Under Vulkan, cap the frame rate instead of using VSync.** A Vulkan frame is shown only after
+  Unity's render thread has handed it over. **Show Vulkan Frames On Worker**, on `QarDevice` and
+  on by default, waits for that hand-off on a worker thread instead of the next frame.
+  - In our measurements a Vulkan player capped at 60 fps with `Application.targetFrameRate` streamed
+    at the Direct3D 11 rate, with frames within 2 ms as fresh.
+  - Under VSync it streamed a little over half the Direct3D 11 rate (46 against 79 per second on a
+    165 Hz display), so set `QualitySettings.vSyncCount` to 0 and cap with `targetFrameRate`.
+  - Turning the option off shows every frame from the main thread, which streams about half as many
+    frames at a cap. Leave it on unless you need that fallback.
+  - With the option on, the package can move the eye cameras, hands and headset model just before
+    the first eye camera renders. A script reading them in `LateUpdate` may see the previous frame's
+    pose.
