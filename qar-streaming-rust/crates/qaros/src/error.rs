@@ -36,6 +36,11 @@ impl StatusCode {
     /// creation before any receiver is waited for, with the accepted formats in the message.
     pub const RENDERING_DEPTH_FORMAT_NOT_SUPPORTED: Self =
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED);
+    /// The device given for a Vulkan render sender lacks the external memory and semaphore
+    /// extensions sharing its images needs; returned by the creation before any receiver is
+    /// waited for, with what is missing in the message.
+    pub const RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED: Self =
+        Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED);
     pub const PAKE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_PAKE_ERROR);
     pub const ONBOARDING_SESSION_NOT_FOUND: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND);
@@ -173,6 +178,9 @@ impl StatusCode {
             Self::RENDERING_APP_VOLUME_UNRESOLVED => "RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED",
             Self::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED => {
                 "RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED"
+            }
+            Self::RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED => {
+                "RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED"
             }
             Self::PAKE_ERROR => "PAKE_ERROR",
             Self::ONBOARDING_SESSION_NOT_FOUND => "ONBOARDING_SESSION_NOT_FOUND",

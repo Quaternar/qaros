@@ -405,6 +405,14 @@ typedef enum QarStatusCode
 	 * qar_render_sender_create() before any receiver is waited for; nothing
 	 * was created. The result's message lists the accepted formats. */
 	QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED = 806,
+	/** The device in the graphics extension of QarRenderSenderInit lacks
+	 * what sharing the sender's images needs. For QAR_GRAPHICS_API_VULKAN:
+	 * VK_KHR_external_memory_win32 and VK_KHR_external_semaphore_win32 on
+	 * Windows, their fd equivalents elsewhere, enabled when the application
+	 * created its VkDevice. Returned by qar_render_sender_create() before any
+	 * receiver is waited for; nothing was created. The result's message names
+	 * what is missing. */
+	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
@@ -4122,7 +4130,14 @@ static inline QarResult qar_peer_subscribe_updates(
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Destroy a render stream sender handle. */
+/**
+ * @brief Destroy a render stream sender handle.
+ *
+ * A begin-frame still waiting on the sender is stopped and fails; the call
+ * returns once it has let go of the sender, usually within a frame and at most
+ * after 5 s. Avoid calling it from a callback of this library, which runs on
+ * the library's own threads.
+ */
 static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
 /** @brief Subscribe to render stream requests for this application's content.
  *

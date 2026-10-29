@@ -300,6 +300,15 @@ impl QarStatusCode {
     was created. The result's message lists the accepted formats.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED: QarStatusCode =
         QarStatusCode(806);
+    /** The device in the graphics extension of QarRenderSenderInit lacks
+    what sharing the sender's images needs. For QAR_GRAPHICS_API_VULKAN:
+    VK_KHR_external_memory_win32 and VK_KHR_external_semaphore_win32 on
+    Windows, their fd equivalents elsewhere, enabled when the application
+    created its VkDevice. Returned by qar_render_sender_create() before any
+    receiver is waited for; nothing was created. The result's message names
+    what is missing.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED: QarStatusCode =
+        QarStatusCode(807);
     /** Code-based onboarding handshake rejected / expired / timed out. Ask the
     user to re-check the code shown on the hub and retry.*/
     pub const QAR_STATUS_PAKE_ERROR: QarStatusCode = QarStatusCode(1600);
