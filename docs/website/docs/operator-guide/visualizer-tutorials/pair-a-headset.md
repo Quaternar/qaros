@@ -1,7 +1,7 @@
 ---
 title: Pair a Headset That Joins by Itself
 sidebar_position: 4.5
-description: Pair a METALENSE 2 or Quest player that joins the session on its own, from the Visualizer over Wi-Fi or with a QR code, and set the name it shows.
+description: Pair a METALENSE 2 or Quest player that joins the session on its own, from the Visualizer over USB or with a QR code, and set the name it shows.
 ---
 
 # Pair a Headset That Joins by Itself
@@ -15,11 +15,15 @@ card.
 
 - The player is installed and running on the headset
   ([Install and Invite](./quest-and-metalense-2.md)).
-- The headset is on the same network as the Hub ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)).
+- The headset can reach the Hub over the network to join it
+  ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**
   (or **Meta Quest · USB**).
 
-## Pair over Wi-Fi (headset on USB)
+## Pair over USB
+
+**Pair headset** needs the headset connected by USB, with USB debugging allowed (adb). The code
+travels over the cable, never over the network.
 
 1. Plug the headset in with a USB-C data cable; it is listed under **Connected over USB**.
 2. Open the step **Invite the glasses** and click **Pair headset**.
@@ -28,7 +32,7 @@ card.
 4. When the headset appears in the session the step shows *Paired: the headset joined the
    session.*
 
-## Pair with a QR code (no cable needed)
+## Pair with a QR code (no USB needed)
 
 1. Click **Show QR code**. A dialog shows the code and how long it stays valid (two minutes).
 2. Put the headset on and look at the code with the player running. The dialog closes once the
@@ -47,18 +51,21 @@ card.
 
 - Every code is single use and short-lived (30 s for **Pair headset**, two minutes for a QR code).
   **Pair again** always makes a new one.
-- **Pair headset** sends the code over the local network without encryption, which is why only a
-  one-time code is ever sent, and why a headset that already has an identity ignores it.
+- **Pair headset** sends the code over the USB cable, never over the network. If the Visualizer
+  cannot reach the player over USB it reports the failure and sends nothing; use a QR code then.
+- The player also listens for codes on the local network, without encryption, for other tools.
+  That is why only a one-time code is ever sent, and why a headset that already has an identity
+  ignores it.
 - **Pair headset** pairs one headset at a time.
 
 ## Troubleshooting
 
 | Message | Meaning |
 |---|---|
-| *Not paired* with *refused the connection* or *did not answer* | The player is not running, or the headset is not on the network |
-| The toast says the headset reports no Wi-Fi address | Put the headset on Wi-Fi first |
+| *Not paired* with *closed the connection without answering* or *did not answer* | The player is not running on the headset |
+| *adb could not open a tunnel…* | The headset is not connected by USB, not authorised for USB debugging, or offline; reconnect it, or pair with a QR code |
 | *the headset already has a session identity…* | It is paired already; scan a QR code on the headset to pair it to this Hub again |
-| *Not paired: the headset did not join (code expired or onboarding failed) — pair again* | The headset took the code but never appeared; click **Pair again** |
+| *Not paired: the headset did not join (code expired or onboarding failed) — pair again* | The headset took the code but never appeared: check it can reach the Hub over the network, then click **Pair again** |
 | **Pair headset** disabled | No headset on USB; **Show QR code** still works |
 
 ## Set the name the headset shows
