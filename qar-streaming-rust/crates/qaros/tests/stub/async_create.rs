@@ -1,5 +1,6 @@
 //! `Session::start_render_sender` against the stub's
-//! `qar_render_sender_create_async`, which calls back from a detached thread.
+//! `qar_render_sender_create_async`, which calls back exactly once from a thread of its own, as
+//! the header says: with the sender, or `QAR_STATUS_TIMEOUT` on cancel.
 
 use qaros::{PendingRenderSender, PixelFormat, RenderSender};
 
@@ -190,8 +191,8 @@ fn errors_from_the_callback_and_from_the_call_are_reported() {
     assert!(refused.has_code(StatusCode::LOGIC_ERROR), "{refused}");
     assert_eq!(
         fixture.control.live_handle_count(),
-        handles_before + 1,
-        "after a synchronous error the token stays until the library goes"
+        handles_before,
+        "after a synchronous error no callback follows, so the token is released at once"
     );
 
     let mut too_many_views = stereo_color_and_depth(VISUALIZER_PEER);

@@ -1,9 +1,9 @@
 use std::sync::mpsc;
 
 use qaros::{
-    BlockingOptions, CancelToken, GraphicsAdapter, HubAddress, Library, OnboardMethod,
-    OnboardingId, PeerPresentation, Progress, Runtime, RuntimeConfig, Session, SessionId,
-    SessionLifecycle, SessionLifecycleState, StatusCode, Subscription,
+    BlockingOptions, CancelToken, GraphicsAdapter, HubAddress, Library, OnboardExtensions,
+    OnboardMethod, OnboardingId, PeerPresentation, Progress, Runtime, RuntimeConfig, Session,
+    SessionId, SessionLifecycle, SessionLifecycleState, StatusCode, Subscription,
 };
 
 fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> {
@@ -226,5 +226,97 @@ fn teardown(runtime: &Runtime, session: Session, saved_id: OnboardingId) -> qaro
     // only for an explicit un-pair:
     runtime.forget(saved_id)?;
     // ANCHOR_END: teardown
+    Ok(())
+}
+
+fn send_over_your_channel(_bytes: &[u8]) {}
+
+fn remote_app_grant(library: &Library, runtime: &Runtime, received: &[u8]) -> qaros::Result<()> {
+    // ANCHOR: remote_app_grant
+    // On the primary's PC:
+    let config = qaros::MemberHubInvitationConfig {
+        app_grant_tag: Some("client.my-simulation.vendor".to_string()),
+        ..qaros::MemberHubInvitationConfig::default()
+    };
+    let invitation = runtime.create_member_hub_invitation(&config, None)?;
+    let mut bytes = invitation.serialize()?;
+    send_over_your_channel(&bytes); // encrypted and authenticated; never log it
+    bytes.fill(0);
+    drop(invitation);
+
+    // On the other PC, first start:
+    let invitation = library.deserialize_member_hub_invitation(received)?;
+    runtime.join_hub_as_member(
+        &invitation,
+        &qaros::JoinHubAsMemberConfig::default(),
+        &BlockingOptions::default(),
+    )?;
+    let onboarded = runtime.onboard_with(
+        &OnboardMethod::LocalApp {
+            approval_timeout: None,
+            app_tag: None, // the grant's tag applies
+        },
+        &PeerPresentation::default(),
+        &OnboardExtensions {
+            remote_app_grant: Some(&invitation),
+            ..OnboardExtensions::default()
+        },
+        &BlockingOptions::default(),
+    )?;
+    // ANCHOR_END: remote_app_grant
+    drop(onboarded);
+    Ok(())
+}
+
+fn re_enroll(
+    runtime: &Runtime,
+    saved_id: OnboardingId,
+    pairing_code: &str,
+) -> qaros::Result<Session> {
+    // ANCHOR: re_enroll
+    let onboarded = runtime.onboard_with(
+        &OnboardMethod::Code {
+            code: pairing_code,
+            hub: None,
+        },
+        &PeerPresentation::default(),
+        &OnboardExtensions {
+            onboarding_id: Some(saved_id), // the slot to re-enroll
+            ..OnboardExtensions::default()
+        },
+        &BlockingOptions::default(),
+    )?;
+    assert_eq!(onboarded.onboarding_id, saved_id);
+    // ANCHOR_END: re_enroll
+    Ok(onboarded.session)
+}
+
+fn request_repaint() {}
+
+fn onboard_without_blocking(runtime: &Runtime) -> qaros::Result<()> {
+    // ANCHOR: onboard_async
+    let (progress, reports) = mpsc::channel::<Progress>();
+    let mut pending = runtime.start_onboard(
+        &OnboardMethod::LocalApp {
+            approval_timeout: None,
+            app_tag: None,
+        },
+        &PeerPresentation::default(),
+        &OnboardExtensions::default(),
+        Some(progress),
+        None,            // or a timeout: the call then ends with StatusCode::TIMEOUT
+        request_repaint, // runs on a library thread once the result is in
+    )?;
+
+    // In your UI loop, on your thread:
+    for report in reports.try_iter() {
+        println!("{}", report.message);
+    }
+    if let Some(outcome) = pending.poll() {
+        let onboarded = outcome?; // persist onboarded.onboarding_id unless it is zero
+        drop(onboarded);
+    }
+    // Dropping `pending` cancels the call; the runtime destroys a session it still delivers.
+    // ANCHOR_END: onboard_async
     Ok(())
 }

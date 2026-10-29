@@ -2115,13 +2115,19 @@ typedef struct QarMemberHubInvitationAppGrantExt
  * QarOnboardLocalAppExt (with any other mode:
  * QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
  *
- * The hub on this PC must already be a member of the invitation's primary
- * (qar_runtime_join_hub_as_member). When no approval admits this executable
- * there yet, the primary records it as the app the invitation's grant admits,
- * without a prompt; once redeemed by another executable the onboarding fails
- * with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
- * it, the invitation is not used. The app tag of the grant applies; a
- * QarOnboardLocalAppTagExt is not needed.
+ * Only a member hub redeems a grant: join the hub on this PC to the
+ * invitation's primary first (qar_runtime_join_hub_as_member). A hub that is
+ * not a member ignores the grant, with no error of its own, and asks its own
+ * operator as for any local app: the approval prompt, then
+ * QAR_STATUS_ONBOARDING_APPROVAL_DENIED or
+ * QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT when nobody allows it.
+ *
+ * On a member hub, when no approval admits this executable there yet, the
+ * primary records it as the app the invitation's grant admits, without a
+ * prompt; once redeemed by another executable, or when the primary refuses
+ * the grant, the onboarding fails with QAR_STATUS_ONBOARDING_APPROVAL_DENIED.
+ * When an approval already admits it, the invitation is not used. The app tag
+ * of the grant applies; a QarOnboardLocalAppTagExt is not needed.
  */
 typedef struct QarOnboardRemoteAppGrantExt
 {
@@ -3042,11 +3048,10 @@ static inline QarOnboardLocalAppTagExt
 qar_onboard_local_app_tag_ext_default(void);
 /** @brief Default init for QarRequestInviteInit (app_tag NULL; set it). */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
-/** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
 qar_session_invite_target_app_init_default(void);
-
+/** @brief Default init for QarForgetInit. */
 static inline QarForgetInit qar_forget_init_default(void);
 
 /**
@@ -3127,8 +3132,9 @@ static inline QarResult qar_runtime_rejoin_async(
  * @param out_session Receives the onboarded session handle on success.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
  *   hub — verify host/port and retry.
- * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected, the invite expired,
- *   out — re-prompt the user for the code.
+ * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected or timed out, or
+ *   the invite expired — re-prompt the user for the code, or get a fresh
+ *   invite.
  */
 static inline QarResult qar_runtime_onboard(
 	QarRuntime* runtime,

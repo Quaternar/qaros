@@ -1,11 +1,18 @@
 <Project>
   <!--
     Where the native SDK binaries the tests load live: qar-streaming-c, qar-streaming-c-ext
-    and their dependencies. A repository that embeds qaros (the Quaternar monorepo) injects
-    its own build output through a qaros-native.props found above this folder; otherwise the
-    QAROS package drop folder is used. An explicit -p:QarStreamingNativeBinDir=... wins over both.
+    and their dependencies. First match wins:
+      - an explicit -p:QarStreamingNativeBinDir=...;
+      - the QAROS_NATIVE_BIN environment variable;
+      - a qaros-native.props found above this folder: a repository that embeds qaros (the
+        Quaternar monorepo) injects its own build output that way;
+      - the QAROS package drop folder, package/bin.
+    QarHubTestExtBinDir (the folder of qar-hub-test-ext.dll, see Directory.Build.targets) follows
+    the same order, from the QAROS_HUB_TEST_EXT_BIN environment variable.
   -->
   <PropertyGroup>
+    <QarStreamingNativeBinDir Condition="'$(QarStreamingNativeBinDir)' == '' and '$(QAROS_NATIVE_BIN)' != ''">$(QAROS_NATIVE_BIN)</QarStreamingNativeBinDir>
+    <QarHubTestExtBinDir Condition="'$(QarHubTestExtBinDir)' == '' and '$(QAROS_HUB_TEST_EXT_BIN)' != ''">$(QAROS_HUB_TEST_EXT_BIN)</QarHubTestExtBinDir>
     <_QarosNativeProps>$([MSBuild]::GetPathOfFileAbove('qaros-native.props', '$(MSBuildThisFileDirectory)..\..'))</_QarosNativeProps>
   </PropertyGroup>
 

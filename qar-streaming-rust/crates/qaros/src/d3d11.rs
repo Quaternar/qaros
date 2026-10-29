@@ -30,8 +30,8 @@
 //!
 //! - **Device lifetime.** `D3D11StreamParams::new` takes a reference on the device and the
 //!   context (`AddRef`), and the sender keeps both until it is destroyed, and its session with
-//!   it when the sender held the session's last reference. A creation that never calls back
-//!   keeps them for the rest of the process. [`D3D11StreamParams::from_raw`] takes no
+//!   it when the sender held the session's last reference. A creation dropped before its
+//!   callback keeps them until the callback has come. [`D3D11StreamParams::from_raw`] takes no
 //!   reference; the caller then keeps both valid that long.
 //! - **The immediate context.** QAROS uses the context it is given. When and on which thread
 //!   is not documented, and a D3D11 immediate context is not thread-safe. That is why sender

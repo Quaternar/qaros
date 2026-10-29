@@ -1,0 +1,140 @@
+---
+sidebar_position: 3.5
+title: Remote App on Another PC
+description: From Rust, an app on the primary hub's PC grants one app on another PC through a member-hub invitation; the app joins there with no prompt under a peer id the primary remembers.
+---
+
+## What you build
+
+Your application already spans two PCs, for example a simulation server on the QAROS PC and its clients on other PCs, and the part on the other PC should stream into the same QAROS session without an operator walking over to pair it. One program plays three roles:
+
+| Role | Where | What it does |
+|---|---|---|
+| `issue` | the primary hub's PC | creates a member-hub invitation carrying a remote-app grant and writes it to stdout |
+| `join` | the other PC, first start | reads the invitation, joins that PC's hub to the primary, onboards the app redeeming the grant |
+| `start` | the other PC, every later start | onboards as a plain local app: no invitation, no prompt |
+
+What you will learn:
+
+- how `MemberHubInvitationConfig::app_grant_tag` makes an invitation that admits one app
+- how `Runtime::join_hub_as_member` joins a PC's hub, not the app, to the primary
+- how `OnboardExtensions::remote_app_grant` redeems the grant, and what happens on later starts
+
+An app cannot obtain a pairing code or an unbound invite for another PC: the grant is the only app-issued way in, and it admits exactly one app.
+
+## Before you start
+
+- **Windows**, with QAROS installed on both PCs. Elsewhere the member-hub calls fail with `NOT_IMPLEMENTED`.
+- **On the primary's PC**, the operator gives the issuing app's approval the right to bring in member hubs ("May bring in member hubs"), with quota left.
+- **A channel between the PCs** that you trust: encrypted and authenticated. The example uses stdout and stdin as stand-ins for it.
+- **macOS or Linux:** the example runs against `qaros-stub`, which admits everything at once; set it up as in [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding#run-it).
+
+## Run it
+
+```powershell
+# On the primary hub's PC:
+cargo run -p qaros-examples --bin remote_app_onboarding -- issue | <your channel>
+# On the other PC, first start:
+<your channel> | cargo run -p qaros-examples --bin remote_app_onboarding -- join
+# On the other PC, every later start:
+cargo run -p qaros-examples --bin remote_app_onboarding -- start
+```
+
+`issue` refuses to print the invitation on a console, so it never lands on screen or in a terminal log; its messages go to stderr. To try it by hand, redirect it to a file you delete right after `join` read it. Exit codes, as in the C sample: 0 done, 1 error, 2 QAROS is not installed.
+
+## Walkthrough
+
+### 1. Issue the invitation on the primary's PC
+
+```rust
+{{#include ../src/bin/remote_app_onboarding.rs:issue}}
+```
+
+The example first joins as a local app with its own tag, so the user can approve it; the issuing app is normally in the session anyway. What the primary hub checks:
+
+| Check | Refused with |
+|---|---|
+| the calling process is an app it approved (identified from Windows, as for a local app) | `ONBOARDING_APPROVAL_DENIED` |
+| the approval may bring in member hubs, with quota left | `MEMBER_SPONSOR_NOT_ALLOWED`, `MEMBER_SPONSOR_QUOTA_EXCEEDED` |
+| the hub on this PC is a primary, not a member | `SESSION_WIDE_ACTION_ON_MEMBER` |
+| the grant's tag follows the app tag rules | `ARGUMENT_NOT_SUPPORTED` |
+
+The invitation is signed by the primary hub, valid 24 h and for one hub by default, and listed in the primary's Visualizer, where the operator can revoke it. It is a **bearer secret**: send it only over a channel you trust, never log it, never put it on a command line. The example clears its bytes once they are written.
+
+### 2. Join the other PC's hub as a member
+
+```rust
+{{#include ../src/bin/remote_app_onboarding.rs:join}}
+```
+
+- This joins the **hub** of that PC, not the app. The call starts the installed hub when none runs, checks the invitation's signature and expiry, checks that this PC trusts the primary (an administrator's allow-list, else the primary this hub joined first), joins and waits through the hub's restart into the primary's session.
+- Typical failures: `MEMBER_INVITATION_EXPIRED`, `_USED_UP`, `_REVOKED` (ask for a new invitation), `MEMBER_INVITATION_PRIMARY_NOT_ALLOWED` (this PC does not trust that primary), `PRIMARY_UNREACHABLE`, `TIMEOUT` (the join is committed; calling again succeeds once the hub is back).
+- Called again for the primary it already belongs to, it succeeds at once.
+
+### 3. Onboard, redeeming the grant
+
+```rust
+{{#include ../src/bin/remote_app_onboarding.rs:redeem}}
+```
+
+`onboard_local` passes the invitation as `OnboardExtensions::remote_app_grant` next to `OnboardMethod::LocalApp`; the grant's tag applies, so it sends no `app_tag` of its own.
+
+- Only a member hub redeems a grant, which is why the join comes first. A hub that is not a member ignores the grant and asks its own operator, as for any local app.
+- The first executable that redeems the grant is approved on the primary without a prompt and recorded by its publisher (signed) or file hash (unsigned). A different executable is refused afterwards with `ONBOARDING_APPROVAL_DENIED`, also with a later invitation of the same app and tag.
+- The primary picks the peer id and remembers it under the grant's tag.
+- With a grant, the issuing app's own approval is not extended to the member hub: the grant admits this one app only.
+
+### 4. Every later start
+
+```rust
+{{#include ../src/bin/remote_app_onboarding.rs:start}}
+```
+
+A plain local onboard: the app is approved now, so no invitation and no prompt are needed, and the primary gives it the same peer id while no other live process holds it.
+
+## What is stored, and for how long
+
+| Where | What | How long |
+|---|---|---|
+| either app | nothing; onboarding ids stay zero | |
+| your channel | the invitation | until used up or expired (one hub, 24 h by default) |
+| the remote app's memory | its key and a 30-minute certificate, renewed while it runs | the process |
+| the primary hub | the granted approval and the remembered peer id | until revoked; the peer id until unused for 30 days |
+
+Revoking the issuing app's approval, or the granted one, on the primary revokes the remote app and forgets its peer id.
+
+## Ownership and teardown
+
+- **`MemberHubInvitation` owns its handle** and destroys it on drop. `join_hub_as_member` and the onboard borrow it for their call only.
+- **The serialized bytes are a copy** the example clears after use; the handle keeps its own.
+- **Sessions, runtime and library** drop in any order, as in every example: each keeps its parent alive.
+
+## Troubleshooting
+
+| What you see | Cause | What to do |
+|---|---|---|
+| `refusing to print the invitation on a console` | `issue` writes to a terminal | pipe stdout into your channel, or redirect it to a file |
+| `Ask the operator to allow this app to bring in member hubs.` | the approval lacks the right | ask the primary's operator |
+| `MEMBER_INVITATION_PRIMARY_NOT_ALLOWED` | this PC trusts another primary, or its administrator's allow-list does not name this one | ask the PC's administrator |
+| `ONBOARDING_APPROVAL_DENIED` on `join` | the grant already admitted another executable, or it was revoked | issue a grant with a new tag |
+| an approval prompt on `join` | the hub on this PC is not a member, so it ignores the grant | run `join` until the hub joined; check the join's error |
+
+## From C
+
+The C tutorial is [Remote App on Another PC](/docs/developer-guide/tutorials/c/remote-app-onboarding).
+
+| C | Rust |
+|---|---|
+| `QarMemberHubInvitationInit` with a chained `QarMemberHubInvitationAppGrantExt` | `MemberHubInvitationConfig { app_grant_tag, .. }` |
+| `qar_runtime_create_member_hub_invitation` | `Runtime::create_member_hub_invitation` |
+| `qar_member_hub_invitation_serialized_size`, `_serialize` | `MemberHubInvitation::serialize` |
+| `qar_member_hub_invitation_deserialize` | `Library::deserialize_member_hub_invitation` |
+| `qar_runtime_join_hub_as_member` with `QarJoinHubAsMemberInit` | `Runtime::join_hub_as_member` with `JoinHubAsMemberConfig` |
+| `QarOnboardRemoteAppGrantExt` after `QarOnboardLocalAppExt` | `OnboardExtensions { remote_app_grant: Some(&invitation), .. }` with `OnboardMethod::LocalApp` |
+| `qar_member_hub_invitation_handle_destroy` | drop the `MemberHubInvitation` |
+| `isatty(fileno(stdout))` | `std::io::stdout().is_terminal()` |
+
+## Next
+
+- [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#remote-app-through-a-member-hub): the rules of member hubs and grants.
+- [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding): the approval prompt and its status codes.

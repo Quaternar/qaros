@@ -68,6 +68,9 @@ cargo xtask tutorials --check
 cargo xtask guide --check
 ```
 
+`python ../ci/run.py rust` runs the checks (with `fmt -- --check`) exactly as CI does; `--e2e`
+runs the integration tests against `QAROS_NATIVE_BIN`. Change a check there, not in the workflow.
+
 As the change needs: on a host without Windows the same clippy with
 `--target x86_64-pc-windows-msvc`; for Vulkan code
 `QAROS_REQUIRE_VULKAN=1 cargo test -p qaros --features vulkan` (without the variable, a host
@@ -97,8 +100,8 @@ are missing), so bindings from a newer header do not load an older runtime.
   `CancelToken::cancel_handle()` cancels from any thread while the token lives.
 - A subscription always owns a token of its own (`SessionInner::subscribe`): ending it is
   cancelling that token.
-- An async call keeps its token until the callback comes. A token the library may still use
-  after its last owner is gone goes to `CancelTokenInner::destroy_at_library_teardown`.
+- An async call keeps its token until the callback comes: the pending value holds it, and after
+  a drop the owner's `AbandonedCall` does (see "Owners settle their async calls").
 - Add a cancel parameter only where the C function takes a `QarCancelToken*`; where it takes
   none, write the gap down.
 
@@ -122,30 +125,18 @@ are missing), so bindings from a newer header do not load an older runtime.
   handed to `OwnedHandle`, the cancel function behind `CancelHandle`) stay valid only because
   the DLL is never unloaded (see "The library stays mapped"); do not change one without the
   other.
-- `QarApi::release_runtime` calls `qar_impl_runtime_destroy` when the bindings declare it,
-  else `qar_impl_runtime_handle_destroy`; `RUNTIME_RELEASE_SYMBOL` names the one in use.
 - A raw-only call takes the C handle of a safe value: `as_raw()` on `Runtime`, `Session`,
-  `RenderSender`, `CancelToken` and `OnboardingInvite`. Taking the pointer is safe and using it
-  `unsafe`; the safe value keeps owning it, so raw code never destroys it. A new type that owns
+  `RenderSender`, `CancelToken`, `OnboardingInvite` and `MemberHubInvitation`. Taking the
+  pointer is safe and using it `unsafe`; the safe value keeps owning it, so raw code never
+  destroys it. A new type that owns
   a handle a raw-only function takes gets an `as_raw()` with the contract of `Session::as_raw`
   and a test in `crates/qaros/tests/stub/raw_handles.rs`.
 
-The same sources build against two binding sets: those of the header of runtime
-0.9.0-dev.2916, which declares `qar_runtime_destroy` and lacks the peer presence, role,
-category and device identity functions, the member-hub functions and
-`qar_platform_set_android_java_vm`, and those of the public header in the QAROS
-repository (`qar-streaming-c/include/qar_streaming.h`), which has them and drops
-`qar_runtime_destroy`. The README says which header this checkout's bindings come from. A
-function in only one of the two sets stays raw only;
-its stub behaviour, if any, goes into the `default_behaviour!` arm in
-`crates/qaros-stub/src/exports.rs`, as `qar_impl_runtime_destroy`'s does. A status code only
-the public header declares gets its `StatusCode` constant by value
-(`StatusCode::ONBOARDING_RE_PAIR_REQUIRED`), and so does a value of an enum both sets have
-(`PixelFormat::D16Unorm`, the `by value:` part of `c_enum!`). Types only the public header
-declares, the render sender's colour extensions, are used under the cfg
-`qaros_color_extensions`: `qaros-sys`'s build script sets it from the target's generated
-bindings and passes it on as `DEP_QAR_STREAMING_C_COLOR_EXTENSIONS`, which the build scripts of
-`qaros`, `qaros-stub` and `qaros-conformance` turn into the same cfg.
+The bindings come only from the public header in this repository
+(`qar-streaming-c/include/qar_streaming.h`) and are regenerated with it: every header change is
+followed by `cargo xtask bindgen`, and the binding requires a runtime that exports every function
+of that header. There is no second binding set, so no cfg, by-value constant or fallback for an
+older header: name every constant and enum value from the bindings.
 
 ## Init structures, defaults and `header.next` chains
 
@@ -172,8 +163,9 @@ if let Some(extension) = adapter_extension.as_mut() {
 ```
 
 - For an async call the library may read the init until it calls back: the init and all it
-  points to are one heap allocation owned by the callback state, freed after the callback or
-  leaked when it never comes (`RenderSenderInitStorage`, `InitAllocation`).
+  points to are one heap allocation in the call's state (`CallSpec::keep` in
+  `crates/qaros/src/pending.rs`; `RenderSenderInitStorage`, `OnboardInitStorage`), freed after
+  the callback.
 - The stub checks every header it receives (`header_mismatch`), so an unstamped structure fails
   the tests.
 
@@ -214,27 +206,37 @@ if let Some(extension) = adapter_extension.as_mut() {
   ones use `OwnedHandle`. A handle passed into a callback is borrowed: read it there, never
   destroy or keep it. The exception the header states is a render request, which its callback
   releases (`render_request_trampoline`).
-- **Bounded wait, then a deliberate leak.** A session dropped with cancelled sender creations
-  that have not called back waits `CANCELLED_CREATION_WAIT` (500 ms) for all of them, destroying
-  any sender delivered meanwhile. If one is still pending, the session, its callback state, its
-  runtime and the library are leaked, because destroying the session could block for good
-  (`stub_cancelled_creation_teardown.rs`, `stub_session_leak.rs`).
+- **Owners settle their async calls.** A pending call dropped before its callback goes to its
+  owner (runtime, session or render sender) as an `AbandonedCall`, with its token and whatever
+  the library may use until the callback (a D3D11 creation's device references). The owner
+  destroys a handle it delivers on its next call or poll, or at its teardown before its own
+  destroy; that destroy ends the calls still running with `QAR_STATUS_TIMEOUT` and returns after
+  their callbacks, so nothing is waited for or leaked on the Rust side
+  (`stub_cancelled_creation_teardown.rs`). A render sender also waits for a dropped begin-frame's
+  callback before its next begin, since a cancel arriving as the begin finishes may still deliver
+  a frame.
 - **The library stays mapped.** `LibraryInner` holds `ManuallyDrop<QarApi>` and never frees the
   DLL: unloading it after `qar_library_destroy` has crashed processes at exit. After a clean
   destroy a later load initializes it again; after a failed one every load is
   `Error::LibraryAlreadyLoaded` (`stub_library_stays_loaded.rs`).
-- Do not wrap a call whose cancellation never calls back: `qar_render_sender_begin_frame_async`
-  stays raw; `try_begin_owned_frame` is the non-blocking begin.
+- Do not wrap a call whose cancellation may never call back: a wrapper could neither free its
+  state nor tear its owner down. The header promises every `_async` call exactly one callback
+  (`QAR_STATUS_TIMEOUT` on cancel, token destroy or owner destroy, whose destroy waits for it).
 
 ## Callbacks
 
 - **One-shot async** (`_async`, a final `QarResult` once): the callback runs on a library
   thread, during or after the call. It records the outcome under a mutex, notifies waiters and
   runs the caller's `wake` closure there (panics caught), nothing more; the owner's thread
-  builds the non-`Send` wrapper when it polls (`PendingRenderSender::poll`). Dropping the
-  pending value cancels and returns at once; the session keeps the creation until its callback
-  and applies the bounded wait at teardown. The library holds one `Arc` reference to the state
-  until the callback reclaims it; a callback that never comes leaks it.
+  builds the non-`Send` wrapper when it polls. Every one goes through `PendingCall`
+  (`crates/qaros/src/pending.rs`): the start call, the init kept until the callback, the result
+  trampoline per callback signature, and the abandoned call its owner (runtime, session or
+  render sender) keeps after the pending value is dropped, releasing a handle it still delivers
+  while the owner lives. Dropping the pending value cancels and returns at once. The library
+  holds one `Arc` reference to the state until the callback reclaims it; a start call that
+  fails never calls back, so the reference is reclaimed at once. The render sender's creation
+  (`PendingRenderSender`), the onboard and rejoin (`PendingOnboard`) and the begin-frame
+  (`PendingFrame`) are all `PendingCall`s.
 - **Continuous subscription** (`subscribe`, `updates`): callbacks run on library threads,
   possibly concurrently, until the subscription ends. Wrap it as a method taking
   `impl Fn(Event) + Send + Sync + 'static` and returning a `Subscription` guard
@@ -302,7 +304,7 @@ impl Drop for RuntimeInner {
     fn drop(&mut self) {
         // SAFETY: every session holds an Rc to this value, so all session
         // handles are already destroyed; the handle is not used again.
-        unsafe { self.library.api.release_runtime(self.handle.as_ptr()) };
+        unsafe { (self.library.api.qar_impl_runtime_handle_destroy)(self.handle.as_ptr()) };
     }
 }
 ```
@@ -416,10 +418,11 @@ pub fn peers(&self) -> Result<Vec<PeerInfo>> {
 
 ### One-shot async
 
-`PendingRenderSender::start` and `render_sender_created_trampoline`,
-`crates/qaros/src/pending_sender.rs`. When the start call itself fails, the state's library
-reference is leaked and the token kept until the library goes: the header does not say whether
-a callback can still follow.
+`crate::pending_sender::start`, on the shared engine in `crates/qaros/src/pending.rs`. The
+`CallSpec` says how the outcome becomes a value on the owner's thread (`finish`), where a dropped
+call goes (`abandon`) and what destroys a handle nobody takes (`destroy`); `pending::start` makes
+the token and the state, hands one `Arc` reference to C and reclaims it at once when the start
+call fails, since no callback follows then.
 
 ```c
 typedef void (*qar_render_sender_create_callback_t)(
@@ -435,33 +438,34 @@ static inline QarResult qar_render_sender_create_async(
 ```
 
 ```rust
-let user_state = Arc::into_raw(Arc::clone(&shared))
-    .cast_mut()
-    .cast::<c_void>();
-let api = session.api();
-// SAFETY: live session; init and what it points to live in the
-// callback state, which the library's reference keeps alive until the
-// callback; the token outlives the operation (see AbandonedCreation).
-let result = unsafe {
-    (api.qar_impl_render_sender_create_async)(
-        session.handle.as_ptr(),
-        init,
-        Some(render_sender_created_trampoline),
-        user_state,
-        token.handle.as_ptr(),
-    )
+let spec = CallSpec {
+    function: CREATE_ASYNC,
+    keep: Some(Box::new(Keep(storage))), // the init, until the callback
+    finish: Box::new(move |outcome: RawOutcome| { /* check, then RenderSender::from_created_handle */ }),
+    abandon: Box::new(move |mut call| {
+        call.keep_until_released(Box::new(references.take())); // D3D11 device references
+        abandon_session.abandon_call(call);
+    }),
+    destroy: Some(release_unwanted_sender),
+    // ...
 };
+pending::start(session.library(), spec, |user_state, _progress, token| {
+    // SAFETY: live session; init and what it points to live in the call's state until the
+    // callback; the token outlives the call (the pending creation or its session keeps it).
+    unsafe {
+        (api.qar_impl_render_sender_create_async)(
+            session_handle,
+            init,
+            Some(pending::handle_result_trampoline::<sys::QarRenderSender>),
+            user_state,
+            token,
+        )
+    }
+})
 // ...
-// SAFETY: user_state is the Arc::into_raw reference handed over in
-// PendingRenderSender::start, reclaimed here once (module docs).
-let shared = unsafe { Arc::from_raw(user_state.cast_const().cast::<CreationShared>()) };
-let mut state = shared.lock();
-// ...
-*state = CreationState::Delivered(CreationOutcome {
-    result: status,
-    sender: sender as usize,
-});
-drop(state);
+// In the trampoline: the library's reference, reclaimed once.
+let shared = unsafe { Arc::from_raw(user_state.cast_const().cast::<CallShared>()) };
+*shared.lock() = CallState::Delivered(outcome);
 shared.called_back.notify_all();
 ```
 
@@ -538,7 +542,7 @@ bindings cover. It logs every call, checks structure headers, and records double
 wrong destroy functions and out-of-order teardown. It proves the wrapper's side only: a stub pass
 is never evidence of what QAROS does where the header is silent.
 
-- **Symbol set.** It exports exactly the binding set it is built against:
+- **Symbol set.** It exports exactly the functions of the generated bindings:
   `crates/qaros-stub/src/exports.rs` turns the generated list into the `StubApi` trait, whose
   defaults return `QAR_STATUS_NOT_IMPLEMENTED` (or false, a zero id, nothing), and one
   `#[no_mangle]` export per function. A new header function needs no edit to be exported.
@@ -548,13 +552,14 @@ is never evidence of what QAROS does where the header is silent.
   release them with `destroy_handle`, run callbacks on threads of their own as the runtime does.
 - **Fault controls** are the `qar_stub_*` exports in `behaviour.rs` (`qar_stub_fail_next`;
   peers that join, leave, retire, pause, stop answering or restart; delayed, unanswered or
-  cancel-ignoring creations; begin-frame delay; reported adapter; render requests; call log)
+  cancel-ignoring creations; begin-frame delay; async-call and async-onboard delays,
+  cancel-ignoring onboards; reported adapter; render requests; call log)
   and `QAROS_STUB_SCENARIO`, `QAROS_STUB_REPORT`, `QAROS_STUB_VULKAN_LIBRARY`,
   `QAROS_STUB_VULKAN_QUEUE_FAMILY`. Tests reach them through `StubControl` in
   `crates/qaros/tests/support/mod.rs`. A failure mode the safe layer handles gets a control and
   a test.
 - Stub tests: `crates/qaros/tests/stub.rs` with its modules in `crates/qaros/tests/stub/`; a test
-  that needs its own process (a leak, the library staying loaded) is its own test binary in
+  that needs its own process (the library staying loaded, fixed timings) is its own test binary in
   `crates/qaros/tests/`.
 
 ## Tutorials and guide tabs
@@ -569,9 +574,7 @@ path relative to the source. Edit the sources and the code, never the output.
   left-over page, a broken include or anchor, and `<` or `{` in prose outside code (MDX).
 - **Guide tabs:** `examples/guide/<page>.md`, one `## ` heading per C tab of the page in page
   order, regions in `examples/tests/guide/` (compiled with the tests, never run; a raw-only call
-  goes through `library.raw_api()` with an `as_raw()` handle). A snippet of a function only one
-  binding set has goes into a module that `examples/tests/guide/main.rs` declares from the
-  generated function list, as `peers_identity.rs` is.
+  goes through `library.raw_api()` with an `as_raw()` handle).
   `cargo xtask guide` puts each tab last in its `<CodeTabs>`, replacing a Rust tab already
   there, in the pages under `PAGES_DIRECTORY` (`xtask/src/guide.rs`); where that is `None` it
   only expands the sources. `--check` fails on a stale page; both modes fail when a page's C
@@ -585,8 +588,7 @@ path relative to the source. Edit the sources and the code, never the output.
 The README's "Coverage" lists every area of the header (sections, and function groups inside
 the larger ones): safe in Rust, raw only, and whether the C# binding (`qar-streaming-sharp/src`
 in the QAROS repository) has it. Update it in the same change when a raw-only function gets a
-wrapper, when the header adds or removes a function or area, or when a function moves between
-the two header sets. Check Rust cells against `crates/qaros/src`, raw cells against the
+wrapper, or when the header adds or removes a function or area. Check Rust cells against `crates/qaros/src`, raw cells against the
 generated function list, C# cells against the C# sources.
 
 ## Change checklist
@@ -620,7 +622,6 @@ generated function list, C# cells against the C# sources.
 - [ ] Ownership of every handle it takes or returns, from the header's text, and what releases
       it.
 - [ ] Inits from their ported default; chained extensions alive while the library reads them.
-- [ ] Present in both binding sets, else it stays raw (see [The raw layer](#the-raw-layer)).
 - [ ] A method on the owning type (or a module in `crates/qaros/src`, re-exported from
       `lib.rs`) returning `qaros::Result`, its doc comment naming the C function and what the
       header leaves unsaid.

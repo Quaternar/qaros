@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::mem::ManuallyDrop;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
@@ -6,7 +5,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use qaros_sys::{QarApi, QarCancelToken, defaults};
+use qaros_sys::{QarApi, defaults};
 
 use crate::cancel::CancelToken;
 use crate::error::{Error, Result, check};
@@ -48,6 +47,19 @@ pub struct RuntimeInfo {
     pub c_api: String,
 }
 
+/// The device kind a target-app connection string names
+/// ([`Library::target_app_connection_string`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetDevice {
+    /// `"hololens:<host>"`.
+    HoloLens,
+    /// `"quest:<host>"`, an alias of `"headset:<host>"`: the headset reports its exact model
+    /// itself.
+    Quest,
+    /// `"android:<host>"`, an alias of `"headset:<host>"`.
+    Android,
+}
+
 /// The loaded and initialized C API library.
 ///
 /// Process-wide: at most one may be alive at a time. Cloning shares the same
@@ -74,10 +86,6 @@ pub(crate) struct LibraryInner {
     /// Never dropped: the table owns the opened DLL, which stays mapped for
     /// the rest of the process (see [`Library`]).
     pub(crate) api: ManuallyDrop<QarApi>,
-    /// Cancel tokens of operations that may still call back (a cancelled
-    /// sender creation whose callback never came): destroyed right before the
-    /// library, once no session that could run the operation is left.
-    pub(crate) tokens_destroyed_at_teardown: RefCell<Vec<NonNull<QarCancelToken>>>,
 }
 
 impl Library {
@@ -159,7 +167,6 @@ impl Library {
         Ok(Self {
             inner: Rc::new(LibraryInner {
                 api: ManuallyDrop::new(api),
-                tokens_destroyed_at_teardown: RefCell::new(Vec::new()),
             }),
         })
     }
@@ -188,6 +195,33 @@ impl Library {
     /// `timeout`.
     pub fn create_cancel_token(&self, timeout: Option<Duration>) -> Result<CancelToken> {
         CancelToken::create(&self.inner, timeout)
+    }
+
+    /// The connection string for a target app on `host`, a hostname or IP address
+    /// (`qar_target_app_connection_string_hololens`, `_quest`, `_android`), for
+    /// [`crate::Session::invite_target_app`]. An empty host fails in the library.
+    pub fn target_app_connection_string(&self, device: TargetDevice, host: &str) -> Result<String> {
+        let api = &self.inner.api;
+        let (builder, function) = match device {
+            TargetDevice::HoloLens => (
+                api.qar_impl_target_app_connection_string_hololens,
+                "qar_target_app_connection_string_hololens",
+            ),
+            TargetDevice::Quest => (
+                api.qar_impl_target_app_connection_string_quest,
+                "qar_target_app_connection_string_quest",
+            ),
+            TargetDevice::Android => (
+                api.qar_impl_target_app_connection_string_android,
+                "qar_target_app_connection_string_android",
+            ),
+        };
+        let host = crate::strings::to_c_string(host, "host")?;
+        crate::strings::read_string(|buffer, size| {
+            // SAFETY: host is a C string; the buffer is writable for size bytes.
+            let result = unsafe { builder(host.as_ptr(), buffer, size) };
+            check(api, function, result)
+        })
     }
 
     /// Parses an invite serialized by [`OnboardingInvite::serialize`].
@@ -275,11 +309,6 @@ impl Library {
 
 impl Drop for LibraryInner {
     fn drop(&mut self) {
-        for token in self.tokens_destroyed_at_teardown.get_mut().drain(..) {
-            // SAFETY: a live token handed over by its last owner; every
-            // session is gone, so no operation still uses it.
-            unsafe { (self.api.qar_impl_cancel_token_handle_destroy)(token.as_ptr()) };
-        }
         // SAFETY: every runtime, session and handle holds an Rc to this
         // value, so none is alive any more.
         let result = unsafe { (self.api.qar_impl_library_destroy)() };
