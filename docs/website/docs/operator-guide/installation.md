@@ -37,7 +37,8 @@ Silent install, from an elevated PowerShell:
 |---|---|
 | `/S` | silent; accepts the QAROS licence |
 | `/NoFirewall` | adds no firewall rules: devices on the LAN cannot connect, local source apps still work |
-| `/NoAutostart` | QAROS does not start at sign-in for every user (it still starts once when the setup finishes); each user can still turn it on in the tray menu |
+| `/NoAutostart` | QAROS does not start at sign-in for anyone (it still starts once when the setup finishes); each user can still turn it on in the tray menu |
+| `/AutostartAllUsers` | QAROS starts at sign-in for every user of the PC, not only for the account that runs the setup; later upgrades keep it. Use it for a silent install run as SYSTEM or by another account |
 | `/AllowDowngrade` | lets an older setup replace a newer installation (silent setups refuse otherwise) |
 | `/ANARI`, `/NoANARI` | adds or removes the optional ANARI device; without either an upgrade keeps the previous choice |
 
@@ -61,7 +62,8 @@ Silent install, from an elevated PowerShell:
 | Windows service `QAROS.SystemService` (`qaros-system-service.exe`) | runs as a service |
 | Firewall rules for every QAROS executable, TCP and UDP, in and out, on the QAROS ports below (`/NoFirewall` skips them) | Windows Defender Firewall, all network profiles |
 | Runtime location for apps: value `InstallFolder` | `HKLM\SOFTWARE\Quaternar\QAROS` |
-| QAROS tray (`qaros.exe`) starting at sign-in, for every user (`/NoAutostart` skips it). Each user turns it off for themselves with **Start QAROS at login** in the tray menu; it stays off across sign-ins, upgrades and reinstalls | `HKLM\...\Run\QAROS` |
+| QAROS tray (`qaros.exe`) starting at sign-in, for the user who runs the setup (finish page: **Start QAROS when I sign in**). Each user turns it on or off for themselves with **Start QAROS at login** in the tray menu; an "off" stays off across sign-ins, upgrades and reinstalls | `HKCU\...\Run\QAROS` of that user |
+| Optionally, the tray starting at sign-in for every user (finish page: **Start QAROS when anyone signs in to this PC**, or `/AutostartAllUsers`); a user who turned it off in the tray stays off | `HKLM\...\Run\QAROS` |
 | Start menu shortcut, Add/Remove Programs entry, signed uninstaller | |
 
 The Hub processes (tray, launcher, Visualizer) run in the signed-in user's session, not as the service.

@@ -94,8 +94,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
   that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
 
-- **Docs:** the operator guide names the program to start `qaros.exe` and explains turning off the
-  start at sign-in per user.
+- **Docs:** the operator guide names the program to start `qaros.exe` and explains the start at
+  sign-in per user: the setup's boxes for this user and for every user, `/AutostartAllUsers`, and
+  turning it on or off in the tray menu.
 - **Docs:** *Connecting to the Hub* and *Managing Devices* describe the Session tabs (Devices
   first), the always-open invite form, HoloLens as the legacy kind and the Revoked peers section.
 
