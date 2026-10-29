@@ -35,7 +35,7 @@ Conventions:
 - Poses are a **position vector + orientation quaternion** (`QarPose`). Quaternions are stored as `{x, y, z, w}` (scalar last).
 - Room space follows **OpenXR conventions: right-handed, Y-up, −Z forward**. The QAROS math types deliberately mirror OpenXR's (`XrPosef`, `XrVector3f`), and the room frame is the runtime's OpenXR reference space.
 
-The room origin itself is established by the underlying XR runtime and the platform's relocalization — it is not something applications set through the API. How multiple headsets co-locate to the same room origin is therefore a property of each device platform's relocalization, not of the QAROS API. The room-space axis convention is inherited from OpenXR (right-handed, Y-up, −Z forward) rather than restated normatively in the C headers.
+The room origin itself is established by the underlying XR runtime and the platform's relocalization — it is not something applications set through the API. How multiple headsets co-locate to the same room origin is therefore a property of each device platform's relocalization, not of the QAROS API. The C header states the same convention: every 3D space follows OpenXR (right-handed, Y-up, −Z forward), and a pose is a position vector plus an orientation quaternion stored x, y, z, w.
 
 ### World space — pinning the room to the Earth
 

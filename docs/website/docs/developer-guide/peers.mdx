@@ -403,12 +403,13 @@ Declaring `CAMERA` changes how the visualizer lists and draws your peer. Streami
 <Lang value="c">
 
 ```c
-static void on_peer_update(/* peer update info */ ..., void* state)
+static void on_peer_update(QarPeerSpec* peer, void* user_state)
 {
     /* peer joined / left / changed presentation or presence */
 }
 
-qar_peer_subscribe_updates(session, on_peer_update, NULL);
+/* token is required: cancelling or destroying it ends the subscription */
+qar_peer_subscribe_updates(session, on_peer_update, NULL, token);
 ```
 
 </Lang>
@@ -420,10 +421,12 @@ session.Peers.Updated += (sender, e) =>
 {
     PeerSpec peer = e.Peer; // joined / left / changed presentation or presence
 };
+// Updated delivers nothing until a subscription is alive: start one, and Dispose() it to stop.
+using IDisposable eventSubscription = session.Peers.SubscribeUpdates().ValueOrThrow();
 
 // Or as a disposable subscription — Dispose() stops native delivery:
 Result<IDisposable> sub = session.Peers.SubscribeUpdates(
-    peer => { /* ... */ });
+    (sender, e) => { PeerSpec peer = e.Peer; /* ... */ });
 using IDisposable subscription = sub.ValueOrThrow();
 ```
 

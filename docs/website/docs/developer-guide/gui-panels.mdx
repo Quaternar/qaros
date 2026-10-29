@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. Panel content is currently **web content**: the panel renders a URI, which makes any existing web UI immediately usable in the room.
+GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. A panel shows either **web content** — the panel renders a URI, which makes any existing web UI immediately usable in the room — or a **video stream** from a video sender. Chain `QarGuiPanelUrlExt` or `QarGuiPanelStreamIdExt` into `QarGuiPanelInit` to choose (C#: `GuiPanelOptions.ContentUri` or `ContentStreamId`); the content type is fixed at creation. The examples on this page use web content.
 
 The concepts (identity by common name, top-edge-midpoint pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
 
@@ -48,12 +48,14 @@ qar_gui_panels_navigate_to_uri(
 <Lang value="csharp">
 
 ```csharp
+using Quaternar.Qaros.Mathematics;
+
 var options = new GuiPanelOptions("machine-status.myapp.example.com") // required, stable identity
 {
     DisplayName = "Machine Status",
     // Pose is the top-edge midpoint, room space, meters.
-    Pose = new Pose { Position = new Vec3(0f, 1.5f, -1.0f) },
-    Size = new GuiPanelSize { WidthMeters = 0.8f, HeightMeters = 0.5f },
+    Pose = new Pose(Quaternion.Identity, new Vector3(0f, 1.5f, -1.0f)),
+    Size = new GuiPanelSize(0.8f, 0.5f, 1.0f),   // width, height, content scale
 };
 
 // get_or_create: returns the existing panel or creates it. Idempotent.
@@ -185,8 +187,8 @@ unsafe { (api.qar_impl_result_log_if_error)(result) };
 
 Your app can react to panels changing — whether changed by another peer, another app, or a user grabbing the panel in the room:
 
-- `qar_gui_panels_subscribe_updates(session, callback, state)` — all panels,
-- `qar_gui_panels_subscribe_panel_updates(session, &panel_id, callback, state)` — one panel,
+- `qar_gui_panels_subscribe_updates(session, callback, state, token)` — all panels,
+- `qar_gui_panels_subscribe_panel_updates(session, &panel_id, callback, state, token)` — one panel,
 - `qar_query_gui_panels_count` / `qar_query_gui_panels` — enumerate current panels (count-then-fetch),
 - per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_uri`, `_get_visible_to_peers`.
 

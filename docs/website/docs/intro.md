@@ -12,12 +12,13 @@ QAROS is Quaternar's AR/VR middleware: it lets you add multi-device, multi-user 
 
 ## How this documentation is organized
 
-The documentation is split into three self-contained guides by audience, plus a generated API reference. Each guide has its own navigation, so you stay in one guide to accomplish your goals.
+The documentation is split into three self-contained guides by audience, plus generated API references. Each guide has its own navigation, so you stay in one guide to accomplish your goals.
 
 - **[User Guide](/docs/user-guide/qaros-world)** - for people who join a QAROS Hub from a device, and for anyone wanting a non-technical picture. It explains the QAROS world without code: joining your first Shared Space, connecting to the Hub, onboarding your device, understanding the shared space, and working in it.
 - **[Developer Guide](/docs/developer-guide/getting-started)** - for engineers integrating the QAROS API (C, C#/.NET or Rust) into their application: SDK setup, API conventions, coordinate systems, onboarding and sessions, streaming rendered frames, GUI panels, and app volumes. Code samples are selectable per language, and tutorials are backed by example programs compiled as part of this repository, so every referenced snippet is real, valid code.
 - **[Administrator & Operator Guide](/docs/operator-guide/overview)** - for people who install, secure, configure, run, and maintain a Hub: system requirements, installation, Hub operation, networking and Hub federation, the security model, device management, the mixer, and maintenance.
 - **[C API Reference](/api/qar-streaming-c/)** - the complete API reference, generated from the C headers with Doxygen.
+- **[C# API Reference](/api/qar-streaming-sharp/)** - the reference for the `Quaternar.Qaros` namespaces, generated from the binding's XML documentation comments.
 
 A shared **[Glossary](/docs/glossary)** defines the cross-cutting terms.
 
@@ -40,4 +41,7 @@ A **Hub** (a powerful workstation) runs your 3D applications and the QAROS runti
 | Integrate the API into my app | [Developer Guide: Getting Started](/docs/developer-guide/getting-started) |
 | Stream my rendered frames | [Rendering Streams](/docs/developer-guide/rendering-streams) |
 | Stream a Unity scene | [Unity](/docs/developer-guide/unity) |
+| Use Ogre, Qt or RViz2 with QAROS | [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) |
+| Stream an Ogre scene to QAROS | [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming) |
+| Run RViz2 with the QAROS plugin | [Running the RViz2 Plugin on Windows](/docs/operator-guide/rviz2-plugin) |
 | Browse the full C API | [C API Reference](/api/qar-streaming-c/) |

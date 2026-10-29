@@ -47,21 +47,18 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
+using Quaternar.Qaros.Mathematics;
+
 // The common name is required: GetOrCreate returns the existing volume of that name.
 var options = new AppVolumeOptions("assembly-view.myapp.example.com")
 {
     DisplayName = "Assembly View",
 
     // Pose is the cuboid CENTER, room space.
-    Pose = new Pose { Position = new Vec3(0f, 1.2f, 0f) },
-    Size = new AppVolumeSize
-    {
-        WidthMeters  = 1.0f,
-        LengthMeters = 1.0f,
-        HeightMeters = 0.8f,
-    },
+    Pose = new Pose(Quaternion.Identity, new Vector3(0f, 1.2f, 0f)),
+    Size = new AppVolumeSize(1.0f, 1.0f, 0.8f),   // width, length, height
 
-    AppPose  = new Pose(),  // app origin inside the box
+    AppPose  = Pose.Identity,  // app origin inside the box
     AppScale = 0.01f,       // 1 app-meter -> 1 room-cm: a 100 m model fits the box
 };
 

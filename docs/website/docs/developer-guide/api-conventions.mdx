@@ -180,6 +180,7 @@ QarOnboardHostExt host = qar_onboard_host_ext_default();
 
 code.code = "ABCD-EFGH";
 host.hostname = "192.168.1.50";
+host.port = 19120;                 // required: the Hub's onboarding port (example value)
 code.header.next = &host.header;   // chain code -> host
 init.header.next = &code.header;   // chain init -> code
 ```
@@ -197,7 +198,7 @@ unmanaged memory afterwards:
 ```csharp
 var options = new OnboardOptions()
     .UseCode("ABCD-EFGH")
-    .WithHost("192.168.1.50");
+    .WithHost("192.168.1.50", 19120);
 ```
 
 </Lang>
