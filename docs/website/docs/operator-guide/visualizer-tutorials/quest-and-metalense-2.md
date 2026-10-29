@@ -71,6 +71,9 @@ Prefer a terminal? The manual `adb install` steps are in
 
 The device must be on the same network as the Hub, with the player running.
 
+A player that joins the session by itself is not invited here: pair it once instead
+([Pair a Headset That Joins by Itself](./pair-a-headset.md)).
+
 1. **Session** › **Devices**. The **Invite device** card is open at the top. (From the setup steps,
    **Invite the headset** › **Invite device...** jumps there too.)
 2. Keep the device kind on **Headset**. It is the default and covers Meta Quest, METALENSE 2 and
