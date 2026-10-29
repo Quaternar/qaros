@@ -4,6 +4,8 @@ name: Vulkan cube build
 # a hosted Windows runner with Visual Studio and no Vulkan SDK, the two documented commands from a
 # developer shell. Proves the public repository alone builds the cube (vcpkg brings the Vulkan
 # headers, loader and glslc). Build only: running the cube needs an installed QAROS and a GPU.
+# The checks and the build are `python ci/run.py vulkan-cube`; run it locally the same way
+# (without --strict it hides a local Vulkan SDK from the build instead of failing).
 
 on:
   pull_request:
@@ -14,8 +16,7 @@ on:
       - "CMakePresets.json"
       - "vcpkg.json"
       - ".github/workflows/vulkan-cube-build.yml"
-      - "ci/vulkan-cube-build.ps1"
-      - "ci/common.ps1"
+      - "ci/**"
   push:
     branches: [main]
     paths:
@@ -25,8 +26,7 @@ on:
       - "CMakePresets.json"
       - "vcpkg.json"
       - ".github/workflows/vulkan-cube-build.yml"
-      - "ci/vulkan-cube-build.ps1"
-      - "ci/common.ps1"
+      - "ci/**"
   workflow_dispatch:
 
 permissions:
@@ -47,9 +47,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ci/vulkan-cube-build.ps1: no Vulkan SDK on the runner (-Strict), the documented configure and
-      # build from Developer PowerShell for VS 2022 (Visual Studio's own CMake and Ninja), then the
-      # documented output exists and runs. Run it locally the same way; without -Strict it hides a
-      # local Vulkan SDK from the build instead of failing.
+      # No Vulkan SDK on the runner (--strict), the documented configure and build in Visual
+      # Studio's developer environment (its own CMake and Ninja, from vcvars64.bat), then the
+      # documented output exists and runs.
       - name: Configure and build (as documented)
-        run: ./ci/vulkan-cube-build.ps1 -Strict
+        run: python ci/run.py vulkan-cube --strict

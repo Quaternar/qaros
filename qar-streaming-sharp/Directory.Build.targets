@@ -7,10 +7,6 @@
   <Target Name="CopyQarStreamingNativeBinaries"
     AfterTargets="Build"
     Condition="'$(IsTestProject)' == 'true' and '$(TargetFramework)' != '' and '$(OS)' == 'Windows_NT'">
-    <PropertyGroup>
-      <_QarosHintPreset>$(QarosNativePreset)</_QarosHintPreset>
-      <_QarosHintPreset Condition="'$(_QarosHintPreset)' == ''">windows-x64-relWithDebInfo</_QarosHintPreset>
-    </PropertyGroup>
     <ItemGroup>
       <QarStreamingNativeBinary
         Include="$(QarStreamingNativeBinDir)\**\*.*"
@@ -18,7 +14,7 @@
     </ItemGroup>
 
     <Error Condition="!Exists('$(QarStreamingNativeBinDir)\qar-streaming-c.dll')"
-      Text="qar-streaming-c.dll was not found in '$(QarStreamingNativeBinDir)'. Put a Debug or RelWithDebInfo QAROS SDK build there (its bin folder), or point QAROS_NATIVE_BIN (or -p:QarStreamingNativeBinDir=&lt;folder&gt;) at one. Inside the Quaternar repository build it first, from its root: .\utils\Invoke-QarBuild.ps1 -Preset $(_QarosHintPreset) -Target qar-streaming-c-ext_gtests,qar-hub-test-ext_gtests" />
+      Text="qar-streaming-c.dll was not found in '$(QarStreamingNativeBinDir)'. Put a Debug or RelWithDebInfo QAROS SDK build there (its bin folder), or point QAROS_NATIVE_BIN (or -p:QarStreamingNativeBinDir=&lt;folder&gt;) at one. Inside the Quaternar repository build the CMake target qar-streaming-c-ext_gtests first (its ci.env names the folder)." />
     <Error Condition="!Exists('$(QarStreamingNativeBinDir)\qar-streaming-c-ext.dll')"
       Text="qar-streaming-c-ext.dll was not found in '$(QarStreamingNativeBinDir)'. The integration tests drive the C API against it; it exists only in Debug and RelWithDebInfo builds, never in a release package." />
 
@@ -35,7 +31,7 @@
         Condition="Exists('$(QarHubTestExtBinDir)')" />
     </ItemGroup>
     <Error Condition="'$(QarHubTestExtBinDir)' != '' and '$(QarSkipHubTestExt)' != 'true' and !Exists('$(QarHubTestExtBinDir)\qar-hub-test-ext.dll')"
-      Text="qar-hub-test-ext.dll was not found in '$(QarHubTestExtBinDir)'. Point QAROS_HUB_TEST_EXT_BIN at it, or build it first (inside the Quaternar repository, from its root: .\utils\Invoke-QarBuild.ps1 -Preset $(_QarosHintPreset) -Target qar-hub-test-ext_gtests), or pass -p:QarSkipHubTestExt=true to skip the hub follow tests." />
+      Text="qar-hub-test-ext.dll was not found in '$(QarHubTestExtBinDir)'. Point QAROS_HUB_TEST_EXT_BIN at it, or build the CMake target qar-hub-test-ext_gtests first (inside the Quaternar repository), or pass -p:QarSkipHubTestExt=true to skip the hub follow tests." />
 
     <Copy SourceFiles="@(QarStreamingNativeBinary)"
       DestinationFiles="@(QarStreamingNativeBinary->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"

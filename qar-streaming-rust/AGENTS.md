@@ -68,7 +68,7 @@ cargo xtask tutorials --check
 cargo xtask guide --check
 ```
 
-`../ci/rust-binding.ps1` runs the checks (with `fmt -- --check`) exactly as CI does; `-Step E2E`
+`python ../ci/run.py rust` runs the checks (with `fmt -- --check`) exactly as CI does; `--e2e`
 runs the integration tests against `QAROS_NATIVE_BIN`. Change a check there, not in the workflow.
 
 As the change needs: on a host without Windows the same clippy with

@@ -440,18 +440,19 @@ variable naming a folder without both DLLs fails them.
 ```powershell
 $env:QAROS_NATIVE_BIN = "<SDK build>\bin"
 cargo test -p qar-streaming-rust-ext --features e2e -- --nocapture
-# or, with the same variable, as CI's script runs its checks:
-..\ci\rust-binding.ps1 -Step E2E
+# or as CI runs them (QAROS_NATIVE_BIN from the environment or the env file; without it the C API
+# runtime of the release ci/ci.env names is downloaded with gh):
+python ..\ci\run.py rust --e2e
 ```
 
-Inside the Quaternar repository the variable needs no setting: its `.cargo/config.toml` points it at
-that repository's `windows-x64-relWithDebInfo` build (a variable set in the environment wins), and a
-missing build fails the tests with the command that builds it. From the Quaternar root,
-`.\utils\Invoke-QarosBindingTests.ps1` builds the native targets and runs these tests and the C#
-tests.
+`ci/run.py` reads its variables from the environment first, then from an env file: inside the
+Quaternar repository its root `ci.env`, which points `QAROS_NATIVE_BIN` at that repository's
+`windows-x64-relWithDebInfo` build (the CMake target `qar-streaming-c-ext_gtests`), else
+`ci/ci.env`. `python ../ci/run.py capi` runs these tests, the C# tests and the C API suite against
+one native folder.
 
-`ci/rust-binding.ps1` (in the repository root) runs CI's checks: format, clippy, the workspace
-tests, the tutorial pages and the guide tabs; `-Step` picks some of them.
+`python ../ci/run.py rust` runs CI's checks: format, clippy, the workspace tests, the tutorial
+pages and the guide tabs; `--step` picks some of them.
 
 | Test | What it checks |
 | --- | --- |

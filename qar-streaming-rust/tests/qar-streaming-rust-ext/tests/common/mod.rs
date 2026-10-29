@@ -25,7 +25,7 @@ pub mod scenario;
 /// folder of a Debug or `RelWithDebInfo` SDK build.
 pub const NATIVE_BIN_VARIABLE: &str = "QAROS_NATIVE_BIN";
 /// How to produce that folder, shown when it lacks a library. A repository that builds the SDK
-/// and sets `QAROS_NATIVE_BIN` to its own output sets this to its build command.
+/// and points `QAROS_NATIVE_BIN` at its own output (its `ci.env`) names the build target here.
 pub const NATIVE_BUILD_HINT_VARIABLE: &str = "QAROS_NATIVE_BUILD_HINT";
 pub const APPLICATION_NAME: &str = "qaros-e2e-application";
 

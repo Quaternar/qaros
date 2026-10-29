@@ -4,8 +4,8 @@ name: Rust binding
 # the developer guide's Rust tabs on a hosted Windows runner. The tests run against qaros-stub,
 # an in-memory stand-in for the runtime, so they need no QAROS build, runner or secret. The
 # integration tests against qar-streaming-c-ext are built and skip without QAROS_NATIVE_BIN.
-# Every check is a step of ci/rust-binding.ps1; run it locally the same way (`-Step E2E` adds the
-# integration tests, with QAROS_NATIVE_BIN set).
+# Every check is a step of `python ci/run.py rust`; run it locally the same way (`--e2e` runs the
+# integration tests against QAROS_NATIVE_BIN; binding-tests.yml runs them in CI).
 
 on:
   push:
@@ -15,16 +15,14 @@ on:
       - "qar-streaming-c/include/**"
       - "docs/website/docs/developer-guide/**"
       - ".github/workflows/rust-binding.yml"
-      - "ci/rust-binding.ps1"
-      - "ci/common.ps1"
+      - "ci/**"
   pull_request:
     paths:
       - "qar-streaming-rust/**"
       - "qar-streaming-c/include/**"
       - "docs/website/docs/developer-guide/**"
       - ".github/workflows/rust-binding.yml"
-      - "ci/rust-binding.ps1"
-      - "ci/common.ps1"
+      - "ci/**"
 
 permissions:
   contents: read
@@ -50,18 +48,18 @@ jobs:
           rustup default stable
 
       - name: Format
-        run: ./ci/rust-binding.ps1 -Step Format
+        run: python ci/run.py rust --step fmt
 
       - name: Clippy
-        run: ./ci/rust-binding.ps1 -Step Clippy
+        run: python ci/run.py rust --step clippy
 
       - name: Test
-        run: ./ci/rust-binding.ps1 -Step Test
+        run: python ci/run.py rust --step test
 
       # The Rust tutorial pages of the developer guide are generated from examples/tutorials/
       # and the examples' anchored regions; a stale page or a broken include fails here.
       - name: Tutorials
-        run: ./ci/rust-binding.ps1 -Step Tutorials
+        run: python ci/run.py rust --step tutorials
 
       # Every code tab of the developer guide with a C tab carries a Rust tab, generated from
       # examples/guide/ and the anchored snippets in examples/tests/guide/; a stale tab, a page
@@ -72,4 +70,4 @@ jobs:
       # qar-streaming-rust/examples/tests/guide/<module>.rs), then run `cargo xtask guide` from
       # qar-streaming-rust/ and commit the regenerated page; or ask the Rust binding's maintainers.
       - name: Guide code tabs
-        run: ./ci/rust-binding.ps1 -Step Guide
+        run: python ci/run.py rust --step guide

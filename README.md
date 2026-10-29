@@ -33,7 +33,7 @@ Run without arguments, the examples load the installed QAROS with the default lo
 
 ## Repository structure
 
-- `ci/` - The checks and builds of the GitHub workflows, one PowerShell script per workflow (`rust-binding.ps1`, `csharp-binding-tests.ps1`, `vulkan-cube-build.ps1`, `docs-website.ps1`). The workflows only set up the tools and call them; run them locally the same way, from any folder.
+- `ci/` - The checks and builds of the GitHub workflows: `python ci/run.py rust|csharp|c|capi|vulkan-cube|docs` (Python 3, standard library only, Windows and Linux) and `ci/ci.env`, its defaults. The workflows only set up the tools and call it; run it locally the same way, from any folder.
 - `cmake/` - CMake helper files, including the vcpkg toolchain integration.
 - `docs/website/` - Documentation site source, authored with Docusaurus.
 - `package/` - Drop-in location for an SDK build the C# tests run against (`package/bin`, see C# binding).
@@ -68,17 +68,18 @@ package. The tests copy the native binaries from `QarStreamingNativeBinDir`, the
 - `-p:QarStreamingNativeBinDir=<folder>`;
 - the `QAROS_NATIVE_BIN` environment variable: the folder holding `qar-streaming-c.dll`,
   `qar-streaming-c-ext.dll` and every DLL they load (the same variable the Rust tests read);
-- inside the Quaternar repository, its `qaros-native.props`, which points at that repository's own
-  build (build the `qar-streaming-c-ext_gtests` and `qar-hub-test-ext_gtests` targets first, or run
-  `.\utils\Invoke-QarosBindingTests.ps1` from its root, which builds and tests);
+- inside the Quaternar repository, its `qaros-native.props`, which reads that repository's root
+  `ci.env` and so points at its own build (build the CMake targets `qar-streaming-c-ext_gtests` and
+  `qar-hub-test-ext_gtests` first);
 - `package/bin`: put a Debug or RelWithDebInfo SDK build there, including `qar-streaming-c-ext.dll`.
 
 `QAROS_HUB_TEST_EXT_BIN` names the folder of `qar-hub-test-ext.dll` (a secured hub that rotates its
 session, built only inside the Quaternar repository, whose `qaros-native.props` sets it too) for the
 hub follow tests; without either they are skipped.
 
-CI runs `ci/csharp-binding-tests.ps1`; run it the same way, with `QAROS_NATIVE_BIN` set, or with
-`-Release <tag>` to test against the C API runtime of a Quaternar release (downloaded with `gh`).
+CI runs `python ci/run.py csharp` (in `capi`, with the C API suite and the Rust integration tests).
+Run it the same way: it uses `QAROS_NATIVE_BIN` when set, else downloads the C API runtime of the
+Quaternar release `ci/ci.env` names (`--release <tag>` picks another) with `gh`.
 
 The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) loads the installed QAROS, joins as a local app with one approval in QAROS (no code), and runs a separate stereo camera and sender for each target app in the session's peer list.
 
@@ -97,8 +98,9 @@ cargo test --workspace
 The tests run against `qaros-stub`, an in-memory stand-in for the runtime, so no QAROS is needed.
 The integration tests drive the C API against `qar-streaming-c-ext`, as the C# tests do: set
 `QAROS_NATIVE_BIN` to the `bin` folder of a Debug or RelWithDebInfo SDK build, then
-`cargo test -p qar-streaming-rust-ext --features e2e`. CI's checks are `ci/rust-binding.ps1`; run it
-the same way (`-Step E2E` runs the integration tests). The runtime is found the way every binding
+`cargo test -p qar-streaming-rust-ext --features e2e`. CI's checks are `python ci/run.py rust`; run
+it the same way (`--e2e` runs the integration tests, downloading a C API runtime without
+`QAROS_NATIVE_BIN`). The runtime is found the way every binding
 finds it, with `QAR_INSTANCE` to point a run at another QAROS instance's runtime. Details:
 [qar-streaming-rust/README.md](qar-streaming-rust/README.md).
 
