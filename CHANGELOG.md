@@ -137,6 +137,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   longer onboards a sibling, `local_app_onboarding.c` sets an app tag, and the new
   `co_process_onboarding.c` example hands a co-process invite over stdin. *Managing Devices* says
   further one-time codes are minted only for operators.
+- **Docs:** the Unity guide lists Vulkan next to Direct3D 11. A new *Graphics APIs* section says
+  that other APIs are refused, that Vulkan needs `QarUnityGraphics.dll` loaded on startup, and that
+  under Vulkan the frame rate should be capped with `targetFrameRate` instead of VSync, with
+  measured figures and the `Show Vulkan Frames On Worker` option, on by default.
 - **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
   presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for
