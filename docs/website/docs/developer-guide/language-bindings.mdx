@@ -1,7 +1,7 @@
 ---
 sidebar_position: 10
 title: Language Bindings
-description: Using QAROS from C++, C# / .NET, and Unity.
+description: Using QAROS from C++, C# / .NET, Unity, and Rust.
 ---
 
 # Language Bindings
@@ -11,6 +11,7 @@ thin layer over it, so all languages share the same concepts — runtime, sessio
 peers, panels, app volumes, render senders — described in [Concepts](/docs/developer-guide/concepts).
 Because the DLL exports plain named functions and structs only ever grow through
 the extension-chain mechanism, bindings stay compatible across runtime updates.
+The Rust binding needs a runtime at least as new as its header (see [Rust](#rust) below).
 
 Pick your language's setup path in [Getting Started](/docs/developer-guide/getting-started).
 Every binding finds and loads the runtime the same way; writing a new one is described in
@@ -21,9 +22,9 @@ Every binding finds and loads the runtime the same way; writing a new one is des
 The C API is the source of truth: one generated header, one shared library
 (`qar-streaming-c`). Results are returned **by value** (`QarResult`), init structs
 carry a `{type, next}` header that must be stamped via the `qar_*_default()`
-helpers, and callbacks fire on library threads. Any language with a C FFI (Rust
-`bindgen`, Python `cffi`, …) can consume it directly by replicating those three
-conventions.
+helpers, and callbacks fire on library threads. Any language with a C FFI (Python
+`cffi`, …) can consume it directly by replicating those three conventions, as the
+[Rust binding](#rust) does with `bindgen`.
 
 ## C# / .NET and Unity
 
@@ -41,6 +42,48 @@ See the per-language snippets throughout this guide —
 [Peers](/docs/developer-guide/peers), [GUI Panels](/docs/developer-guide/gui-panels),
 [App Volumes](/docs/developer-guide/app-volumes), and
 [Rendering Streams](/docs/developer-guide/rendering-streams) — for idiomatic usage.
+
+## Rust
+
+The Rust binding lives in
+[`qar-streaming-rust/`](https://github.com/Quaternar/qaros/tree/main/qar-streaming-rust), a Cargo
+workspace:
+
+- `qaros-sys`: the raw bindings to every exported `qar_impl_*` function, generated from
+  `qar_streaming.h` per target and committed, the runtime lookup and loading, and ports of the
+  `qar_*_default()` initializers.
+- `qaros`: the safe API: library and runtime, onboarding and rejoin, peers, app volumes, GUI
+  panels, and the CPU, Vulkan and D3D11 render senders (Vulkan behind the `vulkan` feature,
+  D3D11 behind the `d3d11` feature: Windows; on macOS only for the tests against `qaros-stub`).
+- `qaros-stub`, `qaros-conformance` and `tests/qar-streaming-rust-ext` are test-only: an
+  in-memory stand-in for the runtime, a check of the ported initializers against the header, and
+  the integration tests against `qar-streaming-c-ext`. `examples/` ports the C examples.
+
+`Library::load_default` finds the runtime with the default lookup every binding follows
+([Authoring a Language Binding](/docs/developer-guide/authoring-a-binding)); `Library::load`
+loads one library file and nothing else. Either loads every function of the header the bindings
+were generated from, or none. The binding therefore needs a QAROS runtime that exports every
+function of that header (this repository's `qar-streaming-c/include/qar_streaming.h`), and that
+is the runtime of the Hub you join. An older runtime fails to load, and the error names the
+functions it lacks. Pin the git dependency with `rev` or `tag`, so the header stays the one
+your runtime exports in full.
+
+The binding keeps the C conventions behind safe wrappers. Init structs come from the ported
+initializers, so every header is stamped. A `QarResult` becomes a `qaros::Result` whose error keeps
+the function name, status code and message. Handles release themselves on drop, each keeping its
+parent alive, so the C teardown order holds. Callbacks run on library threads and receive owned
+snapshots. Hands, gestures, world anchors, video senders, target apps, member hubs and the peer
+role, category, presence and device identity stay raw: call them through `library.raw_api()` with the
+C handle of a safe value, which `as_raw()` returns on `Session`, `Runtime`, `RenderSender`,
+`CancelToken` and `OnboardingInvite`. The handle stays owned by the safe value, which destroys it.
+The coverage table in the binding's
+[README](https://github.com/Quaternar/qaros/blob/main/qar-streaming-rust/README.md#coverage)
+lists each area of the C API as safe in Rust, raw only, and whether the C# binding has it. The
+guide's code samples have a Rust
+tab, taken from code the binding compiles; the
+[Rust tutorials](/docs/developer-guide/tutorials/rust/) walk through the binding's examples, and
+building and testing are in the binding's
+[README](https://github.com/Quaternar/qaros/blob/main/qar-streaming-rust/README.md).
 
 ## C++
 

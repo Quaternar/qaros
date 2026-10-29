@@ -28,6 +28,18 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
   D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
   depth-stencil texture. *Troubleshooting* lists the refused format as an integration mistake.
+- **Docs:** Rust in the Developer Guide: every code sample with a C tab on API Conventions,
+  Getting Started, Onboarding and Sessions, Peers, App Volumes, GUI Panels, Rendering Streams and
+  Troubleshooting has a Rust tab, and the language switcher offers Rust; Rust tutorials for the
+  examples of the new Rust binding (`qar-streaming-rust/`); a Rust section in *Language Bindings*
+  and a Rust row in *Authoring a Language Binding*. A code sample without a tab in the chosen
+  language says which language it shows instead.
+- **Docs:** the C tutorials rewritten around the reworked C samples, plus Local App Onboarding
+  and Vulkan Rendering tutorials. The samples load the installed QAROS by the default lookup, join
+  as a local app when they have no stored id or pairing code, find rendering targets in the peer
+  list, and check every result. The Developer Guide's onboarding, troubleshooting and rendering
+  pages follow the header: a pairing code finds a Hub of your own user, the local-app join starts
+  the Hub, and targets come from the peer list.
 - **Docs:** a Unity page in the Developer Guide, also in the 0.9.0 docs: installing the Unity
   packages, onboarding with the Hub, connection targets, several end users, coordinate spaces
   and MRTK 3.
@@ -145,9 +157,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   only: a panel can also show the video stream of a video sender.
 - **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
   convention: the C header states it.
-- **Docs:** the Rendering Streams guide says to find the render targets in the peer list and create
-  a sender for each, instead of waiting for render stream requests, and the Source Applications
-  guide says that a QAROS API app chooses the target applications it renders for.
+- **Docs:** the Source Applications guide says that a QAROS API app chooses the target
+  applications it renders for: **Streams to** shows *Chosen by the app*, not "all target
+  applications that request it".
 - **Docs:** the Welcome page lists the C# API reference next to the C API reference, and the
   documentation site README no longer says that no version is released yet.
 

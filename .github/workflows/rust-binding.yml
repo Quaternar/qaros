@@ -1,0 +1,70 @@
+name: Rust binding
+
+# Format, clippy, the tests of qar-streaming-rust and the freshness of its tutorial pages and of
+# the developer guide's Rust tabs on a hosted Windows runner. The tests run against qaros-stub,
+# an in-memory stand-in for the runtime, so they need no QAROS build, runner or secret. The
+# integration tests against qar-streaming-c-ext are built and skip without QAROS_PACKAGE_BIN.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qar-streaming-rust/**"
+      - "qar-streaming-c/include/**"
+      - "docs/website/docs/developer-guide/**"
+      - ".github/workflows/rust-binding.yml"
+  pull_request:
+    paths:
+      - "qar-streaming-rust/**"
+      - "qar-streaming-c/include/**"
+      - "docs/website/docs/developer-guide/**"
+      - ".github/workflows/rust-binding.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-binding-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: qar-streaming-rust
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --features qaros/vulkan,qaros-examples/vulkan,qar-streaming-rust-ext/e2e -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      # The Rust tutorial pages of the developer guide are generated from examples/tutorials/
+      # and the examples' anchored regions; a stale page or a broken include fails here.
+      - name: Tutorials
+        run: cargo xtask tutorials --check
+
+      # Every code tab of the developer guide with a C tab carries a Rust tab, generated from
+      # examples/guide/ and the anchored snippets in examples/tests/guide/; a stale tab, a page
+      # whose C tabs and Rust tabs differ in number, or a broken include fails here.
+      # For docs writers: a new code group with a C tab fails until it has a Rust tab. The message
+      # names the page and the group (by its heading). To fix, add or update the tab's section in
+      # qar-streaming-rust/examples/guide/<page>.md (its code in
+      # qar-streaming-rust/examples/tests/guide/<module>.rs), then run `cargo xtask guide` from
+      # qar-streaming-rust/ and commit the regenerated page; or ask the Rust binding's maintainers.
+      - name: Guide code tabs
+        run: cargo xtask guide --check

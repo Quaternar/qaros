@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.dll binary
+*.lib binary
+*.spv binary
+crates/qaros-sys/src/generated/** linguist-generated=true
