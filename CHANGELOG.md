@@ -25,7 +25,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
   the player from the Visualizer by code (the code opens App Installer, the certificate goes into
   Trusted People once per HoloLens, an install page as the fallback); the Device Portal steps remain
-  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460)
+  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460),
+  the ports an Android headset sends to (one UDP and one TCP port from 7461-7499) and the firewall
+  range 7440-7499,
   and *Maintenance and Updates* how to update the HoloLens player.
 
 - **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,

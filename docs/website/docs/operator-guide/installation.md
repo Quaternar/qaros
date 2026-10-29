@@ -74,7 +74,8 @@ The Hub processes (tray, launcher, Visualizer) run in the signed-in user's sessi
 | one TCP port from 19120-19199 | discovery requests and code pairing: the Hub claims its onboarding port from this range, so a rule for TCP 7445 alone does not let a device pair |
 | TCP 19120-19200 | session traffic, mutual TLS (router and peer links) |
 | one TCP port from 7448-7460 | the Visualizer's HoloLens install page, plain HTTP, only while its install code is shown ([HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2#install-from-the-visualizer)) |
-| 7440-7460, 19120-19199 TCP + UDP | what the firewall rules open for each QAROS executable |
+| one UDP and one TCP port from 7461-7499 per streaming Android headset (Quest, MetaLens) | head poses and WebRTC signalling, sent by the headset to this PC |
+| 7440-7499, 19120-19199 TCP + UDP | what the firewall rules open for each QAROS executable |
 
 Details: [Networking and Federation](/docs/operator-guide/networking-and-federation). If the firewall step fails, the setup warns that LAN devices cannot connect; local source apps still work.
 
