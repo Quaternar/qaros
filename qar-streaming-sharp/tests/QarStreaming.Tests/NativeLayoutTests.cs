@@ -264,6 +264,8 @@ namespace Quaternar.Qaros.Tests
         public void StatusCodesMirrorC()
         {
             Assert.Equal(805, (int)StatusCode.RenderingProducerAppVolumeUnresolved);
+            Assert.Equal(806, (int)StatusCode.RenderingProducerDepthFormatNotSupported);
+            Assert.Equal(807, (int)StatusCode.RenderingProducerExternalDeviceNotSupported);
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
@@ -302,7 +304,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(58, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(60, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
