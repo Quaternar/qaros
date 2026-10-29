@@ -85,6 +85,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Unity* says what a join without QAROS Hub shows (the "QAROS Hub is not installed"
+  error and, in the Editor, a dialog that opens the installation guide) and no longer lists
+  `DllFolder` among the coordinator's settings.
+
 - **Docs:** *Player Installation to Device* names the player **QAROS Player** with its package IDs
   (`com.quaternar.qaros.player` on Meta Quest and HoloLens 2,
   `com.metalense.com.quaternar.qaros.player` on METALENSE 2) and says how to remove the earlier

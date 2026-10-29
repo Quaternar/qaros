@@ -32,7 +32,8 @@ player load the runtime of the QAROS installed on the PC, like any other source 
 - The built-in render pipeline or URP.
 - **QAROS installed** on the PC, release or demo (see [Installation](/docs/operator-guide/installation)).
   The app loads its runtime, joins its Hub and streams to the target apps in its session. Without
-  it, joining fails with "QAROS is not installed".
+  it, joining fails with "QAROS Hub is not installed on this PC", in the Inspector and the in-game
+  target list; in the Editor a dialog also offers to open the installation guide.
 
 ## Installation
 
@@ -89,7 +90,7 @@ prefab and a **Connect** button that calls `QarMultiUserStreamingBehaviour.Join`
 
 | Prefab | Role | Contains |
 |---|---|---|
-| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour` (onboarding, which targets to stream to, render and gesture settings, the device prefab, runtime settings such as `EnableMixer`, and `DllFolder`, which only development builds of QAROS use when no QAROS is installed) and `QarTargetPickerOverlay` (the in-game target list) |
+| `QarStreaming` | The streaming coordinator, one per scene | `QarMultiUserStreamingBehaviour` (onboarding, which targets to stream to, render and gesture settings, the device prefab, and runtime settings such as `EnableMixer`) and `QarTargetPickerOverlay` (the in-game target list) |
 | `QarDevice` | One target's view | `QarDeviceBehaviour`, a left-eye and a right-eye camera, and optional hand and head visualizers |
 
 `QarMultiUserStreamingBehaviour` creates a child `QarDevice` for each target it streams to, named
