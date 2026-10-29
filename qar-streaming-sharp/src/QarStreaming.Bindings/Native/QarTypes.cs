@@ -788,6 +788,20 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct RenderSenderAlphaModeExtNative
+    {
+        public StructureHeaderNative Header;
+        public ColorAlphaMode AlphaMode;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RenderSenderColorEncodingExtNative
+    {
+        public StructureHeaderNative Header;
+        public ColorEncoding ColorEncoding;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct StreamParamsVulkanNative
     {
         public StructureHeaderNative Header;

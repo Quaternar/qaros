@@ -444,6 +444,60 @@ namespace Quaternar.Qaros.Tests
         }
 
         [Fact]
+        public void RenderSenderAlphaModeExtMatchesNativeLayout()
+        {
+            int pointerSize = IntPtr.Size;
+            Assert.Equal(pointerSize * 2, Marshal.OffsetOf(typeof(RenderSenderAlphaModeExtNative), nameof(RenderSenderAlphaModeExtNative.AlphaMode)).ToInt32());
+            Assert.Equal(pointerSize * 3, Marshal.SizeOf(typeof(RenderSenderAlphaModeExtNative)));
+        }
+
+        [Fact]
+        public void RenderSenderChainsTheAlphaModeOnlyWhenDeclared()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
+                Assert.Equal(ColorAlphaMode.Unspecified, options.AlphaMode);
+                Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
+
+                options.AlphaMode = ColorAlphaMode.Premultiplied;
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.NotEqual(IntPtr.Zero, native.Header.Next);
+                var extension = Marshal.PtrToStructure<RenderSenderAlphaModeExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RenderSenderAlphaModeExt, extension.Header.Type);
+                Assert.Equal(ColorAlphaMode.Premultiplied, extension.AlphaMode);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+            }
+        }
+
+        [Fact]
+        public void RenderSenderColorEncodingExtMatchesNativeLayout()
+        {
+            int pointerSize = IntPtr.Size;
+            Assert.Equal(pointerSize * 2, Marshal.OffsetOf(typeof(RenderSenderColorEncodingExtNative), nameof(RenderSenderColorEncodingExtNative.ColorEncoding)).ToInt32());
+            Assert.Equal(pointerSize * 3, Marshal.SizeOf(typeof(RenderSenderColorEncodingExtNative)));
+        }
+
+        [Fact]
+        public void RenderSenderChainsTheColorEncodingOnlyWhenLinear()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
+                Assert.Equal(ColorEncoding.Srgb, options.ColorEncoding);
+                Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
+
+                options.ColorEncoding = ColorEncoding.Linear;
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.NotEqual(IntPtr.Zero, native.Header.Next);
+                var extension = Marshal.PtrToStructure<RenderSenderColorEncodingExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RenderSenderColorEncodingExt, extension.Header.Type);
+                Assert.Equal(ColorEncoding.Linear, extension.ColorEncoding);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+            }
+        }
+
+        [Fact]
         public void VulkanRenderSenderChainsItsDeviceAndRequiresIt()
         {
             using (var scope = new NativeMemoryScope())

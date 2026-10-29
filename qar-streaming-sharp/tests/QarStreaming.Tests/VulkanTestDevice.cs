@@ -380,7 +380,11 @@ namespace Quaternar.Qaros.Tests
         [DllImport(Vulkan)] private static extern int vkWaitForFences(IntPtr device, uint count, ulong[] fences, uint waitAll, ulong timeout);
         [DllImport(Vulkan)] private static extern int vkQueueSubmit(IntPtr queue, uint count, [In] SubmitInfo[] submits, ulong fence);
     }
+}
+#endif
 
+namespace Quaternar.Qaros.Tests
+{
     /// <summary>The Vulkan values a render sender's frame is handed back with.</summary>
     internal static class VulkanConstants
     {
@@ -392,4 +396,3 @@ namespace Quaternar.Qaros.Tests
         public const uint QueueFamilyExternal = 0xFFFFFFFE;
     }
 }
-#endif

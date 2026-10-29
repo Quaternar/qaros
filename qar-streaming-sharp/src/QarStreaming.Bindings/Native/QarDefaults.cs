@@ -180,6 +180,24 @@ namespace Quaternar.Qaros.Interop
         internal static RenderSenderInitNative RenderSender(RenderSenderOptions options, NativeMemoryScope scope)
         {
             var next = GraphicsExtension(options.GraphicsAPI, options.StreamParamsD3D11, options.StreamParamsVulkan, options.StreamParamsOpenGl, scope, nameof(RenderSenderOptions));
+            // Chained only when declared, so a stream that declares nothing reaches the native
+            // library exactly as before.
+            if (options.AlphaMode != ColorAlphaMode.Unspecified)
+            {
+                next = scope.AllocStruct(new RenderSenderAlphaModeExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RenderSenderAlphaModeExt, next),
+                    AlphaMode = options.AlphaMode
+                });
+            }
+            if (options.ColorEncoding != ColorEncoding.Srgb)
+            {
+                next = scope.AllocStruct(new RenderSenderColorEncodingExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RenderSenderColorEncodingExt, next),
+                    ColorEncoding = options.ColorEncoding
+                });
+            }
             var native = new RenderSenderInitNative
             {
                 Header = NativeDefaults.Header(StructureType.RenderingStreamSenderInit, next),
