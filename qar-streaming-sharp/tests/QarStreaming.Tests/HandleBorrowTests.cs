@@ -284,6 +284,9 @@ namespace Quaternar.Qaros.Tests
     /// is done (an async call until its native completion fires). A token is the one wrapper whose
     /// Dispose does not wait: its last borrow destroys it, on whatever thread lets go last.
     /// </summary>
+    // Creates native objects: serialized with the fixtures whose Library.Destroy() would
+    // destroy them mid-test (it ends every cancel token).
+    [Collection("QAR Native")]
     public sealed class CancelTokenBorrowTests
     {
         private static ResultInfo Failed()
