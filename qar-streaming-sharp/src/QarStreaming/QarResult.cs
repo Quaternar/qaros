@@ -53,6 +53,10 @@ namespace Quaternar.Qaros
         /// resolves. A volume that was removed never does; recreate it.
         /// </summary>
         RenderingProducerAppVolumeUnresolved = 805,
+        /// <summary>A render sender's depth format is not one its graphics API accepts. Nothing was created; the message lists the accepted formats.</summary>
+        RenderingProducerDepthFormatNotSupported = 806,
+        /// <summary>The device in a Vulkan render sender's <see cref="StreamParamsVulkan"/> was created without the external memory and semaphore extensions sharing its images needs. Nothing was created; the message names what is missing.</summary>
+        RenderingProducerExternalDeviceNotSupported = 807,
         /// <summary>Code-based onboarding handshake rejected, expired or timed out. Re-check the code shown on the hub and retry.</summary>
         PakeError = 1600,
         /// <summary>No persisted state for the onboarding id; fall back to a full onboard.</summary>
