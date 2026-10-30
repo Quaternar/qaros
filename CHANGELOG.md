@@ -19,7 +19,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 ### Added
 
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
-  crates, under the new *Rust API* menu, beside the Rust tutorials and *Language bindings*;
+  crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
 
 - **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
@@ -84,6 +84,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
+
+- **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
+  Guide.
 
 - **Docs:** *Unity* says what a join without QAROS Hub shows (the "QAROS Hub is not installed"
   error and, in the Editor, a dialog that opens the installation guide) and no longer lists

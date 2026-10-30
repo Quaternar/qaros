@@ -233,11 +233,6 @@ const config: Config = {
 							docId: "qar-streaming-sharp/index",
 							label: "C# API",
 						},
-						{
-							type: "doc",
-							docId: "developer-guide/language-bindings",
-							label: "Language bindings",
-						}
 					]
 				},
 				{
@@ -257,11 +252,6 @@ const config: Config = {
 							to: "/docs/next/developer-guide/tutorials/rust/",
 							label: "Tutorials",
 						},
-						{
-							type: "doc",
-							docId: "developer-guide/language-bindings",
-							label: "Language bindings",
-						}
 					]
 				},
 				{
