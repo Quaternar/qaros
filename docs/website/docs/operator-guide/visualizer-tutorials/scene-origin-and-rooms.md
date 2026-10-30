@@ -89,7 +89,7 @@ Keep the white border around it.
 
 For every headset in the room, one after another:
 
-1. Start the player and invite the device ([HoloLens 2](./hololens-2.md),
+1. Start the player and invite (HoloLens) or pair (Meta Quest, METALENSE 2) the device ([HoloLens 2](./hololens-2.md),
    [Meta Quest and METALENSE 2](./quest-and-metalense-2.md)).
 2. Put it on and **look at the code** until the device confirms
    (HoloLens: the *not anchored* message goes; Meta Quest and METALENSE 2: the green outline).

@@ -143,7 +143,7 @@ See [Security Model](/docs/operator-guide/security-model) and [Managing Devices]
 | `enableMixer` | boolean | `true` | Insert the mixer between source apps and targets. See [The Mixer](/docs/operator-guide/the-mixer). |
 | `unifyTargetAppWithMixer` | boolean | `false` | Run the mixer inside the target's process where the target supports it, instead of as its own process. Only with `enableMixer`. |
 | `applyDeterministicIds` | boolean | `true` | Keep launcher-assigned peer ids stable across restarts, so child processes reuse their onboarding identities instead of re-enrolling. |
-| `targetAppOverride` | string | `"None"` | Launch this target app for every target request instead of the one matching the device. `None`, `StreamVisualizer`, `HoloLens`, `StereoKit`, `AndroidStreamer`. |
+| `targetAppOverride` | string | `"None"` | Launch this target app for every target request instead of the one matching the device. `None`, `StreamVisualizer`, `HoloLens`, `StereoKit`. `AndroidStreamer` is ignored with a warning. |
 | `handleInvites` | boolean | `true` | Answer session-invite requests. |
 | `detectConnectedPeers` | boolean | `true` | Track peers connecting to the session. |
 | `replyToServiceExists` | boolean | `true` | Answer service-existence probes. |
@@ -178,18 +178,18 @@ Entries must be objects; bare type strings are rejected.
 
 ## Target apps (`targetApps[]`)
 
-Each enabled entry is a device the Hub invites into the session at startup. Startup waits for each invite to be accepted.
+Each enabled entry is a HoloLens the Hub invites into the session at startup. Startup waits for each invite to be accepted.
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `enabled` | boolean | `true` | `false` skips the entry. |
 | `hostname` | string | `""` | Host name or IP of the device. |
-| `deviceType` | string | `"Visualizer"` | `HoloLens` or `Headset`. A `Headset` is any headset `qar-android-streamer` streams to (Meta Quest, METALENS glasses, other Android devices); it reports its exact model itself. HoloLens is streamed to by `qar-openxr-desktop`. The old names `HoloLensARHeadset`, `Android` and `AndroidStreamer` still work. A model or model family (`MetaQuest`, `MetaQuestHeadset`, `MetaQuest3`, `Metalens`) is not invitable: the entry is skipped with a warning, change it to `Headset`. `Visualizer` is ignored with a warning: use `autoLaunchVisualizer` instead. A camera is never a target app. |
+| `deviceType` | string | `"Visualizer"` | `HoloLens` (old name `HoloLensARHeadset`), streamed to by `qar-openxr-desktop`. Android headsets are not invited: an entry with `Headset`, `Android`, `AndroidStreamer` or a headset model (`MetaQuest`, `Metalens`, ...) is skipped with a warning. Pair those headsets once instead ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)); they join the session by themselves. `Visualizer` is ignored with a warning: use `autoLaunchVisualizer` instead. A camera is never a target app. |
 | `configOverrides` | object | `{}` | Passed into the launched app's config (e.g. `roomTag`). Aliases: `specialKeys`, `config`. |
 
 ```json
 "targetApps": [
-  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "Headset", "configOverrides": { "roomTag": "default" } }
+  { "enabled": true, "hostname": "192.168.1.42", "deviceType": "HoloLens", "configOverrides": { "roomTag": "default" } }
 ]
 ```
 

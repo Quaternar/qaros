@@ -21,9 +21,9 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 **One code at a time.** The Visualizer shows only the current rotating code; it offers no list of further codes to hand out. Applications cannot request codes either: a source app on the Hub's PC joins without a code, after you allow it once ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)).
 
-## The two onboarding paths
+## The onboarding paths
 
-**Push (operator-configured).** You add a HoloLens in the Visualizer's [Session panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** tab, **Invite device** card), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+**Push (operator-configured).** You add a HoloLens in the Visualizer's [Session panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** tab, **Invite device** card), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is the standard path for fixed HoloLens installations - the device does not need anyone to read a code to it.
 
 **Pair (Android headsets).** Meta Quest, METALENSE 2 and Android XR headsets are never invited by IP address. Pair each one once from the Visualizer's **Devices** tab: **Pair headset** pushes a one-time invite over the USB cable, **Show QR code** shows one the player scans. The headset then joins the session by itself and the Hub starts its mixer and video relay ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)).
 

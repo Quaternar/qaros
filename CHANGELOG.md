@@ -90,11 +90,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **Docs:** *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the METALENSE 2
-  Wi-Fi tutorial and the player installation pages say that Android headsets are paired, never
-  invited by IP address: the last setup step is **Pair headset** (USB) or **Show QR code**, and an
-  Android address in **Invite device** is refused. The Rust API reference says the same for
-  `Session::invite_target_app`.
+- **Docs:** the device and launcher guides (*Managing Devices*, *Connecting to the Hub*, *Meta Quest
+  and METALENSE 2 - Install and Pair*, the METALENSE 2 Wi-Fi tutorial, the player installation
+  pages, *Launcher Configuration Reference*) pair Android headsets with **Pair headset** (USB) or
+  **Show QR code** instead of inviting them by IP address; **Invite device** and `targetApps` take
+  only a HoloLens. The target app invite docs (*Onboarding and Sessions*, *Choosing an Onboarding
+  Mode*, the C# and Rust API references) say an Android headset returns
+  `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`; *Working with Peers* says a headset joins with
+  its exact model.
 
 - **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
   in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
