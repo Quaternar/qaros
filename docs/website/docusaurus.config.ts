@@ -98,6 +98,9 @@ const config: Config = {
 		],
 	],
 
+	// Renders ```mermaid code blocks as diagrams (markdown.mermaid below).
+	themes: ["@docusaurus/theme-mermaid"],
+
 	// Mount additional documentation sources (Doxygen -> Docusaurus Markdown)
 	plugins: [
 		[
@@ -328,6 +331,7 @@ const config: Config = {
 	} satisfies Preset.ThemeConfig,
 	markdown: {
 		format: "detect",
+		mermaid: true,
 	},
 };
 

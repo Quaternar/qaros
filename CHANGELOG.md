@@ -200,6 +200,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
+  runtime lookup flow.
+
 - **Docs:** *Getting Started* and *Troubleshooting* say that every QAROS Hub sets `QAR_INSTANCE`
   for the apps it and the Visualizer start (`default` for the installed QAROS), so only an app
   started by hand needs it.
