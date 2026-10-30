@@ -507,6 +507,80 @@ pub fn qar_forget_init_default() -> QarForgetInit {
     }
 }
 
+/// `peer_id` is required (the zero id is refused); the caller sets it.
+pub fn qar_onboard_peer_id_ext_default() -> QarOnboardPeerIdExt {
+    QarOnboardPeerIdExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT),
+        peer_id: qar_peer_id_default(),
+    }
+}
+
+/// Category `QAR_DEVICE_CATEGORY_DESKTOP_PC`, NULL strings; `device_id` is required.
+pub fn qar_peer_device_identity_default() -> QarPeerDeviceIdentity {
+    QarPeerDeviceIdentity {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY),
+        category: QarDeviceCategory::QAR_DEVICE_CATEGORY_DESKTOP_PC,
+        device_id: ptr::null(),
+        device_family: ptr::null(),
+        device_name: ptr::null(),
+    }
+}
+
+/// `connection_string` is required; the caller sets it.
+pub fn qar_session_invite_target_app_init_default() -> QarSessionInviteTargetAppInit {
+    QarSessionInviteTargetAppInit {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT,
+        ),
+        connection_string: ptr::null(),
+    }
+}
+
+/// Zero fields select the defaults: 24 h, one use, join, rejoin and bring devices.
+pub fn qar_member_hub_invitation_init_default() -> QarMemberHubInvitationInit {
+    QarMemberHubInvitationInit {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT,
+        ),
+        lifetime_seconds: 0,
+        max_uses: 0,
+        permissions: 0,
+        label: ptr::null(),
+    }
+}
+
+/// `app_tag` is required; the caller sets it.
+pub fn qar_member_hub_invitation_app_grant_ext_default() -> QarMemberHubInvitationAppGrantExt {
+    QarMemberHubInvitationAppGrantExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT,
+        ),
+        app_tag: ptr::null(),
+    }
+}
+
+/// `invitation` is required; the caller sets it.
+pub fn qar_onboard_remote_app_grant_ext_default() -> QarOnboardRemoteAppGrantExt {
+    QarOnboardRemoteAppGrantExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT,
+        ),
+        invitation: ptr::null(),
+    }
+}
+
+/// `invitation` is required; the zero timeouts select 60 s and 120 s.
+pub fn qar_join_hub_as_member_init_default() -> QarJoinHubAsMemberInit {
+    QarJoinHubAsMemberInit {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT,
+        ),
+        invitation: ptr::null(),
+        hub_start_timeout_ms: 0,
+        restart_timeout_ms: 0,
+    }
+}
+
 /// Frame views are zero-filled, as in the header.
 pub fn qar_render_sender_init_default() -> QarRenderSenderInit {
     QarRenderSenderInit {
@@ -523,7 +597,6 @@ pub fn qar_render_sender_init_default() -> QarRenderSenderInit {
     }
 }
 
-#[cfg(qaros_color_extensions)]
 pub fn qar_render_sender_alpha_mode_ext_default() -> QarRenderSenderAlphaModeExt {
     QarRenderSenderAlphaModeExt {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT),
@@ -531,13 +604,49 @@ pub fn qar_render_sender_alpha_mode_ext_default() -> QarRenderSenderAlphaModeExt
     }
 }
 
-#[cfg(qaros_color_extensions)]
 pub fn qar_render_sender_color_encoding_ext_default() -> QarRenderSenderColorEncodingExt {
     QarRenderSenderColorEncodingExt {
         header: structure_header(
             QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT,
         ),
         color_encoding: QarColorEncoding::QAR_COLOR_ENCODING_SRGB,
+    }
+}
+
+/// The zero stream id; the caller sets it.
+pub fn qar_gui_panel_stream_id_ext_default() -> QarGuiPanelStreamIdExt {
+    QarGuiPanelStreamIdExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_STREAM_ID_EXT),
+        stream_id: qar_stream_id_default(),
+    }
+}
+
+pub fn qar_gui_panel_url_ext_default() -> QarGuiPanelUrlExt {
+    QarGuiPanelUrlExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT),
+        url: ptr::null(),
+    }
+}
+
+/// No peers: the caller sets `allowed_peers` and `allowed_peer_count`.
+pub fn qar_app_volume_gesture_allowed_peers_ext_default() -> QarAppVolumeGestureAllowedPeersExt {
+    QarAppVolumeGestureAllowedPeersExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_ALLOWED_PEERS_EXT,
+        ),
+        allowed_peers: ptr::null(),
+        allowed_peer_count: 0,
+    }
+}
+
+/// Reconnects on, 300 s reconnect timeout, CPU frames.
+pub fn qar_video_sender_init_default() -> QarVideoSenderInit {
+    QarVideoSenderInit {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT),
+        layout: qar_video_frame_layout_default(),
+        enable_reconnects: true,
+        reconnect_timeout_ms: 300_000,
+        graphics_api: QarGraphicsAPI::QAR_GRAPHICS_API_CPU,
     }
 }
 

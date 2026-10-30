@@ -405,6 +405,14 @@ typedef enum QarStatusCode
 	 * qar_render_sender_create() before any receiver is waited for; nothing
 	 * was created. The result's message lists the accepted formats. */
 	QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED = 806,
+	/** The device in the graphics extension of QarRenderSenderInit lacks
+	 * what sharing the sender's images needs. For QAR_GRAPHICS_API_VULKAN:
+	 * VK_KHR_external_memory_win32 and VK_KHR_external_semaphore_win32 on
+	 * Windows, their fd equivalents elsewhere, enabled when the application
+	 * created its VkDevice. Returned by qar_render_sender_create() before any
+	 * receiver is waited for; nothing was created. The result's message names
+	 * what is missing. */
+	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
@@ -2115,13 +2123,19 @@ typedef struct QarMemberHubInvitationAppGrantExt
  * QarOnboardLocalAppExt (with any other mode:
  * QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
  *
- * The hub on this PC must already be a member of the invitation's primary
- * (qar_runtime_join_hub_as_member). When no approval admits this executable
- * there yet, the primary records it as the app the invitation's grant admits,
- * without a prompt; once redeemed by another executable the onboarding fails
- * with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
- * it, the invitation is not used. The app tag of the grant applies; a
- * QarOnboardLocalAppTagExt is not needed.
+ * Only a member hub redeems a grant: join the hub on this PC to the
+ * invitation's primary first (qar_runtime_join_hub_as_member). A hub that is
+ * not a member ignores the grant, with no error of its own, and asks its own
+ * operator as for any local app: the approval prompt, then
+ * QAR_STATUS_ONBOARDING_APPROVAL_DENIED or
+ * QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT when nobody allows it.
+ *
+ * On a member hub, when no approval admits this executable there yet, the
+ * primary records it as the app the invitation's grant admits, without a
+ * prompt; once redeemed by another executable, or when the primary refuses
+ * the grant, the onboarding fails with QAR_STATUS_ONBOARDING_APPROVAL_DENIED.
+ * When an approval already admits it, the invitation is not used. The app tag
+ * of the grant applies; a QarOnboardLocalAppTagExt is not needed.
  */
 typedef struct QarOnboardRemoteAppGrantExt
 {
@@ -3042,11 +3056,10 @@ static inline QarOnboardLocalAppTagExt
 qar_onboard_local_app_tag_ext_default(void);
 /** @brief Default init for QarRequestInviteInit (app_tag NULL; set it). */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
-/** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
 qar_session_invite_target_app_init_default(void);
-
+/** @brief Default init for QarForgetInit. */
 static inline QarForgetInit qar_forget_init_default(void);
 
 /**
@@ -3127,8 +3140,9 @@ static inline QarResult qar_runtime_rejoin_async(
  * @param out_session Receives the onboarded session handle on success.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
  *   hub — verify host/port and retry.
- * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected, the invite expired,
- *   out — re-prompt the user for the code.
+ * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected or timed out, or
+ *   the invite expired — re-prompt the user for the code, or get a fresh
+ *   invite.
  */
 static inline QarResult qar_runtime_onboard(
 	QarRuntime* runtime,
@@ -4116,7 +4130,14 @@ static inline QarResult qar_peer_subscribe_updates(
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Destroy a render stream sender handle. */
+/**
+ * @brief Destroy a render stream sender handle.
+ *
+ * A begin-frame still waiting on the sender is stopped and fails; the call
+ * returns once it has let go of the sender, usually within a frame and at most
+ * after 5 s. Avoid calling it from a callback of this library, which runs on
+ * the library's own threads.
+ */
 static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
 /** @brief Subscribe to render stream requests for this application's content.
  *

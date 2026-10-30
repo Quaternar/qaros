@@ -6,6 +6,9 @@ using Xunit;
 
 namespace Quaternar.Qaros.Tests
 {
+    // Creates native objects: serialized with the fixtures whose Library.Destroy() would
+    // destroy them mid-test (it ends every cancel token).
+    [Collection("QAR Native")]
     public sealed class CancelTokenTests
     {
         [Fact]

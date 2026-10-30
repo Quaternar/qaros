@@ -26,6 +26,14 @@
 {{#include ../tests/guide/onboarding_and_sessions.rs:co_process}}
 ```
 
+## Remote app: through a member hub
+
+`MemberHubInvitationConfig::app_grant_tag` chains the grant; `OnboardExtensions::remote_app_grant` redeems it next to `OnboardMethod::LocalApp`.
+
+```rust
+{{#include ../tests/guide/onboarding_and_sessions.rs:remote_app_grant}}
+```
+
 ## Choosing the GPU: chaining the adapter
 
 ```rust
@@ -36,6 +44,22 @@
 
 ```rust
 {{#include ../tests/guide/onboarding_and_sessions.rs:session_adapter}}
+```
+
+## Re-enrolling a slot
+
+`OnboardExtensions::onboarding_id` sets `QarOnboardInit::onboarding_id`. The zero id, and a local app, are refused with `Error::InvalidArgument` before the call.
+
+```rust
+{{#include ../tests/guide/onboarding_and_sessions.rs:re_enroll}}
+```
+
+## Onboarding without blocking
+
+`Runtime::start_onboard` (and `start_rejoin`) returns a `PendingOnboard`; `poll` never blocks, `wait` does, `cancel_handle` cancels from any thread.
+
+```rust
+{{#include ../tests/guide/onboarding_and_sessions.rs:onboard_async}}
 ```
 
 ## Platforms without local enrollment

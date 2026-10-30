@@ -10,7 +10,7 @@ mod common;
 
 #[test]
 fn the_process_exits_cleanly_after_teardown() {
-    let Some(bin) = common::package_bin() else {
+    let Some(bin) = common::native_bin() else {
         return;
     };
     let loaded = common::load(&bin, "teardown");

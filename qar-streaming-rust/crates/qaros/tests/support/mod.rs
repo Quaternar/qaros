@@ -25,17 +25,14 @@ use qaros_stub::frame_stamp;
 
 pub(crate) const VISUALIZER_PEER: PeerId = PeerId([0x56; 16]);
 
-/// The stub's call log entry of the runtime release these bindings use
-/// (`qaros_sys::RUNTIME_RELEASE_SYMBOL`).
-pub(crate) fn runtime_release_call() -> &'static str {
-    qaros::qaros_sys::RUNTIME_RELEASE_SYMBOL.trim_start_matches("qar_impl_")
-}
+/// The stub's call log entry of a runtime release (`qar_runtime_handle_destroy`).
+pub(crate) const RUNTIME_RELEASE_CALL: &str = "runtime_handle_destroy";
 
-/// Every runtime release in the call log, by either name a header declares.
+/// Every runtime release in the call log.
 pub(crate) fn runtime_releases(calls: &[String]) -> usize {
     calls
         .iter()
-        .filter(|call| *call == "runtime_destroy" || *call == "runtime_handle_destroy")
+        .filter(|call| *call == RUNTIME_RELEASE_CALL)
         .count()
 }
 
@@ -184,6 +181,26 @@ impl StubControl {
         set_delay(milliseconds);
     }
 
+    pub(crate) fn set_async_call_delay(&self, milliseconds: u64) {
+        let set_delay: unsafe extern "C" fn(u64) = self.symbol("qar_stub_set_async_call_delay_ms");
+        // SAFETY: plain value argument.
+        unsafe { set_delay(milliseconds) };
+    }
+
+    pub(crate) fn set_onboard_async_delay(&self, milliseconds: u64) {
+        let set_delay: unsafe extern "C" fn(u64) =
+            self.symbol("qar_stub_set_onboard_async_delay_ms");
+        // SAFETY: plain value argument.
+        unsafe { set_delay(milliseconds) };
+    }
+
+    pub(crate) fn set_onboard_async_ignores_cancel(&self, ignores: bool) {
+        let set_ignores: unsafe extern "C" fn(u8) =
+            self.symbol("qar_stub_set_onboard_async_ignores_cancel");
+        // SAFETY: plain value argument.
+        unsafe { set_ignores(u8::from(ignores)) };
+    }
+
     pub(crate) fn set_render_sender_create_delay(&self, milliseconds: u64) {
         let set_delay: unsafe extern "C" fn(u64) =
             self.symbol("qar_stub_set_render_sender_create_delay_ms");
@@ -196,13 +213,6 @@ impl StubControl {
             self.symbol("qar_stub_set_render_sender_create_cancel_delay_ms");
         // SAFETY: plain value argument.
         unsafe { set_delay(milliseconds) };
-    }
-
-    pub(crate) fn set_render_sender_create_never_calls_back(&self, never: bool) {
-        let set_never: unsafe extern "C" fn(u8) =
-            self.symbol("qar_stub_set_render_sender_create_never_calls_back");
-        // SAFETY: plain value argument.
-        unsafe { set_never(u8::from(never)) };
     }
 
     pub(crate) fn set_render_sender_create_ignores_cancel(&self, ignores: bool) {
@@ -288,6 +298,15 @@ pub(crate) fn code(pairing_code: &str) -> OnboardMethod<'_> {
     OnboardMethod::Code {
         code: pairing_code,
         hub: None,
+    }
+}
+
+/// A local app with the default tag: the only kind of session the stub mints co-process
+/// invites for.
+pub(crate) fn local_app() -> OnboardMethod<'static> {
+    OnboardMethod::LocalApp {
+        approval_timeout: None,
+        app_tag: None,
     }
 }
 

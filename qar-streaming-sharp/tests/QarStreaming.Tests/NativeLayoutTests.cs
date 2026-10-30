@@ -264,6 +264,8 @@ namespace Quaternar.Qaros.Tests
         public void StatusCodesMirrorC()
         {
             Assert.Equal(805, (int)StatusCode.RenderingProducerAppVolumeUnresolved);
+            Assert.Equal(806, (int)StatusCode.RenderingProducerDepthFormatNotSupported);
+            Assert.Equal(807, (int)StatusCode.RenderingProducerExternalDeviceNotSupported);
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
@@ -302,7 +304,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(58, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(60, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -404,6 +406,116 @@ namespace Quaternar.Qaros.Tests
                 var extension = Marshal.PtrToStructure<AppVolumeGestureAllowedPeersExtNative>(next);
                 Assert.Equal(StructureType.AppVolumeGestureAllowedPeersExt, extension.Header.Type);
                 Assert.Equal((UIntPtr)2, extension.AllowedPeerCount);
+            }
+        }
+
+        // The application reports the state it left an image in by writing into the sender-owned
+        // frame; only that texture's layout and queue family may change.
+        [Fact]
+        public void VulkanTextureStateIsWrittenIntoTheNativeFrame()
+        {
+            var native = new VideoFrameVulkanNative
+            {
+                TextureViews = new VideoFrameViewNative[NativeConstants.MaxFrameViews],
+                Textures = new VideoTextureVulkanNative[NativeConstants.MaxFrameTextures]
+            };
+            native.TexturesCount = (UIntPtr)2;
+            native.Textures[0].Image = 0x10;
+            native.Textures[1].Image = 0x20;
+            native.Synchronization.Semaphore = 0x30;
+            var frame = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(VideoFrameVulkanNative)));
+            try
+            {
+                Marshal.StructureToPtr(native, frame, false);
+                var access = VideoFrameVulkan.FromNativePointer(frame);
+                access.SetTextureState(1, VulkanConstants.ImageLayoutTransferSrcOptimal, VulkanConstants.QueueFamilyExternal);
+                Assert.Throws<ArgumentOutOfRangeException>(() => access.SetTextureState(2, 0, 0));
+                var written = VideoFrameVulkan.FromNativePointer(frame);
+                Assert.Equal(2, written.Textures.Length);
+                Assert.Equal(VulkanConstants.ImageLayoutUndefined, written.Textures[0].Layout);
+                Assert.Equal(0u, written.Textures[0].QueueFamilyIndex);
+                Assert.Equal(0x20UL, written.Textures[1].Image);
+                Assert.Equal(VulkanConstants.ImageLayoutTransferSrcOptimal, written.Textures[1].Layout);
+                Assert.Equal(VulkanConstants.QueueFamilyExternal, written.Textures[1].QueueFamilyIndex);
+                Assert.Equal(0x30UL, written.Semaphore);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(frame);
+            }
+        }
+
+        [Fact]
+        public void RenderSenderAlphaModeExtMatchesNativeLayout()
+        {
+            int pointerSize = IntPtr.Size;
+            Assert.Equal(pointerSize * 2, Marshal.OffsetOf(typeof(RenderSenderAlphaModeExtNative), nameof(RenderSenderAlphaModeExtNative.AlphaMode)).ToInt32());
+            Assert.Equal(pointerSize * 3, Marshal.SizeOf(typeof(RenderSenderAlphaModeExtNative)));
+        }
+
+        [Fact]
+        public void RenderSenderChainsTheAlphaModeOnlyWhenDeclared()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
+                Assert.Equal(ColorAlphaMode.Unspecified, options.AlphaMode);
+                Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
+
+                options.AlphaMode = ColorAlphaMode.Premultiplied;
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.NotEqual(IntPtr.Zero, native.Header.Next);
+                var extension = Marshal.PtrToStructure<RenderSenderAlphaModeExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RenderSenderAlphaModeExt, extension.Header.Type);
+                Assert.Equal(ColorAlphaMode.Premultiplied, extension.AlphaMode);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+            }
+        }
+
+        [Fact]
+        public void RenderSenderColorEncodingExtMatchesNativeLayout()
+        {
+            int pointerSize = IntPtr.Size;
+            Assert.Equal(pointerSize * 2, Marshal.OffsetOf(typeof(RenderSenderColorEncodingExtNative), nameof(RenderSenderColorEncodingExtNative.ColorEncoding)).ToInt32());
+            Assert.Equal(pointerSize * 3, Marshal.SizeOf(typeof(RenderSenderColorEncodingExtNative)));
+        }
+
+        [Fact]
+        public void RenderSenderChainsTheColorEncodingOnlyWhenLinear()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
+                Assert.Equal(ColorEncoding.Srgb, options.ColorEncoding);
+                Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
+
+                options.ColorEncoding = ColorEncoding.Linear;
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.NotEqual(IntPtr.Zero, native.Header.Next);
+                var extension = Marshal.PtrToStructure<RenderSenderColorEncodingExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RenderSenderColorEncodingExt, extension.Header.Type);
+                Assert.Equal(ColorEncoding.Linear, extension.ColorEncoding);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+            }
+        }
+
+        [Fact]
+        public void VulkanRenderSenderChainsItsDeviceAndRequiresIt()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Vulkan);
+                Assert.Throws<ArgumentException>(() => NativeInit.RenderSender(options, scope));
+                options.StreamParamsVulkan = new StreamParamsVulkan { PhysicalDevice = new IntPtr(0x1234), Device = new IntPtr(0x5678) };
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.Equal(GraphicsAPI.Vulkan, native.GraphicsAPI);
+                var extension = Marshal.PtrToStructure<StreamParamsVulkanNative>(native.Header.Next);
+                Assert.Equal(StructureType.StreamVulkanParamsExt, extension.Header.Type);
+                Assert.Equal(new IntPtr(0x1234), extension.PhysicalDevice);
+                Assert.Equal(new IntPtr(0x5678), extension.Device);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+                options.GraphicsAPI = GraphicsAPI.Cpu;
+                Assert.Throws<ArgumentException>(() => NativeInit.RenderSender(options, scope));
             }
         }
 

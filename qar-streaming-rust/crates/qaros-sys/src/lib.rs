@@ -80,7 +80,7 @@ mod loader;
 mod lookup;
 mod platform;
 
-pub use loader::{LoadError, QarApi, RUNTIME_RELEASE_SYMBOL, SYMBOL_NAMES, open_package_library};
+pub use loader::{LoadError, QarApi, SYMBOL_NAMES, open_package_library};
 pub use lookup::{
     DEFAULT_INSTANCE_NAME, INSTALL_FOLDER_VALUE, INSTALL_REGISTRY_KEY, INSTANCE_NAME_MAX_LENGTH,
     INSTANCE_RUNTIME_FOLDER_VALUE, INSTANCE_VARIABLE, INSTANCES_REGISTRY_KEY, LookupAttempt,

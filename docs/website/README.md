@@ -123,6 +123,14 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
 The SVGs are tracked in Git LFS, via the repo-wide `*.svg`/`*.png` rule in
 the top-level `.gitattributes` (see `qaros/.gitattributes`).
 
+### Mermaid diagrams
+
+- A ` ```mermaid ` code block renders as a diagram (`@docusaurus/theme-mermaid`), in light and
+  dark theme, and is versioned with its page like any other text.
+- Use it for flows, sequences and state machines that read as text; keep the SVG -> PNG route for
+  drawn diagrams that need a fixed layout.
+- In `sequenceDiagram` notes, no semicolons: Mermaid reads them as statement separators.
+
 ## Installation
 
 ```bash

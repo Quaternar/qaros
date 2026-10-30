@@ -51,11 +51,27 @@ EXPORT_DEFAULT(QarRuntimeEphemeralStorageExt,
 EXPORT_DEFAULT(QarOnboardLocalAppTagExt, qar_onboard_local_app_tag_ext_default)
 EXPORT_DEFAULT(QarRequestInviteInit, qar_request_invite_init_default)
 EXPORT_DEFAULT(QarForgetInit, qar_forget_init_default)
+EXPORT_DEFAULT(QarOnboardPeerIdExt, qar_onboard_peer_id_ext_default)
+EXPORT_DEFAULT(QarPeerDeviceIdentity, qar_peer_device_identity_default)
+EXPORT_DEFAULT(QarSessionInviteTargetAppInit,
+               qar_session_invite_target_app_init_default)
+EXPORT_DEFAULT(QarMemberHubInvitationInit,
+               qar_member_hub_invitation_init_default)
+EXPORT_DEFAULT(QarMemberHubInvitationAppGrantExt,
+               qar_member_hub_invitation_app_grant_ext_default)
+EXPORT_DEFAULT(QarOnboardRemoteAppGrantExt,
+               qar_onboard_remote_app_grant_ext_default)
+EXPORT_DEFAULT(QarJoinHubAsMemberInit, qar_join_hub_as_member_init_default)
 EXPORT_DEFAULT(QarRenderSenderInit, qar_render_sender_init_default)
 EXPORT_DEFAULT(QarRenderSenderAlphaModeExt,
                qar_render_sender_alpha_mode_ext_default)
 EXPORT_DEFAULT(QarRenderSenderColorEncodingExt,
                qar_render_sender_color_encoding_ext_default)
+EXPORT_DEFAULT(QarGuiPanelStreamIdExt, qar_gui_panel_stream_id_ext_default)
+EXPORT_DEFAULT(QarGuiPanelUrlExt, qar_gui_panel_url_ext_default)
+EXPORT_DEFAULT(QarAppVolumeGestureAllowedPeersExt,
+               qar_app_volume_gesture_allowed_peers_ext_default)
+EXPORT_DEFAULT(QarVideoSenderInit, qar_video_sender_init_default)
 EXPORT_DEFAULT(QarGuiPanelInit, qar_gui_panel_init_default)
 EXPORT_DEFAULT(QarAppVolumeInit, qar_app_volume_init_default)
 EXPORT_DEFAULT(QarRenderFrameShow, qar_render_frame_show_default)

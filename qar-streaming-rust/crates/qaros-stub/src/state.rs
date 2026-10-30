@@ -53,6 +53,10 @@ pub struct StubVolume {
 }
 
 #[derive(Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent test switches, not a state machine"
+)]
 pub struct StubState {
     pub calls: Vec<String>,
     pub messages: HashMap<u32, String>,
@@ -93,7 +97,26 @@ pub struct StubState {
     /// How long a cancelled async render sender creation takes to call back
     /// once its token is cancelled.
     pub render_sender_create_cancel_delay: Duration,
-    pub render_sender_create_completion: CreateCompletion,
+    /// An async render sender creation ignores its cancel token (not the session's destroy).
+    pub render_sender_create_ignores_cancel: bool,
+    /// How long an async onboard or rejoin waits before it creates its session.
+    pub onboard_async_delay: Duration,
+    /// An async onboard or rejoin ignores its cancel token (not the runtime's destroy).
+    pub onboard_async_ignores_cancel: bool,
+    /// Async calls whose callback has not returned, per owner address (a runtime, session or
+    /// render sender).
+    pub pending_calls: HashMap<usize, Vec<PendingStubCall>>,
+    /// Owners whose destroy is waiting for their async calls, which end at once.
+    pub destroying_owners: HashSet<usize>,
+    pub next_call_id: u64,
+    /// How long an async begin-frame, invite request or target-app call waits before it
+    /// completes.
+    pub async_call_delay: Duration,
+    /// The stub's hub joined a primary (`qar_runtime_join_hub_as_member`): only then does it
+    /// redeem remote-app grants.
+    pub member_of_primary: bool,
+    /// Target apps the stub's hub started, by peer id.
+    pub started_target_apps: HashMap<[u8; 16], StartedTargetApp>,
     /// Every successful `show_frame`, across all senders.
     pub frames_shown: u64,
     pub frames_shown_by_peer: HashMap<[u8; 16], u64>,
@@ -104,18 +127,18 @@ pub struct StubState {
     pub reported_adapter: Option<ReportedAdapter>,
 }
 
-/// How an async render sender creation ends.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CreateCompletion {
-    /// Calls back once: with the sender, or with an error when cancelled or
-    /// timed out first.
-    #[default]
-    CallsBack,
-    /// Never calls back and creates nothing, cancelled or not.
-    NeverCallsBack,
-    /// Ignores its cancel token and delivers a sender after the delay, as a
-    /// creation that completes while being cancelled.
-    IgnoresCancel,
+/// An async call in flight: its id and, while its result callback runs, that thread.
+#[derive(Clone, Copy, Debug)]
+pub struct PendingStubCall {
+    pub id: u64,
+    pub callback_thread: Option<std::thread::ThreadId>,
+}
+
+/// A target app the stub's hub started: its device family and host.
+#[derive(Clone, Debug)]
+pub struct StartedTargetApp {
+    pub family: &'static str,
+    pub host: String,
 }
 
 #[derive(Clone, Copy, Debug)]

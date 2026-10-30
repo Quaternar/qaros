@@ -1,9 +1,10 @@
 //! Safe Rust API over the QAROS streaming C API.
 //!
 //! Covers what a streaming application needs: loading and initializing the
-//! library, the loaded runtime's version, runtimes, onboarding and rejoin
-//! (pairing code, remote hub, sibling invites, local app approved in the hub,
-//! adapter choice), peers, the CPU render sender, the
+//! library, the loaded runtime's version, runtimes, onboarding and rejoin,
+//! blocking or async (pairing code, remote hub, co-process invites, local app
+//! approved in the hub, app tags, remote-app grants, a declared device, adapter
+//! choice, planned peer id, re-enrollment), member hubs, peers, the CPU render sender, the
 //! Vulkan render sender (feature `vulkan`, module `vulkan`), the D3D11 render
 //! sender (feature `d3d11`, module `d3d11`: Windows; on macOS only for the
 //! tests against `qaros-stub`), app volumes and GUI panels. Hands, gestures and world anchors
@@ -51,11 +52,14 @@ mod callbacks;
 mod cancel;
 #[cfg(qaros_d3d11)]
 pub mod d3d11;
+mod device;
 mod error;
 mod invite;
 mod library;
+mod member_hub;
 mod panels;
 mod peers;
+mod pending;
 mod pending_sender;
 mod render;
 mod runtime;
@@ -69,18 +73,29 @@ pub mod vulkan;
 pub use adapter::GraphicsAdapter;
 pub use callbacks::{BlockingOptions, Progress, channel};
 pub use cancel::{CancelHandle, CancelToken};
+pub use device::{
+    DeviceCategory, DeviceIdentity, PeerIdentity, PeerPresence, PeerRole, SourceDeviceCategory,
+};
 pub use error::{Error, Result, StatusCode};
 pub use invite::OnboardingInvite;
-pub use library::{Library, LibraryConfig, RuntimeInfo};
+pub use library::{Library, LibraryConfig, RuntimeInfo, TargetDevice};
+pub use member_hub::{
+    JoinHubAsMemberConfig, MemberHubInvitation, MemberHubInvitationConfig, MemberHubPermissions,
+};
 pub use panels::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanels};
 pub use peers::PeerInfo;
-pub use pending_sender::{CANCELLED_CREATION_WAIT, PendingRenderSender};
+pub use pending::{PendingCall, PendingOnboard};
+pub use pending_sender::PendingRenderSender;
+pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
     RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,
     VideoFrameView, ViewPose,
 };
-pub use runtime::{HubAddress, OnboardMethod, Onboarded, PeerPresentation, Runtime, RuntimeConfig};
+pub use runtime::{
+    HubAddress, OnboardExtensions, OnboardMethod, Onboarded, PeerPresentation, Runtime,
+    RuntimeConfig,
+};
 pub use session::{Session, Subscription};
 pub use types::{
     ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout, GuiPanelId,

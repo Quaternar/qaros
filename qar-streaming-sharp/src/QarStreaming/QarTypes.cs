@@ -242,7 +242,55 @@ namespace Quaternar.Qaros
         /// <summary>Four-byte BGR colour with an unused X byte. X is not alpha.</summary>
         B8G8R8X8 = 56,
         R16G16B16A16 = 55,
-        D32Float = 101
+        /// <summary>16-bit normalized depth; render sender depth only, widened to 32-bit float before it is sent.</summary>
+        D16Unorm = 100,
+        D32Float = 101,
+        /// <summary>Depth-stencil; OpenGL or Vulkan render sender depth only. The stencil is dropped, the depth widened to 32-bit float.</summary>
+        D24UnormS8Uint = 102,
+        /// <summary>Depth-stencil; OpenGL or Vulkan render sender depth only. The stencil is dropped, the depth sent as 32-bit float.</summary>
+        D32FloatS8X24Uint = 103
+    }
+
+    /// <summary>
+    /// What a render sender's colour alpha means. Published with the stream, so a receiver
+    /// composites by it instead of guessing.
+    /// </summary>
+    public enum ColorAlphaMode
+    {
+        /// <summary>Not declared: a receiver keeps its own default.</summary>
+        Unspecified = 0,
+        /// <summary>The alpha channel means nothing; every pixel is fully covered.</summary>
+        Opaque = 1,
+        /// <summary>
+        /// The colour is premultiplied by the alpha, and the alpha is the pixel's coverage: what a
+        /// renderer produces drawing over a transparent-black clear.
+        /// </summary>
+        Premultiplied = 2,
+        /// <summary>
+        /// The colour is not multiplied by the alpha, and the alpha is the pixel's coverage. The
+        /// sender premultiplies the colour before the frame leaves the application, so the stream
+        /// publishes Premultiplied. Costs one shader pass per frame.
+        /// </summary>
+        Straight = 3
+    }
+
+    /// <summary>
+    /// What the numbers in a render sender's colour texture mean. Whatever is declared, the stream
+    /// carries sRGB-encoded colour: a linear colour is encoded by the sender.
+    /// </summary>
+    public enum ColorEncoding
+    {
+        /// <summary>
+        /// sRGB-encoded, as a display shows it: what a renderer stores in an sRGB render target.
+        /// The default; nothing is converted.
+        /// </summary>
+        Srgb = 0,
+        /// <summary>
+        /// Linear light, as a renderer stores it in a plain UNORM render target without encoding.
+        /// The sender encodes it, at one GPU pass per frame. 8-bit linear values have already lost
+        /// precision in the darks; R16G16B16A16 keeps them.
+        /// </summary>
+        Linear = 1
     }
 
     /// <summary>How the views of one video frame are packed into textures.</summary>
@@ -439,6 +487,8 @@ namespace Quaternar.Qaros
         RenderingEndFrame = 0x3002,
         RenderingEndFrameViewOverridesExt = 0x3004,
         VideoSenderInit = 0x3005,
+        RenderSenderAlphaModeExt = 0x3006,
+        RenderSenderColorEncodingExt = 0x3007,
         StreamD3D11ParamsExt = 0x4000,
         StreamVulkanParamsExt = 0x4002,
         StreamOpenGlEglParamsExt = 0x4003,
@@ -1348,6 +1398,16 @@ namespace Quaternar.Qaros
         public PixelFormat ColorFormat { get; set; }
         /// <summary>Defaults to <see cref="PixelFormat.D32Float"/>.</summary>
         public PixelFormat DepthFormat { get; set; }
+        /// <summary>
+        /// What the colour's alpha means. Unspecified, the default, declares nothing; any other
+        /// value is chained to the native init as QarRenderSenderAlphaModeExt.
+        /// </summary>
+        public ColorAlphaMode AlphaMode { get; set; }
+        /// <summary>
+        /// What the colour's numbers mean. Srgb, the default, is not chained; Linear is chained to
+        /// the native init as QarRenderSenderColorEncodingExt and encoded by the sender.
+        /// </summary>
+        public ColorEncoding ColorEncoding { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.D3D11"/>; must be null otherwise.</summary>
         public StreamParamsD3D11? StreamParamsD3D11 { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.Vulkan"/>; must be null otherwise.</summary>

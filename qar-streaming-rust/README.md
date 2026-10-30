@@ -126,26 +126,29 @@ Design rules, following the SDK's API conventions:
   `qar_library_init` is process-wide: a second `Library` is refused while one is alive. The DLL
   stays mapped for the rest of the process. After a clean `qar_library_destroy`, a later load
   initializes it again; after a failed one, it returns `Error::LibraryAlreadyLoaded`.
-- Teardown never blocks on a cancelled asynchronous call. A session dropped with cancelled sender
-  creations in flight waits at most `CANCELLED_CREATION_WAIT` (500 ms) for their callbacks. A
-  session still waiting after that is leaked with its runtime and the library instead of
-  destroyed, since destroying it would block.
+- Teardown never leaks. Destroying a runtime, session or render sender ends its async calls
+  still running with `StatusCode::TIMEOUT` and returns once their callbacks have come, so a
+  dropped pending call is always settled by its owner.
 - Runtime, session and the other handles are not `Send`: the SDK is single-threaded per runtime.
   A `CancelToken` is cancelled from another thread (a Ctrl+C handler, a stdin watcher) through
   its `cancel_handle()`.
 - One frame is open per sender, from `begin_frame` until `show` or drop. `begin_frame` returns a
   `Frame` that borrows the sender; `begin_owned_frame` returns an `OwnedFrame` that keeps the
   sender alive, for renderers that fill the frame several UI frames later.
-  `try_begin_owned_frame` polls for a frame without blocking. The async
-  `qar_render_sender_begin_frame_async` is not wrapped, since the runtime never calls back for a
-  cancelled one; it is reachable through `raw_api()` with the sender's `as_raw()`.
+  `try_begin_owned_frame` polls for a frame without blocking, and `start_owned_frame`
+  (`qar_render_sender_begin_frame_async`) begins one in the background: its `PendingFrame` counts
+  as the open frame until it is taken and shown or dropped.
+- Every async call returns a `PendingCall` (`PendingOnboard`, `PendingFrame`, ...): `poll`,
+  `wait` and `cancel_handle`. The library calls back exactly once, with `StatusCode::TIMEOUT`
+  when the call is cancelled; dropping the pending value cancels it, and its owner releases what
+  it still delivers. After a dropped `PendingFrame`, the sender's next begin waits for that
+  call's callback, since a cancel arriving as the begin finishes may still deliver a frame.
 - Several users are several senders: one `RenderSender` per target peer.
 - A sender declares its colour through `RenderSenderConfig`: `alpha_mode` (unspecified by
   default) and `color_encoding` (sRGB by default) chain their extension only when set to
   something else. `PixelFormat::D16Unorm` works on every graphics API, the depth-stencil formats
   on Vulkan only; a format the API cannot take is
-  `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`. With bindings from a header without the
-  colour extensions, such as that of 0.9.0-dev.2916, setting either is `Error::InvalidArgument`.
+  `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`.
 - Subscription callbacks run on library threads and receive owned snapshots. `qaros::channel()`
   forwards them into a `std::sync::mpsc` receiver.
 - The Vulkan render sender is behind the feature `vulkan`, with `ash` 0.38 types:
@@ -163,8 +166,8 @@ Design rules, following the SDK's API conventions:
   `qar_peer_spec_get_presence` through `library.raw_api()` with the session's `as_raw()`.
 - Hands, gestures, world anchors and the other areas the [coverage table](#coverage) lists as raw
   only are reached through `library.raw_api()`, the `qaros_sys::QarApi` table, with the C handle
-  of a safe value: `as_raw()` on `Runtime`, `Session`, `RenderSender`, `CancelToken` and
-  `OnboardingInvite`. Taking the pointer is safe; using it is `unsafe`: it is valid while the safe
+  of a safe value: `as_raw()` on `Runtime`, `Session`, `RenderSender`, `CancelToken`,
+  `OnboardingInvite` and `MemberHubInvitation`. Taking the pointer is safe; using it is `unsafe`: it is valid while the safe
   value lives, the safe value destroys it (never the caller), and the session's threading rules
   apply.
 
@@ -177,36 +180,36 @@ what the safe `qaros` API covers, what is reached only through `library.raw_api(
 the C# binding (`qar-streaming-sharp/src`, at the time of writing) has it in its public API. Raw
 only means the function is in `qaros_sys::QarApi` for the header the bindings are generated
 from, called with the `as_raw()` handle of the safe value it takes (a `Session`, `Runtime`,
-`RenderSender`, `CancelToken` or `OnboardingInvite`).
+`RenderSender`, `CancelToken`, `OnboardingInvite` or `MemberHubInvitation`).
 
-\* These bindings are generated from the public header in this repository
-(`qar-streaming-c/include/qar_streaming.h`), which declares the functions marked \* (peer
-presence, role, category and device identity, member hubs, the Android Java VM) and the types
-of the render sender's colour and depth declarations. A runtime without those functions, such
-as 0.9.0-dev.2916, does not load.
+The bindings come only from the public header in this repository
+(`qar-streaming-c/include/qar_streaming.h`) and are regenerated with it (`cargo xtask bindgen`).
+A runtime that lacks any function of that header does not load (`LoadError::MissingSymbols`).
 
 | Area | Safe in Rust | Raw only | C# has it |
 | --- | --- | --- | --- |
 | Dynamic loading | `Library::load_default`, `Library::load`, `Library::linked` (feature `link`), `installed_bin_folder` | | yes (`InstalledRuntime`) |
 | Library initialization, runtime info | `Library` (initialized on load, destroyed on drop), `Library::runtime_info` | | yes |
-| Android Java VM | | `qar_platform_set_android_java_vm` \* | no |
+| Android Java VM | | `qar_platform_set_android_java_vm` | no |
 | Error handling | `qaros::Error` with function, `StatusCode`, message and wrapped causes (`has_code`, `has_cause`) | the `qar_result_*` constructors and predicates, `qar_error_wrap_result`, `qar_result_log_if_error` | yes (`ResultInfo`, `StatusCode`) |
 | Cancellation | `CancelToken` with or without a timeout, `is_timed_out`, `CancelHandle` from another thread | `qar_cancel_token_cancel_after` | partly: a `CancellationToken` bridged to an internal native token; no timeout token or timeout query |
 | Runtime | `Runtime` | | yes |
-| Onboarding: pairing code, remote Hub, invite, local app; rejoin; forget | blocking: `Runtime::onboard`, `rejoin`, `forget`, `OnboardMethod`, `OnboardingInvite`, the adapter extension | `qar_session_request_onboarding_codes`, `qar_onboarding_invite_get_code`, the planned peer id extension | yes |
-| Onboarding with a declared device | | `qar_runtime_onboard` with a `QarPeerDeviceIdentity` \* chained into the presentation; the session it yields is a raw `QarSession`, not a `Session`, so everything after it is raw too | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
-| Member hubs | | `qar_runtime_create_member_hub_invitation`, `qar_runtime_join_hub_as_member`, `qar_member_hub_invitation_serialize`, `_serialized_size`, `_deserialize`, `_handle_destroy` \* | yes |
-| Async calls | `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | `qar_runtime_onboard_async`, `qar_runtime_rejoin_async`, `qar_session_request_onboarding_invite_async`, `qar_session_invite_target_app_async`, `qar_session_kill_target_app_async`, `qar_render_sender_begin_frame_async` | yes (`Task` forms) |
-| Session | `Session::id`, `Session::graphics_adapter` | `qar_session_find_render_target` | yes |
-| Target apps | | invite and kill a target app, `qar_target_app_connection_string_*` | yes |
+| Onboarding: pairing code, remote Hub, invite, local app and its app tag; rejoin; forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, the planned peer id, re-enrolling a slot, a remote-app grant), `rejoin`, `forget`, `OnboardMethod`, `RuntimeConfig::ephemeral_storage` | | yes |
+| Co-process invites and the invite handle | `Session::request_onboarding_invite`, `start_onboarding_invite`, `OnboardingInvite` (serialize, deserialize, expiry, method, `code`) | `qar_onboarding_invite_handle_is_valid` (an `OnboardingInvite` is always valid) | yes |
+| Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
+| Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` | | yes |
+| Async calls | `PendingCall` from `Runtime::start_onboard`, `start_rejoin` (`PendingOnboard`), `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, `RenderSender::start_owned_frame` (`PendingFrame`); `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | | yes (`Task` forms) |
+| Session | `Session::id`, `Session::graphics_adapter`, `Session::find_render_target` | | yes |
+| Session lifecycle | `Session::lifecycle`, `Session::subscribe_lifecycle`, `SessionLifecycle` | | yes |
+| Target apps | `Session::invite_target_app`, `kill_target_app` and their `start_` forms, `Library::target_app_connection_string` (`TargetDevice`) | | yes |
 | Peers: list, own spec, display name, updates | `Session::peers`, `my_peer`, `set_display_name`, `subscribe_peer_updates`; `PeerInfo` with the app state and `is_target_app` | | yes |
-| Peers: presence, role, category, device identity | | `qar_peer_spec_get_presence`, `_get_role`, `_get_category`, `_get_device_id`, `_get_device_family`, `_get_device_name`, `qar_peer_update_device_identity` \* | yes |
+| Peers: presence, role, category, device identity | `PeerInfo::identity` (`PeerIdentity`: `PeerPresence`, `PeerRole`, `DeviceCategory`, device id, family and name) | | yes |
 | Render requests | `Session::subscribe_render_requests`, `RenderRequest` | | yes |
-| CPU render sender | creation (blocking and polled), layout, begin, try-begin, `CpuFrame`, show | | yes |
+| CPU render sender | creation (blocking and polled), layout, begin, try-begin, async begin (`start_owned_frame`), `CpuFrame`, show | | yes |
 | Vulkan render sender | feature `vulkan`: `create_vulkan_render_sender`, `VulkanFrame` | | yes |
 | D3D11 render sender | feature `d3d11` (Windows; on macOS only for the tests against `qaros-stub`): `create_d3d11_render_sender`, `D3D11Frame` | | yes |
 | OpenGL render sender | not bound: the bindings are generated without `QAR_ENABLE_OPENGL` | | yes |
-| Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` \* | | yes |
+| Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |
@@ -258,7 +261,8 @@ it would be loaded first, and a Hub verifies only the runtime it installed.
 
 `examples/` ports the C examples: `dynamic_loading`, `onboarding_and_rejoin`,
 `app_volume_management`, `gui_panel_operations`, `cpu_rendering_visualizer`,
-`local_app_onboarding`, `vulkan_cube` (feature `vulkan`) and `d3d11_render_sender` (Windows; the
+`local_app_onboarding`, `remote_app_onboarding`, `vulkan_cube` (feature `vulkan`) and
+`d3d11_render_sender` (Windows; the
 examples enable `qaros/d3d11`). They load the runtime with the default lookup. A development build or the stub
 is named with `--qaros-library=PATH`, else `QAROS_DLL`, else the first line of
 `qaros-library.txt` beside the executable (`vulkan_cube` and `local_app_onboarding` take no
@@ -277,6 +281,11 @@ cargo run -p qaros-examples --bin dynamic_loading
 
 # Join as a local app: the first run of each executable asks for Allow in QAROS.
 cargo run -p qaros-examples --bin local_app_onboarding -- [approval-timeout-ms]
+
+# An app on the primary's PC grants one app on another PC (member hubs; Windows).
+cargo run -p qaros-examples --bin remote_app_onboarding -- issue | <your channel>
+<your channel> | cargo run -p qaros-examples --bin remote_app_onboarding -- join
+cargo run -p qaros-examples --bin remote_app_onboarding -- start
 cargo run -p qaros-examples --bin gui_panel_operations
 cargo run -p qaros-examples --bin app_volume_management
 cargo run --release -p qaros-examples --bin cpu_rendering_visualizer -- --frames=300
@@ -304,10 +313,11 @@ your user. A Hub elsewhere needs its host and port, `HubAddress` in `OnboardMeth
 runtime, `onboarding_and_rejoin.primary-onboarding-id.txt` and
 `onboarding_and_rejoin.sibling-onboarding-id.txt`.
 
-The pairing code comes from a Hub onboarding screen when one shows it, or from an invite that an
-already onboarded session mints: `qar_session_request_onboarding_invite`
-(`Session::request_onboarding_invite`), then `qar_onboarding_invite_get_code` for its code text,
-which the safe API leaves to `library.raw_api()` with the invite's `as_raw()`.
+The pairing code comes from a Hub onboarding screen when one shows it, or from the Hub's
+operators, who mint pairing codes and addressed codes (`qar-code:...`); an app cannot mint one.
+`OnboardingInvite::code` (`qar_onboarding_invite_get_code`) reads the code text of a pairing-code
+invite. A local app mints co-process invites instead (`Session::request_onboarding_invite`), for a
+process it starts on the same PC, which onboards with `OnboardMethod::Invite`.
 
 `vulkan_cube` ports the C `vulkan_cube` source app:
 
@@ -422,14 +432,27 @@ and never ships in a release package.
 
 `tests/qar-streaming-rust-ext` holds the Rust layer of that DLL, mirrored by hand like the C#
 tests' `Ext` layer, and the tests. It is test-only: not a default member of the workspace, never
-published, and no other crate depends on it. Point the tests at the `bin` folder of a Debug or
-RelWithDebInfo SDK build that includes `qar-streaming-c-ext.dll`; without the variable they print
-`skipped` and pass.
+published, and no other crate depends on it. Point `QAROS_NATIVE_BIN` at the folder holding
+`qar-streaming-c.dll`, `qar-streaming-c-ext.dll` and every DLL they load: the `bin` folder of a
+Debug or RelWithDebInfo SDK build. Without the variable the tests print `skipped` and pass; a set
+variable naming a folder without both DLLs fails them.
 
 ```powershell
-$env:QAROS_PACKAGE_BIN = "<SDK build>\bin"
+$env:QAROS_NATIVE_BIN = "<SDK build>\bin"
 cargo test -p qar-streaming-rust-ext --features e2e -- --nocapture
+# or as CI runs them (QAROS_NATIVE_BIN from the environment or the env file; without it the C API
+# runtime of the release ci/ci.env names is downloaded with gh):
+python ..\ci\run.py rust --e2e
 ```
+
+`ci/run.py` reads its variables from the environment first, then from an env file: inside the
+Quaternar repository its root `ci.env`, which points `QAROS_NATIVE_BIN` at that repository's
+`windows-x64-relWithDebInfo` build (the CMake target `qar-streaming-c-ext_gtests`), else
+`ci/ci.env`. `python ../ci/run.py capi` runs these tests, the C# tests and the C API suite against
+one native folder.
+
+`python ../ci/run.py rust` runs CI's checks: format, clippy, the workspace tests, the tutorial
+pages and the guide tabs; `--step` picks some of them.
 
 | Test | What it checks |
 | --- | --- |

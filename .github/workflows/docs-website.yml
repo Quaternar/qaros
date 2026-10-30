@@ -11,6 +11,7 @@ on:
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
       - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
+      - "ci/**"
   pull_request:
     paths:
       - "docs/website/**"
@@ -20,6 +21,7 @@ on:
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
       - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
+      - "ci/**"
   workflow_dispatch:
 
 permissions:
@@ -34,9 +36,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs/website
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -71,14 +70,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y doxygen cmake
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 
-      - name: Install dependencies
-        run: npm ci
-
+      # npm ci and npm run build in docs/website; run it locally the same way.
       - name: Build website
-        run: npm run build
+        run: python ci/run.py docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

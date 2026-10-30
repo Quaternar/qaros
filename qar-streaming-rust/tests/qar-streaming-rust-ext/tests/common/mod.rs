@@ -1,15 +1,15 @@
-//! Shared set-up of the end-to-end tests: the real QAROS package from
-//! `QAROS_PACKAGE_BIN`, the base library through `qaros`, the extension, an
+//! Shared set-up of the end-to-end tests: the real QAROS SDK binaries from
+//! `QAROS_NATIVE_BIN`, the base library through `qaros`, the extension, an
 //! extension hub, and an application session onboarded into that hub with a
 //! minted invite. Nothing touches a Hub running on the machine: the runtime
 //! stores its state in a fresh directory per test process.
 
-#![allow(dead_code, clippy::expect_used)]
+#![allow(dead_code, clippy::expect_used, clippy::panic)]
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use qar_streaming_rust_ext::{Extension, Hub, InviteMethod};
+use qar_streaming_rust_ext::{EXTENSION_FILE_NAME, Extension, Hub, InviteMethod};
 use qaros::qaros_sys::{QarPose, QarVideoFrameLayout, defaults};
 use qaros::{
     AppVolumeConfig, AppVolumeId, BlockingOptions, Eye, FrameViewSpec, Library, LibraryConfig,
@@ -21,18 +21,46 @@ pub mod own_vulkan;
 pub mod pattern;
 pub mod scenario;
 
-pub const PACKAGE_VARIABLE: &str = "QAROS_PACKAGE_BIN";
+/// The folder holding the base library, the extension and every DLL they load: the `bin`
+/// folder of a Debug or `RelWithDebInfo` SDK build.
+pub const NATIVE_BIN_VARIABLE: &str = "QAROS_NATIVE_BIN";
+/// How to produce that folder, shown when it lacks a library. A repository that builds the SDK
+/// and points `QAROS_NATIVE_BIN` at its own output (its `ci.env`) names the build target here.
+pub const NATIVE_BUILD_HINT_VARIABLE: &str = "QAROS_NATIVE_BUILD_HINT";
 pub const APPLICATION_NAME: &str = "qaros-e2e-application";
 
-/// The package's `bin` folder, or `None` (the test then passes as skipped).
-pub fn package_bin() -> Option<PathBuf> {
-    match std::env::var_os(PACKAGE_VARIABLE) {
-        Some(value) if !value.is_empty() => Some(PathBuf::from(value)),
+/// The native folder, or `None` when `QAROS_NATIVE_BIN` is unset (the test then passes as
+/// skipped). A set variable naming a folder without both libraries fails the test.
+pub fn native_bin() -> Option<PathBuf> {
+    let library = qaros::qaros_sys::LIBRARY_FILE_NAME;
+    let bin = match std::env::var_os(NATIVE_BIN_VARIABLE) {
+        Some(value) if !value.is_empty() => PathBuf::from(value),
         _ => {
-            eprintln!("skipped: set {PACKAGE_VARIABLE} to the QAROS package's bin folder");
-            None
+            eprintln!(
+                "skipped: set {NATIVE_BIN_VARIABLE} to the folder holding {library} and \
+                 {EXTENSION_FILE_NAME} (the bin folder of a Debug or RelWithDebInfo SDK build)"
+            );
+            return None;
         }
+    };
+    let missing: Vec<&str> = [library, EXTENSION_FILE_NAME]
+        .into_iter()
+        .filter(|file| !bin.join(file).is_file())
+        .collect();
+    if !missing.is_empty() {
+        let hint = std::env::var(NATIVE_BUILD_HINT_VARIABLE)
+            .ok()
+            .filter(|hint| !hint.is_empty())
+            .unwrap_or_else(|| {
+                "point it at the bin folder of a Debug or RelWithDebInfo SDK build".to_string()
+            });
+        panic!(
+            "{NATIVE_BIN_VARIABLE} is {}, which holds no {}: {hint}",
+            bin.display(),
+            missing.join(" and no ")
+        );
     }
+    Some(bin)
 }
 
 /// A fresh directory for this test process's runtime storage and logs.
@@ -118,7 +146,7 @@ pub fn onboard_into(
             &PeerPresentation {
                 display_name: Some(display_name.to_string()),
                 app_version: Some("e2e".to_string()),
-                custom_info: None,
+                ..PeerPresentation::default()
             },
             &BlockingOptions {
                 progress: None,

@@ -10,7 +10,7 @@ use std::time::Instant;
 
 #[test]
 fn the_package_loads_initializes_and_tears_down_twice() {
-    let Some(bin) = common::package_bin() else {
+    let Some(bin) = common::native_bin() else {
         return;
     };
     for round in 1..=2 {

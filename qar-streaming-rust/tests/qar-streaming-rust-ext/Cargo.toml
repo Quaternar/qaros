@@ -10,7 +10,7 @@ publish.workspace = true
 [features]
 default = []
 # The integration tests against a Debug or RelWithDebInfo SDK build that
-# includes qar-streaming-c-ext (QAROS_PACKAGE_BIN). Off by default, so
+# includes qar-streaming-c-ext (QAROS_NATIVE_BIN). Off by default, so
 # `cargo test --workspace` never runs them.
 e2e = []
 

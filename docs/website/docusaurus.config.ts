@@ -98,6 +98,9 @@ const config: Config = {
 		],
 	],
 
+	// Renders ```mermaid code blocks as diagrams (markdown.mermaid below).
+	themes: ["@docusaurus/theme-mermaid"],
+
 	// Mount additional documentation sources (Doxygen -> Docusaurus Markdown)
 	plugins: [
 		[
@@ -230,11 +233,6 @@ const config: Config = {
 							docId: "qar-streaming-sharp/index",
 							label: "C# API",
 						},
-						{
-							type: "doc",
-							docId: "developer-guide/language-bindings",
-							label: "Language bindings",
-						}
 					]
 				},
 				{
@@ -254,11 +252,6 @@ const config: Config = {
 							to: "/docs/next/developer-guide/tutorials/rust/",
 							label: "Tutorials",
 						},
-						{
-							type: "doc",
-							docId: "developer-guide/language-bindings",
-							label: "Language bindings",
-						}
 					]
 				},
 				{
@@ -328,6 +321,7 @@ const config: Config = {
 	} satisfies Preset.ThemeConfig,
 	markdown: {
 		format: "detect",
+		mermaid: true,
 	},
 };
 

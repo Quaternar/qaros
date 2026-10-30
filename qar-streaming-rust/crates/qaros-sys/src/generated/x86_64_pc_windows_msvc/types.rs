@@ -316,6 +316,15 @@ impl QarStatusCode {
     was created. The result's message lists the accepted formats.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED: QarStatusCode =
         QarStatusCode(806);
+    /** The device in the graphics extension of QarRenderSenderInit lacks
+    what sharing the sender's images needs. For QAR_GRAPHICS_API_VULKAN:
+    VK_KHR_external_memory_win32 and VK_KHR_external_semaphore_win32 on
+    Windows, their fd equivalents elsewhere, enabled when the application
+    created its VkDevice. Returned by qar_render_sender_create() before any
+    receiver is waited for; nothing was created. The result's message names
+    what is missing.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED: QarStatusCode =
+        QarStatusCode(807);
     /** Code-based onboarding handshake rejected / expired / timed out. Ask the
     user to re-check the code shown on the hub and retry.*/
     pub const QAR_STATUS_PAKE_ERROR: QarStatusCode = QarStatusCode(1600);
@@ -2631,13 +2640,19 @@ on another PC, chained into QarOnboardInit.header.next next to
 QarOnboardLocalAppExt (with any other mode:
 QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
 
-The hub on this PC must already be a member of the invitation's primary
-(qar_runtime_join_hub_as_member). When no approval admits this executable
-there yet, the primary records it as the app the invitation's grant admits,
-without a prompt; once redeemed by another executable the onboarding fails
-with QAR_STATUS_ONBOARDING_APPROVAL_DENIED. When an approval already admits
-it, the invitation is not used. The app tag of the grant applies; a
-QarOnboardLocalAppTagExt is not needed.*/
+Only a member hub redeems a grant: join the hub on this PC to the
+invitation's primary first (qar_runtime_join_hub_as_member). A hub that is
+not a member ignores the grant, with no error of its own, and asks its own
+operator as for any local app: the approval prompt, then
+QAR_STATUS_ONBOARDING_APPROVAL_DENIED or
+QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT when nobody allows it.
+
+On a member hub, when no approval admits this executable there yet, the
+primary records it as the app the invitation's grant admits, without a
+prompt; once redeemed by another executable, or when the primary refuses
+the grant, the onboarding fails with QAR_STATUS_ONBOARDING_APPROVAL_DENIED.
+When an approval already admits it, the invitation is not used. The app tag
+of the grant applies; a QarOnboardLocalAppTagExt is not needed.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarOnboardRemoteAppGrantExt {

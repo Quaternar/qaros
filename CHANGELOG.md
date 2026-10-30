@@ -19,13 +19,15 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 ### Added
 
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
-  crates, under the new *Rust API* menu, beside the Rust tutorials and *Language bindings*;
+  crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
 
 - **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
   the player from the Visualizer by code (the code opens App Installer, the certificate goes into
   Trusted People once per HoloLens, an install page as the fallback); the Device Portal steps remain
-  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460)
+  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460),
+  the ports an Android headset sends to (one UDP and one TCP port from 7461-7499) and the firewall
+  range 7440-7499,
   and *Maintenance and Updates* how to update the HoloLens player.
 
 - **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
@@ -83,6 +85,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
+  Guide.
+
+- **Docs:** *Unity* says what a join without QAROS Hub shows (the "QAROS Hub is not installed"
+  error and, in the Editor, a dialog that opens the installation guide) and no longer lists
+  `DllFolder` among the coordinator's settings.
+
 - **Docs:** *Player Installation to Device* names the player **QAROS Player** with its package IDs
   (`com.quaternar.qaros.player` on Meta Quest and HoloLens 2,
   `com.metalense.com.quaternar.qaros.player` on METALENSE 2) and says how to remove the earlier
@@ -91,9 +100,17 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Scene Origin: Anchor Several Devices Together* says every player ignores QR codes other
   than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
   that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
+- **Docs:** *Onboarding and Sessions* has C, C# and Rust tabs for remote apps through a member
+  hub, and new sections on re-enrolling a slot and onboarding without blocking; it says that a hub
+  that is not a member ignores a remote-app grant and prompts as for any local app. *Rendering
+  Streams* has a section on beginning a frame without blocking. The Rust tabs of *Peers* read the
+  presence and device identity and declare the device with the safe API instead of raw calls, and
+  *API Conventions* names the wrapped async calls. A Rust tutorial, *Remote App on Another PC*,
+  ports the C one.
 
-- **Docs:** the operator guide names the program to start `qaros.exe` and explains turning off the
-  start at sign-in per user.
+- **Docs:** the operator guide names the program to start `qaros.exe` and explains the start at
+  sign-in per user: the setup's boxes for this user and for every user, `/AutostartAllUsers`, and
+  turning it on or off in the tray menu.
 - **Docs:** *Connecting to the Hub* and *Managing Devices* describe the Session tabs (Devices
   first), the always-open invite form, HoloLens as the legacy kind and the Revoked peers section.
 
@@ -134,6 +151,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   longer onboards a sibling, `local_app_onboarding.c` sets an app tag, and the new
   `co_process_onboarding.c` example hands a co-process invite over stdin. *Managing Devices* says
   further one-time codes are minted only for operators.
+- **Docs:** the Unity guide lists Vulkan next to Direct3D 11. A new *Graphics APIs* section says
+  that other APIs are refused, that Vulkan needs `QarUnityGraphics.dll` loaded on startup, and that
+  under Vulkan the frame rate should be capped with `targetFrameRate` instead of VSync, with
+  measured figures and the `Show Vulkan Frames On Worker` option, on by default.
 - **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
   presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for
@@ -181,6 +202,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   (`session_lifecycle.c`) does so on every new session id.
 
 ### Fixed
+
+- **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
+  runtime lookup flow.
 
 - **Docs:** *Getting Started* and *Troubleshooting* say that every QAROS Hub sets `QAR_INSTANCE`
   for the apps it and the Visualizer start (`default` for the installed QAROS), so only an app

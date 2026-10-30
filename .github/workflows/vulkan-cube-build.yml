@@ -4,6 +4,8 @@ name: Vulkan cube build
 # a hosted Windows runner with Visual Studio and no Vulkan SDK, the two documented commands from a
 # developer shell. Proves the public repository alone builds the cube (vcpkg brings the Vulkan
 # headers, loader and glslc). Build only: running the cube needs an installed QAROS and a GPU.
+# The checks and the build are `python ci/run.py vulkan-cube`; run it locally the same way
+# (without --strict it hides a local Vulkan SDK from the build instead of failing).
 
 on:
   pull_request:
@@ -14,6 +16,7 @@ on:
       - "CMakePresets.json"
       - "vcpkg.json"
       - ".github/workflows/vulkan-cube-build.yml"
+      - "ci/**"
   push:
     branches: [main]
     paths:
@@ -23,6 +26,7 @@ on:
       - "CMakePresets.json"
       - "vcpkg.json"
       - ".github/workflows/vulkan-cube-build.yml"
+      - "ci/**"
   workflow_dispatch:
 
 permissions:
@@ -43,26 +47,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: No Vulkan SDK on the runner
-        run: |
-          if ($env:VULKAN_SDK) { throw "VULKAN_SDK is set ($env:VULKAN_SDK): the build would not prove the documented setup." }
-          if (Get-Command glslc -ErrorAction SilentlyContinue) { throw "glslc is on PATH: the build would not prove the documented setup." }
-
-      # Developer PowerShell for VS 2022, as the page says: Visual Studio's own CMake and Ninja.
+      # No Vulkan SDK on the runner (--strict), the documented configure and build in Visual
+      # Studio's developer environment (its own CMake and Ninja, from vcvars64.bat), then the
+      # documented output exists and runs.
       - name: Configure and build (as documented)
-        run: |
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-          if (-not $vs) { throw 'No Visual Studio on the runner.' }
-          Import-Module (Join-Path $vs 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
-          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
-          cmake --preset x64-windows -DBUILD_VULKAN_EXAMPLE=ON -DVCPKG_MANIFEST_FEATURES=examples-vulkan
-          if ($LASTEXITCODE -ne 0) { throw "configure failed ($LASTEXITCODE)" }
-          cmake --build --preset x64-windows-release --target qar-vulkan-source
-          if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
-
-      - name: The documented output exists
-        run: |
-          $exe = 'build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe'
-          if (-not (Test-Path $exe)) { throw "$exe missing" }
-          & $exe --help
-          if ($LASTEXITCODE -ne 0) { throw "qar-vulkan-source --help exited $LASTEXITCODE" }
+        run: python ci/run.py vulkan-cube --strict
