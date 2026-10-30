@@ -59,6 +59,6 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 
 For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its short lifetime. A code is offered only while that card is open.
 
-Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Invite device** > **By QR code invite** shows the large QR code for them.
+The QAROS Player on Meta Quest, METALENSE 2 and Android XR headsets also pairs by scanning a QR code: **Show QR code** in the last setup step of the **Devices** tab shows one, and no USB cable is needed. In Debug mode, **Devices** > **Invite device** > **By QR code invite** shows the large QR code too.
 
 - **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. A HoloLens you can reach by address is easier with push onboarding (**Devices** > **Invite device**), and an Android headset with **Pair headset**; neither needs a code read to it.
