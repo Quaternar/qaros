@@ -15,7 +15,7 @@ The QAROS Visualizer installs the player over USB from its **Devices** tab, so y
 4. If the Visualizer does not find `adb`, click **Download platform tools**, read Google's licence and accept it. The tools are saved for your Windows user under `%LOCALAPPDATA%\QAROS\platform-tools`; no administrator rights are needed. If you already have them, click **Locate adb.exe…** instead.
 5. Put on the headset and allow USB debugging when it asks. The headset then shows as **Ready** under **Connected over USB**.
 6. Under **Install QAROS Player**, check the package (the Visualizer finds the one shipped in `devices/android/`; **Browse…** picks another) and click **Install** or **Update to** *version*. Leave **Launch after install** ticked to start the player right away.
-7. Once the player runs, invite the headset in the **Connection** tab.
+7. Once the player runs, pair the headset in the last step, **Pair the headset**: **Pair headset** sends it a one-time invite over the USB cable, **Show QR code** shows one the player scans. The headset then joins the session by itself ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)). Android headsets are not invited by IP address.
 
 If the headset holds a player signed with another key, the Visualizer asks before reinstalling: reinstalling removes the player's settings and its saved scene origin. Install failures appear as a notification with `adb`'s message.
 

@@ -1,13 +1,14 @@
 ---
-title: Meta Quest and METALENSE 2 - Install and Invite
+title: Meta Quest and METALENSE 2 - Install and Pair
 sidebar_position: 3
-description: Install the QAROS player APK on a Meta Quest or P&C Solutions METALENSE 2 over USB from the Visualizer, then invite it with the Headset device kind.
+description: Install the QAROS player APK on a Meta Quest or P&C Solutions METALENSE 2 over USB from the Visualizer, then pair it so it joins the session by itself.
 ---
 
-# Meta Quest and METALENSE 2: Install and Invite
+# Meta Quest and METALENSE 2: Install and Pair
 
 Meta Quest and P&C Solutions METALENSE 2 run the same kind of player, an Android APK. The
-Visualizer installs it over a USB-C cable and invites the device with the **Headset** device kind.
+Visualizer installs it over a USB-C cable and pairs the device once; the device then joins the
+session by itself.
 No Android tools or terminal are needed.
 
 | | Meta Quest | METALENSE 2 |
@@ -16,7 +17,7 @@ No Android tools or terminal are needed.
 | APK in the QAROS ZIP (`devices/android/`) | `QAROS Player Quest <version>.apk` | `QAROS Player MetaLens <version>.apk` |
 | One-time preparation | Developer Mode on the headset (Meta Horizon phone app) | None |
 | Wi-Fi | Set on the headset itself | Can be set from the Visualizer ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)) |
-| Invite as | **Headset** | **Headset** |
+| Last setup step | **Pair the headset** | **Pair the glasses** |
 
 ## 1. Prepare the device
 
@@ -67,30 +68,21 @@ power it on.
 Prefer a terminal? The manual `adb install` steps are in
 [Player Installation to Device](/docs/operator-guide/player-installation-to-device).
 
-## 3. Invite the device with the Headset button
+## 3. Pair the device
 
-The device must be on the same network as the Hub, with the player running.
+Android headsets are not invited by IP address. Pair the device once from the last setup step
+(**Pair the headset** for Quest, **Pair the glasses** for METALENSE 2):
 
-A player that joins the session by itself is not invited here: pair it once instead
-([Pair a Headset That Joins by Itself](./pair-a-headset.md)).
+1. Start QAROS Player on the device.
+2. Click **Pair headset** to send it a one-time invite over the USB cable, or **Show QR code** for
+   the player to scan.
+3. The device joins the session by itself and the Hub starts its mixer and video relay. It reports
+   its exact model, and rejoins on its own after a restart.
 
-1. **Session** › **Devices**. The **Invite device** card is open at the top. (From the setup steps,
-   **Invite the headset** › **Invite device...** jumps there too.)
-2. Keep the device kind on **Headset**. It is the default and covers Meta Quest, METALENSE 2 and
-   other Android headsets; the player reports its exact model once it runs.
-3. Type the IP address the player shows in **Address**, and optionally a **Label** (`Quest Lab`).
-4. Tick **Invite automatically** to have the Hub invite the device again on every start.
+Details, messages and the name the device shows:
+[Pair a Headset That Joins by Itself](./pair-a-headset.md).
 
-   ![Invite device card with Headset selected](../../img/visualizer/invite-headset.png)
-
-5. Click **Invite Headset**. The row goes from *Waiting for player* to *Streaming from &lt;hub&gt;*,
-   and the Session header counts *1 device streaming*.
-
-Start, stop and forget work as for every device: **Stop** / **Invite** on the row, **⋯** for
-**Invite automatically** and **Forget...** (see
-[HoloLens 2, step 3](./hololens-2.md#3-start-and-stop-streaming)).
-
-- An empty **Address** gives *Enter the device's hostname or IP address before inviting it.*
-- A wrong address gives a notification *Invite failed: …*.
-- A device remembered under an older kind (*Meta Quest*, *Metalens*) is not invited any more:
-  **Forget** it and invite it again as **Headset**.
+- A remembered Android headset row has no **Invite**; the device rejoins by itself.
+- An address typed with `headset:`, `android:` or `quest:` in **Invite device** is refused: *Android
+  headsets are not invited: pair them with Pair headset on the Devices tab (adb push or Show QR
+  code).*

@@ -8,13 +8,13 @@ description: Install and pair a METALENSE 2, Quest or Android XR player that joi
 
 A player that joins the session by itself is paired **once** with a one-time code. After that it
 keeps its own identity and rejoins on its own after an app restart, a reboot or a Hub restart. The
-Hub then starts its mixer and video relay for it; you do not invite it from the **Invite device**
-card.
+Hub then starts its mixer and video relay for it. Android headsets (Meta Quest, METALENSE 2,
+Android XR) are never invited from the **Invite device** card: pairing is the only way in.
 
 ## Before you start
 
 - The player is installed and running on the headset
-  ([Install and Invite](./quest-and-metalense-2.md)).
+  ([Install and Pair](./quest-and-metalense-2.md)).
 - The headset can reach the Hub over the network to join it
   ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**
@@ -27,8 +27,8 @@ card.
 travels over the cable, never over the network.
 
 1. Plug the headset in with a USB-C data cable; it is listed under **Connected over USB**.
-2. Open the step **Invite the glasses** (**Invite the headset** for Quest, **Pair the headset** for
-   Android XR) and click **Pair headset**.
+2. Open the step **Pair the glasses** (**Pair the headset** for Quest and Android XR) and click
+   **Pair headset**.
 3. The step shows *Asking the hub for a one-time pairing code*, then *Sending the pairing code to
    the headset*, then *Invite delivered — the headset is joining…*.
 4. When the headset appears in the session the step shows *Paired: the headset joined the

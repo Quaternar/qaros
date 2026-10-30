@@ -1,18 +1,18 @@
 ---
 title: Put METALENSE 2 on Wi-Fi
 sidebar_position: 4
-description: Join METALENSE 2 glasses to a Wi-Fi network over USB from the Visualizer, then invite them at the address they get.
+description: Join METALENSE 2 glasses to a Wi-Fi network over USB from the Visualizer, so they can reach the Hub and join it.
 ---
 
 # Put METALENSE 2 on Wi-Fi
 
 Typing a Wi-Fi password on the glasses is slow. The Visualizer sets the network over the USB cable
-instead, then invites the glasses at the address they receive.
+instead. Once on the network, the glasses join the session by themselves after you pair them.
 
 ## Before you start
 
 - The glasses are connected over a USB-C data cable and the player is installed
-  ([Install and Invite](./quest-and-metalense-2.md)).
+  ([Install and Pair](./quest-and-metalense-2.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**,
   and the glasses are listed under **Connected over USB**.
 - The network is WPA2 (or open). Enterprise (802.1X) networks are not supported.
@@ -33,8 +33,8 @@ instead, then invites the glasses at the address they receive.
 5. Click **Join**. It shows *Joining &lt;network&gt;*.
 6. When the glasses report the network, the card shows **On** *&lt;network&gt;* · *&lt;address&gt;*
    in green, with **Copy**.
-7. Click **Invite at this address →**. **Invite device** opens with the kind (**Headset**) and the
-   glasses' address filled in. Click **Invite Headset**.
+7. Pair the glasses in the next step, **Pair the glasses**
+   ([Pair a Headset That Joins by Itself](./pair-a-headset.md)).
 
 To move the glasses to another network later, click **Disconnect** (the glasses forget the
 current network) and repeat from step 3. **Turn Wi-Fi off** switches Wi-Fi off on the glasses.

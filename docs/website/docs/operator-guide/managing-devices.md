@@ -23,7 +23,9 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 ## The two onboarding paths
 
-**Push (operator-configured).** You add a device in the Visualizer's [Session panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** tab, **Invite device** card), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+**Push (operator-configured).** You add a HoloLens in the Visualizer's [Session panel](/docs/user-guide/connection-panel#onboard-a-device) (**Devices** tab, **Invite device** card), and the Hub sends it an onboarding invite, again at every startup when **Auto** is on. This is today's default and the standard path for fixed installations - the device does not need anyone to read a code to it.
+
+**Pair (Android headsets).** Meta Quest, METALENSE 2 and Android XR headsets are never invited by IP address. Pair each one once from the Visualizer's **Devices** tab: **Pair headset** pushes a one-time invite over the USB cable, **Show QR code** shows one the player scans. The headset then joins the session by itself and the Hub starts its mixer and video relay ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)).
 
 **Pull (code entry).** A device's app asks its user for the code currently shown by the Hub and onboards itself. Integrated applications on a PC or device without a Hub use this path through the C API; on the Hub's PC they join as local apps instead. Someone reads the Hub's current code from the Visualizer (see [Reading this Hub's code](#reading-this-hubs-code)).
 
@@ -59,4 +61,4 @@ For push onboarding you do not need the code. For pull onboarding, open the Conn
 
 Device players that scan a QR code are still in development. In Debug mode, **Devices** > **Invite device** > **By QR code invite** shows the large QR code for them.
 
-- **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. Headsets you can reach by address are easier with push onboarding (**Devices** > **Invite device**), which needs no code.
+- **Several devices at once:** pair them one after another, each with the code shown at that moment; a code is spent by the device that uses it. A HoloLens you can reach by address is easier with push onboarding (**Devices** > **Invite device**), and an Android headset with **Pair headset**; neither needs a code read to it.

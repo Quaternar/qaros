@@ -90,6 +90,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the METALENSE 2
+  Wi-Fi tutorial and the player installation pages say that Android headsets are paired, never
+  invited by IP address: the last setup step is **Pair headset** (USB) or **Show QR code**, and an
+  Android address in **Invite device** is refused. The Rust API reference says the same for
+  `Session::invite_target_app`.
+
 - **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
   in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
 

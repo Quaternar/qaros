@@ -605,8 +605,12 @@ impl Session {
     /// Asks this machine's hub to start the target app for one AR device
     /// (`qar_session_invite_target_app`) and returns its peer id once the target app's peer
     /// has joined the session. `connection` names the device kind and address:
-    /// `"hololens:<host>"`, `"headset:<host>"` (`"quest:"` and `"android:"` are aliases), or a
-    /// bare host, as `hololens:<host>`; [`crate::Library::target_app_connection_string`] builds it.
+    /// `"hololens:<host>"`, or a bare host, as `hololens:<host>`;
+    /// [`crate::Library::target_app_connection_string`] builds it. An Android headset
+    /// (`"headset:<host>"`, `"quest:"`, `"android:"`) is never invited: it pairs itself and joins
+    /// the session on its own, and this call fails with
+    /// [`crate::StatusCode::HUB_TARGET_APP_DEVICE_NOT_INVITABLE`] for it; find it with
+    /// [`Session::find_render_target`].
     ///
     /// Only this machine's hub answers, and the invite is one-time: the hub remembers the device
     /// but never re-invites it by itself. A device another hub serves is stopped there first.
