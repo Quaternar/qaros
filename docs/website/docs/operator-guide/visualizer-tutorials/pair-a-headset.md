@@ -1,7 +1,7 @@
 ---
 title: Pair a Headset That Joins by Itself
 sidebar_position: 4.5
-description: Pair a METALENSE 2 or Quest player that joins the session on its own, from the Visualizer over USB or with a QR code, and set the name it shows.
+description: Install and pair a METALENSE 2, Quest or Android XR player that joins the session on its own, from the Visualizer over USB or with a QR code, and set the name it shows.
 ---
 
 # Pair a Headset That Joins by Itself
@@ -18,7 +18,8 @@ card.
 - The headset can reach the Hub over the network to join it
   ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**
-  (or **Meta Quest · USB**).
+  (or **Meta Quest · USB**, or **Android XR · USB**: see
+  [Android XR headsets](#android-xr-headsets)).
 
 ## Pair over USB
 
@@ -26,7 +27,8 @@ card.
 travels over the cable, never over the network.
 
 1. Plug the headset in with a USB-C data cable; it is listed under **Connected over USB**.
-2. Open the step **Invite the glasses** and click **Pair headset**.
+2. Open the step **Invite the glasses** (**Invite the headset** for Quest, **Pair the headset** for
+   Android XR) and click **Pair headset**.
 3. The step shows *Asking the hub for a one-time pairing code*, then *Sending the pairing code to
    the headset*, then *Invite delivered — the headset is joining…*.
 4. When the headset appears in the session the step shows *Paired: the headset joined the
@@ -38,6 +40,30 @@ travels over the cable, never over the network.
 2. Put the headset on and look at the code with the player running. The dialog closes once the
    code is used.
 3. An expired code is replaced by a placeholder; click **Show QR code** again for a new one.
+
+## Android XR headsets
+
+One **Android XR** device type covers every Android XR headset (for example Samsung Galaxy XR) and
+the Android XR emulator: installing apps is the same on all of them. Its steps:
+
+1. **Developer options and USB debugging**: on the headset open **Settings** › **About** and select
+   **Build number** seven times, then **Developer options** › **USB debugging** on. Connect the
+   headset with a USB-C data cable. The step is done once the headset is listed under **Connected
+   over USB**.
+2. **Allow USB debugging**: put the headset on and choose **Allow** in the *Allow USB debugging?*
+   prompt (tick *Always allow from this computer*). Until then the row says *Allow USB debugging on
+   the device*.
+3. **Install QAROS Player**: click **Install**; the Visualizer offers the `QAROS Player AndroidXR`
+   package that comes with QAROS, or pick one with **Browse...**.
+   - Without a PC: download the `.apk` in the headset's browser and allow the browser to install
+     unknown apps in **Settings** › **Security & privacy**.
+4. **Pair the headset**: start QAROS Player, then **Pair headset** over the cable, or **Show QR
+   code** for the player to scan ([Pair over USB](#pair-over-usb),
+   [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)).
+
+- There is no Wi-Fi step: join Wi-Fi in the headset's own settings.
+- **Pair headset** works only with a headset that allowed USB debugging from this PC. To stop this
+  PC from reaching it, revoke USB debugging authorisations in **Developer options**.
 
 ## How pairing behaves
 
