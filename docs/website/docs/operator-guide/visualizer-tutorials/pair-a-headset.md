@@ -57,13 +57,31 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
    package that comes with QAROS, or pick one with **Browse...**.
    - Without a PC: download the `.apk` in the headset's browser and allow the browser to install
      unknown apps in **Settings** › **Security & privacy**.
-4. **Pair the headset**: start QAROS Player, then **Pair headset** over the cable, or **Show QR
+4. **Wi-Fi on the headset**: the networks the headset sees, strongest first. Pick one, type its
+   password and click **Join**; the step is done once the headset reports the network and its
+   address. See [Wi-Fi on an Android XR headset](#wi-fi-on-an-android-xr-headset).
+5. **Pair the headset**: start QAROS Player, then **Pair headset** over the cable, or **Show QR
    code** for the player to scan ([Pair over USB](#pair-over-usb),
    [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)).
 
-- There is no Wi-Fi step: join Wi-Fi in the headset's own settings.
 - **Pair headset** works only with a headset that allowed USB debugging from this PC. To stop this
   PC from reaching it, revoke USB debugging authorisations in **Developer options**.
+
+### Wi-Fi on an Android XR headset
+
+- The headset remembers a network joined here: it shows among the headset's saved networks and
+  rejoins on its own when in range. A network marked **Saved** joins without a password (the
+  Visualizer turns Wi-Fi off and on, and the headset picks it).
+- No prompt appears on the headset.
+- The headset does not leave a network it is on for the one you join here. If it stays on, or
+  moves to, another network, the join fails: click **Disconnect** (or leave that network in the
+  headset's settings) and join again.
+- **Disconnect** forgets the network on the headset; joining it again needs the password.
+  **Turn Wi-Fi off** is beside it.
+- The password is never stored, logged or shown by the Visualizer. While the headset applies it,
+  it is briefly on the command the Visualizer runs on the headset over USB.
+- A headset that refuses this shows *Set Wi-Fi on the headset*: join in the headset's own settings,
+  then click **Check again**.
 
 ## How pairing behaves
 

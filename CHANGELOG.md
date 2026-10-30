@@ -20,7 +20,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** a Visualizer tutorial, *Pair a headset*: pairing an Android headset (Meta Quest,
   METALENSE 2, Android XR) by **Pair headset** over USB or by scanning **Show QR code**, how long a
-  code stays valid, and the Android XR install steps.
+  code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset
+  sees from the Visualizer over USB; the headset remembers the password).
 
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
