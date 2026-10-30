@@ -448,8 +448,9 @@ python ..\ci\run.py rust --e2e
 `ci/run.py` reads its variables from the environment first, then from an env file: inside the
 Quaternar repository its root `ci.env`, which points `QAROS_NATIVE_BIN` at that repository's
 `windows-x64-relWithDebInfo` build (the CMake target `qar-streaming-c-ext_gtests`), else
-`ci/ci.env`. `python ../ci/run.py capi` runs these tests, the C# tests and the C API suite against
-one native folder.
+`ci/ci.env`. `python ../ci/run.py capi` runs these tests and the C# tests against one native
+folder, plus the C API suite when `QAROS_C_TESTS_BIN` points at a local build of it (a downloaded
+C API runtime has none, so `capi` reports it as skipped).
 
 `python ../ci/run.py rust` runs CI's checks: format, clippy, the workspace tests, the tutorial
 pages and the guide tabs; `--step` picks some of them.

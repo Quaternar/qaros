@@ -90,6 +90,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
+  in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
+
 - **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
   Guide.
 
