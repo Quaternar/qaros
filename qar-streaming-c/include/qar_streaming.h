@@ -2786,7 +2786,10 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @brief Deinitialize global library state and free process-wide resources.
  *
  * After this call, no other API should be used until the next
- * qar_library_init().
+ * qar_library_init(). It also removes the crash hooks qar_library_init()
+ * installed in the process, so the library can then be unloaded with
+ * qar_library_unload() while the application keeps running. A crash handler
+ * the application installed after qar_library_init() is left in place.
  *
  * @return QarResult Success or error code.
  */
