@@ -1957,14 +1957,16 @@ typedef struct QarRequestInviteInit
  *
  * `connection_string` names the device kind and its address:
  *   - `"hololens:<host>"` — HoloLens
- *   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
- *     served by the Android streamer; it reports its exact model itself
- *   - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
  *   - `"<host>"` with no scheme — alias of `"hololens:<host>"`
  * `<host>` is a hostname or an IP address; the two are interchangeable.
  *
- * Only these device kinds can be invited. Anything else — a visualizer, a
- * desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ * Only a HoloLens can be invited. An Android headset (`"headset:<host>"`,
+ * `"quest:<host>"`, `"android:<host>"`: Meta Quest, METALENSE, Android XR) is
+ * never invited: it pairs itself once (Pair headset in the QAROS Visualizer, or
+ * a QR code) and then joins the session on its own. Its invite is refused with
+ * QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE. Anything else — a
+ * visualizer, a desktop peer — is rejected with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  *
  * The invite is served only by the hub running on this machine, and is always a
  * one-time invite: the hub remembers the device so it is visible in the
@@ -3693,8 +3695,14 @@ static inline QarResult qar_session_subscribe_lifecycle(
  * @ingroup qar_c_api
  *
  * Starting and stopping the target app for one AR device. A *target app* is the
- * process a hub runs on this machine to drive a HoloLens or an Android headset;
- * the hub owns its whole lifecycle, and these calls ask the hub to act.
+ * process a hub runs on this machine to drive a HoloLens; the hub owns its
+ * whole lifecycle, and these calls ask the hub to act.
+ *
+ * Android headsets (Meta Quest, METALENSE, Android XR) are never invited. A
+ * headset pairs itself once (Pair headset in the QAROS Visualizer, or a QR
+ * code) and from then on joins the session on its own; the hub serves it
+ * without an invite. Inviting one with `"headset:"`, `"quest:"` or
+ * `"android:"` returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE.
  *
  * Two rules hold for every call in this group.
  *
@@ -3728,13 +3736,12 @@ static inline QarResult qar_session_subscribe_lifecycle(
  *   or names no host (a `visualizer:` connection, which only
  *   qar_session_find_render_target resolves) - rebuild it with a
  *   qar_target_app_connection_string_* helper.
- * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the hub has no
- *   target app it can launch for the device family the connection string
- *   names; which devices can be invited is the hub's decision.
+ * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the connection
+ *   string names an Android headset (`"headset:"`, `"quest:"`, `"android:"`),
+ *   which pairs itself and is never invited - refused before the hub is asked;
+ *   or the hub has no target app it can launch for the device family it names.
  *
- * A device is invited as a HoloLens (`"hololens:<host>"`) or a Headset
- * (`"headset:<host>"`; `"quest:"` and `"android:"` are aliases of it).
- * The headset reports its exact model itself once it runs.
+ * Only a HoloLens is invited (`"hololens:<host>"`, or a bare `"<host>"`).
  */
 static inline QarResult qar_session_invite_target_app(
 	QarSession* session,
@@ -3748,10 +3755,11 @@ static inline QarResult qar_session_invite_target_app(
 /**
  * @brief Ask this machine's hub to start the target app for one AR device.
  *
- * Non-blocking form of qar_session_invite_target_app. A device is invited as a
- * HoloLens (`"hololens:<host>"`) or a Headset (`"headset:<host>"`;
- * `"quest:"` and `"android:"` are aliases of it) - see
- * QarSessionInviteTargetAppInit.
+ * Non-blocking form of qar_session_invite_target_app. Only a HoloLens is
+ * invited (`"hololens:<host>"`) - see QarSessionInviteTargetAppInit. An Android
+ * headset connection string (`"headset:"`, `"quest:"`, `"android:"`) returns
+ * QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE from this call and the result
+ * callback never fires.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
  * @param result_callback Fires exactly once with the outcome, see
@@ -3822,9 +3830,11 @@ static inline QarResult qar_target_app_connection_string_hololens(
 );
 
 /**
- * @brief Build the connection string for a headset target app, spelled
- * `"quest:<host>"`, an alias of `"headset:<host>"`. The device is
- * invited as a Headset and reports its exact model itself.
+ * @brief Build the connection string for a headset, spelled
+ * `"quest:<host>"`, an alias of `"headset:<host>"`. Use it with
+ * qar_session_find_render_target to find a joined headset; an invite with it
+ * returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE (headsets pair
+ * themselves).
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -3834,9 +3844,11 @@ static inline QarResult qar_target_app_connection_string_quest(
 );
 
 /**
- * @brief Build the connection string for a headset target app, spelled
- * `"android:<host>"`, an alias of `"headset:<host>"`. The device is
- * invited as a Headset and reports its exact model itself.
+ * @brief Build the connection string for a headset, spelled
+ * `"android:<host>"`, an alias of `"headset:<host>"`. Use it with
+ * qar_session_find_render_target to find a joined headset; an invite with it
+ * returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE (headsets pair
+ * themselves).
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
