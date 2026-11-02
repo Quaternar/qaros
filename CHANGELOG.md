@@ -97,6 +97,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
+  installer sets it up, and several Hubs on one PC run from one installation or development build.
+
 - **Docs:** headset certificates: *Managing Devices* has a section *How long a device stays
   paired* (a paired headset's certificate is valid 30 days, every other device's 24 hours; a
   headset off for up to 37 days rejoins without pairing; revoke a lost headset in the Devices tab;
