@@ -95,6 +95,7 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 |---|---|---|
 | Onboarding screen code, minted only while the Visualizer shows a code and replaced a few seconds before it expires | 60 s | Yes, the only one; none while no code is shown |
 | **Pair headset** code, pushed over USB or shown as a QR code | 60 s | No |
+| Code a headset shows while connected to no Hub, registered by the Hub when the operator types it into the Visualizer (**By code**); the Visualizer then asks the headset to call back, without the code | 60 s, a new one after every attempt | No; it never crosses the network |
 | Codes minted for peers configured as the Hub's operators (1-64 per request, optionally bound to a planned peer id); the Visualizer offers no screen for them and applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 

@@ -1,7 +1,7 @@
 ---
 title: Pair a Headset That Joins by Itself
 sidebar_position: 4.5
-description: Install and pair a METALENSE 2, Quest or Android XR player that joins the session on its own, from the Visualizer over USB or with a QR code, and set the name it shows.
+description: Install and pair a METALENSE 2, Quest or Android XR player that joins the session on its own, from the Visualizer over USB, with a QR code or by the code the headset shows, and set the name it shows.
 ---
 
 # Pair a Headset That Joins by Itself
@@ -9,7 +9,13 @@ description: Install and pair a METALENSE 2, Quest or Android XR player that joi
 A player that joins the session by itself is paired **once** with a one-time code. After that it
 keeps its own identity and rejoins on its own after an app restart, a reboot or a Hub restart. The
 Hub then starts its mixer and video relay for it. Android headsets (Meta Quest, METALENSE 2,
-Android XR) are never invited from the **Invite device** card: pairing is the only way in.
+Android XR) are never invited by address: pairing is the only way in, in one of three ways:
+
+| Way | Needs |
+|---|---|
+| [Pair over USB](#pair-over-usb) | The headset on a USB cable |
+| [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed) | The headset's camera sees the Visualizer's screen |
+| [Pair by the code the headset shows](#pair-by-the-code-the-headset-shows) | Neither: you read the headset's code and type it into the Visualizer |
 
 ## Before you start
 
@@ -42,6 +48,34 @@ travels over the cable, never over the network.
 3. While the dialog stays open, a new code replaces the shown one a few seconds before it
    expires, so the code on screen always works. Closing the dialog stops the codes.
 
+## Pair by the code the headset shows
+
+Use this when the headset can neither be plugged in nor scan the QR code. The headset and the PC
+are on the same network.
+
+1. Start QAROS Player on the headset. While it is connected to no hub (not paired yet, or its hub
+   is away), it shows the connection prompt: *Connect: scan the connection QR code in the QAROS
+   Visualizer, or enter this address and code there:* with its address, an 8-digit code
+   (`1234-5678`) and a countdown.
+2. In the Visualizer open **Session** › **Devices** › **Invite device** and pick **By code**. The
+   headsets showing a code on this network are listed by name and model with their address
+   (*Looking for headsets on this network...* until one answers).
+3. Click the headset in the list, or type its **Address**.
+4. Type the **Pairing code** the headset shows now and click **Pair**. The card shows *Giving the
+   code to the hub*, *Calling the headset at &lt;address&gt;*, then *The headset is pairing*; the
+   prompt on the headset hides.
+5. When the headset joins, the card shows *Headset paired* and the headset is listed as a device.
+
+- The code changes every 60 s and after every pairing attempt: type the one shown now.
+- A code of the wrong shape (a hub join code, a typo) is refused before anything is sent.
+- The code never crosses the network: the Visualizer hands it to the Hub and only asks the headset
+  to call back.
+- A headset paired with another Hub can be paired this way too; it moves to this Hub.
+- A headset connected to its Hub shows no code, is not listed and refuses the call (*connected to
+  its hub*). Scan a QR code with it to move it to this Hub.
+- The list comes from the headsets announcing themselves on the local network. Where the network
+  blocks that, type the address.
+
 ## Android XR headsets
 
 One **Android XR** device type covers every Android XR headset (for example Samsung Galaxy XR) and
@@ -63,7 +97,8 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
    address. See [Wi-Fi on an Android XR headset](#wi-fi-on-an-android-xr-headset).
 5. **Pair the headset**: start QAROS Player, then **Pair headset** over the cable, or **Show QR
    code** for the player to scan ([Pair over USB](#pair-over-usb),
-   [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)).
+   [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)), or type the code it shows
+   ([Pair by the code the headset shows](#pair-by-the-code-the-headset-shows)).
 
 - **Pair headset** works only with a headset that allowed USB debugging from this PC. To stop this
   PC from reaching it, revoke USB debugging authorisations in **Developer options**.
@@ -88,9 +123,9 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
 
 | Situation | What happens |
 |---|---|
-| Headset not paired yet | Takes a code from **Pair headset** or a QR code |
+| Headset not paired yet | Shows the connection prompt with its code; takes a code from **Pair headset**, a QR code or **By code** |
 | Headset already paired (or its stored identity cannot be read right now) | Refuses **Pair headset** and keeps rejoining with its identity; a **QR code** scanned on the headset still pairs it again |
-| Headset joined | Refuses new codes |
+| Headset joined | Shows no code and refuses new codes from the network; a QR code scanned on the headset still moves it |
 | Its stored identity no longer works (data restored from another install, refused by the Hub) | Waits for a new code: pair it again |
 | Uninstalled | Its identity is gone with the app: pair it again after reinstalling |
 
@@ -111,7 +146,9 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
 | *adb could not open a tunnel…* | The headset is not connected by USB, not authorised for USB debugging, or offline; reconnect it, or pair with a QR code |
 | *the headset already has a session identity…* | It is paired already; scan a QR code on the headset to pair it to this Hub again |
 | *Not paired: the headset did not join (code expired or onboarding failed) — pair again* | The headset took the code but never appeared: check it can reach the Hub over the network, then click **Pair again** |
-| **Pair headset** disabled | No headset on USB; **Show QR code** still works |
+| **Pair headset** disabled | No headset on USB; **Show QR code** and **By code** still work |
+| *this is no code a headset shows; check it for a typo.* (**By code**) | The typed code has the wrong shape; type the 8 digits the headset shows |
+| *Not paired: ...* after **Pair** in **By code** | The code was wrong or expired. The headset shows a new code at once: type that one |
 
 ## Set the name the headset shows
 

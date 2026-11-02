@@ -18,6 +18,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
+  connected to a hub, an Android headset shows the connection prompt with its address and an
+  8-digit code that changes every 60 s; type both (or pick the headset from those found on the
+  network) into **Invite device** › **By code** and click **Pair**. *Connecting to the Hub*,
+  *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the player installation
+  pages and *Security Deep Dive* name this way too.
+
 - **Docs:** a Visualizer tutorial, *Pair a headset*: pairing an Android headset (Meta Quest,
   METALENSE 2, Android XR) by **Pair headset** over USB or by scanning **Show QR code**, how long a
   code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset

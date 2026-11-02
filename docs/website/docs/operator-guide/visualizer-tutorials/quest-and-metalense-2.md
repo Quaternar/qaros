@@ -75,7 +75,8 @@ Android headsets are not invited by IP address. Pair the device once from the la
 
 1. Start QAROS Player on the device.
 2. Click **Pair headset** to send it a one-time invite over the USB cable, or **Show QR code** for
-   the player to scan.
+   the player to scan. Without cable or camera, type the address and code the device shows into
+   **Invite device** › **By code**.
 3. The device joins the session by itself and the Hub starts its mixer and video relay. It reports
    its exact model, and rejoins on its own after a restart.
 
