@@ -49,7 +49,7 @@ The secrets that bootstrap a mode are short-lived and single-purpose:
 
 | Secret | Who makes it | Valid |
 |---|---|---|
-| Pairing code on the Visualizer's onboarding screen | the hub, for its operators | about 10 s, then the next one |
+| Pairing code on the Visualizer's onboarding screen | the hub, for its operators, only while the Visualizer shows it | 60 s, then the next one while it stays on screen |
 | Co-process invite | the hub, on your local app's request | once, 60 s, from the hub's PC only |
 | Member-hub invitation with a remote-app grant | the primary hub, on an allowed app's request | 24 h and one hub by default (at most 7 days, 64 hubs); the grant admits one app |
 | Launch invite on stdin (no local enrollment) | QAROS, for an app it starts | once, 2 min, this start only |

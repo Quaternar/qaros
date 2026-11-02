@@ -411,7 +411,7 @@ Key points:
 
 - `qar_runtime_rejoin` shows no UI and is silent: call it optimistically on every start.
 - `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: this identity has no persisted slot here, onboard instead.
-- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (the screen code lives about 10 seconds): re-prompt.
+- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (a code the Visualizer shows lives 60 seconds): re-prompt.
 - With `QarOnboardCodeExt` alone, `qar_runtime_onboard` finds **your own Hub**. A Hub has no fixed onboarding port (it claims one from its port range), so the lookup goes:
   1. The `hub-endpoint.json` file the Hub writes into the QAROS data folder on start. The data folder is per Windows user, so this finds the Hub of the same user on this PC, with no network.
   2. Otherwise a discovery beacon from a Hub run by the same user on this PC, listening up to 6 s.
@@ -660,7 +660,7 @@ let onboarded = runtime.onboard_with(
 
 Apps cannot obtain credentials for an arbitrary new peer:
 
-- **No pairing codes.** No API mints a pairing code. Codes come from the hub's operators: the code on the Visualizer's onboarding screen, which the hub replaces with a new one every few seconds. Ask the operator for a code for each device.
+- **No pairing codes.** No API mints a pairing code. Codes come from the hub's operators: the code on the Visualizer's onboarding screen, which the hub mints only while the operator shows it and which lives 60 seconds. Ask the operator for a code for each device.
 - **No unbound invites.** `qar_session_request_onboarding_invite` mints only [co-process invites](#co-process-a-process-your-app-starts). An invite for another PC or a new device is minted only for the hub's operators.
 - **An app on another PC** pairs with a code from the operator and then [rejoins](#onboarding-code-a-hub-on-another-pc) with its stored identity on every start, or, when that PC runs a QAROS hub, joins through a [remote-app grant](#remote-app-through-a-member-hub) from an app on the primary's PC.
 - **A camera on a PC without a hub** pairs once with a code from the operator, keeps its identity in the secure store and rejoins with it, also after its certificate has expired within the renewal window.

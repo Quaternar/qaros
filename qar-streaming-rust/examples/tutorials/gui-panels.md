@@ -304,7 +304,7 @@ What it does not guarantee:
 | --- | --- | --- |
 | `No persisted onboarding id in 'gui_panel_operations.onboarding-id.txt'` | Not on Windows, no code, and no id file in this folder | Pass the current pairing code, or run from the folder that holds the file |
 | Exit code 4 or 5 after `joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
-| `qar_runtime_onboard failed with QAR_STATUS_PAKE_ERROR` | The code was wrong or expired (codes live about 10 s) | Read the current code and run again |
+| `qar_runtime_onboard failed with QAR_STATUS_PAKE_ERROR` | The code was wrong or expired (codes live 60 s) | Read the current code and run again |
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | No Hub answered; with a code, the example finds only your own Hub, on the Hub machine | Start QAROS and run again ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
 | `QAR_STATUS_GUI_PANEL_INVALID_ID` from a setter | The panel was closed, possibly by another peer | `get_or_create` again |
 | `get_or_create` fails for a name with accents or other non-ASCII text | Common names must be ASCII | Keep the name ASCII; put the text in `display_name` |

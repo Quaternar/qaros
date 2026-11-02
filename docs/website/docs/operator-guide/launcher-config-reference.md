@@ -118,7 +118,7 @@ See [Networking & Federation](/docs/operator-guide/networking-and-federation) fo
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `onboardingPakePort` | integer | `0` | Same listener as `discoveryPort`, kept for older configs. `0` takes the first free port of the router range; nonzero pins it, or the Hub does not start. |
-| `codeRotationSec` | integer | `8` | Seconds between freshly minted pairing codes. A code lives at least 10 s, or longer if this is larger. |
+| `codeRotationSec` | integer | `8` | No longer rotates codes: the Hub mints a pairing code only when the Visualizer shows one, and every code the Visualizer shows lives 60 s. The key only sets the shortest lifetime, in seconds, of a code minted without a lifetime of its own: at least 10 s, or this value if larger. |
 | `pakeCodeLength` | integer | `8` | Characters in the human-entered pairing code. |
 | `certLifetimeHours` | integer | CA default | Lifetime of certificates issued to onboarded devices. |
 

@@ -10,16 +10,16 @@ This page is the operator's side of onboarding. The device owner's side - the st
 
 ## How pairing codes are minted
 
-The Hub continuously mints short-lived pairing codes:
+The Hub mints a pairing code only when the Visualizer shows one, never on a timer:
 
-- A **fresh code** is minted every 8 seconds by default (`codeRotationSec` in the [Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference)). This is the code the Visualizer shows.
+- A code is **created when you open** a card or dialog that shows one (**Let another hub join us**, **Show QR code**) or click **Pair headset**, and it appears at once.
+- Each code **lives 60 seconds**. While the card or dialog stays open, a new code replaces the shown one a few seconds before it expires; closing it stops the codes. While no code is on screen, the Hub offers none.
 - Each code is **single-use** - it is consumed on success *and* on failure.
-- Each code has a **short time-to-live of about 10 seconds**.
 - **One failed attempt invalidates the code** - there is no retry against a spent or failed code.
 
 Security comes from this handling - single-use, short TTL, one-failure-max - not from the length of the code. The code never crosses any transport; it is only ever read by a human and typed into a device.
 
-**One code at a time.** The Visualizer shows only the current rotating code; it offers no list of further codes to hand out. Applications cannot request codes either: a source app on the Hub's PC joins without a code, after you allow it once ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)).
+**One code at a time.** The Visualizer shows only the current code; it offers no list of further codes to hand out. Applications cannot request codes either: a source app on the Hub's PC joins without a code, after you allow it once ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)).
 
 ## The onboarding paths
 
@@ -57,7 +57,7 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 
 ## Reading this Hub's code
 
-For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its short lifetime. A code is offered only while that card is open.
+For push onboarding you do not need the code. For pull onboarding, open the Connection panel's **Hubs** > **Pair another Hub** > **Let another hub join us**: it shows the current code as text with its countdown and this Hub's addresses. Relay it to the device owner within its 60-second lifetime; a new code replaces it a few seconds before it expires. A code is offered only while that card is open.
 
 The QAROS Player on Meta Quest, METALENSE 2 and Android XR headsets also pairs by scanning a QR code: **Show QR code** in the last setup step of the **Devices** tab shows one, and no USB cable is needed. In Debug mode, **Devices** > **Invite device** > **By QR code invite** shows the large QR code too.
 

@@ -32,7 +32,7 @@ description: Short definitions of every QAROS term used in this documentation.
 
 **Onboarding ID** — the opaque identifier of a persisted identity slot; the only thing an application must store to rejoin later.
 
-**Pairing code** — the short-lived (10 s), single-use, 8-character code shown by the Hub and entered on the device.
+**Pairing code** — the short-lived (60 s), single-use, 8-character code the Visualizer shows when you open it, entered on the device.
 
 **Peer** — a session participant (a device or an application) with a certificate-backed identity and presentation metadata.
 

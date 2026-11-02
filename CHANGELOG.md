@@ -90,6 +90,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
+  *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
+  *Troubleshooting*, the glossary and the Developer Guide's onboarding and troubleshooting pages say
+  that a code is made only when a card or dialog that shows it opens, appears at once, lives 60 s
+  and is replaced a few seconds before it expires while it stays open. The launcher configuration
+  reference says `codeRotationSec` only sets the shortest lifetime of a code minted without one of
+  its own.
+
 - **Docs:** the device and launcher guides (*Managing Devices*, *Connecting to the Hub*, *Meta Quest
   and METALENSE 2 - Install and Pair*, the METALENSE 2 Wi-Fi tutorial, the player installation
   pages, *Launcher Configuration Reference*) pair Android headsets with **Pair headset** (USB) or

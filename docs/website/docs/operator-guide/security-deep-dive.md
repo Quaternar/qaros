@@ -64,7 +64,7 @@ Wire sequence (length-prefixed frames on one TCP connection):
 - The client rejects a public invitation whose id or server id differs from the one it was given, so a code for one Hub cannot be used against another.
 - A wrong code fails key confirmation; the invitation is then discarded.
 
-**Code entropy.** 8 digits is about 2^26.6. That is acceptable only because EC-JPAKE gives no offline-guessing foothold: each guess costs a live handshake against one invitation that allows one failure and lives 10 s. The TTL and the one-failure rule are load-bearing.
+**Code entropy.** 8 digits is about 2^26.6. That is acceptable only because EC-JPAKE gives no offline-guessing foothold: each guess costs a live handshake against one invitation that allows one failure and lives at most 60 s. The TTL and the one-failure rule are load-bearing.
 
 ## Layer 2 - Secure channel
 
@@ -93,7 +93,8 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 
 | Code | Lifetime | Shown / announced |
 |---|---|---|
-| Onboarding screen code | ~10 s, rotates | Yes, the only one |
+| Onboarding screen code, minted only while the Visualizer shows a code and replaced a few seconds before it expires | 60 s | Yes, the only one; none while no code is shown |
+| **Pair headset** code, pushed over USB or shown as a QR code | 60 s | No |
 | Codes minted for peers configured as the Hub's operators (1-64 per request, optionally bound to a planned peer id); the Visualizer offers no screen for them and applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 

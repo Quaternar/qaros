@@ -41,8 +41,8 @@ This Hub and every Hub paired with it share one **session**.
 
 Opens only when you ask for it. Pairing takes both Hubs:
 
-1. On the Hub that shares: **Let another hub join us** shows a pairing code (digits, it changes
-   every few seconds), a countdown and the addresses this Hub is reachable at, each with a copy
+1. On the Hub that shares: **Let another hub join us** shows a pairing code (digits, valid 60 s;
+   a new one replaces it a few seconds before it expires), a countdown and the addresses this Hub is reachable at, each with a copy
    button. **Stop sharing** closes it; no code is offered while it is closed.
 2. On the joining Hub: **Join another hub**. Turn on **Discover** to list Hubs on this LAN and press
    **Use** on one, or type its **Address**. Type the **Code** from step 1 and press **Pair with hub**.

@@ -227,7 +227,7 @@ What it does not guarantee:
 | `No persisted onboarding id in '...'` | not on Windows, no code, and no id file in the working directory | pass the Hub's pairing code |
 | exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
 | exit 3 | the local-app join, which starts a Hub that is not running, reached no Hub | start QAROS and run again |
-| `Pairing code rejected or expired` (`QAR_STATUS_PAKE_ERROR`) | wrong code, or the code changed (they live about 10 s) | read the current code and run again at once |
+| `Pairing code rejected or expired` (`QAR_STATUS_PAKE_ERROR`) | wrong code, or the code changed (they live 60 s) | read the current code and run again at once |
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | with a code: no Hub of your user answered; the example finds only your own Hub, on the Hub machine | start QAROS and run again |
 | a not-found error naming every place it looked | no runtime found, or `QAR_INSTANCE` names an instance without a loadable runtime | install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
 | stays at `Looking for target apps ...` | no running target app in the session | open the Visualizer or start a headset |

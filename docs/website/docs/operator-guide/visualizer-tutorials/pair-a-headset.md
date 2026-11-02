@@ -36,10 +36,11 @@ travels over the cable, never over the network.
 
 ## Pair with a QR code (no USB needed)
 
-1. Click **Show QR code**. A dialog shows the code and how long it stays valid (two minutes).
+1. Click **Show QR code**. A dialog shows the code at once and how long it stays valid (60 s).
 2. Put the headset on and look at the code with the player running. The dialog closes once the
    code is used.
-3. An expired code is replaced by a placeholder; click **Show QR code** again for a new one.
+3. While the dialog stays open, a new code replaces the shown one a few seconds before it
+   expires, so the code on screen always works. Closing the dialog stops the codes.
 
 ## Android XR headsets
 
@@ -93,8 +94,8 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
 | Its stored identity no longer works (data restored from another install, refused by the Hub) | Waits for a new code: pair it again |
 | Uninstalled | Its identity is gone with the app: pair it again after reinstalling |
 
-- Every code is single use and short-lived (30 s for **Pair headset**, two minutes for a QR code).
-  **Pair again** always makes a new one.
+- Every code is single use and lives 60 s, for **Pair headset** and for a QR code alike.
+  **Pair again** always makes a new one. A headset that took a pushed code has 90 s to join.
 - **Pair headset** sends the code over the USB cable, never over the network. If the Visualizer
   cannot reach the player over USB it reports the failure and sends nothing; use a QR code then.
 - The player also listens for codes on the local network, without encryption, for other tools.
