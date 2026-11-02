@@ -97,6 +97,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** every device's setup ends with **Anchor: look at the anchoring QR code**: *Scene
+  Origin: Anchor Several Devices Together* describes **Show anchoring QR code**, the *Anchor your
+  headset: look at the anchoring QR code* message on the headset, the step that completes by
+  itself with the room on Meta Quest, METALENSE 2 and Android XR (marked by hand on HoloLens) and
+  the wrong-room warning, and tells the anchoring QR code from the connection QR code; *Meta Quest
+  and METALENSE 2 - Install and Pair*, *Pair a Headset*, the *HoloLens 2* tutorial and the glossary
+  follow.
+
 - **Docs:** Meta Quest setup has the **Wi-Fi on the headset** step, as Android XR and METALENSE 2:
   *Meta Quest and METALENSE 2 - Install and Pair* gains a Wi-Fi section, *Pair a Headset* covers
   Quest in *Wi-Fi on a Meta Quest or Android XR headset*, and these pages, *Put METALENSE 2 on

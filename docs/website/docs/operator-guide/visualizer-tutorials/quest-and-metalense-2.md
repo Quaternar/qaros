@@ -17,7 +17,8 @@ No Android tools or terminal are needed.
 | APK in the QAROS ZIP (`devices/android/`) | `QAROS Player Quest <version>.apk` | `QAROS Player MetaLens <version>.apk` |
 | One-time preparation | Developer Mode on the headset (Meta Horizon phone app) | None |
 | Wi-Fi, 5 GHz only | Set from the Visualizer over USB: **Wi-Fi on the headset** | Set from the Visualizer over USB: **Wi-Fi on the glasses** ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)) |
-| Last setup step | **Pair the headset** | **Pair the glasses** |
+| Pairing step | **Pair the headset** | **Pair the glasses** |
+| Last setup step | **Anchor: look at the anchoring QR code** | **Anchor: look at the anchoring QR code** |
 
 ## 1. Prepare the device
 
@@ -87,7 +88,7 @@ METALENSE 2): the device joins a network over the USB cable, so no password is t
 
 ## 4. Pair the device
 
-Android headsets are not invited by IP address. Pair the device once from the last setup step
+Android headsets are not invited by IP address. Pair the device once from the pairing step
 (**Pair the headset** for Quest, **Pair the glasses** for METALENSE 2):
 
 1. Start QAROS Player on the device.
@@ -99,6 +100,19 @@ Android headsets are not invited by IP address. Pair the device once from the la
 
 Details, messages and the name the device shows:
 [Pair a Headset That Joins by Itself](./pair-a-headset.md).
+
+## 5. Anchor the device
+
+The last step, **Anchor: look at the anchoring QR code**, places the scene. This is the room's
+origin marker, not the connection QR code used for pairing.
+
+1. Click **Show anchoring QR code** (or use a printed code).
+2. Put the device on. Until it is anchored it shows *Anchor your headset: look at the anchoring QR
+   code*. Look at the code until the message goes.
+3. The step completes by itself and shows the room the device took (`anchored · room N`).
+
+Several devices, rooms and printing the code:
+[Scene Origin: Anchor Several Devices Together](./scene-origin-and-rooms.md#4-anchor-each-device).
 
 - A remembered Android headset row has no **Invite**; the device rejoins by itself.
 - An address typed with `headset:`, `android:` or `quest:` in **Invite device** is refused: *Android

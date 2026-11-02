@@ -101,6 +101,10 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
    code** for the player to scan ([Pair over USB](#pair-over-usb),
    [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)), or type the code it shows
    ([Pair by the code the headset shows](#pair-by-the-code-the-headset-shows)).
+6. **Anchor: look at the anchoring QR code**: click **Show anchoring QR code** and look at it with
+   the headset until *Anchor your headset: look at the anchoring QR code* goes. The step completes
+   by itself and shows the room
+   ([Scene Origin](./scene-origin-and-rooms.md#4-anchor-each-device)).
 
 - **Pair headset** works only with a headset that allowed USB debugging from this PC. To stop this
   PC from reaching it, revoke USB debugging authorisations in **Developer options**.
