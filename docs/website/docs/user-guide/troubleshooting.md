@@ -13,8 +13,8 @@ Most problems joining a session come down to one of a few things. Work through t
 Pairing codes are short-lived and single-use, so a rejection is almost always one of these:
 
 - **Mistyped.** The code uses an alphabet with no easily-confused characters, but it's still easy to fumble under time pressure. Re-read it carefully, or scan the QR code instead of typing.
-- **Expired.** A code lapses after about ten seconds. If you were a moment too slow, it's already gone — ask for the current one.
-- **Not the current code.** The Hub replaces the code frequently. An old code from earlier in the conversation won't work.
+- **Expired.** A code lapses after 60 seconds. If you were a moment too slow, it's already gone — ask for the current one.
+- **Not the current code.** While the operator keeps the code on screen, a new one replaces it a few seconds before it expires, and once they close it there is none. An old code from earlier in the conversation won't work.
 
 The fix is the same in every case: **ask the operator for a fresh code and enter it right away.** There's no limit on how many times you can try.
 
@@ -43,7 +43,7 @@ You only need to enter a pairing code again if your device's identity was **forg
 
 ## How do I get a new code
 
-You don't generate codes yourself — the Hub does, and it shows a fresh one every few seconds. **Ask the operator for the code currently on screen**, and enter or scan it promptly before it lapses.
+You don't generate codes yourself — the Hub does, while the operator has a code open in the Visualizer, and each one lives 60 seconds. **Ask the operator for the code currently on screen**, and enter or scan it promptly before it lapses.
 
 ## Still stuck
 

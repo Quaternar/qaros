@@ -14,11 +14,16 @@ variables, never from a build this script starts:
     QAROS_NATIVE_BIN        qar-streaming-c, qar-streaming-c-ext and every library they load
     QAROS_HUB_TEST_EXT_BIN  qar-hub-test-ext (C# hub follow tests; optional, skipped without it)
     QAROS_C_TESTS_BIN       qar-streaming-c_dynamic_gtests, from the same build as QAROS_NATIVE_BIN
+                            (a local build only: no package ships it)
 
 They are read from the environment first, then from an env file (``--env-file``; default: the
 ``ci.env`` of a repository embedding qaros, else ``ci/ci.env``). Without ``QAROS_NATIVE_BIN`` the
 native commands download the C API runtime of ``--release`` / ``QAROS_RUNTIME_RELEASE`` with gh
-(``QAROS-CApi-*-RelWithDebInfo.zip``: ``bin/`` and ``tests/``). ``--release`` always downloads.
+(``QAROS-CApi-*-RelWithDebInfo.zip``: ``bin/`` only). ``--release`` always downloads.
+
+``c`` needs ``QAROS_C_TESTS_BIN`` and fails without it, so it cannot run on a downloaded runtime:
+with a download due it refuses before downloading. ``capi`` then skips ``c``, runs ``csharp`` and
+the Rust e2e tests, and reports ``c`` as skipped.
 """
 
 from __future__ import annotations
@@ -75,12 +80,20 @@ def results_dir(args: argparse.Namespace, name: str) -> Path:
 # Native folders: given, or downloaded
 
 
+def runtime_release(args: argparse.Namespace) -> str | None:
+    """The C API runtime release provide_natives will download, if any: ``--release``; otherwise
+    ``QAROS_RUNTIME_RELEASE`` when ``QAROS_NATIVE_BIN`` is not set."""
+    if getattr(args, "natives_ready", False):
+        return None
+    return args.release or (None if env("QAROS_NATIVE_BIN") else env("QAROS_RUNTIME_RELEASE"))
+
+
 def provide_natives(args: argparse.Namespace) -> None:
     """``--release`` downloads; otherwise a set ``QAROS_NATIVE_BIN`` is used as it is; otherwise
     ``QAROS_RUNTIME_RELEASE`` is downloaded."""
     if getattr(args, "natives_ready", False):
         return
-    release = args.release or (None if env("QAROS_NATIVE_BIN") else env("QAROS_RUNTIME_RELEASE"))
+    release = runtime_release(args)
     if release:
         repository = env("QAROS_RUNTIME_REPOSITORY") or "Quaternar/Quaternar"
         directory = Path(env("QAROS_RUNTIME_DIR") or QAROS_ROOT / "build" / "qaros-capi-runtime") / release
@@ -152,7 +165,24 @@ def csharp(args: argparse.Namespace) -> None:
 # c
 
 
+C_TESTS_MISSING = ("QAROS_C_TESTS_BIN is not set: the C API suite needs a local build of "
+                   f"{C_TEST_EXECUTABLE.removesuffix('.exe')} from the same build as QAROS_NATIVE_BIN "
+                   "(a downloaded C API runtime has no tests); set QAROS_C_TESTS_BIN to its output folder")
+
+
+def c_tests_with_download(release: str) -> str:
+    return (f"QAROS_C_TESTS_BIN cannot run against the downloaded C API runtime {release}: the suite "
+            "and its natives must come from one build; set QAROS_NATIVE_BIN to that build's output "
+            "folder instead of downloading")
+
+
 def c_tests(args: argparse.Namespace) -> None:
+    # Checked before provide_natives: a download unsets QAROS_C_TESTS_BIN.
+    if not env("QAROS_C_TESTS_BIN"):
+        raise CiError(C_TESTS_MISSING)
+    release = runtime_release(args)
+    if release:
+        raise CiError(c_tests_with_download(release))
     provide_natives(args)
     tests = native_folder("QAROS_C_TESTS_BIN", (C_TEST_EXECUTABLE,))
     results = results_dir(args, "c")
@@ -171,9 +201,22 @@ def c_tests(args: argparse.Namespace) -> None:
 
 
 def capi(args: argparse.Namespace) -> None:
+    # Decided before provide_natives: a download unsets QAROS_C_TESTS_BIN.
+    release = runtime_release(args)
+    c_skip_reason = None
+    if not env("QAROS_C_TESTS_BIN"):
+        c_skip_reason = C_TESTS_MISSING
+    elif release:
+        c_skip_reason = c_tests_with_download(release)
     provide_natives(args)
     failed = []
-    suites = [("c", c_tests), ("csharp", csharp), ("rust e2e", rust)]
+    suites = [("csharp", csharp), ("rust e2e", rust)]
+    skipped = []
+    if c_skip_reason:
+        print(f"SKIPPED c: {c_skip_reason}", flush=True)
+        skipped.append("c")
+    else:
+        suites.insert(0, ("c", c_tests))
     args.e2e = True
     for name, suite in suites:
         try:
@@ -183,7 +226,8 @@ def capi(args: argparse.Namespace) -> None:
             failed.append(name)
     if failed:
         raise CiError(f"native tests failed: {', '.join(failed)}")
-    print("Native tests (c, csharp, rust e2e) passed.", flush=True)
+    ran = ", ".join(name for name, _ in suites)
+    print(f"Native tests ({ran}) passed" + (f"; skipped: {', '.join(skipped)}." if skipped else "."), flush=True)
 
 
 # ---------------------------------------------------------------------------------------------

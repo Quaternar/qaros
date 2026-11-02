@@ -33,7 +33,7 @@ The first start may take a few seconds longer while Windows creates the TPM key.
 
 ## Certificate renewal needs the current SDK
 
-An updated hub renews a device's or app's certificate only when the renewal proves it holds the certificate's key. Devices and apps built with an older SDK do not make that proof, so they **cannot renew** at an updated hub: they stop working when their certificate ends (within 24 hours, plus a 7-day grace). Pairing them again does not help.
+An updated hub renews a device's or app's certificate only when the renewal proves it holds the certificate's key. Devices and apps built with an older SDK do not make that proof, so they **cannot renew** at an updated hub: they stop working when their certificate ends (within 24 hours, 30 days for a paired headset, plus a 7-day grace). Pairing them again does not help.
 
 1. Update the device players and every app that loads the QAROS runtime to the current release before, or together with, the hub ([Upgrading across the artifact matrix](#upgrading-across-the-artifact-matrix)).
 2. A device that reports it could not renew its certificate (status `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN`) is updated first; if it still fails afterwards, pair it again with a new code ([Managing Devices](/docs/operator-guide/managing-devices)).

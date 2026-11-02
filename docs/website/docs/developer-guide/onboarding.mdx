@@ -34,7 +34,7 @@ Code pairing with a code from the hub's operator, then rejoin
 | is started and stopped by QAROS (added in Source Applications) | [local app, under the planned peer id](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps) | adds the app once; **Allow** on its first start | [App Launched by QAROS](/docs/developer-guide/tutorials/c/launched-app-onboarding) |
 
 - A source app normally runs on the QAROS PC: start with the local app mode.
-- Target apps (the players on headsets) are QAROS's own apps. Your app brings one in with `qar_session_invite_target_app`; it does not onboard it.
+- Target apps (the players on headsets) are QAROS's own apps; your app does not onboard them. It can bring a HoloLens in with `qar_session_invite_target_app`; an Android headset is paired by the operator and joins by itself.
 
 ## What is stored, and how long credentials live
 
@@ -49,7 +49,7 @@ The secrets that bootstrap a mode are short-lived and single-purpose:
 
 | Secret | Who makes it | Valid |
 |---|---|---|
-| Pairing code on the Visualizer's onboarding screen | the hub, for its operators | about 10 s, then the next one |
+| Pairing code on the Visualizer's onboarding screen | the hub, for its operators, only while the Visualizer shows it | 60 s, then the next one while it stays on screen |
 | Co-process invite | the hub, on your local app's request | once, 60 s, from the hub's PC only |
 | Member-hub invitation with a remote-app grant | the primary hub, on an allowed app's request | 24 h and one hub by default (at most 7 days, 64 hubs); the grant admits one app |
 | Launch invite on stdin (no local enrollment) | QAROS, for an app it starts | once, 2 min, this start only |

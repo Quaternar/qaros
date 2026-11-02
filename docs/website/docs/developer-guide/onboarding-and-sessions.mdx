@@ -411,7 +411,7 @@ Key points:
 
 - `qar_runtime_rejoin` shows no UI and is silent: call it optimistically on every start.
 - `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` is *expected control flow*: this identity has no persisted slot here, onboard instead.
-- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (the screen code lives about 10 seconds): re-prompt.
+- `QAR_STATUS_PAKE_ERROR` means the code was wrong or expired (a code the Visualizer shows lives 60 seconds): re-prompt.
 - With `QarOnboardCodeExt` alone, `qar_runtime_onboard` finds **your own Hub**. A Hub has no fixed onboarding port (it claims one from its port range), so the lookup goes:
   1. The `hub-endpoint.json` file the Hub writes into the QAROS data folder on start. The data folder is per Windows user, so this finds the Hub of the same user on this PC, with no network.
   2. Otherwise a discovery beacon from a Hub run by the same user on this PC, listening up to 6 s.
@@ -660,7 +660,7 @@ let onboarded = runtime.onboard_with(
 
 Apps cannot obtain credentials for an arbitrary new peer:
 
-- **No pairing codes.** No API mints a pairing code. Codes come from the hub's operators: the code on the Visualizer's onboarding screen, which the hub replaces with a new one every few seconds. Ask the operator for a code for each device.
+- **No pairing codes.** No API mints a pairing code. Codes come from the hub's operators: the code on the Visualizer's onboarding screen, which the hub mints only while the operator shows it and which lives 60 seconds. Ask the operator for a code for each device.
 - **No unbound invites.** `qar_session_request_onboarding_invite` mints only [co-process invites](#co-process-a-process-your-app-starts). An invite for another PC or a new device is minted only for the hub's operators.
 - **An app on another PC** pairs with a code from the operator and then [rejoins](#onboarding-code-a-hub-on-another-pc) with its stored identity on every start, or, when that PC runs a QAROS hub, joins through a [remote-app grant](#remote-app-through-a-member-hub) from an app on the primary's PC.
 - **A camera on a PC without a hub** pairs once with a code from the operator, keeps its identity in the secure store and rejoins with it, also after its certificate has expired within the renewal window.
@@ -942,7 +942,7 @@ The code the Visualizer shows under Connection panel > **Hubs** > **Pair another
 
 Every peer reaches the session by running its own onboard or rejoin flow (this page) against the hub: as a local app, as a [co-process](#co-process-a-process-your-app-starts) of one, or with a pairing code from the hub's operator. Once a peer has joined, it shows in the [peer list](/docs/developer-guide/peers). Your application decides which targets it renders for and creates a sender for each; that sender is what makes the target ask for your content — see [Finding rendering targets](/docs/developer-guide/rendering-streams#finding-rendering-targets).
 
-To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names the device kind and address: `"hololens:<host>"` for a HoloLens, `"headset:<host>"` for any other headset (Meta Quest, Android glasses), which reports its exact model itself once it runs. `"quest:<host>"` and `"android:<host>"` are accepted as aliases of `"headset:<host>"`. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
+To bring an AR device in from your application, ask this machine's hub to start its target app with `qar_session_invite_target_app` (or `_async`). The connection string names a HoloLens and its address: `"hololens:<host>"` or a bare `"<host>"`. Android headsets (Meta Quest, METALENSE 2, Android XR) are never invited: `"headset:<host>"`, `"quest:<host>"` and `"android:<host>"` return `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE` before the hub is asked (`_async` returns it directly and never calls its callback). Such a headset is paired once by the operator and joins the session by itself; find it with `qar_session_find_render_target`, which still takes those connection strings. The call returns once the device's peer has joined and gives you its peer id; `qar_session_kill_target_app` stops it again. Only the hub on your own machine answers, and only for an application it admitted itself: a local app onboarded with no code (local enrollment) or an app the hub started. An app that paired with a code, or runs on another PC, is refused. The invite is one-time (only an operator can mark a device for automatic re-invite), and a device another hub is serving is moved to this one.
 
 ## When the hub's session changes
 

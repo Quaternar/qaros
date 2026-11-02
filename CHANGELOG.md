@@ -18,6 +18,18 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
+  connected to a hub, an Android headset shows the connection prompt with its address and an
+  8-digit code that changes every 60 s; type both (or pick the headset from those found on the
+  network) into **Invite device** › **By code** and click **Pair**. *Connecting to the Hub*,
+  *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the player installation
+  pages and *Security Deep Dive* name this way too.
+
+- **Docs:** a Visualizer tutorial, *Pair a headset*: pairing an Android headset (Meta Quest,
+  METALENSE 2, Android XR) by **Pair headset** over USB or by scanning **Show QR code**, how long a
+  code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset
+  sees from the Visualizer over USB; the headset remembers the password).
+
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
@@ -84,6 +96,54 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
+
+- **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
+  installer sets it up, and several Hubs on one PC run from one installation or development build.
+
+- **Docs:** headset certificates: *Managing Devices* has a section *How long a device stays
+  paired* (a paired headset's certificate is valid 30 days, every other device's 24 hours; a
+  headset off for up to 37 days rejoins without pairing; revoke a lost headset in the Devices tab;
+  an EST server must allow 30-day certificates and issue the `qar://device-class/headset` URI
+  name). *Security Model*, *Security Deep Dive*, *Maintenance & Updates*, *Pair a Headset* and the
+  launcher configuration reference follow.
+
+- **Docs:** every device's setup ends with **Anchor: look at the anchoring QR code**: *Scene
+  Origin: Anchor Several Devices Together* describes **Show anchoring QR code**, the *Anchor your
+  headset: look at the anchoring QR code* message on the headset, the step that completes by
+  itself with the room on Meta Quest, METALENSE 2 and Android XR (marked by hand on HoloLens) and
+  the wrong-room warning, and tells the anchoring QR code from the connection QR code; *Meta Quest
+  and METALENSE 2 - Install and Pair*, *Pair a Headset*, the *HoloLens 2* tutorial and the glossary
+  follow.
+
+- **Docs:** Meta Quest setup has the **Wi-Fi on the headset** step, as Android XR and METALENSE 2:
+  *Meta Quest and METALENSE 2 - Install and Pair* gains a Wi-Fi section, *Pair a Headset* covers
+  Quest in *Wi-Fi on a Meta Quest or Android XR headset*, and these pages, *Put METALENSE 2 on
+  Wi-Fi* and the player installation pages say to use a 5 GHz network only, with the marking and
+  warnings a 2.4 GHz network gets.
+
+- **Docs:** *Connecting to the Hub* and *Managing Devices* no longer describe the Debug-only QR
+  invite for other players: **By QR code** in the **Invite device** card, in every UI mode, is the
+  one QR invite, the same code as **Show QR code** in a headset's setup steps.
+
+- **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
+  *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
+  *Troubleshooting*, the glossary and the Developer Guide's onboarding and troubleshooting pages say
+  that a code is made only when a card or dialog that shows it opens, appears at once, lives 60 s
+  and is replaced a few seconds before it expires while it stays open. The launcher configuration
+  reference says `codeRotationSec` only sets the shortest lifetime of a code minted without one of
+  its own.
+
+- **Docs:** the device and launcher guides (*Managing Devices*, *Connecting to the Hub*, *Meta Quest
+  and METALENSE 2 - Install and Pair*, the METALENSE 2 Wi-Fi tutorial, the player installation
+  pages, *Launcher Configuration Reference*) pair Android headsets with **Pair headset** (USB) or
+  **Show QR code** instead of inviting them by IP address; **Invite device** and `targetApps` take
+  only a HoloLens. The target app invite docs (*Onboarding and Sessions*, *Choosing an Onboarding
+  Mode*, the C# and Rust API references) say an Android headset returns
+  `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`; *Working with Peers* says a headset joins with
+  its exact model.
+
+- **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
+  in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
 
 - **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
   Guide.

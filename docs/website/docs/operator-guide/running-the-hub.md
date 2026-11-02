@@ -16,7 +16,7 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 ## Starting the Hub
 
-1. Start **`qaros.exe`** (**QAROS** in the Start menu, or `bin\qaros.exe`). It starts at sign-in by default: the installer sets that up for every user, the portable ZIP at its first start. The tray menu's **Start QAROS at login** turns it off for you, and it stays off across sign-ins, upgrades and reinstalls. Development builds never start at sign-in. Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
+1. Start **`qaros.exe`** (**QAROS** in the Start menu, or `bin\qaros.exe`). It starts at sign-in by default: the installer sets that up for every user. The tray menu's **Start QAROS at login** turns it off for you, and it stays off across sign-ins, upgrades and reinstalls. Development builds never start at sign-in. Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
 2. **Left-click the tray icon** to open the visualizer window.
 3. The tray menu offers: *Open visualizer*, *Restart*, *New session…* and *Join hub…* (both greyed on a member), *Leave and start own session…* (on a member), and *Exit*. The tray tooltip shows the role: "Primary hub" or "Member of *primary*".
 
@@ -26,7 +26,7 @@ Hub configuration is managed through the Hub UI and persists across restarts. St
 
 ## Running several Hubs on one PC
 
-For development and testing, one PC can run several independent Hubs from the same portable (ZIP) or development build. Give each its own data root:
+For development and testing, one PC can run several independent Hubs from the same installation or development build. Give each its own data root:
 
 ```powershell
 $env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros.exe

@@ -314,9 +314,12 @@ namespace Quaternar.Qaros
         /// Asks this machine's hub to start the target app for one AR device and
         /// returns the target app's peer id once its peer joined the session - the
         /// id a render sender renders for. Build <paramref name="connectionString"/>
-        /// with <see cref="TargetAppConnectionString"/>; a malformed one or a device
-        /// kind that cannot be invited fails with
-        /// <see cref="StatusCode.ArgumentNotSupported"/>.
+        /// with <see cref="TargetAppConnectionString.HoloLens"/>; a malformed one fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>. An Android headset (a
+        /// <see cref="TargetAppConnectionString.Quest"/> or
+        /// <see cref="TargetAppConnectionString.Android"/> string) is never invited and fails with
+        /// <see cref="StatusCode.HubTargetAppDeviceNotInvitable"/>: it is paired by the operator,
+        /// joins the session by itself, and <see cref="FindRenderTarget"/> finds it.
         /// </summary>
         public Result<PeerId> InviteTargetApp(string connectionString, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -453,7 +456,8 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Builds the connection strings <see cref="Session.InviteTargetApp"/> accepts.
+    /// Builds target app connection strings: <see cref="Session.InviteTargetApp"/> invites only a
+    /// <see cref="HoloLens"/> one; <see cref="Session.FindRenderTarget"/> takes all of them.
     /// A host is a hostname or an IP address; it must not be empty.
     /// </summary>
     public static class TargetAppConnectionString
