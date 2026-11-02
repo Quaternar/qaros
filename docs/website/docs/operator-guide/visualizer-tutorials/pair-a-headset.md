@@ -151,6 +151,9 @@ Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install Q
   That is why only a one-time code is ever sent, and why a headset that already has an identity
   ignores it.
 - **Pair headset** pairs one headset at a time.
+- A paired headset's certificate is valid 30 days and renews by itself. A headset left off for up
+  to 37 days rejoins without pairing again. Cut off a lost headset with **Revoke** in the
+  **Devices** tab ([Managing Devices](/docs/operator-guide/managing-devices#how-long-a-device-stays-paired)).
 
 ## Troubleshooting
 

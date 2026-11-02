@@ -97,6 +97,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** headset certificates: *Managing Devices* has a section *How long a device stays
+  paired* (a paired headset's certificate is valid 30 days, every other device's 24 hours; a
+  headset off for up to 37 days rejoins without pairing; revoke a lost headset in the Devices tab;
+  an EST server must allow 30-day certificates and issue the `qar://device-class/headset` URI
+  name). *Security Model*, *Security Deep Dive*, *Maintenance & Updates*, *Pair a Headset* and the
+  launcher configuration reference follow.
+
 - **Docs:** every device's setup ends with **Anchor: look at the anchoring QR code**: *Scene
   Origin: Anchor Several Devices Together* describes **Show anchoring QR code**, the *Anchor your
   headset: look at the anchoring QR code* message on the headset, the step that completes by

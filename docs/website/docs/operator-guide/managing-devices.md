@@ -33,6 +33,18 @@ Security comes from this handling - single-use, short TTL, one-failure-max - not
 
 The runtime tracks which peers are connected. In the Visualizer's Session panel, the **Devices** tab (shown first) lists the headsets with their streaming status; **Hubs** lists every Hub of the session, expand one to see the apps and devices it serves.
 
+## How long a device stays paired
+
+| Device | Certificate valid | Rejoins without pairing again after being off for up to |
+|---|---|---|
+| Android headset (Meta Quest, METALENSE 2, Android XR) paired with **Pair headset**, a QR code or **By code** | 30 days | 37 days |
+| Every other device | 24 hours | 8 days |
+
+- A device renews its certificate during the session, or at its next join, before it expires; an expired one still renews within a 7-day grace. Off for longer, it must be paired again.
+- A headset paired before this release gets 30 days at its next pairing.
+- A lost or stolen headset keeps a valid certificate for up to 30 days: **Revoke** it in **Session** > **Devices** (see below).
+- With your own certificate authority (EST), its policy must allow 30-day certificates and issue the `qar://device-class/headset` URI name a headset's request carries. A shorter certificate is accepted; the headset then renews sooner.
+
 ## Forgetting and blacklisting a device
 
 Two related operations remove a device:
@@ -52,7 +64,7 @@ A revoked certificate is not invalid everywhere at once. What happens depends on
 
 - The Hub publishes the list the moment you blacklist a device, and keeps it stored, so a peer that joins later still receives it. Peers connected to the Hub normally hear of it within about a second.
 - A peer that cannot reach the Hub's stored data keeps accepting the device. It never refuses everyone just because the list is missing.
-- **Worst case: up to 24 hours.** That is the longest a certificate lives. When it expires, every peer drops the connection and the device cannot renew.
+- **Worst case: until its certificate expires** - up to 24 hours for most devices, up to **30 days for a paired headset**. When it expires, every peer drops the connection and the device cannot renew. Revoke a lost headset at once; do not wait for its certificate to expire.
 - A peer that refuses the device stops serving it (no pipeline, no video), but the network connection itself is not closed.
 
 ## Reading this Hub's code

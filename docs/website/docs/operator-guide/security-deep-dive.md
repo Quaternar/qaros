@@ -147,6 +147,8 @@ Every decision is written to the gateway audit log.
 - The CA takes the certificate's names from the gateway's decision, never from the CSR; the CSR contributes only the public key.
 - Bootstrap is crash-safe (staged, then renamed into place); a damaged CA is reported, never silently replaced.
 - Certificate lifetime: the Hub requests the configured lifetime (`certLifetimeHours`). The gateway caps it at **24 h** for devices and **1 h** for local apps, and the CA caps it again.
+- A headset player paired with **Pair headset**, a QR code or the code it shows always gets **30 days**. The Hub alone decides it is one: from its own record of the invitation the headset paired with, or, on renewal, from the `qar://device-class/headset` name its CA put in the certificate being renewed; that name reaching the gateway any other way is dropped. No other certificate is signed for longer than 24 h.
+- An EST server must allow 30-day certificates and issue the headset URI name the request carries. A certificate longer than the gateway authorized is refused; a shorter one is accepted, and the headset renews sooner.
 
 ### Certificate URI SANs
 
@@ -155,6 +157,7 @@ Every decision is written to the gateway audit log.
 | `qar://peer/<peer-id>` | The QAROS peer the certificate is issued to | Derived by the gateway from the channel's peer, not copied from the CSR |
 | `qar://session/<session-id>` | The session the certificate is bound to | The channel's session; omitted when there is none |
 | `qar://member/<peer-id>` | The member Hub the request came through | Stamped by the primary on every forwarded request, never copied from the CSR |
+| `qar://device-class/headset` | A headset player, whose certificate lives 30 days | Stamped by the gateway from the Hub's own record of the pairing, or kept from the certificate being renewed |
 
 A stored certificate is reused only while the peer, the session and the session name still match; otherwise the device generates a new key and enrols again. A process opens a session only with a certificate naming that session and its own peer id.
 
@@ -210,7 +213,7 @@ Every secret is in an encrypted store; the rest are plain files. An **installed*
 | Re-entry | Only after an operator clicks **Allow**; a new pairing code alone is refused |
 
 - A peer that has read the list refuses the device's peer id: the launcher releases its pipeline at once and never provisions it again. The zenoh link is not closed; zenoh decides TLS acceptance itself and offers no per-certificate hook.
-- A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h. A missing list is "unknown", never "everyone is revoked".
+- A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h (30 days for a headset player: revoke a lost headset, do not wait for expiry). A missing list is "unknown", never "everyone is revoked".
 - Removing a member Hub revokes the member and every certificate it forwarded. Revoking an app approval does not revoke certificates already issued through members; they expire within 30 minutes.
 - Revoke / allow / list run over the session for the Hub, its own Visualizer and configured operator peers. The Hub takes the sender from a signature made with the sender's session certificate, never from a field of the request. Revoke and allow also need the Hub's machine. Every action is audited.
 
