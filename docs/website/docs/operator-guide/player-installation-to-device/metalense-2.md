@@ -17,7 +17,7 @@ The QAROS Visualizer installs the player over USB from its **Devices** tab, and 
 
 ### Wi-Fi on the glasses
 
-Under **Wi-Fi on the device**, type or pick the network name (names saved on this PC are offered, the network this PC is on first), choose the security type, type the password and click **Join**. The password is typed every time; the Visualizer never stores or logs it, and does not read saved Wi-Fi keys from Windows.
+Under **Wi-Fi on the device**, type or pick the network name (names saved on this PC are offered, the network this PC is on first), choose the security type, type the password and click **Join**. Use a 5 GHz network only: 2.4 GHz is too slow and unstable for streaming, and a network seen only on 2.4 GHz is marked **2.4 GHz**. The password is typed every time; the Visualizer never stores or logs it, and does not read saved Wi-Fi keys from Windows.
 
 When the glasses report the network, the card shows **On** *network* · *address*.
 

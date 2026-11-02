@@ -21,8 +21,9 @@ Android XR) are never invited by address: pairing is the only way in, in one of 
 
 - The player is installed and running on the headset
   ([Install and Pair](./quest-and-metalense-2.md)).
-- The headset can reach the Hub over the network to join it
-  ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)).
+- The headset can reach the Hub over a 5 GHz network to join it
+  ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md),
+  [Wi-Fi on a Meta Quest or Android XR headset](#wi-fi-on-a-meta-quest-or-android-xr-headset)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**
   (or **Meta Quest · USB**, or **Android XR · USB**: see
   [Android XR headsets](#android-xr-headsets)).
@@ -94,7 +95,8 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
      unknown apps in **Settings** › **Security & privacy**.
 4. **Wi-Fi on the headset**: the networks the headset sees, strongest first. Pick one, type its
    password and click **Join**; the step is done once the headset reports the network and its
-   address. See [Wi-Fi on an Android XR headset](#wi-fi-on-an-android-xr-headset).
+   address. Use a 5 GHz network only. See
+   [Wi-Fi on a Meta Quest or Android XR headset](#wi-fi-on-a-meta-quest-or-android-xr-headset).
 5. **Pair the headset**: start QAROS Player, then **Pair headset** over the cable, or **Show QR
    code** for the player to scan ([Pair over USB](#pair-over-usb),
    [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)), or type the code it shows
@@ -103,8 +105,16 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
 - **Pair headset** works only with a headset that allowed USB debugging from this PC. To stop this
   PC from reaching it, revoke USB debugging authorisations in **Developer options**.
 
-### Wi-Fi on an Android XR headset
+### Wi-Fi on a Meta Quest or Android XR headset
 
+Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install QAROS Player** and
+**Pair the headset**.
+
+- **Use a 5 GHz network only:** 2.4 GHz is too slow and unstable for streaming, and the step says
+  so. A network the headset sees only on 2.4 GHz starts with an amber **2.4 GHz**; picking it shows
+  *Only seen on 2.4 GHz: pick a 5 GHz network for streaming.* (joining is still allowed). On a
+  2.4 GHz network the step warns *This is a 2.4 GHz network: streaming will stutter. Join a 5 GHz
+  network.*
 - The headset remembers a network joined here: it shows among the headset's saved networks and
   rejoins on its own when in range. A network marked **Saved** joins without a password (the
   Visualizer turns Wi-Fi off and on, and the headset picks it).

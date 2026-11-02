@@ -97,6 +97,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** Meta Quest setup has the **Wi-Fi on the headset** step, as Android XR and METALENSE 2:
+  *Meta Quest and METALENSE 2 - Install and Pair* gains a Wi-Fi section, *Pair a Headset* covers
+  Quest in *Wi-Fi on a Meta Quest or Android XR headset*, and these pages, *Put METALENSE 2 on
+  Wi-Fi* and the player installation pages say to use a 5 GHz network only, with the marking and
+  warnings a 2.4 GHz network gets.
+
 - **Docs:** *Connecting to the Hub* and *Managing Devices* no longer describe the Debug-only QR
   invite for other players: **By QR code** in the **Invite device** card, in every UI mode, is the
   one QR invite, the same code as **Show QR code** in a headset's setup steps.

@@ -15,7 +15,8 @@ instead. Once on the network, the glasses join the session by themselves after y
   ([Install and Pair](./quest-and-metalense-2.md)).
 - **Session** › **Devices** › **Set up or update a device** › **Device type** = **Metalens · USB**,
   and the glasses are listed under **Connected over USB**.
-- The network is WPA2 (or open). Enterprise (802.1X) networks are not supported.
+- The network is WPA2 (or open) on **5 GHz**: 2.4 GHz is too slow and unstable for streaming.
+  Enterprise (802.1X) networks are not supported.
 
 ## Change the network
 
@@ -27,12 +28,15 @@ instead. Once on the network, the glasses join the session by themselves after y
 2. If it says *Wi-Fi is off on the glasses*, click **Turn on** (or just continue: **Join** turns it
    on).
 3. Type the network name in **Network**, or open **Saved** and pick one. Networks this PC knows are
-   offered, the one the PC is on first.
+   offered, the one the PC is on first. Pick a 5 GHz network: one the glasses see only on 2.4 GHz
+   starts with an amber **2.4 GHz**, and picking it shows *Only seen on 2.4 GHz: pick a 5 GHz
+   network for streaming.*
 4. Set **Security** (**WPA2** or **Open**) and type the **Password**. It is typed every time: the
    Visualizer never stores or logs it and does not read saved keys from Windows.
 5. Click **Join**. It shows *Joining &lt;network&gt;*.
 6. When the glasses report the network, the card shows **On** *&lt;network&gt;* · *&lt;address&gt;*
-   in green, with **Copy**.
+   in green, with **Copy**. On a 2.4 GHz network it adds *This is a 2.4 GHz network: streaming will
+   stutter. Join a 5 GHz network.*
 7. Pair the glasses in the next step, **Pair the glasses**
    ([Pair a Headset That Joins by Itself](./pair-a-headset.md)).
 

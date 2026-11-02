@@ -16,7 +16,7 @@ No Android tools or terminal are needed.
 | **Device type** in the Visualizer | **Meta Quest · USB** | **Metalens · USB** |
 | APK in the QAROS ZIP (`devices/android/`) | `QAROS Player Quest <version>.apk` | `QAROS Player MetaLens <version>.apk` |
 | One-time preparation | Developer Mode on the headset (Meta Horizon phone app) | None |
-| Wi-Fi | Set on the headset itself | Can be set from the Visualizer ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)) |
+| Wi-Fi, 5 GHz only | Set from the Visualizer over USB: **Wi-Fi on the headset** | Set from the Visualizer over USB: **Wi-Fi on the glasses** ([Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md)) |
 | Last setup step | **Pair the headset** | **Pair the glasses** |
 
 ## 1. Prepare the device
@@ -68,7 +68,24 @@ power it on.
 Prefer a terminal? The manual `adb install` steps are in
 [Player Installation to Device](/docs/operator-guide/player-installation-to-device).
 
-## 3. Pair the device
+## 3. Join a 5 GHz Wi-Fi network
+
+The step after **Install QAROS Player** is **Wi-Fi on the headset** (**Wi-Fi on the glasses** for
+METALENSE 2): the device joins a network over the USB cable, so no password is typed on it.
+
+1. Open the step. It lists the networks the device sees (on METALENSE 2, the networks this PC
+   knows).
+2. Pick a **5 GHz** network, set **Security**, type the password and click **Join**.
+3. The step is done when it shows **On** *&lt;network&gt;* · *&lt;address&gt;* in green.
+
+- **Use a 5 GHz network only:** 2.4 GHz is too slow and unstable for streaming. A network the
+  device sees only on 2.4 GHz is marked **2.4 GHz**; picking it warns *Only seen on 2.4 GHz: pick a
+  5 GHz network for streaming.*, and a device on one warns *This is a 2.4 GHz network: streaming
+  will stutter. Join a 5 GHz network.*
+- Details and messages: [Wi-Fi on a Meta Quest or Android XR headset](./pair-a-headset.md#wi-fi-on-a-meta-quest-or-android-xr-headset),
+  [Put METALENSE 2 on Wi-Fi](./metalense-2-wi-fi.md).
+
+## 4. Pair the device
 
 Android headsets are not invited by IP address. Pair the device once from the last setup step
 (**Pair the headset** for Quest, **Pair the glasses** for METALENSE 2):
