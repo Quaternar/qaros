@@ -85,5 +85,6 @@ invited: pair them with Pair headset on the Devices tab (adb push or Show QR cod
    device** in the title folds it away.
 
 An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
-uses the code shown by **Let another hub join us** above. In Debug mode, **By QR code invite** in
-the **Invite device** card opens the large QR code for players that scan it.
+uses the code shown by **Let another hub join us** above. **By QR code** in the **Invite device** card,
+in every UI mode, shows the same one-time QR code for an Android headset as **Show QR code** in its
+setup steps; it is the one QR invite.

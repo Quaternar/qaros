@@ -97,6 +97,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Connecting to the Hub* and *Managing Devices* no longer describe the Debug-only QR
+  invite for other players: **By QR code** in the **Invite device** card, in every UI mode, is the
+  one QR invite, the same code as **Show QR code** in a headset's setup steps.
+
 - **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
   *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
   *Troubleshooting*, the glossary and the Developer Guide's onboarding and troubleshooting pages say
