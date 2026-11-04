@@ -86,6 +86,8 @@ The console shows `Joined QAROS as peer <id>`, names the GPU (`Rendering on ...`
 
 Stop the cube with **Ctrl+C**.
 
+The cube renders 60 times a second for every viewer that can take a frame. `--fps <n>` changes the rate, `--uncapped` renders as fast as the viewers take frames, and `--render-loop request-driven` renders each frame for the viewer's request instead ([Render Loops](/docs/developer-guide/render-loops)).
+
 ## 7. Run it again
 
 Run the same command again. The cube joins without a prompt, under the same peer id as before (the same `Joined QAROS as peer` line), so the Visualizer and every headset see the same app, not a new one. QAROS remembers the approval for this exact file: as long as you neither rebuild nor move it, no one is asked again, also after restarting the PC or updating QAROS.

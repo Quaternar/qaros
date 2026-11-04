@@ -24,7 +24,8 @@
  *   request
  * - how to create your Vulkan device on the session's GPU with the extensions
  *   QAROS needs
- * - how to find the target apps and serve each on a thread of its own
+ * - how to find the target apps and serve them all from one render loop on a
+ *   fixed schedule, free-running or request-driven
  * - the frame hand-off: take each image from the state QAROS reports, render,
  *   release it to the external queue family, signal the frame's semaphore,
  *   write the new state back, show
@@ -66,10 +67,21 @@
  * .\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
  * \endcode
  *
- * The cube takes no arguments. `--help` prints its usage; any other argument
- * prints the usage to stderr and exits with 1. Stop it with Ctrl+C. When its
- * stdin is a pipe, the end of stdin stops it too: that is how QAROS stops an
- * app it started.
+ * Options:
+ * | Option | Meaning |
+ * |---|---|
+ * | `--fps <n>` | render passes on a fixed schedule of n per second; default 60 |
+ * | `--uncapped` | the same as `--fps 0`: render as fast as the targets take frames |
+ * | `--render-loop free-running` | the default: the cube renders on its own schedule and begins a frame only to send it |
+ * | `--render-loop request-driven` | each frame answers the target's render request |
+ *
+ * `--help` prints the usage; any other argument prints it to stderr and exits
+ * with 1. Stop it with Ctrl+C. When its stdin is a pipe, the end of stdin stops
+ * it too: that is how QAROS stops an app it started.
+ *
+ * To test how a target copes with a slow or uneven source, run the cube
+ * `--uncapped` and add latency and jitter to its senders in the Visualizer's
+ * Latency Simulator (debug mode, **Tools** -> **Latency**).
  *
  * Expected output, with the Visualizer open, for a run that you stop later
  * (your GPU and peer id differ; with console logging on, the runtime adds log
@@ -81,6 +93,7 @@
  * Onboarding complete.
  * Rendering on <GPU name> (LUID <adapter LUID>), the session's GPU
  * Connected. Waiting for rendering targets. Ctrl+C to quit.
+ * Free-running senders, rendering 60 times a second on a fixed schedule.
  * Rendering for target <peer id>
  * \endcode
  *
@@ -185,59 +198,89 @@
  * \snippet main.cpp vulkan_follow
  *
  * \subsection vulkan_sender_step 6. One sender per target
- * Each `Target` runs on a thread of its own. It creates its sender, then
- * renders until it is stopped or its stream fails. A target that never
- * answers blocks only its own thread.
+ * Each `Target` creates its sender on a thread of its own, because
+ * \ref qar_render_sender_create blocks until the target answers: a target that
+ * never answers holds up only that thread. `RequestStop` cancels the wait
+ * through the target's token. From then on the one render loop renders for
+ * it.
  * \snippet main.cpp vulkan_sender
  *
  * QarStreamParamsVulkan, chained into the init, hands QAROS your physical
  * device and device. Each eye gets a color and a depth texture of its own,
  * the `QAR_FRAME_LAYOUT_SEPARATED_TEXTURES` layout, four views in all.
- * \ref qar_render_sender_create blocks until the target answers;
- * `RequestStop` cancels it through the target's token.
+ * QarRenderSenderRenderLoopExt with `QAR_RENDER_LOOP_FREE_RUNNING` makes the
+ * sender free-running; without it, as with `--render-loop request-driven`, it
+ * is request-driven.
  *
- * \subsection vulkan_frame_step 7. One frame
+ * \subsection vulkan_schedule_step 7. One render loop on a fixed schedule
+ * The main thread runs the render loop: each pass renders a frame for every
+ * target that can take one now, then waits for the next pass. Between passes
+ * it starts, restarts and forgets targets, as step 5 queued them.
+ * \snippet main.cpp vulkan_schedule
+ *
+ * Pass k starts at start + k / fps, and each wait is the time left until that
+ * point: a pass that ran long, for example because a show was held up by the
+ * Latency Simulator, does not move the passes after it. A pass that ran past a
+ * slot is not repeated to catch up; the loop takes the next slot still ahead
+ * and reports the skipped ones every 5 s. A plain sleep on Windows lasts at
+ * least one 15.6 ms timer tick, nearly a whole 60 fps frame, so the wait uses a
+ * high-resolution waitable timer. With `--fps 0` there is no schedule: each
+ * pass renders for the ready targets, and a pass that found none waits 1 ms.
+ *
+ * \subsection vulkan_frame_step 8. One frame
  * \snippet main.cpp vulkan_frame
  *
- * \ref qar_render_sender_begin_frame paces the thread: it returns when this
- * target wants its next frame, so each target runs at its own display rate,
- * and a slow or paused one never delays another. The frame path sleeps only
- * after a waiting status, 2 ms before the next begin.
+ * Nothing on the frame path blocks, so a slow, paused or reconnecting target
+ * never delays another, and a target that cannot take a frame gets no render
+ * at all.
  *
- * The frame info it returns describes the begun frame. Keep it until
+ * - **Free-running** (the default):
+ *   \ref qar_render_sender_is_ready_for_next_frame says whether the receiver
+ *   handed the last frame's destination back; it is false while the stream is
+ *   paused or reconnecting too. When it is true the destination is reserved:
+ *   \ref qar_render_sender_next_render_pose gives the poses, predicted for when
+ *   the frame is shown, and \ref qar_render_sender_begin_frame returns at once
+ *   with a frame that carries exactly those poses. The cube renders straight
+ *   into the sender's images, so it begins before it renders; an app that
+ *   renders into a target of its own renders first and copies after the begin.
+ * - **Request-driven**: \ref qar_render_sender_try_begin_frame starts the wait
+ *   for the target's request and polls it; the frame's poses are the
+ *   request's. Right after the show, the cube calls it once more: the next wait
+ *   then runs while the loop waits for its next pass. Started only at the next
+ *   pass, it would complete a pass later, and a capped loop would serve each
+ *   target every other frame.
+ *
+ * The frame info a begin returns describes the begun frame. Keep it until
  * \ref qar_render_sender_show_frame has shown that frame. The `FrameInfo`
  * type, a `std::unique_ptr` whose deleter calls
- * `qar_render_frame_info_handle_destroy`, destroys it on every path out of
- * `RenderNext`, after the show.
+ * `qar_render_frame_info_handle_destroy`, destroys it on every path out of the
+ * frame, after the show.
  *
  * A begun frame is always shown, as in the CPU and D3D11 programs: the show
  * closes the frame cycle that begin opened. When rendering fails, the camera
  * first discards the frame by signaling its semaphore, the cube shows it, and
- * the target ends. So a stop request that arrives after a successful begin
- * waits for that one frame, and the thread stops at the next turn of its
- * loop. One case differs, for a Vulkan reason: the show waits for the frame's
- * semaphore, which comes with the frame record. When reading the record
- * fails, nothing can signal it, so the target ends without a show and its
- * sender is destroyed with it.
+ * the target ends. One case differs, for a Vulkan reason: the show waits for
+ * the frame's semaphore, which comes with the frame record. When reading the
+ * record fails, nothing can signal it, so the target ends without a show and
+ * its sender is destroyed with it.
  *
  * The pose and the field of view of each eye come from the view showing that
  * eye's color. The poses are in the app volume's app content space, the space
  * the cube renders in:
  * \snippet main.cpp vulkan_views
  *
- * A failed begin-frame or show is not always the end of the target:
+ * A failed call is not always the end of the target:
  * \snippet main.cpp vulkan_waiting
  *
  * Reconnecting and transfer-less streams keep their sender, and so does an app
- * volume that does not resolve yet; begin-frame holds the unresolved volume
- * about 16 ms before it reports it. A paused stream does not show up here:
- * begin-frame waits through the pause. Any other failure ends the
- * target, `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` included; a closed
- * stream is forgotten until the peer list offers the target again
+ * volume that does not resolve yet, or a target whose first head pose has not
+ * arrived; the next pass tries again. Any other failure ends the target,
+ * `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` included; a closed stream
+ * is forgotten until the peer list offers the target again
  * (<a href="/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow">Status
  * codes that are part of normal flow</a>).
  *
- * \subsection vulkan_handoff_step 8. Hand the images back
+ * \subsection vulkan_handoff_step 9. Hand the images back
  * `qar_render_sender_frame_vulkan` gives the sender's frame: its views, its
  * images with their current layout and owning queue family, and the frame's
  * semaphore. The pointer stays valid until the next call to it or the
@@ -268,7 +311,7 @@
  * \section vulkan_ownership Ownership and teardown
  * | Object | Created by | Lives until |
  * |---|---|---|
- * | `QarRenderFrameInfo*` | \ref qar_render_sender_begin_frame | the frame is shown or discarded; `FrameInfo` destroys it |
+ * | `QarRenderFrameInfo*` | \ref qar_render_sender_begin_frame or \ref qar_render_sender_try_begin_frame | the frame is shown or discarded; `FrameInfo` destroys it |
  * | `QarVideoFrameVulkan*` | `qar_render_sender_frame_vulkan` | the next call to it, or the sender's destruction; never freed by you |
  * | frame images, memory, semaphore | QAROS | the sender; never destroyed by you |
  * | camera (views, framebuffers, fences) | `CubeCamera::Create` | the `Target`, before its sender |
@@ -279,8 +322,8 @@
  * | `VulkanDevice` | `VulkanDevice::Create` | `RunApp`, last |
  *
  * - **Stop before join.** `Run` asks every target to stop first, so all their
- *   waits end together, then destroys them. `~Target` stops the thread and
- *   joins it before it touches anything the thread uses.
+ *   sender creations end together, then destroys them. `~Target` stops its
+ *   creation thread and joins it before it touches anything the thread made.
  * - **Camera before sender.** The camera waits for its own GPU work, then
  *   destroys its views and framebuffers over the sender's images while those
  *   images still exist. Then the sender goes, then its token.
@@ -330,6 +373,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdint>
@@ -344,6 +388,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
@@ -436,6 +481,27 @@ struct FrameInfoDeleter
 };
 using FrameInfo = std::unique_ptr<QarRenderFrameInfo, FrameInfoDeleter>;
 
+// Each eye gets a color and a depth view: four views in all.
+constexpr size_t kViewCount = 4;
+
+// One frame's poses and fields of view, in the frame's view order.
+struct Views
+{
+	std::array<QarPose, kViewCount> poses{};
+	std::array<QarFov, kViewCount> fovs{};
+	bool valid = true;
+};
+
+// How each sender takes its frames (--render-loop).
+enum class RenderLoop
+{
+	// The cube renders on its own schedule; begin-frame waits only for a
+	// destination. The default.
+	FreeRunning,
+	// Each frame answers the target's render request.
+	RequestDriven,
+};
+
 // What every target renders: one animated scene, seen through each target's
 // own cameras.
 struct Scene
@@ -447,22 +513,142 @@ struct Scene
 	float Seconds() const { return std::chrono::duration<float>(Clock::now() - started).count(); }
 };
 
-// One target app the cube renders for, on a thread of its own. The blocking
-// qar_render_sender_begin_frame() paces it: it returns when this target wants
-// its next frame, so each target runs at its own display rate and a slow or
-// paused one never delays another.
+//! [vulkan_schedule]
+// Waits until a point in time without rounding it up to the OS timer tick: on
+// Windows a plain sleep lasts at least one 15.6 ms tick in a process that
+// never raised its timer resolution, a whole 60 fps frame. A high-resolution
+// waitable timer wakes within a fraction of a millisecond.
+class Waiter
+{
+public:
+	Waiter()
+	{
+#ifdef _WIN32
+		m_timer = CreateWaitableTimerExW(
+			nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS
+		);
+#endif
+	}
+	Waiter(const Waiter&) = delete;
+	Waiter& operator=(const Waiter&) = delete;
+	~Waiter()
+	{
+#ifdef _WIN32
+		if(m_timer != nullptr)
+		{
+			CloseHandle(m_timer);
+		}
+#endif
+	}
+	void WaitUntil(Clock::time_point until)
+	{
+		const Clock::duration left = until - Clock::now();
+		if(left <= Clock::duration::zero())
+		{
+			return;
+		}
+#ifdef _WIN32
+		if(m_timer != nullptr)
+		{
+			// A negative due time is relative, in 100 ns units.
+			LARGE_INTEGER due{};
+			due.QuadPart = -std::max<long long>(
+				1, std::chrono::duration_cast<std::chrono::nanoseconds>(left).count() / 100
+			);
+			if(SetWaitableTimer(m_timer, &due, 0, nullptr, nullptr, FALSE)
+			   && WaitForSingleObject(m_timer, INFINITE) == WAIT_OBJECT_0)
+			{
+				return;
+			}
+		}
+#endif
+		std::this_thread::sleep_until(until);
+	}
+
+private:
+#ifdef _WIN32
+	HANDLE m_timer = nullptr;
+#endif
+};
+
+// When the render loop starts its passes. With a frame rate, pass k starts at
+// start + k * period: the schedule is a fixed grid, and every wait is the time
+// left until the next grid point. A pass that ran long (a show the Latency
+// Simulator held up, a slow GPU) therefore never moves the passes after it. A
+// pass that ran past one or more grid points does not run again at once to
+// catch up: the loop takes the next grid point still ahead and counts the ones
+// it skipped. Without a frame rate (--fps 0) the loop runs as fast as the
+// targets take frames: readiness gates each target, and a pass that rendered
+// nothing waits 1 ms instead of spinning.
+class FrameSchedule
+{
+public:
+	explicit FrameSchedule(unsigned fps)
+		: m_period(
+			  fps == 0 ? Clock::duration::zero()
+					   : std::chrono::duration_cast<Clock::duration>(
+							 std::chrono::duration<double>(1.0 / static_cast<double>(fps))
+						 )
+		  )
+		, m_start(Clock::now())
+	{
+	}
+	// Waits until the next pass may start. `rendered`: whether this pass
+	// showed a frame for any target.
+	void WaitForNextPass(bool rendered)
+	{
+		if(m_period == Clock::duration::zero())
+		{
+			if(not rendered)
+			{
+				m_waiter.WaitUntil(Clock::now() + std::chrono::milliseconds(1));
+			}
+			return;
+		}
+		++m_pass;
+		const Clock::time_point now = Clock::now();
+		if(now >= GridPoint(m_pass))
+		{
+			const uint64_t due = static_cast<uint64_t>((now - m_start) / m_period) + 1;
+			m_skipped += due - m_pass;
+			m_pass = due;
+		}
+		m_waiter.WaitUntil(GridPoint(m_pass));
+	}
+	// Grid points skipped since the last call.
+	uint64_t TakeSkipped() { return std::exchange(m_skipped, 0); }
+
+private:
+	Clock::time_point GridPoint(uint64_t pass) const
+	{
+		return m_start + m_period * static_cast<Clock::rep>(pass);
+	}
+
+	Clock::duration m_period;
+	Clock::time_point m_start;
+	uint64_t m_pass = 0;
+	uint64_t m_skipped = 0;
+	Waiter m_waiter;
+};
+//! [vulkan_schedule]
+
+// One target app the cube renders for. Its sender is created on a thread of
+// its own, because qar_render_sender_create blocks until the target answers
+// and a target that never answers must not hold up the others. From then on
+// the one render loop renders for it, whenever its sender is ready.
 class Target
 {
 public:
-	Target(QarPeerId peer, const Scene& scene)
+	Target(QarPeerId peer, const Scene& scene, RenderLoop loop)
 		: m_peer(peer)
 		, m_scene(scene)
+		, m_loop(loop)
 		, m_camera(scene.gpu)
 	{
 		m_ready = Check(qar_cancel_token_create(&m_cancel));
 		if(m_ready)
 		{
-			m_thread = std::thread(&Target::Serve, this);
+			m_creation = std::thread(&Target::Create, this);
 		}
 	}
 	Target(const Target&) = delete;
@@ -470,9 +656,9 @@ public:
 	~Target()
 	{
 		RequestStop();
-		if(m_thread.joinable())
+		if(m_creation.joinable())
 		{
-			m_thread.join();
+			m_creation.join();
 		}
 		// The camera drains its own GPU work before the sender's images go.
 		m_camera.reset();
@@ -485,7 +671,7 @@ public:
 			qar_cancel_token_handle_destroy(m_cancel);
 		}
 	}
-	// Ends a pending sender creation or begin-frame wait at once.
+	// Ends a pending sender creation at once.
 	void RequestStop()
 	{
 		m_stop.store(true);
@@ -498,14 +684,159 @@ public:
 	// The target is gone for good, not just failing for now.
 	bool StreamClosed() const { return m_closed.load(); }
 
+	//! [vulkan_frame]
+	// One pass of the render loop for this target: a frame only when its
+	// sender can take one now. Returns whether a frame was shown.
+	bool RenderIfReady()
+	{
+		if(not m_created.load() || Finished() || m_stop.load())
+		{
+			return false;
+		}
+		return m_loop == RenderLoop::FreeRunning ? RenderFreeRunning() : RenderRequestDriven();
+	}
+
+	// Free-running: ask whether the frame can go out now, take the poses for
+	// it, then begin. The destination is reserved by then, so begin-frame
+	// returns at once, and the frame it opens carries exactly those poses.
+	bool RenderFreeRunning()
+	{
+		bool ready = false;
+		const QarResult checked = qar_render_sender_is_ready_for_next_frame(m_sender, &ready);
+		if(not qar_result_is_success(checked))
+		{
+			End(checked);
+			return false;
+		}
+		if(not ready)
+		{
+			// The receiver still holds the last frame, or the stream is paused
+			// or reconnecting: nothing to render for this target now.
+			return false;
+		}
+		Views views{};
+		const QarResult posed = qar_render_sender_next_render_pose(
+			m_sender, kViewCount, views.poses.data(), views.fovs.data()
+		);
+		if(not qar_result_is_success(posed))
+		{
+			// No head pose yet, or the app volume does not resolve yet: the
+			// destination stays reserved, and the next pass tries again.
+			if(not IsWaiting(posed)
+			   && not qar_result_has_code(posed, QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA))
+			{
+				End(posed);
+			}
+			return false;
+		}
+		QarRenderFrameInfo* begunInfo = nullptr;
+		const QarResult begun = qar_render_sender_begin_frame(m_sender, m_cancel, &begunInfo);
+		const FrameInfo info(begunInfo);
+		if(not qar_result_is_success(begun))
+		{
+			if(not IsWaiting(begun))
+			{
+				End(begun);
+			}
+			return false;
+		}
+		return RenderAndShow(views);
+	}
+
+	// Request-driven: the frame begins when the target's request is there.
+	// try_begin_frame never blocks; the frame's poses are the request's.
+	bool RenderRequestDriven()
+	{
+		FrameInfo info = std::move(m_armed);
+		if(not info)
+		{
+			info = TryBegin();
+			if(not info)
+			{
+				return false;
+			}
+		}
+		Views views{};
+		for(size_t view = 0; view < kViewCount && views.valid; ++view)
+		{
+			views.valid =
+				Check(qar_render_frame_info_get_view_pose(info.get(), view, &views.poses[view]))
+				&& Check(qar_render_frame_info_get_view_fov(info.get(), view, &views.fovs[view]));
+		}
+		const bool shown = RenderAndShow(views);
+		// Start the next wait right away, so the target's next request arrives
+		// while the loop waits for its next pass. Started only at the next
+		// pass, it would complete a pass later, and a capped loop would serve
+		// this target every other frame.
+		if(shown && not Finished())
+		{
+			m_armed = TryBegin();
+		}
+		return shown;
+	}
+
+	// The next frame once the target's request is there, else empty. The
+	// first call starts the wait, later calls poll it.
+	FrameInfo TryBegin()
+	{
+		QarRenderFrameInfo* begunInfo = nullptr;
+		bool ready = false;
+		const QarResult tried = qar_render_sender_try_begin_frame(m_sender, &begunInfo, &ready);
+		if(not qar_result_is_success(tried))
+		{
+			if(not IsWaiting(tried))
+			{
+				End(tried);
+			}
+			return FrameInfo();
+		}
+		return ready ? FrameInfo(begunInfo) : FrameInfo();
+	}
+
+	// Renders a begun frame and shows it. From here the frame is shown, even
+	// when rendering failed: the show closes the frame cycle. The show waits
+	// for the frame's semaphore, which comes with the record: without the
+	// record nothing could signal it, so a failed read ends the target
+	// without a show.
+	bool RenderAndShow(const Views& views)
+	{
+		QarVideoFrameVulkan* frame = nullptr;
+		if(not Check(qar_render_sender_frame_vulkan(m_sender, &frame)))
+		{
+			m_finished.store(true);
+			return false;
+		}
+		if(not views.valid || not RenderInto(*frame, views))
+		{
+			// The discard signals the semaphore, so the show can close the
+			// cycle; the target ends afterwards.
+			if(m_camera->Discard(*frame))
+			{
+				Check(Show());
+			}
+			else
+			{
+				std::cerr << "Failed to discard camera frame\n";
+			}
+			m_finished.store(true);
+			return false;
+		}
+		const QarResult shown = Show();
+		if(not qar_result_is_success(shown) && not IsWaiting(shown))
+		{
+			End(shown);
+		}
+		return true;
+	}
+	//! [vulkan_frame]
+
 private:
-	void Serve()
+	void Create()
 	{
 		if(CreateSender() && CreateCamera())
 		{
-			while(not m_stop.load() && RenderNext())
-			{
-			}
+			m_created.store(true);
+			return;
 		}
 		m_finished.store(true);
 	}
@@ -516,6 +847,15 @@ private:
 		auto vulkan = qar_stream_params_vulkan_default();
 		vulkan.physical_device = m_scene.gpu->physical;
 		vulkan.device = m_scene.gpu->device;
+		// Free-running: the cube renders on its own schedule, and begin-frame
+		// waits only for a destination, never for a render request. Without
+		// the extension the sender is request-driven.
+		auto loop = qar_render_sender_render_loop_ext_default();
+		loop.render_loop = QAR_RENDER_LOOP_FREE_RUNNING;
+		if(m_loop == RenderLoop::FreeRunning)
+		{
+			vulkan.header.next = &loop.header;
+		}
 		auto init = qar_render_sender_init_default();
 		init.header.next = &vulkan.header;
 		init.graphics_api = QAR_GRAPHICS_API_VULKAN;
@@ -524,7 +864,7 @@ private:
 		init.color_format = QAR_PIXEL_FORMAT_R8G8B8A8;
 		init.depth_format = QAR_PIXEL_FORMAT_D32_FLOAT;
 		init.texture_layout = QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;
-		init.frame_views_count = 4;
+		init.frame_views_count = kViewCount;
 		for(size_t eye = 0; eye < 2; ++eye)
 		{
 			for(size_t type = 0; type < 2; ++type)
@@ -565,53 +905,6 @@ private:
 		return true;
 	}
 
-	//! [vulkan_frame]
-	// One frame: begin (paced by the target), render, show. Returns false when
-	// this target cannot go on.
-	bool RenderNext()
-	{
-		QarRenderFrameInfo* begunInfo = nullptr;
-		const QarResult begun = qar_render_sender_begin_frame(m_sender, m_cancel, &begunInfo);
-		// The frame info describes the begun frame: keep it until that frame is
-		// shown, as the CPU and D3D11 samples do.
-		const FrameInfo info(begunInfo);
-		if(not qar_result_is_success(begun))
-		{
-			return ContinueAfterFailedBegin(begun);
-		}
-		// From here a stop request waits for this frame: a begun frame is
-		// shown, even when rendering failed, because the show closes the frame
-		// cycle. The show waits for the frame's semaphore, which comes with the
-		// record: without the record nothing could signal it, so a failed read
-		// ends the target without a show, and its sender goes with it.
-		QarVideoFrameVulkan* frame = nullptr;
-		if(not Check(qar_render_sender_frame_vulkan(m_sender, &frame)))
-		{
-			return false;
-		}
-		if(not RenderInto(*frame, info.get()))
-		{
-			// The discard signals the semaphore, so the show can close the
-			// cycle; the target ends afterwards.
-			if(m_camera->Discard(*frame))
-			{
-				Check(Show());
-			}
-			else
-			{
-				std::cerr << "Failed to discard camera frame\n";
-			}
-			return false;
-		}
-		const QarResult shown = Show();
-		if(IsWaiting(shown))
-		{
-			return true;
-		}
-		NoteClosed(shown);
-		return Check(shown);
-	}
-
 	QarResult Show()
 	{
 		auto show = qar_render_frame_show_default();
@@ -619,52 +912,37 @@ private:
 		return qar_render_sender_show_frame(m_sender, &show);
 	}
 
-	bool ContinueAfterFailedBegin(QarResult begun)
+	// This target cannot go on: report why, unless a stop asked for it.
+	void End(QarResult result)
 	{
-		if(m_stop.load())
+		if(not m_stop.load())
 		{
-			// RequestStop() cancelled the wait: not an error to report.
-			return false;
+			Check(result);
 		}
-		if(IsWaiting(begun))
-		{
-			// Begin-frame waits through a pause without reporting it, and
-			// holds an unresolved app volume about 16 ms before reporting it.
-			// A reconnecting or transfer-less stream has no such hold, so wait
-			// a moment before the next begin instead of spinning.
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));
-			return true;
-		}
-		Check(begun);
-		NoteClosed(begun);
-		return false;
+		NoteClosed(result);
+		m_finished.store(true);
 	}
-	//! [vulkan_frame]
 
 	//! [vulkan_views]
-	bool RenderInto(QarVideoFrameVulkan& frame, QarRenderFrameInfo* info)
+	bool RenderInto(QarVideoFrameVulkan& frame, const Views& views)
 	{
 		std::array<CameraView, 2> cameras{};
 		for(size_t eye = 0; eye < 2; ++eye)
 		{
 			// Each eye's pose and field of view belong to the view showing its
 			// color. Finding it by eye and type keeps this right whatever order
-			// the views were declared in.
+			// the views were declared in; the poses are in that same order.
 			const int view = FindFrameView(
 				frame,
 				eye == 0 ? QAR_VIDEO_FRAME_VIEW_EYE_LEFT : QAR_VIDEO_FRAME_VIEW_EYE_RIGHT,
 				QAR_VIDEO_FRAME_VIEW_TYPE_COLOR
 			);
-			if(view < 0
-			   || not Check(qar_render_frame_info_get_view_pose(
-				   info, static_cast<size_t>(view), &cameras[eye].pose
-			   ))
-			   || not Check(qar_render_frame_info_get_view_fov(
-				   info, static_cast<size_t>(view), &cameras[eye].fov
-			   )))
+			if(view < 0 || static_cast<size_t>(view) >= kViewCount)
 			{
 				return false;
 			}
+			cameras[eye].pose = views.poses[static_cast<size_t>(view)];
+			cameras[eye].fov = views.fovs[static_cast<size_t>(view)];
 		}
 		return m_camera->Render(frame, cameras, m_scene.Seconds());
 	}
@@ -680,14 +958,21 @@ private:
 
 	QarPeerId m_peer{};
 	Scene m_scene;
+	RenderLoop m_loop;
 	std::optional<CubeCamera> m_camera;
 	QarCancelToken* m_cancel = nullptr;
 	QarRenderSender* m_sender = nullptr;
 	bool m_ready = false;
 	std::atomic<bool> m_stop = false;
+	// Set by the creation thread once the sender and camera exist; the render
+	// loop touches neither before.
+	std::atomic<bool> m_created = false;
 	std::atomic<bool> m_finished = false;
 	std::atomic<bool> m_closed = false;
-	std::thread m_thread;
+	std::thread m_creation;
+	// Request-driven: a frame whose wait, started right after the last show,
+	// already completed. Render loop only.
+	FrameInfo m_armed;
 };
 
 //! [vulkan_targets]
@@ -779,11 +1064,103 @@ struct Targets
 };
 //! [vulkan_targets]
 
-// Main only manages targets: starts one for each new target app, restarts one
-// that failed after a pause, forgets one whose stream closed for good. The
-// frames themselves run on the targets' threads.
+// How the cube runs: the --fps and --render-loop options.
+struct LoopOptions
+{
+	// Passes per second on a fixed schedule; 0 runs as fast as the targets
+	// take frames.
+	unsigned fps = 60;
+	RenderLoop renderLoop = RenderLoop::FreeRunning;
+};
+
+// The targets the cube serves, managed between render passes: one is started
+// for each new target app, one that failed is restarted after 3 s, and one
+// whose stream closed for good is forgotten until the peer list offers it
+// again.
+struct TargetBook
+{
+	std::map<PeerKey, QarPeerId> wanted;
+	std::map<PeerKey, std::unique_ptr<Target>> targets;
+	std::map<PeerKey, Clock::time_point> retries;
+
+	void Manage(Targets& found, const Scene& scene, RenderLoop loop, Clock::time_point now)
+	{
+		for(const auto& [key, id] : found.Take())
+		{
+			wanted.insert_or_assign(key, id);
+		}
+		for(const auto& [key, id] : wanted)
+		{
+			if(not targets.contains(key) && now >= retries[key])
+			{
+				targets.emplace(key, std::make_unique<Target>(id, scene, loop));
+			}
+		}
+		for(auto it = targets.begin(); it != targets.end();)
+		{
+			if(not it->second->Finished())
+			{
+				++it;
+				continue;
+			}
+			if(it->second->StreamClosed())
+			{
+				wanted.erase(it->first);
+			}
+			retries[it->first] = now + std::chrono::seconds(3);
+			it = targets.erase(it);
+		}
+	}
+
+	// One pass: a frame for every target whose sender can take one now.
+	// Returns whether any frame was shown.
+	bool RenderPass()
+	{
+		bool rendered = false;
+		for(auto& [key, target] : targets)
+		{
+			rendered = target->RenderIfReady() || rendered;
+		}
+		return rendered;
+	}
+
+	// Stops every target first so their creation waits end together, then
+	// destroys them.
+	void StopAll()
+	{
+		for(auto& [key, target] : targets)
+		{
+			target->RequestStop();
+		}
+		targets.clear();
+	}
+};
+
+// Says, at most every 5 s, how many slots of the fixed schedule passes ran
+// past.
+void
+ReportSkippedPasses(FrameSchedule& schedule, unsigned fps, Clock::time_point& nextReport)
+{
+	const Clock::time_point now = Clock::now();
+	if(now < nextReport)
+	{
+		return;
+	}
+	nextReport = now + std::chrono::seconds(5);
+	const uint64_t skipped = schedule.TakeSkipped();
+	if(skipped > 0)
+	{
+		std::cout << "Fell behind the " << fps << " fps schedule: " << skipped
+				  << " frame slots skipped in the last 5 s.\n";
+	}
+}
+
+// One thread renders for every target, pass after pass, on the schedule
+// --fps sets; between passes it manages the targets. Creating a sender blocks
+// until its target answers, so each target creates its own on a thread of its
+// own.
 bool
-Run(QarSession* session, VulkanDevice& gpu, Targets& found)
+Run(QarSession* session, VulkanDevice& gpu, Targets& found, const LoopOptions& options)
 {
 	//! [vulkan_volume]
 	auto volumeInit = qar_app_volume_init_default();
@@ -813,46 +1190,24 @@ Run(QarSession* session, VulkanDevice& gpu, Targets& found)
 		qar_cancel_token_handle_destroy(subscription);
 		return false;
 	}
-	std::map<PeerKey, QarPeerId> wanted;
-	std::map<PeerKey, std::unique_ptr<Target>> targets;
-	std::map<PeerKey, Clock::time_point> retries;
+	TargetBook book;
+	FrameSchedule schedule(options.fps);
+	Clock::time_point nextManage = Clock::now();
+	Clock::time_point nextReport = Clock::now() + std::chrono::seconds(5);
 	while(not g_stopRequested.load())
 	{
-		const auto now = Clock::now();
-		for(const auto& [key, id] : found.Take())
-		{
-			wanted.insert_or_assign(key, id);
-		}
-		for(const auto& [key, id] : wanted)
-		{
-			if(not targets.contains(key) && now >= retries[key])
-			{
-				targets.emplace(key, std::make_unique<Target>(id, scene));
-			}
-		}
-		for(auto it = targets.begin(); it != targets.end();)
-		{
-			if(not it->second->Finished())
-			{
-				++it;
-				continue;
-			}
-			if(it->second->StreamClosed())
-			{
-				wanted.erase(it->first);
-			}
-			retries[it->first] = now + std::chrono::seconds(3);
-			it = targets.erase(it);
-		}
+		const Clock::time_point now = Clock::now();
 		// Control plane only: how soon a new or failed target is noticed.
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if(now >= nextManage)
+		{
+			book.Manage(found, scene, options.renderLoop, now);
+			nextManage = now + std::chrono::milliseconds(100);
+		}
+		const bool rendered = book.RenderPass();
+		ReportSkippedPasses(schedule, options.fps, nextReport);
+		schedule.WaitForNextPass(rendered);
 	}
-	// Stop every target first so their waits end together, then join them.
-	for(auto& [key, target] : targets)
-	{
-		target->RequestStop();
-	}
-	targets.clear();
+	book.StopAll();
 	bool success = Check(qar_cancel_token_cancel(subscription));
 	qar_cancel_token_handle_destroy(subscription);
 	return success;
@@ -890,7 +1245,14 @@ SessionAdapter(const QarSession* session)
 constexpr const char* kAppTag = "vulkan-cube.examples.qaros";
 
 constexpr const char* kUsage =
-	"Usage: qar-vulkan-source\n"
+	"Usage: qar-vulkan-source [--fps <n> | --uncapped] [--render-loop "
+	"free-running|request-driven]\n"
+	"\n"
+	"  --fps <n>       render passes on a fixed schedule of n per second (default 60)\n"
+	"  --uncapped      same as --fps 0: render as fast as the targets take frames\n"
+	"  --render-loop   free-running (default): render on the cube's schedule and\n"
+	"                  begin a frame only to send it; request-driven: each frame\n"
+	"                  answers the target's render request\n"
 	"\n"
 	"Loads the QAROS runtime (qar_library_load(NULL): one beside this executable,\n"
 	"else the one of the QAROS instance QAR_INSTANCE names, else the installed\n"
@@ -1037,7 +1399,7 @@ ExplainOnboardingFailure(QarResult result)
 // Everything between loading the library and unloading it. Returns the exit
 // code; a stop request is not a failure.
 int
-RunApp()
+RunApp(const LoopOptions& options)
 {
 	VulkanDevice gpu; // Outlives every sender and camera.
 	Targets found;	  // Outlives session subscription teardown.
@@ -1067,7 +1429,20 @@ RunApp()
 		if(success)
 		{
 			std::cout << "Connected. Waiting for rendering targets. Ctrl+C to quit.\n";
-			success = Run(session, gpu, found);
+			std::cout
+				<< (options.renderLoop == RenderLoop::FreeRunning ? "Free-running"
+																  : "Request-driven")
+				<< " senders, ";
+			if(options.fps == 0)
+			{
+				std::cout << "rendering as fast as the targets take frames.\n";
+			}
+			else
+			{
+				std::cout << "rendering " << options.fps
+						  << " times a second on a fixed schedule.\n";
+			}
+			success = Run(session, gpu, found, options);
 		}
 		exitCode = success ? 0 : 1;
 	}
@@ -1083,6 +1458,50 @@ RunApp()
 }
 //! [vulkan_run_app]
 
+// Reads the options. Empty when an argument is not one of them.
+std::optional<LoopOptions>
+ParseOptions(int argc, char** argv)
+{
+	LoopOptions options;
+	for(int index = 1; index < argc; ++index)
+	{
+		const std::string_view arg = argv[index];
+		if(arg == "--uncapped")
+		{
+			options.fps = 0;
+			continue;
+		}
+		if(arg == "--fps" && index + 1 < argc)
+		{
+			const std::string_view value = argv[++index];
+			const auto parsed =
+				std::from_chars(value.data(), value.data() + value.size(), options.fps);
+			if(parsed.ec != std::errc() || parsed.ptr != value.data() + value.size()
+			   || options.fps > 1000)
+			{
+				return std::nullopt;
+			}
+			continue;
+		}
+		if(arg == "--render-loop" && index + 1 < argc)
+		{
+			const std::string_view value = argv[++index];
+			if(value == "free-running")
+			{
+				options.renderLoop = RenderLoop::FreeRunning;
+				continue;
+			}
+			if(value == "request-driven")
+			{
+				options.renderLoop = RenderLoop::RequestDriven;
+				continue;
+			}
+		}
+		return std::nullopt;
+	}
+	return options;
+}
+
 } // namespace
 
 //! [vulkan_main]
@@ -1093,12 +1512,16 @@ main(int argc, char** argv)
 	// file: the C runtime block-buffers redirected output, and MSVC has no line
 	// buffering, so stdout (which std::cout writes through) stays unbuffered.
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
-	if(argc > 1)
+	if(argc > 1 && (std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h"))
 	{
-		const bool help =
-			std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h";
-		(help ? std::cout : std::cerr) << kUsage;
-		return help ? 0 : 1;
+		std::cout << kUsage;
+		return 0;
+	}
+	const std::optional<LoopOptions> options = ParseOptions(argc, argv);
+	if(not options.has_value())
+	{
+		std::cerr << kUsage;
+		return 1;
 	}
 	std::signal(SIGINT, OnStopSignal);
 	std::signal(SIGTERM, OnStopSignal);
@@ -1120,7 +1543,7 @@ main(int argc, char** argv)
 		qar_library_unload();
 		return 1;
 	}
-	int exitCode = RunApp();
+	int exitCode = RunApp(options.value());
 	if(not Check(qar_library_destroy()) && exitCode == 0)
 	{
 		exitCode = 1;

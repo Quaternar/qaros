@@ -298,6 +298,8 @@ while !leaving() {
 
 Poll each sender with `try_begin_frame`; render only for the viewers whose frame is ready, and skip the rest.
 
+The [Vulkan cube example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) implements this loop in C++ on the C API with `--render-loop request-driven`, on a fixed schedule (`--fps <n>`, default 60) or as fast as the viewers take frames (`--uncapped`).
+
 **Arm the next wait right after you show.** The first `try_begin_frame` call starts the wait for the viewer's next request, and only a later call can find it complete. Call it once more right after `show_frame`, so the wait runs while your loop is idle and the next pass finds the frame ready. Started only at the next pass, the wait completes one pass later, and a loop at its own rate (say 30 fps) serves every viewer every other frame. A frame the arming call already returns is kept for the next pass.
 
 <CodeTabs>
@@ -500,6 +502,8 @@ The loops above send **sequentially**: one thread visits every viewer. You can a
 A sender is used from one thread at a time: keep each viewer's sender on its worker.
 
 ## Implementing the free-running mode
+
+The [Vulkan cube example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) is the reference implementation in C++ on the C API: it runs this loop by default, on a fixed 60 fps schedule whose waits are the time left until the next slot, so a frame that runs long does not shift the ones after it.
 
 Your loop renders on its own schedule and sends to whichever viewers are ready. Create the senders free-running ([Creating a sender in each mode](#creating-a-sender-in-each-mode)), serve them as a collection as in [Serving several viewers](#serving-several-viewers), and each pass, for each viewer:
 

@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the Vulkan cube example and its *Vulkan Rendering* tutorial serve every viewer from one
+  render loop: free-running senders by default, request-driven with `--render-loop request-driven`,
+  on a fixed 60 fps schedule (`--fps <n>`) that a slow frame does not shift, or as fast as the
+  viewers take frames (`--uncapped`). *Getting Started* and *Render Loops* point at it.
 - **Docs:** *Render Loops* in the Developer Guide: the request-driven and free-running modes, how to
   create a sender in each, and how to drive senders for several viewers — blocking with a thread per
   viewer, non-blocking from one loop, free-running with the readiness check — in C, C# and Rust,
