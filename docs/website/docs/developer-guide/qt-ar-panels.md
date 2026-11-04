@@ -1,15 +1,15 @@
 ---
 sidebar_position: 7.5
 title: Video in GUI Panels, and Qt Widgets as AR Panels
-description: How a GUI panel shows a video stream, what a stream panel accepts, and what the qar_qt_streaming library does to show a Qt widget in AR.
+description: How a GUI panel shows a video stream, what a stream panel accepts, and what the standalone Qt package qar_qt_streaming does to show a Qt widget in AR.
 ---
 
 # Video in GUI Panels, and Qt Widgets as AR Panels
 
-A GUI panel can show a **video stream**, so any picture that you can draw becomes a panel: a camera image, a rendered view, a Qt widget. This page has two parts. The first describes the video route of the C API. The second describes how the library `qar_qt_streaming` uses that route to turn a `QWidget` into a panel.
+A GUI panel can show a **video stream**, so any picture that you can draw becomes a panel: a camera image, a rendered view, a Qt widget. This page has two parts. The first describes the video route of the C API. The second describes how the package `qar_qt_streaming` uses that route to turn a `QWidget` into a panel.
 
 :::info Which QAROS runtime
-The first part describes the header and the C# binding of the C API that this guide documents. The second part describes the library `qar_qt_streaming`, which was built and checked against the installed QAROS runtime **0.9.0-dev.3008+65dc9aeb**, a development build of the setup that precedes the 0.9.0 release. The library does not join the Hub itself: the session owner of `qar_ogre_adapter` does, as a local app on the PC of the Hub or by code pairing with a Hub on another PC ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions)), and the library borrows its session. The document `docs/SDK_COMPATIBILITY.md` of the repository lists the runtime that the library supports.
+The first part describes the header and the C# binding of the C API that this guide documents. The second part describes the package `qar_qt_streaming`, version 0.2.0, which was built and checked against the C header of the installed QAROS runtime **0.9.0-dev.3008+65dc9aeb**, a development build of the setup that precedes the 0.9.0 release, and is written for QAROS 0.9 with the onboarding C API at the oldest. The package does not join the Hub itself: your program does, as a local app on the PC of the Hub or by pairing with a Hub on another PC ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions)), and hands the joined session to the package. The document `docs/SDK_COMPATIBILITY.md` of the repository lists the runtime that the package supports.
 :::
 
 ## Show a video in a GUI panel
@@ -64,9 +64,71 @@ A stream panel differs from a web panel in these points. [Limits and Behaviors t
 
 ## Qt widgets as AR panels
 
-`qar_qt_streaming` is the video route for Qt widgets. The library draws a `QWidget` into a pixel buffer with the paint path of Qt, streams the buffer as the video of a GUI panel and turns the gestures that QAROS reports on the panel into Qt events, so that a widget that works on the desktop works in AR. It needs Qt 5.15.2 and builds on `qar_ogre_adapter`; [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) says how the libraries fit together and what to install.
+`qar_qt_streaming` is the video route for Qt widgets. The library draws a `QWidget` into a pixel buffer with the paint path of Qt, streams the buffer as the video of a GUI panel and turns the gestures that QAROS reports on the panel into Qt events, so that a widget that works on the desktop works in AR. It is a **standalone Qt package**: it needs Qt 5.15 or Qt 6.5 and newer and the headers of the QAROS C++ SDK, and no Ogre, no ROS 2 and no RViz2 in its build or in its dependency chain. [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) says how the package relates to the other two libraries.
 
-The library never calls the C API itself. The `panels` component of `qar_ogre_adapter` implements the interfaces that it uses: it creates the video sender, the GUI panel and the input subscription, and the library supplies the frames and takes the pointer samples. The calls that read or change a GUI panel can wait for the Hub, and a query of the installed runtime takes about two seconds ([How long a query takes](/docs/developer-guide/sdk-limits#how-long-a-query-takes)). The component therefore queues them for the thread of the session owner, which runs them in order, and the Qt thread picks up the results at the next tick: no QAROS call that may wait runs on the Qt thread, and a panel appears in AR a few seconds after the call that asked for it.
+### The package
+
+The package has three layers, each a library of its own, so that you take what you need:
+
+| Layer | Target | What it holds | Needs |
+|---|---|---|---|
+| **seam** | `qar_qt_streaming::seam` | Plain C++ types and interfaces: the panel values, the sender, sender factory and input source interfaces (`IPanelSender`, `IPanelSenderFactory`, `IPanelInputSource`), the naming rule for panels, the timing log, the gesture mapper. | the C++ standard library |
+| **Qt core** | `qar_qt_streaming::qar_qt_streaming` | The capture of a widget, the stream manager, the input injector, the popup and dialog handling, the video widget. It talks to QAROS only through the seam. | Qt (Core, Gui, Widgets) |
+| **`qaros` backend** | `qar_qt_streaming::qaros` | The sender, the sender factory and the input source over the C++ SDK `qar-streaming-cpp`: a CPU video sender, the GUI panel that shows its stream, and the subscription for the gestures. | the SDK headers; no Qt |
+
+The Qt core and the backend meet only at the seam, in your program. A program that streams to QAROS links the second and the third layer; the seam alone is enough to write a backend of your own, and the repository's tests run the Qt core against a recording test double of the seam, which is not part of the installed package.
+
+How to get it into your build:
+
+- **Installed package.** `find_package(qar_qt_streaming 0.2.0 CONFIG REQUIRED COMPONENTS seam qar_qt_streaming qaros)` gives the targets above; without `COMPONENTS` you get all that the package installed. Qt is searched on `CMAKE_PREFIX_PATH` and in the folder named by the environment variable `QAR_QT_ROOT`. In the repository's own build, `-DQAR_QT_MAJOR=5` or `6` selects the Qt major version; without it the version of the kit in `QAR_QT_ROOT` decides, else Qt 6 when CMake finds one, else Qt 5.
+- **Subproject.** `add_subdirectory` of the repository, or `FetchContent_Declare` with the source ZIP, builds only the libraries; the tests, the examples and the install rules are off unless you ask for them. The ZIP `qar_qt_streaming-0.2.0-src.zip` is made with `cpack --config CPackSourceConfig.cmake` in a configured build folder.
+- **The SDK headers.** The backend needs the target `qar-streaming-cpp` (the C++ wrapper, header only) and `qar-streaming-c-headers` (the C header `qar_streaming.h`). They come from targets of these names that your project defines, else from the folder `QAR_STREAMING_CPP_INCLUDE_DIR` or `<QAR_SDK_ROOT>/include` that holds `qar_streaming_cpp/Config.hpp` and `qar_streaming.h`, else from the copy in the repository. Build with `QAR_QT_STREAMING_WITH_QAROS=OFF` for the seam and the Qt core alone.
+- **Compiler.** C++17 or newer; the headers of the C++ SDK refuse an older standard. With MSVC the headers need the conforming mode (`/permissive-`), which the backend's target passes on to every program that includes its headers: [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits#the-c-sdk-headers) says why.
+- **Version.** The package is at version 0.2.0, and it is written for QAROS 0.9 with the onboarding C API at the oldest.
+
+The program, not the library, owns the C header's configuration. It expands the function tables of the header once, with `QAR_IMPLEMENT_DYNAMIC_LOADING()`, and compiles with the same macros as the backend (`QAR_ENABLE_DYNAMIC_LOADING` by default). The public headers of the backend record the macros that the backend was built with, and the MSVC linker refuses a program whose set differs.
+
+```cmake
+target_compile_definitions(qar_qt_panel_example PRIVATE ${QAR_QT_STREAMING_SDK_DEFINES})
+target_link_libraries(qar_qt_panel_example PRIVATE
+  qar_qt_streaming::qar_qt_streaming
+  qar_qt_streaming::qaros
+  Qt${QAR_QT_MAJOR}::Widgets
+)
+```
+
+### Threads
+
+The package reaches QAROS only through the seam, and the backend never lets the Qt thread wait. The calls that read or change a GUI panel can wait for the Hub, and a query of the installed runtime takes about two seconds ([How long a query takes](/docs/developer-guide/sdk-limits#how-long-a-query-takes)). The backend therefore runs everything that can wait on one worker, one task after the other in the order they were posted: making the video sender and the panel, finding a panel of an earlier session again, the subscriptions, the placement, the state and the teardown. You can give the factory an executor of your own instead; it must run the tasks in order and off the Qt thread. The Qt thread makes only the three calls of the frame cycle (begin a frame, take the frame buffer, show the frame), and only while the panel exists, and it collects the outcomes of the worker's tasks at each tick. A panel appears in AR a few seconds after the call that asked for it.
+
+When the program ends, reset the stream manager first (it closes or hides the panels), then the factory, then release the program's own copy of the session, and never do that inside a callback of the SDK. The factory's destructor is the one place that blocks the calling thread: it waits for the worker to run the queued tasks for at most `FactoryOptions::shutdown_budget`, 8 seconds by default, and abandons a worker that is still busy.
+
+### Joining the Hub
+
+The package does not join the Hub: your program does, and hands the joined session to the factory. [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) describes the modes. The example program `qt_panel_example`, which streams a window with a button and a panel that is shown off screen and never reaches the desktop, uses two of them:
+
+- **The Hub on the PC of the program (the default).** The program joins as a [local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code). QAROS asks once to allow the program, and again after each rebuild of it; click **Allow** in the QAROS window. The join stores nothing, and the Hub recognises the program on its next start while it matches what was allowed. The C++ SDK has no builder for this mode, so the example calls the C onboarding API (`qar_runtime_onboard` with `QarOnboardLocalAppExt`) in one separate function. That call is temporary: it goes away when the C++ SDK offers a builder for the mode.
+- **A Hub on another PC.** `--hub HOST:PORT --code CODE` pairs with the Hub of another PC (enter the pairing code the Hub shows for a new device, see [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#onboarding-code-a-hub-on-another-pc)). The program stores the onboarding id in `%LOCALAPPDATA%\Quaternar\QarOS-Qt\qt-panel-example`, a folder apart from the data of the Hub, and every later start rejoins with it; `--rejoin` asks for that explicitly, and `--forget` erases the pairing and exits.
+
+The join takes as long as the person at the PC takes to answer, so the example runs it on a thread of its own and polls it from the Qt thread. Ctrl+C in the console ends the program the orderly way, also while the join still waits: the example asks the join to stop and waits up to 5 seconds for it. The SDK documents the effect of a cancel token for its asynchronous calls only, so a synchronous join may keep waiting; if it does, the example ends without it. If the backend's worker is still busy after the shutdown budget, the example ends the process at once and does not release QAROS or unload its library, because releasing the session under that worker could crash the program at its end.
+
+```cpp
+qqb::FactoryOptions factory_options;
+factory_options.diagnostics = &sink;
+factory_options.shutdown_budget = kShutdownBudget;
+panel_factory = std::make_shared<qqb::QarosPanelSenderFactory>(joined.session, input, factory_options);
+
+qqs::QtPanelStreamingConfig streaming;
+streaming.panel_sender_factory = panel_factory;
+streaming.input_source = input;
+manager = std::make_unique<qqs::QtPanelStreamManager>(streaming);
+
+qqs::PanelStreamOptions options;
+options.placement.pose.position = seam::Vector3{x, 1.5f, -1.0f};   // top centre, room space
+manager->add_panel("counter", &widget, options);
+```
+
+What the authors ran live: the example with a local join, with Qt 5.15 and Qt 6.8 on the desktop Visualizer, with taps on the button, the list of the combo box, resizing the window, Ctrl+C, and finding the panels again at the next start. What they did not run live: a headset, `--hub` with `--code` against a Hub on another PC, and the exit path of the shutdown budget. The authors ran the unit tests of the package with Qt 5.15, 6.5, 6.8 and 6.10.
 
 ### Capture
 
@@ -78,24 +140,25 @@ The library never calls the C API itself. The `panels` component of `qar_ogre_ad
 
 - **Gestures become Qt events.** A tap, a drag or a hover on the panel reaches the widget as touch events first, and as mouse events for a widget that does not take touch, so that buttons, check boxes, sliders and combo boxes work.
 - **Pointers.** The library keeps an implicit grab for each pointer, recognizes double clicks, sends the enter and leave events of a hover and treats the two hands of a user as two pointers.
-- **Status.** The unit tests of the library cover drags and two hands; no live session has exercised them yet.
+- **Qt 5 and Qt 6.** A standard widget (a button, a slider, a line edit, a tab bar) does not accept touch events, so by default the library offers each pointer sequence as touch first and, when no widget in the chain accepts it, sends mouse events for the rest of that sequence. Under Qt 6 an injected touch point carries the position in the top-level widget and on the screen, and no position of its own in the receiving widget. A program whose widgets read the position of a touch point can set `PanelStreamOptions::input.delivery_mode` to `InputDeliveryMode::MouseOnly`, which sends mouse events only.
+- **Status.** The live checks of the example covered taps on a button and on the list of a combo box; the unit tests of the library cover drags and two hands, and no live session has exercised those yet.
 
 ### Popups and dialogs
 
-- **Popups.** The lists of combo boxes, menus and completers that a panel opens are drawn into its picture where Qt placed them. A popup that hangs over the edge of the panel is cut at the edge and not shifted. A tooltip window is drawn only when it has the panel as its parent.
+- **Popups.** The lists of combo boxes, menus and completers that a panel opens are drawn into its picture where Qt placed them. A popup that hangs over the edge of the panel is cut at the edge and not shifted. A tooltip window is drawn only when it has the panel as its parent. Qt draws nothing when it renders a top-level widget that has an enabled graphics effect, and the `windows11` style of Qt 6.8 gives every combo box list and menu a drop shadow effect; the library therefore switches such an effect off while it draws the widget and on again afterwards, so the list reaches the AR picture without its drop shadow.
 - **Dialogs.** A dialog that a panel opens becomes a GUI panel of its own, sized from the dialog and placed beside the panel that opened it, 0.5 m away by default and a further 0.5 m for each dialog that panel already has, and it closes when the dialog hides.
 
 ### Resizing
 
-A widget of a new size needs a new video sender, because the layout of a sender is fixed when the sender is created and the receiver of the panel is allocated from it. By default (`QAR_PANEL_RESIZE=swap`) the library releases the old sender and attaches a new sender of the new size to the same QAROS panel, which keeps its name: it gives the panel the new stream with `qar_gui_panels_set_stream` and the new size with `qar_gui_panels_change_size`. The header takes the resolution of the receiver from the sender at that call, but does not promise that a panel accepts a sender of another size; the installed runtime accepted it in the live checks of the authors (2026-10-25), in which a resized dock was followed by its AR panel. With `QAR_PANEL_RESIZE=new-panel` the name of every panel carries the buffer size (`@<width>x<height>`), a size change makes a second QAROS panel, the old one is hidden and kept, and a return to a size that is kept shows the kept panel again. To avoid a rebuild for every pixel of a drag, the library adopts a new size by default only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached, and the library does not use it; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
+A widget of a new size needs a new video sender, because the layout of a sender is fixed when the sender is created and the receiver of the panel is allocated from it. By default (the mode `swap`, which `QAR_PANEL_RESIZE=swap` also selects in a program that reads the variable with `parse_panel_resize_mode`) the library releases the old sender and attaches a new sender of the new size to the same QAROS panel, which keeps its name: it gives the panel the new stream with `qar_gui_panels_set_stream` and the new size with `qar_gui_panels_change_size`. The header takes the resolution of the receiver from the sender at that call, but does not promise that a panel accepts a sender of another size; the installed runtime accepted it in the live checks of the authors with the RViz2 plugin (2026-10-25), in which a resized dock was followed by its AR panel, and with the Qt example, in which a resized window was. With `QAR_PANEL_RESIZE=new-panel` the name of every panel carries the buffer size (`@<width>x<height>`), a size change makes a second QAROS panel, the old one is hidden and kept, and a return to a size that is kept shows the kept panel again. To avoid a rebuild for every pixel of a drag, the library adopts a new size by default only when the size differs by at least 8 pixels and has held for half a second and for three ticks. The header leaves open whether `qar_video_sender_change_layout` reaches a receiver that is already attached, and the library does not use it; see [Changing the size of a video](/docs/developer-guide/sdk-limits#changing-the-size-of-a-video).
 
 ### Names and the next start
 
-Every panel gets a stable ASCII name, `<key>-<hash>.<program>.<host>.qaros-ros`, made from the key that the host gave the window, the program tag of the session owner and the name of the PC, and the library asks QAROS for the panel with `qar_gui_panels_get_or_create`. The same name finds the same panel again in the next session. When QAROS returns a panel that an earlier session left behind, the library reads what it is and carries out what is missing: it gives it the new video (`set_stream`), fits its size and pose, and shows it if it was hidden. A panel that shows web content where video is wanted cannot be reused, because the content type is fixed at creation; the library asks again with the suffix `-v2`. A panel whose name is closed is not reused either: the library asks again with `-r1` up to `-r8`. Every attach writes one line, `[qar-panel-adapter] ... panel '<key>' <created|reattached> name=<name> id=<id> state_was=<state> stream_swapped=<y|n> size_changed=<y|n>`. What QAROS applies to an existing panel is not documented ([A panel or volume that already exists](/docs/developer-guide/sdk-limits#a-panel-or-volume-that-already-exists)); in the live checks of the authors a panel found again was shown in its place.
+Every panel gets a stable ASCII name, `<key>-<hash>.<program>.<host>.qaros-ros`, made from the key that the host gave the window, the program tag that your program gives the name scope (the example uses `qt-panel-example`) and the name of the PC, and the library asks QAROS for the panel with `qar_gui_panels_get_or_create`. The same name finds the same panel again in the next session. When QAROS returns a panel that an earlier session left behind, the library reads what it is and carries out what is missing: it gives it the new video (`set_stream`), fits its size and pose, and shows it if it was hidden. A panel that shows web content where video is wanted cannot be reused, because the content type is fixed at creation; the library asks again with the suffix `-v2`. A panel whose name is closed is not reused either: the library asks again with `-r1` up to `-r8`. Every attach writes one line, `[qar-panel-adapter] ... panel '<key>' <created|reattached> name=<name> id=<id> state_was=<state> stream_swapped=<y|n> size_changed=<y|n>`. What QAROS applies to an existing panel is not documented ([A panel or volume that already exists](/docs/developer-guide/sdk-limits#a-panel-or-volume-that-already-exists)); in the live checks of the authors a panel found again was shown in its place.
 
 ### Closing
 
-When a Qt window closes, `QAR_PANEL_CLOSE_MODE` decides what happens to its AR panel:
+When a Qt window closes, the close mode decides what happens to its AR panel. The default of the library is `destroy`; `parse_panel_close_mode` turns the text of `QAR_PANEL_CLOSE_MODE` into a mode for a program that reads the variable, and the example parks its panels unless the variable names a mode:
 
 | Mode | What happens |
 |---|---|
@@ -114,11 +177,11 @@ When the session ends, `destroy` closes the panels with their senders. `notice` 
 
 ## Where the detail lives
 
-The repository [github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaros-qt) documents the installation, the getting-started program, the architecture, the API, the configuration defaults and the troubleshooting of the library. This site does not copy them.
+The repository [github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaros-qt) documents the installation, the getting-started program, the architecture, the API, the configuration defaults and the troubleshooting of the package. This site does not copy them.
 
 ## Related pages
 
 - [Custom GUI Panels](/docs/developer-guide/gui-panels) — creating and observing panels, with web content.
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender and the layouts that the video sender shares.
-- [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries and how they stack.
+- [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries and how they depend on each other.
 - [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and the gesture rules of an app volume.

@@ -16,13 +16,13 @@ This page describes the library `qar_ogre_adapter` as it was built and checked a
 
 For each target that asks for a frame, `qar_ogre_adapter` takes the pose and the field of view of each eye from QAROS, renders your Ogre scene for each eye into a **color** texture and a **depth** texture, and copies the textures into the textures that QAROS hands out. It renders the peers that are due in one batch under a **render budget**. Your application keeps its Ogre scene and its render loop: the library creates its eye cameras in your scene manager and its render textures on the first frame of a stream, and it never creates or destroys the scene manager.
 
-Three modules of C++17 static libraries make up the layer. Link only the ones you need. Nothing in them depends on Qt, ROS or RViz; the ROS 2 Humble distribution is only the source of Ogre.
+Three modules of C++17 static libraries make up the layer. Link only the ones you need. Nothing in them depends on Qt, ROS or RViz; the ROS 2 Humble distribution is only the source of Ogre. The library is independent of the Qt panel package [`qar_qt_streaming`](/docs/developer-guide/qt-ar-panels); the RViz2 plugin builds on both.
 
 | Module | What it holds | Calls the C API |
 |---|---|---|
 | `qar_ar_core` | The core that the other two build on: the panel and pointer types, the pointing ray, the spatial frames, the pick model, an opt-in timing log and the one wrapper of the vendored C header. | No |
 | `qar_ogre_streaming` | The Ogre side: the stream manager, the batched render scheduler, the render budget, the eye render targets, the pose conversion, the scene lighting and the diagnostics. It reaches QAROS only through the interfaces `IQarRenderSenderFactory` and `IQarRenderSenderAdapter`. | No |
-| `qar_qar_adapter` | The adapter of the C API, in six components: `capi`, `session`, `render`, `panels`, `url` and `gestures`. Streaming a 3D scene needs `session`, which holds the session owner that joins the Hub and lists its targets, and `render`, which holds the sender factory and the render sender of every target. | Yes, the only module that does |
+| `qar_qar_adapter` | The adapter of the C API, in five components: `capi`, `session`, `render`, `url` and `gestures`. Streaming a 3D scene needs `session`, which holds the session owner that joins the Hub and lists its targets, and `render`, which holds the sender factory and the render sender of every target. | Yes, the only module that does |
 
 [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) says when to use which of the three libraries and what to install.
 
@@ -68,7 +68,7 @@ The program `qar_ogre_live_stream_example` joins the Hub and streams the same sc
 | Option | Effect |
 |---|---|
 | `--local` | Join the Hub of this PC as a local app. This is the default. QAROS asks once, in its own window, whether the program may join (click **Allow**), and asks again after each rebuild of the program, because the program is not code-signed. |
-| `--hub HOST:PORT --code CODE` | Pair with the Hub of another PC. The port is shown with the code in the Visualizer of that PC. The code lives about ten seconds and works once, and only the first join needs it: the pairing is stored for the next start, which then needs `--hub HOST:PORT` alone. |
+| `--hub HOST:PORT --code CODE` | Pair with the Hub of another PC: enter the pairing code that the Hub shows for a new device (see [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#onboarding-code-a-hub-on-another-pc)); the port is shown with the code. Only the first join needs the code: the pairing is stored for the next start, which then needs `--hub HOST:PORT` alone. |
 | `--forget` | Erase the stored pairing with the Hub of another PC and exit. |
 | `--connect-only` | Join QAROS, print the runtime, the mode, the peer of the program, the app volume and the targets, and exit. It opens no window and streams nothing. |
 | `--seconds N` | Without `--connect-only`: wait for a target and stream the scene to the first one for `N` seconds, `60` by default. |
@@ -208,7 +208,7 @@ The library joins the Hub with the **session owner**, `QarSessionOwner` of the c
 - **The app volume.** The SDK rejects a stream without an app volume. `attach()` calls `qar_app_volumes_get_or_create` with the stable ASCII name `scene.<program>.<host>.qaros-ros`, so the next start gets the same volume again. The library creates a cube of `10 m`, centered `1 m` above the origin of the room, with the app scale `1.0`; the fields are `create_app_volume`, `app_volume_name`, `app_volume_width_m`, `app_volume_length_m`, `app_volume_height_m`, `app_volume_center_y_m`, `app_volume_scale`, `app_volume_pick_gestures` and `name_scope`. Nothing clips the content to the box. The placement of the volume is read back through a subscription and kept in a cache, so a read of it on your thread waits for nothing. Whether QAROS applies the size and the pose to a volume that already exists is not documented. If the volume cannot be created, the session stays usable, but the factory refuses to create a sender and says why.
 - **The log.** The owner writes a line for every step, each starting with `QAROS:` (`QAROS: runtime ...`, `QAROS: hub mode ...`, `QAROS: state ...`, `QAROS: joined as peer ...`, `QAROS: target ...`). A call that takes `500 ms` or more on its thread is reported as `QAROS: call <name> took <n> ms`.
 
-The status of a failed join comes in plain words. For example, the Hub denying the program reads `QAROS denied this app (Deny was clicked, the prompt was closed, or the approval was revoked). Connect again and click Allow.`, and a pairing code that was wrong reads `The code was wrong or has expired (codes live about 10 s and work once). Type the code the Hub shows at that moment.` The paths for a denied or unanswered prompt, a stopped Hub and a code pairing against another PC are designed and covered by the unit tests, which run the owner against a table of fake functions; the authors have not run them in a live session.
+The status of a failed join comes in plain words. For example, the Hub denying the program reads `QAROS denied this app (Deny was clicked, the prompt was closed, or the approval was revoked). Connect again and click Allow.`, and a pairing code that was wrong reads `The code was wrong or has expired. Type the code the Hub shows now.` The paths for a denied or unanswered prompt, a stopped Hub and a code pairing against another PC are designed and covered by the unit tests, which run the owner against a table of fake functions; the authors have not run them in a live session.
 
 ## Where it stops
 
@@ -243,6 +243,6 @@ The status of a failed join comes in plain words. For example, the Hub denying t
 - [App Volumes and Gestures](/docs/developer-guide/app-volumes) — the volume that every stream is keyed to.
 - [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) — the local app and the pairing code that the library uses to join the Hub.
 - [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator.
-- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — the panel route of the same adapter.
+- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — the Qt panel package, which is independent of this library.
 - [Troubleshooting](/docs/developer-guide/troubleshooting) — status codes and frequent integration mistakes.
 - [Running the RViz2 Plugin on Windows](/docs/operator-guide/rviz2-plugin) — the RViz2 plugin that streams the scene of RViz2 through this library.

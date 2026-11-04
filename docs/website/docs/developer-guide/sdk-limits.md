@@ -76,7 +76,7 @@ Plan for this:
 
 `qar_gui_panels_get_or_create` and `qar_app_volumes_get_or_create` derive the identity of the object from a required, stable ASCII common name, so the same name finds the same object in the next session. The header leaves open what the call applies to an object that already exists: whether the pose, the size and the content that you pass replace the stored ones or are ignored, whether a panel that was closed can be reopened under its name, and whether `qar_gui_panels_set_stream` accepts the stream of a sender of another size.
 
-In the live checks of the authors with the installed runtime, a hidden panel that came back from `get_or_create` accepted a new stream, a new size and the state VISIBLE. But the Hub reported the old stored state (HIDDEN) about 40 milliseconds after the authors had shown a found panel, so a program that shows a panel has to check the state it gets back and ask again. The `qar_qar_adapter` library keeps the state it asked for for one second after it asked, and checks again when that time ends. Read back what an existing object holds before you rely on it.
+In the live checks of the authors with the installed runtime, a hidden panel that came back from `get_or_create` accepted a new stream, a new size and the state VISIBLE. But the Hub reported the old stored state (HIDDEN) about 40 milliseconds after the authors had shown a found panel, so a program that shows a panel has to check the state it gets back and ask again. The libraries that make panels keep the state they asked for for a short time after they asked and check again when it ends; the `qaros` backend of the Qt package holds it for one second. Read back what an existing object holds before you rely on it.
 
 ## Gesture rules of an app volume
 
@@ -101,6 +101,17 @@ The header says that `qar_app_volume_gesture_configuration_default` mirrors the 
 
 Two hands change the scale of the app, one hand moves it, and hover and click are only reported, each with its own ray.
 
+## The C++ SDK headers
+
+The Qt package [`qar_qt_streaming`](/docs/developer-guide/qt-ar-panels) builds its QAROS backend on the header-only C++ SDK `qar-streaming-cpp`, a wrapper over the C header. These are the points of that wrapper that a build depends on:
+
+- **It includes the C header by name.** Its headers include `<qar_streaming.h>`, so a build must have a folder with that header on the include path of every file that includes the wrapper. The macro `QAR_STREAMING_CPP_C_HEADER` names another header to include instead. The wrapper works with a static link and with `QAR_ENABLE_DYNAMIC_LOADING` alike, because it only calls the `qar_*` functions of the header.
+- **It needs C++17 or newer.** A build with an older standard stops with an `#error`.
+- **MSVC needs the conforming mode in C++17.** The wrapper uses the alternative token `not` in `detail/Values.inl`, `detail/Library.inl` and `detail/Native.hpp`. In the default C++17 mode of MSVC it does not compile; compile with `/permissive-` or with C++20 or newer. The Qt package passes `/permissive-` to every program that includes its headers, because its public headers include the wrapper.
+- **It pairs with the C header of the installed runtime.** The authors build the wrapper with the C header of the installed QAROS 0.9.0-dev.3008+65dc9aeb. When they checked, the C header on the wrapper's own branch lacked the local-app onboarding of the installed QAROS, and the wrapper did not compile against the C header of the vendor's `main` branch.
+- **It has no builder for the local-app join.** The wrapper offers builders for the code pairing and the rejoin; a program that joins as a local app calls `qar_runtime_onboard` with `QarOnboardLocalAppExt` itself, as the example of the Qt package does.
+- **Its licence is not stated in the source.** The folder that the authors copied carries no licence text and no notice file. The copy is revision `1914bc2` of the branch `feature/cpp-api` of the repository [Quaternar/qaros](https://github.com/Quaternar/qaros), folder `qar-streaming-cpp`.
+
 ## Observed in live sessions
 
 The first observation comes from a live session with an earlier SDK drop and has not been repeated on every drop; the header describes neither it nor the behavior, and this page does not claim that it holds today. The second compares such a drop with the installed runtime.
@@ -114,5 +125,5 @@ The first observation comes from a live session with an earlier SDK drop and has
 - [Rendering Streams](/docs/developer-guide/rendering-streams) — the render sender, its frame loop and layouts.
 - [App Volumes and Gestures](/docs/developer-guide/app-volumes#gestures) — configuring and consuming gestures.
 - [Troubleshooting](/docs/developer-guide/troubleshooting) — status codes and frequent integration mistakes.
-- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — showing a video in a panel, and the Qt library built on it.
+- [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — showing a video in a panel, and the Qt package built on it.
 - [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the libraries whose measurements this page reports.
