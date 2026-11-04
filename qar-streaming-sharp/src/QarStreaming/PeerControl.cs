@@ -38,7 +38,8 @@ namespace Quaternar.Qaros
         public Result<PeerSpec> GetMySpec()
         {
             IntPtr handle;
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_my_spec(_context.DangerousHandle, out handle));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_my_spec(session.Handle, out handle));
             return info.IsSuccess ? PeerSpec.FromHandle(handle, true) : Result<PeerSpec>.Failure(info);
         }
 
@@ -57,7 +58,8 @@ namespace Quaternar.Qaros
         public Result<Unit> UpdateDisplayName(string name)
         {
             using (var str = NativeUtf8String.FromUtf8(name))
-                return Results.FromNative(NativeMethods.qar_impl_peer_update_display_name(_context.DangerousHandle, str.Pointer));
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_peer_update_display_name(session.Handle, str.Pointer));
         }
 
         /// <summary>
@@ -76,7 +78,8 @@ namespace Quaternar.Qaros
                 DeviceFamily = identity.DeviceFamily,
                 DeviceName = identity.DeviceName
             }))
-                return Results.FromNative(NativeMethods.qar_impl_peer_update_device_identity(_context.DangerousHandle, chain.Head));
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_peer_update_device_identity(session.Handle, chain.Head));
         }
 
         /// <summary>
@@ -137,8 +140,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
             var subscription = PeerUpdateSubscription.Create(cancelToken, ownsToken, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_peer_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, cancelToken.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(subscription, StartUpdates);
         }
 
         private Result<IDisposable> SubscribeUpdatesCore(EventHandler<PeerSpecUpdatedEventArgs> handler, CancellationToken cancellationToken)
@@ -146,40 +148,16 @@ namespace Quaternar.Qaros
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            try
-            {
-                var tokenResult = CancelToken.Create();
-                if (!tokenResult.IsSuccess)
-                    return Result<IDisposable>.Failure(tokenResult.Info);
-                var hasRegistration = false;
-                if (cancellationToken.IsCancellationRequested)
-                    tokenResult.Value.Cancel();
-                else if (cancellationToken.CanBeCanceled)
-                {
-                    registration = cancellationToken.Register(CancelNativeToken, tokenResult.Value);
-                    hasRegistration = true;
-                }
-                var subscription = hasRegistration ? PeerUpdateSubscription.Create(tokenResult.Value, registration, handler) : PeerUpdateSubscription.Create(tokenResult.Value, true, handler);
-                var info = Results.ToInfo(NativeMethods.qar_impl_peer_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-                return Results.SubscriptionResult(info, subscription);
-            }
-            catch
-            {
-                registration.Dispose();
-                throw;
-            }
+            return _context.StartSubscription(
+                cancellationToken,
+                token => PeerUpdateSubscription.Create(token, true, handler),
+                (token, registration) => PeerUpdateSubscription.Create(token, registration, handler),
+                StartUpdates);
         }
 
-        private static void CancelNativeToken(object? state)
+        private static ResultNative StartUpdates(PeerUpdateSubscription subscription, IntPtr session, IntPtr token)
         {
-            try
-            {
-                ((CancelToken)state!).Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            return NativeMethods.qar_impl_peer_subscribe_updates(session, subscription.Callback, subscription.UserState, token);
         }
 
 #if NET8_0_OR_GREATER

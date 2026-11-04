@@ -78,7 +78,7 @@ namespace Quaternar.Qaros.Tests
         }
 
         // A joined peer is Online in the hub's view, and the deprecated AppState still reads the
-        // Running every session claims when it joins (ADR-0363).
+        // Running every session claims when it joins.
         [Fact]
         public void AJoinedPeerReadsOnlineAndItsDeprecatedAppStateStaysRunning()
         {
@@ -101,7 +101,7 @@ namespace Quaternar.Qaros.Tests
         }
 
         // A peer that exits cleanly announces its leave: the session lists it as Leaving rather than
-        // Online, and the deprecated AppState reads ShuttingDown (ADR-0363).
+        // Online, and the deprecated AppState reads ShuttingDown.
         [Fact]
         public void APeerThatLeavesReadsLeaving()
         {

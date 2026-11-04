@@ -235,7 +235,7 @@
  * \section d3d11_rendering_code With a pairing code
  * Like the CPU program, it also takes a pairing code as its first argument
  * that does not start with `--`. It passes no Hub address, so the code finds
- * a Hub of your own user, as \ref qar_c_tutorial_onboarding "Onboarding and Rejoin"
+ * a Hub of your own user, as \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
  * explains. An app on another machine also names the Hub with a
  * QarOnboardHostExt; that tutorial shows how.
  * \code{.bash}

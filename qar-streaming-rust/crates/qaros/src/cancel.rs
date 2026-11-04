@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::fmt;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
@@ -26,7 +25,6 @@ pub struct CancelToken {
 pub(crate) struct CancelTokenInner {
     pub(crate) handle: NonNull<QarCancelToken>,
     library: Rc<LibraryInner>,
-    destroy_at_library_teardown: Cell<bool>,
     cross_thread: Arc<CrossThreadToken>,
 }
 
@@ -61,6 +59,12 @@ pub struct CancelHandle {
 }
 
 impl CancelHandle {
+    pub(crate) fn for_token(token: &CancelTokenInner) -> Self {
+        Self {
+            token: Arc::clone(&token.cross_thread),
+        }
+    }
+
     /// Cancels every call that was given the token. `Ok(true)` when the token was cancelled,
     /// `Ok(false)` when its owner had already dropped it.
     pub fn cancel(&self) -> Result<bool> {
@@ -167,7 +171,6 @@ impl CancelTokenInner {
         Ok(Self {
             handle,
             library: Rc::clone(library),
-            destroy_at_library_teardown: Cell::new(false),
             cross_thread: Arc::new(CrossThreadToken {
                 handle: Mutex::new(Some(TokenPointer(handle))),
                 cancel: api.qar_impl_cancel_token_cancel,
@@ -183,14 +186,6 @@ impl CancelTokenInner {
     }
 }
 
-impl CancelTokenInner {
-    /// For an operation that may still use the token after its last owner
-    /// is gone: the handle is then destroyed right before the library.
-    pub(crate) fn destroy_at_library_teardown(&self) {
-        self.destroy_at_library_teardown.set(true);
-    }
-}
-
 impl Drop for CancelTokenInner {
     fn drop(&mut self) {
         // From here on no other thread reaches the handle.
@@ -199,13 +194,6 @@ impl Drop for CancelTokenInner {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take();
-        if self.destroy_at_library_teardown.get() {
-            self.library
-                .tokens_destroyed_at_teardown
-                .borrow_mut()
-                .push(self.handle);
-            return;
-        }
         // SAFETY: last owner; no call using the token is in progress because
         // blocking calls borrow the token and subscriptions keep their own
         // reference until the session handle is destroyed.

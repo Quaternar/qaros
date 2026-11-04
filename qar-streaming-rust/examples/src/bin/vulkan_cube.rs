@@ -8,8 +8,8 @@
 //!
 //! Like the C sample it takes no options and looks for no file itself. It loads the runtime with
 //! the default lookup (`Library::load_default`, the C sample's `qar_library_load(NULL)`: the
-//! runtime beside the executable, the folder `QAROS_RUNTIME_DIR` names, the installed QAROS,
-//! `PATH`) and joins the QAROS on this PC as a local app (`OnboardMethod::LocalApp`): no code,
+//! runtime beside the executable, the runtime of the QAROS instance `QAR_INSTANCE` names, the
+//! installed QAROS, `PATH`) and joins the QAROS on this PC as a local app (`OnboardMethod::LocalApp`): no code,
 //! the first run waits until someone clicks Allow in QAROS. It then creates its device on the
 //! session's GPU (`Session::graphics_adapter`; the first supported GPU when the session names
 //! none), renders for every running target app in the peer list with one sender and camera each,
@@ -57,8 +57,8 @@ use qaros_examples::{ExampleResult, describe_loaded_runtime, is_running_target, 
 const USAGE: &str = "Usage: vulkan_cube
 
 Loads the QAROS runtime (the default lookup: the runtime beside this executable,
-the folder QAROS_RUNTIME_DIR names, the installed QAROS, PATH) and joins the QAROS
-on this PC as a local app. The first run waits until you click Allow in QAROS.
+the runtime of the QAROS instance QAR_INSTANCE names, the installed QAROS, PATH)
+and joins the QAROS on this PC as a local app. The first run waits until you click Allow in QAROS.
 The cube renders on the GPU its session was created on.
 Stop with Ctrl+C, or by closing stdin when it is a pipe.
 ";
@@ -122,8 +122,8 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
     stop::watch_for_stop_requests();
-    // SAFETY: the runtime found is the installed QAROS, or one the user chose with
-    // QAROS_RUNTIME_DIR or put beside this executable, which matches these bindings.
+    // SAFETY: the runtime found is the installed QAROS, that of the instance the user chose with
+    // QAR_INSTANCE, or one put beside this executable, which matches these bindings.
     let library = match unsafe { Library::load_default(&LibraryConfig::default()) } {
         Ok(library) => library,
         Err(qaros::Error::Load(load_error)) => {
@@ -212,6 +212,8 @@ fn join_as_local_app(library: &Library, runtime: &Runtime) -> ExampleResult<Opti
     let onboarded = runtime.onboard(
         &OnboardMethod::LocalApp {
             approval_timeout: None,
+            // Constant across versions: every start gets the same peer id back from the hub.
+            app_tag: Some(APP_TAG),
         },
         &presentation,
         &BlockingOptions {
@@ -224,7 +226,10 @@ fn join_as_local_app(library: &Library, runtime: &Runtime) -> ExampleResult<Opti
         eprintln!("a helper thread of the join panicked");
     }
     match onboarded {
-        Ok(onboarded) if !stop::requested() => Ok(Some(onboarded.session)),
+        Ok(onboarded) if !stop::requested() => {
+            print_my_peer_id(&onboarded.session);
+            Ok(Some(onboarded.session))
+        }
         Ok(_) => Ok(None),
         Err(_) if stop::requested() => Ok(None),
         Err(error) => {
@@ -234,6 +239,22 @@ fn join_as_local_app(library: &Library, runtime: &Runtime) -> ExampleResult<Opti
     }
 }
 // ANCHOR_END: join
+
+/// The cube's app tag: an identity key, printable ASCII and constant across versions, as in the
+/// C cube.
+const APP_TAG: &str = "vulkan-cube.examples.qaros";
+
+/// Prints the peer id the hub gave this app. Thanks to the app tag it is the same on every
+/// start, so the user (and a test) can see the restart kept it.
+fn print_my_peer_id(session: &Session) {
+    let peer = session
+        .my_peer()
+        .and_then(|me| session.library().uuid_to_string(&me.id.0));
+    match peer {
+        Ok(text) => println!("Joined QAROS as peer {text}"),
+        Err(error) => eprintln!("could not read this app's peer id: {error}"),
+    }
+}
 
 // ANCHOR: explain_failure
 /// Tells the user, in plain words, why joining failed and what to do.

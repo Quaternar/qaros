@@ -284,7 +284,7 @@
  * | `Update:` or listing values differ from what you set | Updates arrive asynchronously and can be older than your last call | Do not apply an update's values blindly; treat it as a sign that the panel changed |
  * | ``name=''`` in the listing | The Hub returned an empty display name | Identify panels by id, not by display name |
  * | The program hangs while ending the subscription | A callback is waiting for a lock the ending thread holds | Release the lock before qar_cancel_token_cancel() |
- * | `No QAROS runtime loaded` | The default lookup found no runtime | Install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
+ * | `No QAROS runtime loaded` | The default lookup found no runtime | Install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
  *
  * \section gui_panels_next Next
  *

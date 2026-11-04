@@ -21,7 +21,7 @@ The program is `examples/src/bin/cpu_rendering_visualizer.rs` in the Rust bindin
 ## Before you start
 
 - **Platform.** Windows for the real runtime. On macOS and Linux the example runs against `qaros-stub`, the in-memory stand-in for the runtime that ships with the binding's tests. The stub is enough to follow the frame cycle; it shows no picture.
-- **QAROS.** Installed on the Hub machine, where the example runs, or a runtime folder named by `QAROS_RUNTIME_DIR`, or a library file named with `--qaros-library=PATH`. The example finds the runtime the way every binding does ([Language Bindings](/docs/developer-guide/language-bindings#rust)).
+- **QAROS.** Installed on the Hub machine, where the example runs, or the runtime of a QAROS development hub whose instance `QAR_INSTANCE` names, or a library file named with `--qaros-library=PATH`. The example finds the runtime the way every binding does ([Language Bindings](/docs/developer-guide/language-bindings#rust)).
 - **A target.** At least one target app in the session: open the Visualizer, or start a headset. Joining as a local app starts the Hub when it is not running.
 - **Joining.** On Windows the example joins the Hub as a local app ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)): the first run of the executable opens the QAROS approval prompt, you click **Allow** once, and later runs of the same executable join without a prompt. A local app has no onboarding id, so nothing is stored.[^code]
 - **The latest stable Rust.**
@@ -229,7 +229,7 @@ What it does not guarantee:
 | exit 3 | the local-app join, which starts a Hub that is not running, reached no Hub | start QAROS and run again |
 | `Pairing code rejected or expired` (`QAR_STATUS_PAKE_ERROR`) | wrong code, or the code changed (they live about 10 s) | read the current code and run again at once |
 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | with a code: no Hub of your user answered; the example finds only your own Hub, on the Hub machine | start QAROS and run again |
-| a not-found error naming every place it looked | no runtime found | install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
+| a not-found error naming every place it looked | no runtime found, or `QAR_INSTANCE` names an instance without a loadable runtime | install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
 | stays at `Looking for target apps ...` | no running target app in the session | open the Visualizer or start a headset |
 | `No sender for <target> yet: ...`, repeated | the target does not answer the sender creation within 10 s | check the target is running; each attempt blocks the loop for up to 10 s, so the Vulkan tutorial's example retries less often |
 | `Stopped streaming to <target>: ...` | a failure that is not part of the normal flow, `RENDERING_STREAM_IS_CLOSED` included | the next listing creates a new sender when the target still runs |

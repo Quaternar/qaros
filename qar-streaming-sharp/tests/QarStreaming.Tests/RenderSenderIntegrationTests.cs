@@ -137,6 +137,51 @@ namespace Quaternar.Qaros.Tests
             Assert.Throws<ObjectDisposedException>(() => frame.GetViewPose(0));
             Assert.Throws<ObjectDisposedException>(() => frame.GetViewFov(0));
         }
+
+        // A Vulkan 1.1 device with nothing but the two external extensions, as a Unity player has
+        // with the QAROS plugin: the application releases the images and signals the semaphore,
+        // reports the state it left them in, and shows the frame.
+        [Fact]
+        public async Task VulkanRenderSenderCompletesFullLoopOnAnApplicationDevice()
+        {
+            Assert.True(OperatingSystem.IsWindows(), "Vulkan render sender tests require Windows.");
+            using var scope = _fixture.CreateSessionScope();
+            var target = scope.StartRenderTarget();
+            using var device = VulkanTestDevice.Create(VulkanTestDevice.ExternalMemoryWin32, VulkanTestDevice.ExternalSemaphoreWin32);
+            using var sender = CreateSender(scope.Session, CreateVulkanOptions(target.PeerId, device, scope.CreateAppVolume()));
+            using var frame = await BeginFrameEventuallyAsync(sender);
+            var vulkanFrame = sender.GetVulkanFrame().ValueOrThrow();
+            Assert.NotEmpty(vulkanFrame.TextureViews);
+            Assert.NotEmpty(vulkanFrame.Textures);
+            Assert.All(vulkanFrame.Textures, texture => Assert.NotEqual(0UL, texture.Image));
+            Assert.NotEqual(0UL, vulkanFrame.Semaphore);
+            Assert.False(sender.GetD3D11Frame().IsSuccess);
+            device.ReleaseToExternal(vulkanFrame);
+            for (var i = 0; i < vulkanFrame.Textures.Length; i++)
+                vulkanFrame.SetTextureState(i, VulkanConstants.ImageLayoutTransferSrcOptimal, VulkanConstants.QueueFamilyExternal);
+            Assert.All(sender.GetVulkanFrame().ValueOrThrow().Textures, texture =>
+            {
+                Assert.Equal(VulkanConstants.ImageLayoutTransferSrcOptimal, texture.Layout);
+                Assert.Equal(VulkanConstants.QueueFamilyExternal, texture.QueueFamilyIndex);
+            });
+            Assert.Throws<ArgumentOutOfRangeException>(() => vulkanFrame.SetTextureState(vulkanFrame.Textures.Length, 0, 0));
+            sender.ShowFrame().EnsureSuccess();
+        }
+
+        // A Unity player's device without the plugin's extensions is refused by name when the
+        // sender is created, before any receiver is waited for.
+        [Fact]
+        public void VulkanRenderSenderRefusesADeviceWithoutExternalExtensions()
+        {
+            Assert.True(OperatingSystem.IsWindows(), "Vulkan render sender tests require Windows.");
+            using var scope = _fixture.CreateSessionScope();
+            using var device = VulkanTestDevice.Create();
+            // Every render sender is placed in an app volume; without one it is refused first.
+            var options = CreateVulkanOptions(default(PeerId), device, scope.CreateAppVolume());
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var result = scope.Session.RenderSenders.Create(options, cts.Token);
+            QarNativeAssert.AssertFailure(result, StatusCode.RenderingProducerExternalDeviceNotSupported);
+        }
 #endif
 
         private static RenderSender CreateSender(Session session, RenderSenderOptions options)
@@ -167,6 +212,21 @@ namespace Quaternar.Qaros.Tests
                 {
                     D3D11Device = device.Device.NativePointer,
                     D3D11Context = device.Context.NativePointer
+                }
+            };
+        }
+
+        private static RenderSenderOptions CreateVulkanOptions(PeerId peerId, VulkanTestDevice device, AppVolumeId appVolume)
+        {
+            return new RenderSenderOptions(peerId, GraphicsAPI.Vulkan)
+            {
+                AppVolumeId = appVolume,
+                TextureLayout = FrameLayout.SideBySide,
+                FrameViews = CreateStereoFrameViews(),
+                StreamParamsVulkan = new StreamParamsVulkan
+                {
+                    PhysicalDevice = device.PhysicalDevice,
+                    Device = device.Device
                 }
             };
         }
@@ -268,8 +328,9 @@ namespace Quaternar.Qaros.Tests
 
         private static void WriteCpuFrameMarker(VideoFrameCpu frame)
         {
-            Assert.NotEmpty(frame.Textures);
-            var texture = frame.Textures[0];
+            // Colour and depth are separate textures; the marker goes into the left eye's colour one.
+            var colorView = Assert.Single(frame.TextureViews, view => view.DataType == VideoFrameViewType.Color && view.Eye == VideoFrameViewEye.Left);
+            var texture = frame.Textures[(int)colorView.TextureIndex];
             var length = Math.Min((int)texture.TextureDataSize.ToUInt64(), 16);
             if (length <= 0 || texture.TextureData == IntPtr.Zero)
                 return;

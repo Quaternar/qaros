@@ -13,19 +13,21 @@ This page covers keeping a Hub running over time: how to upgrade, what compatibi
 QAROS ships as several artifacts (see [Installation](/docs/operator-guide/installation)); each upgrades differently:
 
 - **QAROS.** Run the newer installer over the installed version ([Installation: Upgrade](/docs/operator-guide/installation#upgrade)). All runtime state lives outside the install folder, so identity, CA state, session state, approved local apps and Hub configuration are kept.
-- **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, redeploy the package on HoloLens 2. Keep Hub and players on the same release.
+- **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, on HoloLens 2 show the install code again in the Visualizer ([HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2#install-from-the-visualizer)), or redeploy the package through the Device Portal. Keep Hub and players on the same release.
 - **Applications on the C API.** A runtime update reaches every application that loads it, which is why the compatibility promise below matters.
 
 ## Updating to encrypted storage
 
 From this release every secret QAROS keeps (the Hub's CA keys, device and app identities, approved local apps, the licence) is encrypted in `secure-store` under the data root, protected by a key of the signed-in Windows user that lives in the PC's TPM (or in Windows DPAPI where no TPM is usable). See [Security Deep Dive: What is stored where](./security-deep-dive.md#what-is-stored-where).
 
+An installed Hub keeps its own secrets in the QAROS System Service's store instead (under `%ProgramData%`, a machine key only the service can use). Updating from a version that kept them in `secure-store` works the same way as below: they are destroyed at the first start, not moved.
+
 The plaintext key files of earlier versions are **deleted** at the Hub's first start, not converted. After the update:
 
 1. **Pair every device again** with a new code (headsets, desktop players, apps on other PCs). Apps the Hub starts itself re-enrol on their own.
 2. **Approve local source apps again** when they first connect.
 3. **Join member Hubs to their primary again.** The Hub has a new certificate authority and a new Hub key.
-4. **Activate the QAROS licence again** with `qaros-license.exe` (release builds).
+4. **Activate the QAROS licence again** with `qaros-license.exe` (release builds). It finds the Hub's store through the Hub's launcher config; for a config it does not find on its own (not in the data folder or beside the tool), pass `--config <file>`.
 
 The first start may take a few seconds longer while Windows creates the TPM key.
 
@@ -55,6 +57,7 @@ Two categories matter under the data root ([Installation: Where data and logs li
 
 - **Hub identity and CA state** - the Hub's trust root and issued device trust. Losing it means every device must re-onboard and any federation must be re-established. Back it up, and protect the backup as you would the Hub machine itself.
   - The secrets in `secure-store` are bound to this PC's TPM (or DPAPI) and this Windows user. A backup restores them only on the same PC, for the same user, while the TPM has not been cleared. Restored anywhere else, the Hub cannot read them, does not start, and must begin with a new `secure-store` (a new CA: every device pairs again).
+  - An installed Hub's secrets are in `%ProgramData%\Quaternar\Qaros\secure`, which only SYSTEM and the QAROS service can open, under a machine key bound to this PC. A per-user backup does not contain them; they cannot be moved to another PC.
 - **Runtime storage and session state** - preserves Shared Space continuity and peer continuity across a machine move.
 - **Logs** - under the log root (`%TEMP%\quaternar\logs`), not the data root. Collect them from a run *before* restarting if you need them for diagnosis.
 

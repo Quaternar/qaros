@@ -1,6 +1,7 @@
 /** \file local_app_onboarding.c
  *  \brief Smallest source app that joins the QAROS installed on this machine
- *  as a local app: no code, the user approves it once in QAROS.
+ *  as a local app: no code, the user approves it once in QAROS, and an app tag
+ *  keeps its peer id across restarts.
  *  \example local_app_onboarding.c
  */
 
@@ -18,12 +19,14 @@
  * This is how a source app on the Hub machine joins QAROS. There is nothing
  * to type and no onboarding id to store. An app on another machine pairs with
  * a code instead
- * (\ref qar_c_tutorial_onboarding "Onboarding and Rejoin").
+ * (\ref qar_c_tutorial_onboarding "Code Pairing and Rejoin").
  *
  * What you will learn:
  * - how QarOnboardLocalAppExt joins, and what the user sees during the
  *   approval
  * - why a local app always loads the installed runtime
+ * - how an app tag (QarOnboardLocalAppTagExt) gives the app the same peer id
+ *   on every start
  * - how to follow the approval wait through progress messages
  * - which status codes a refusal comes with, and what to tell the user for
  *   each
@@ -45,12 +48,16 @@
  *
  * # Wait up to 90 s for the approval instead of the Hub's default.
  * .\build\x64-windows\qar-streaming-c\examples\Debug\local_app_onboarding.exe 90000
+ *
+ * # A second instance beside the first, with an app tag of its own.
+ * .\build\x64-windows\qar-streaming-c\examples\Debug\local_app_onboarding.exe 0 second.local-app-onboarding.examples.quaternar
  * \endcode
  *
- * The only argument is the approval timeout in milliseconds. Absent or `0`
+ * The first argument is the approval timeout in milliseconds. Absent or `0`
  * means the Hub's default of 120 s; the Hub caps longer waits at 10 minutes.
- * The program takes no library path: like a shipped app, it always runs the
- * default lookup.
+ * The second is the app tag, `main.local-app-onboarding.examples.quaternar`
+ * when absent. The program takes no library path: like a shipped app, it
+ * always runs the default lookup.
  *
  * On the first run, the expected output while the approval prompt is open
  * and after the user clicks **Allow** is this. The lines before `Joined
@@ -61,17 +68,19 @@
  * Certificate signed.
  * Onboarding complete.
  * Joined QAROS.
+ * This app joined as peer <uuid>
  * qar_library_destroy: SUCCESS (code=0)
  * \endcode
  *
  * Later starts of the same executable print the same lines without
- * `Waiting for approval in QAROS hub`.
+ * `Waiting for approval in QAROS hub`, and the same peer id while no other
+ * instance with the same tag runs.
  *
  * Exit codes, for scripts:
  * | Code | Status | Meaning |
  * |---|---|---|
  * | 0 | | joined |
- * | 1 | any other | other error, or an approval timeout that is not a number |
+ * | 1 | any other | other error, an approval timeout that is not a number, or a refused app tag (`QAR_STATUS_ARGUMENT_NOT_SUPPORTED`) |
  * | 2 | | no runtime loaded: QAROS is not installed, or its runtime could not be loaded |
  * | 3 | `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` (1802) | no Hub answers on this machine, and none could be started |
  * | 4 | `QAR_STATUS_ONBOARDING_APPROVAL_DENIED` (1805) | Deny, a closed prompt, or a revoked approval |
@@ -116,7 +125,8 @@
  * \snippet local_app_onboarding.c local_app_onboard
  *
  * QarOnboardLocalAppExt, chained as the only mode extension, asks the Hub on
- * this machine to let the process in. The Hub identifies the process from
+ * this machine to let the process in. QarOnboardLocalAppTagExt, chained after
+ * it, names this instance (see \ref local_app_tag_step "the app tag" below). The Hub identifies the process from
  * Windows: its path, file hash, signature and user. Your `display_name` is
  * shown to the user separately, labelled "App says:".
  * - **Approved before and unchanged:** the session comes back at once, with
@@ -144,6 +154,28 @@
  * is nothing to save: every start calls \ref qar_runtime_onboard again, and
  * the Hub remembers the approval. \ref qar_runtime_rejoin and
  * \ref qar_runtime_forget do not apply.
+ *
+ * \anchor local_app_tag_step
+ * The app tag and the peer id:
+ * - The Hub picks the peer id and remembers one per approval and app tag. The
+ *   next start with the same tag gets the same peer id back, so viewers and
+ *   your own bookkeeping see the same peer, not a new one. An app cannot
+ *   choose the id (\ref QarOnboardPeerIdExt is refused here).
+ * - While another live process holds the remembered id (a second instance
+ *   with the same tag), the newcomer gets a one-off id that is not
+ *   remembered. Give instances that run together different tags.
+ * - The tag is an identity key like the common name of an app volume:
+ *   printable ASCII, no space at either end, at most
+ *   \ref QAR_MAX_APP_TAG_LENGTH bytes, compared exactly, never starting with
+ *   `member/`, and kept the same across versions of the app. Anything else is
+ *   refused with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` before the Hub is asked.
+ *   Text for people goes in the display name.
+ * - No tag is the default tag, remembered the same way.
+ * - The Hub keeps at most 64 tags per approval (least recently used dropped
+ *   first) and forgets a tag unused for 30 days. Revoking or narrowing the
+ *   approval revokes the running instances and forgets every remembered id.
+ * - A tag is not a secret and not a permission: it only selects among the
+ *   peer ids of your own approval.
  *
  * \subsection local_app_explain_step 5. Tell the user, and leave
  * \snippet local_app_onboarding.c local_app_teardown
@@ -175,7 +207,7 @@
  * | What you see | Cause | What to do |
  * |---|---|---|
  * | exit 2, `Could not load QAROS: install or repair it; the line above says why.` after `qar-streaming-c.dll is not beside this module, ...` | no runtime in any step of the lookup | install QAROS (<a href="/docs/operator-guide/installation">Installation</a>) |
- * | exit 2, the same line after ``QAROS_RUNTIME_DIR is '...', but no loadable qar-streaming-c.dll is there.`` | the variable names a folder without a loadable runtime; the lookup stops there | fix or unset `QAROS_RUNTIME_DIR` |
+ * | exit 2, the same line after ``QAR_INSTANCE is '...', but ...`` | the variable names an instance without a loadable runtime; the lookup stops there | start that instance's hub, or fix or unset `QAR_INSTANCE` |
  * | exit 2, the same line after `` The installed QAROS runtime in '...' could not be loaded. `` | a broken installation | repair or reinstall QAROS |
  * | exit 2, the same line after ``Failed to load symbol '...'`` | the runtime is older than this repository's header | install a QAROS at least as new as the header |
  * | exit 3, `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.` | QAROS is installed but its Hub does not answer, and the runtime did not start it | start **QAROS** from the Start menu, then the app again |
@@ -183,8 +215,10 @@
  * | exit 5 | nobody answered within the timeout | answer the prompt in the Visualizer or the tray window; pass a longer timeout if users need it |
  * | exit 6 | the program serving the local enrollment is not the installed, signed QAROS | do not retry; reinstall QAROS from the official installer |
  * | exit 7 | the executable was moved, copied, re-signed or changed since its approval | revoke the old approval in the Visualizer (<a href="/docs/operator-guide/source-applications#approved-local-apps">Approved local apps</a>) and start again |
- * | exit 1, `QAR_STATUS_ONBOARDING_FAILED` with a runtime version or flavor in the message | the app loaded a runtime other than the installed one, through `QAROS_RUNTIME_DIR` or a copy beside the executable | unset the variable, remove the copy |
+ * | exit 1, `QAR_STATUS_ONBOARDING_FAILED` with a runtime version or flavor in the message | the app loaded a runtime other than the Hub's, through `QAR_INSTANCE` or a copy beside the executable | unset the variable, remove the copy |
  * | exit 1, ``approval timeout '...' is not a number of milliseconds`` | the argument is not a number | pass milliseconds, or nothing |
+ * | exit 1, `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` | the app tag is not printable ASCII, has a space at either end, is too long, or starts with `member/` | pass a valid tag, or none |
+ * | a new peer id on every start | another instance with the same tag still runs, or the tag changed | give instances that run together different tags; keep the tag constant |
  * | the prompt comes back after every build | the executable is unsigned, so its approval is for one exact file | expected during development |
  *
  * More in
@@ -205,6 +239,10 @@
 #include <errno.h>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
+
+/* An app tag is an identity key: printable ASCII, constant across versions,
+ * scoped by the app (DNS style). */
+#define DEFAULT_APP_TAG "main.local-app-onboarding.examples.quaternar"
 
 //! [local_app_timeout]
 /** \brief Parse the optional approval timeout in milliseconds. Absent or 0
@@ -246,14 +284,15 @@ main(int argc, char** argv)
 		fprintf(stderr, "approval timeout '%s' is not a number of milliseconds\n", argv[1]);
 		return 1;
 	}
+	const char* app_tag = argc >= 3 ? argv[2] : DEFAULT_APP_TAG;
 
 	//! [local_app_load]
 	/* A local app always runs the default lookup: the Hub refuses a runtime of
 	 * another version or flavor than its own. */
 	if(!qar_library_load(NULL))
 	{
-		/* The lookup has printed why: nothing found, a QAROS_RUNTIME_DIR without
-		 * a runtime, a broken install, or a runtime older than the header. */
+		/* The lookup has printed why: nothing found, a QAR_INSTANCE without a
+		 * runtime, a broken install, or a runtime older than the header. */
 		fprintf(stderr, "Could not load QAROS: install or repair it; the line above says why.\n");
 		return 2;
 	}
@@ -286,7 +325,11 @@ main(int argc, char** argv)
 	init.presentation.display_name = "Local App Onboarding Example";
 	QarOnboardLocalAppExt local_app = qar_onboard_local_app_ext_default();
 	local_app.approval_timeout_ms = approval_timeout_ms;
-	init.header.next = &local_app.header;
+	/* Optional: without it the app has the default tag. */
+	QarOnboardLocalAppTagExt tag = qar_onboard_local_app_tag_ext_default();
+	tag.app_tag = app_tag;
+	init.header.next = &local_app.header; /* the one mode extension */
+	local_app.header.next = &tag.header;
 
 	/* Blocks until the Hub answers, which can take minutes on the first run.
 	 * The onboarding id comes back zero: a local app has nothing to persist. */
@@ -305,6 +348,12 @@ main(int argc, char** argv)
 	}
 	if(session != NULL)
 	{
+		/* The same tag prints the same peer id on the next start. Joining
+		 * succeeded either way, so a failure here is only logged. */
+		if(!example_print_own_peer_id("This app", session))
+		{
+			fprintf(stderr, "Could not read this app's peer id.\n");
+		}
 		qar_session_handle_destroy(session);
 	}
 	qar_runtime_handle_destroy(runtime);

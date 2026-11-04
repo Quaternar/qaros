@@ -38,10 +38,10 @@ Functions are loaded by symbol name into a table the binding owns (`qaros_sys::Q
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 
-With an unpacked QAROS package instead, name its `bin` folder with `QAROS_RUNTIME_DIR`:
+To run against a QAROS development hub instead, name its instance with `QAR_INSTANCE`: the hub records its runtime folder under that name, and the examples load that runtime (an app the hub starts receives the variable already):
 
 ```powershell
-$env:QAROS_RUNTIME_DIR = "C:\path\to\QAROS-package\bin"
+$env:QAR_INSTANCE = "dev-0123456789abcdef" # the development hub's instance name
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 

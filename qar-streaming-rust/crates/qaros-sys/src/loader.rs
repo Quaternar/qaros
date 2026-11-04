@@ -27,8 +27,9 @@ pub enum LoadError {
         symbols: Vec<&'static str>,
     },
     /// The default lookup ([`QarApi::load_default`]) found no runtime it could load. The
-    /// attempts name every place looked at, in lookup order; a set `QAROS_RUNTIME_DIR` or an
-    /// installed QAROS whose runtime is missing or fails to load ends the lookup there.
+    /// attempts name every place looked at, in lookup order; a set `QAR_INSTANCE` that names no
+    /// valid or known instance, or an instance or installed QAROS whose runtime is missing or
+    /// fails to load, ends the lookup there.
     NotFound {
         /// Each place looked at and what was met there.
         attempts: Vec<LookupAttempt>,
@@ -136,91 +137,6 @@ macro_rules! define_api_table {
 
 qar_impl_function_list!(define_api_table);
 
-/// The function that releases a runtime under these bindings, fixed when they are generated: the
-/// header of the runtimes up to 0.9.0-dev.2916 declares `qar_runtime_destroy`, the runtime's
-/// shutdown its samples call, and documents `qar_runtime_handle_destroy` as releasing the handle
-/// "without shutting down the runtime"; the public header drops `qar_runtime_destroy` and
-/// releases the runtime with `qar_runtime_handle_destroy`. A loaded table exports every declared
-/// symbol, so the call always exists in the library.
-pub const RUNTIME_RELEASE_SYMBOL: &str = if declares_symbol("qar_impl_runtime_destroy") {
-    "qar_impl_runtime_destroy"
-} else {
-    "qar_impl_runtime_handle_destroy"
-};
-
-const fn declares_symbol(name: &str) -> bool {
-    let mut index = 0;
-    while index < SYMBOL_NAMES.len() {
-        if same_name(SYMBOL_NAMES[index], name) {
-            return true;
-        }
-        index += 1;
-    }
-    false
-}
-
-const fn same_name(left: &str, right: &str) -> bool {
-    let (left, right) = (left.as_bytes(), right.as_bytes());
-    if left.len() != right.len() {
-        return false;
-    }
-    let mut index = 0;
-    while index < left.len() {
-        if left[index] != right[index] {
-            return false;
-        }
-        index += 1;
-    }
-    true
-}
-
-/// `qar_impl_runtime_destroy` when these bindings declare it; the override comes from the
-/// generated function list, so the table field it reads exists exactly then.
-trait DeclaredRuntimeDestroy {
-    fn declared_runtime_destroy(&self) -> Option<unsafe extern "C" fn(*mut QarRuntime)> {
-        None
-    }
-}
-
-macro_rules! override_when_runtime_destroy_is_declared {
-    (qar_impl_runtime_destroy) => {
-        fn declared_runtime_destroy(&self) -> Option<unsafe extern "C" fn(*mut QarRuntime)> {
-            Some(self.qar_impl_runtime_destroy)
-        }
-    };
-    ($other_function:ident) => {};
-}
-
-macro_rules! implement_declared_runtime_destroy {
-    ($(
-        pub fn $name:ident($($argument:ident : $argument_type:ty),* $(,)?) $(-> $return_type:ty)?;
-    )*) => {
-        impl DeclaredRuntimeDestroy for QarApi {
-            $(override_when_runtime_destroy_is_declared!($name);)*
-        }
-    };
-}
-
-qar_impl_function_list!(implement_declared_runtime_destroy);
-
-impl QarApi {
-    /// Releases a runtime with [`RUNTIME_RELEASE_SYMBOL`], the call these bindings' header
-    /// releases a runtime with.
-    ///
-    /// # Safety
-    ///
-    /// `runtime` comes from `qar_impl_runtime_create` of this table's library, every session of
-    /// it is destroyed, and it is not used afterwards.
-    pub unsafe fn release_runtime(&self, runtime: *mut QarRuntime) {
-        match self.declared_runtime_destroy() {
-            // SAFETY: forwarded to the caller.
-            Some(runtime_destroy) => unsafe { runtime_destroy(runtime) },
-            // SAFETY: forwarded to the caller.
-            None => unsafe { (self.qar_impl_runtime_handle_destroy)(runtime) },
-        }
-    }
-}
-
 impl QarApi {
     /// Opens the C API library file at `path` and resolves every `qar_impl_*` symbol. Only that
     /// file is tried, from its absolute path (a relative path is taken from the current
@@ -248,8 +164,13 @@ impl QarApi {
     /// 0. a `qar-streaming-c` already loaded in the process (a reference is taken);
     /// 1. `qar-streaming-c.dll` beside the binding: in the folder of the executable or library
     ///    this crate is compiled into;
-    /// 2. the folder named by `QAROS_RUNTIME_DIR`; when the variable is set it is the only copy
-    ///    considered, and a runtime missing there or failing to load is an error;
+    /// 2. when `QAR_INSTANCE` names a QAROS instance (Windows only), that instance's runtime
+    ///    folder: `default` is the installed QAROS, any other name the `RuntimeFolder` recorded
+    ///    under `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a QAROS development hub
+    ///    records its build output there and sets `QAR_INSTANCE` for the apps it starts), else
+    ///    that record's `<InstallFolder>\bin`. When the variable is set it is the only copy
+    ///    considered: an invalid name, an unknown instance, or a runtime missing there or failing
+    ///    to load is an error, never a reason to load another instance's runtime;
     /// 3. the installed QAROS, `<InstallFolder>\bin`, from `HKLM\SOFTWARE\Quaternar\QAROS`
     ///    (Windows); an installed runtime missing or failing to load is an error;
     /// 4. each folder on `PATH`, in order (elsewhere: the dynamic linker's search).
@@ -316,22 +237,5 @@ impl fmt::Debug for QarApi {
             .field("library_path", &self.library_path)
             .field("lookup_step", &self.lookup_step)
             .finish_non_exhaustive()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{RUNTIME_RELEASE_SYMBOL, SYMBOL_NAMES};
-
-    #[test]
-    fn the_runtime_is_released_with_runtime_destroy_exactly_when_the_bindings_declare_it() {
-        let declares_runtime_destroy = SYMBOL_NAMES.contains(&"qar_impl_runtime_destroy");
-        let expected = if declares_runtime_destroy {
-            "qar_impl_runtime_destroy"
-        } else {
-            "qar_impl_runtime_handle_destroy"
-        };
-        assert_eq!(RUNTIME_RELEASE_SYMBOL, expected);
-        assert!(SYMBOL_NAMES.contains(&RUNTIME_RELEASE_SYMBOL));
     }
 }

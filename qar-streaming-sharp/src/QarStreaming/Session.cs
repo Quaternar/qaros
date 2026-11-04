@@ -15,8 +15,9 @@ namespace Quaternar.Qaros
     /// The caller owns the session. <see cref="Dispose"/> tears the session down but keeps the
     /// persisted identity, so the next start can <see cref="Runtime.Rejoin"/> silently; erasing the
     /// identity is <see cref="Runtime.Forget"/>. Disposing ends every subscription of the session
-    /// and waits for a handler running on another thread, so never dispose it from a QAROS
-    /// callback or event handler, nor while holding a lock a handler takes.
+    /// and waits for a handler running on another thread, and for the session calls other threads
+    /// are making (see <see cref="Dispose"/>): never dispose it from a QAROS callback or event
+    /// handler, nor while holding a lock a handler or such a call takes.
     /// </remarks>
     public sealed partial class Session : IDisposable
     {
@@ -39,12 +40,11 @@ namespace Quaternar.Qaros
 
         public PrimarylessVideoSenderControl PrimarylessVideoSenders { get; }
 
-        internal IntPtr DangerousHandle { get { return _context.DangerousHandle; } }
-
         public Result<SessionId> GetId()
         {
             var id = SessionIdNative.CreateDefault();
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_id(_context.DangerousHandle, ref id));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_id(session.Handle, ref id));
             return info.IsSuccess ? Result<SessionId>.Success(info, SessionId.FromNative(id)) : Result<SessionId>.Failure(info);
         }
 
@@ -59,40 +59,172 @@ namespace Quaternar.Qaros
             _context.ThrowIfDisposed();
             var native = new GraphicsDeviceId().ToNative();
             bool present;
-            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_graphics_device_id(_context.DangerousHandle, ref native, out present));
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_graphics_device_id(session.Handle, ref native, out present));
             if (!info.IsSuccess)
                 return Result<GraphicsDeviceId?>.Failure(info);
             return Result<GraphicsDeviceId?>.Success(info, present ? GraphicsDeviceId.FromNative(native) : null);
         }
 
         /// <summary>
-        /// Asks the hub this session onboarded through for a fresh invite, to onboard another API
-        /// instance (a helper process, a plugin sandbox) without a code. Blocks until the hub
+        /// Raised for every lifecycle state, but only while a subscription from
+        /// <see cref="SubscribeLifecycle()"/> is alive: attaching a handler alone delivers nothing.
+        /// </summary>
+        /// <remarks>Raised on a library thread, like every subscription handler.</remarks>
+        public event EventHandler<SessionLifecycleChangedEventArgs>? LifecycleChanged;
+
+        /// <summary>
+        /// The session's current lifecycle state: <see cref="SessionLifecycleState.Connected"/> in the
+        /// session <see cref="GetId"/> names, unless it is moving, cannot reach its hub, or has been
+        /// refused for good. Its <see cref="SessionLifecycleChangedEventArgs.Reason"/> is empty.
+        /// </summary>
+        public Result<SessionLifecycleChangedEventArgs> GetLifecycleState()
+        {
+            _context.ThrowIfDisposed();
+            var native = SessionLifecycleInfoNative.CreateDefault();
+            using var session = _context.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_session_get_lifecycle_state(session.Handle, ref native));
+            return info.IsSuccess
+                ? Result<SessionLifecycleChangedEventArgs>.Success(info, SessionLifecycleChangedEventArgs.FromNative(native))
+                : Result<SessionLifecycleChangedEventArgs>.Failure(info);
+        }
+
+        /// <summary>
+        /// Starts delivering lifecycle states to <see cref="LifecycleChanged"/> until the returned
+        /// subscription is disposed.
+        /// </summary>
+        public Result<IDisposable> SubscribeLifecycle()
+        {
+            return SubscribeLifecycle(RaiseLifecycleChanged);
+        }
+
+        /// <summary>
+        /// Calls <paramref name="handler"/> with the session's lifecycle state, the current one first,
+        /// then every change, until the returned subscription is disposed: how an app learns that
+        /// its hub started a new session, joined another hub, or no longer admits it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The session follows its hub by itself, in place: when the hub starts a new session or
+        /// joins another hub as its member, this <see cref="Session"/>, every object obtained from
+        /// it, the app volumes, GUI panels and rooms the app created or took over with
+        /// <c>GetOrCreate</c>, its subscriptions and its peer id stay; senders created with reconnects renegotiate (frames stop for a few seconds), and
+        /// objects of other peers come back once their owners have moved too. A move reports
+        /// <see cref="SessionLifecycleState.Migrating"/>, then <see cref="SessionLifecycleState.Connected"/>
+        /// with the new <see cref="SessionLifecycleChangedEventArgs.SessionId"/>, the previous one
+        /// and the <see cref="SessionLifecycleChangedEventArgs.Cause"/>. A move whose new session
+        /// answers late reports <see cref="SessionLifecycleState.HubUnreachable"/> first, so react to a
+        /// change of the session id rather than to one state: re-read whatever the app keyed by it.
+        /// </para>
+        /// <para>
+        /// <see cref="SessionLifecycleState.RePairRequired"/> is terminal: nothing is retried. Dispose
+        /// the session (not from the handler), onboard again and recreate what the app owns.
+        /// </para>
+        /// <para>
+        /// Recommended: on a new session id, and after onboarding again, call
+        /// <see cref="AppVolumeControl.GetOrCreate"/> and <see cref="GuiPanelControl.GetOrCreate"/>
+        /// again for every common name the app owns. Each call returns the same id, takes the
+        /// object over when it is there and re-creates it when it is missing; after a re-pair it is
+        /// the only way back.
+        /// </para>
+        /// <para>
+        /// The handler runs on a library thread: keep it short and do the reinitialization on a
+        /// thread of your own. An exception it throws is swallowed. When <c>Dispose</c> of the
+        /// subscription returns, a handler call running on another thread has finished and no
+        /// further one starts; never dispose while holding a lock the handler takes.
+        /// </para>
+        /// </remarks>
+        public Result<IDisposable> SubscribeLifecycle(EventHandler<SessionLifecycleChangedEventArgs> handler)
+        {
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+            _context.ThrowIfDisposed();
+            var tokenResult = CancelToken.Create();
+            if (!tokenResult.IsSuccess)
+                return Result<IDisposable>.Failure(tokenResult.Info);
+            var subscription = SessionLifecycleSubscription.Create(tokenResult.Value, true, handler);
+            return _context.StartSubscription(subscription, StartLifecycle);
+        }
+
+        private static ResultNative StartLifecycle(SessionLifecycleSubscription subscription, IntPtr session, IntPtr token)
+        {
+            return NativeMethods.qar_impl_session_subscribe_lifecycle(session, subscription.Callback, subscription.UserState, token);
+        }
+
+        private void RaiseLifecycleChanged(object? sender, SessionLifecycleChangedEventArgs args)
+        {
+            var handler = LifecycleChanged;
+            if (handler != null)
+                handler(this, args);
+        }
+
+        /// <summary>
+        /// Asks the hub for a co-process invite: one companion process on this PC (a C# helper of a
+        /// native app, a plugin sandbox) joins with it, without a code, as the peer the hub
+        /// remembers for this app's approval and <paramref name="appTag"/>. Blocks until the hub
         /// answers.
         /// </summary>
         /// <remarks>
-        /// The caller owns and disposes the invite. Hand it over with
-        /// <see cref="OnboardingInvite.Serialize"/>; the other instance, with a runtime and storage
-        /// folder of its own, onboards with <see cref="OnboardingInvite.Deserialize"/> and
-        /// <see cref="OnboardOptions.UseInvite"/>. Invites expire: mint one when it is needed.
-        /// Fails with <see cref="StatusCode.ArgumentNotSupported"/> when the hub cannot be resolved
-        /// from this session, for example while it is not connected.
+        /// <para>
+        /// Only a session that joined by <see cref="OnboardOptions.UseLocalApp"/>, or a process the
+        /// QAROS launcher started, may ask; the hub refuses any other. The invite works once, for
+        /// 60 s (set by the hub), and only from the hub's PC. The co-process gets the short local
+        /// certificate under this app's approval; its certificate renews only while this app's peer is
+        /// still in the session, and revoking the approval revokes both.
+        /// </para>
+        /// <para>
+        /// The caller owns and disposes the invite. Hand it to the co-process over a private
+        /// channel (for example its stdin, never a command line) with
+        /// <see cref="OnboardingInvite.Serialize()"/>; the co-process creates its runtime with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/>, so it writes nothing to disk, and onboards
+        /// with <see cref="OnboardingInvite.Deserialize"/> and <see cref="OnboardOptions.UseInvite"/>.
+        /// A restarted co-process needs a fresh invite: mint one when it is needed.
+        /// </para>
+        /// <para>
+        /// There is no invite for another PC or for a new device: pairing codes and unbound
+        /// invites are minted by the hub's operators. Fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/> for a tag the runtime refuses, or when the
+        /// hub cannot be resolved from this session, for example while it is not connected. A
+        /// runtime without app tags refuses the request; check <see cref="RuntimeInfo.Version"/>
+        /// when you may load one.
+        /// </para>
         /// </remarks>
-        public Result<OnboardingInvite> RequestOnboardingInvite(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <param name="appTag">The co-process's app tag; rules in <see cref="RequestOnboardingInviteOptions.AppTag"/>.</param>
+        /// <param name="progress">Optional progress reports.</param>
+        /// <param name="cancellationToken">Cancels the request; the call then returns a failure.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="appTag"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="appTag"/> is not a valid app tag.</exception>
+        public Result<OnboardingInvite> RequestOnboardingInvite(string appTag, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingInviteOptions();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            return RequestOnboardingInvite(new RequestOnboardingInviteOptions(appTag), progress, cancellationToken);
+        }
+
+        /// <summary>
+        /// <see cref="RequestOnboardingInvite(string, IProgress{ActionProgress}?, CancellationToken)"/>
+        /// with the full request options.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+        public Result<OnboardingInvite> RequestOnboardingInvite(RequestOnboardingInviteOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+            _context.ThrowIfDisposed();
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<OnboardingInvite>.Failure(cancellationResult.Info);
-            using (var chain = NativeStructureChain.From(options.Extension))
+            // The scope first: it is registered on the session's Dispose, so nothing may throw
+            // between its creation and its using.
             using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var scope = new NativeMemoryScope())
+            using (var chain = NativeStructureChain.From(options.Extension))
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
-                var native = NativeInit.RequestInvite(options, chain.Head);
+                var native = NativeInit.RequestInvite(options, scope, chain.Head);
                 IntPtr invite;
+                using var session = _context.Borrow();
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_invite(
-                    _context.DangerousHandle,
+                    session.Handle,
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -103,56 +235,29 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Ask the hub for a new set of one-time onboarding codes, for several devices to onboard at once.
-        /// Codes other callers hold and the hub's onboarding screen code stay valid. The caller owns and
-        /// disposes every returned invite.
+        /// Async <see cref="RequestOnboardingInvite(string, IProgress{ActionProgress}?, CancellationToken)"/>.
+        /// Canceling <paramref name="cancellationToken"/> cancels the task.
         /// </summary>
-        /// <remarks>
-        /// Blocks until the hub answers. Each code works once (a failed attempt also uses it up) and
-        /// is never shown on the hub's screen. Hand a device either its text
-        /// (<see cref="OnboardingInvite.GetCode"/>, for <see cref="OnboardOptions.UseCode"/>) or the
-        /// serialized invite (for <see cref="OnboardOptions.UseInvite"/>). Fails with
-        /// <see cref="StatusCode.ArgumentNotSupported"/> for a count or lifetime out of range, or
-        /// when the hub cannot be resolved from this session.
-        /// </remarks>
-        public Result<IReadOnlyList<OnboardingInvite>> RequestOnboardingCodes(RequestOnboardingCodesOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="ArgumentNullException"><paramref name="appTag"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="appTag"/> is not a valid app tag.</exception>
+        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(string appTag, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingCodesOptions();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
-            if (!cancellationResult.IsSuccess)
-                return Result<IReadOnlyList<OnboardingInvite>>.Failure(cancellationResult.Info);
-            using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
-            {
-                var native = NativeInit.RequestOnboardingCodes(options, IntPtr.Zero);
-                var handles = new IntPtr[Math.Max(1u, options.Count)];
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_codes(
-                    _context.DangerousHandle,
-                    ref native,
-                    progressState.Callback,
-                    progressState.UserState,
-                    cancellation.Handle,
-                    handles));
-                if (!info.IsSuccess)
-                    return Result<IReadOnlyList<OnboardingInvite>>.Failure(info);
-                var invites = new List<OnboardingInvite>(handles.Length);
-                foreach (var handle in handles)
-                    invites.Add(new OnboardingInvite(new OnboardingInviteSafeHandle(handle)));
-                return Result<IReadOnlyList<OnboardingInvite>>.Success(info, invites);
-            }
+            return RequestOnboardingInviteAsync(new RequestOnboardingInviteOptions(appTag), progress, cancellationToken);
         }
 
         /// <summary>
-        /// Async <see cref="RequestOnboardingInvite"/>. Canceling
-        /// <paramref name="cancellationToken"/> cancels the task.
+        /// Async <see cref="RequestOnboardingInvite(RequestOnboardingInviteOptions, IProgress{ActionProgress}?, CancellationToken)"/>.
+        /// Canceling <paramref name="cancellationToken"/> cancels the task.
         /// </summary>
-        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(RequestOnboardingInviteOptions? options = null, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
+        public Task<Result<OnboardingInvite>> RequestOnboardingInviteAsync(RequestOnboardingInviteOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
             _context.ThrowIfDisposed();
-            options = options ?? new RequestOnboardingInviteOptions();
             var state = new RequestInviteAsyncState(progress);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<OnboardingInvite>.Failure(cancelHandle.Info));
@@ -166,8 +271,10 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_request_onboarding_invite_async(
-                    _context.DangerousHandle,
+                    session.Handle,
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -197,7 +304,8 @@ namespace Quaternar.Qaros
             using (var scope = new NativeMemoryScope())
             {
                 var peer = PeerIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(_context.DangerousHandle, scope.AllocUtf8(connection), ref peer));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_find_render_target(session.Handle, scope.AllocUtf8(connection), ref peer));
                 return info.IsSuccess ? Result<PeerId>.Success(info, PeerId.FromNative(peer)) : Result<PeerId>.Failure(info);
             }
         }
@@ -215,16 +323,17 @@ namespace Quaternar.Qaros
             if (connectionString == null)
                 throw new ArgumentNullException(nameof(connectionString));
             _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<PeerId>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var scope = new NativeMemoryScope())
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
                 var native = NativeInit.InviteTargetApp(connectionString, scope);
                 var peer = PeerIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app(_context.DangerousHandle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle, ref peer));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app(session.Handle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle, ref peer));
                 return info.IsSuccess ? Result<PeerId>.Success(info, PeerId.FromNative(peer)) : Result<PeerId>.Failure(info);
             }
         }
@@ -236,7 +345,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(connectionString));
             _context.ThrowIfDisposed();
             var state = new TargetAppAsyncState<PeerId>(progress, PeerIdFromPointer);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<PeerId>.Failure(cancelHandle.Info));
@@ -245,7 +354,9 @@ namespace Quaternar.Qaros
             try
             {
                 var native = NativeInit.InviteTargetApp(connectionString, state.Scope);
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app_async(_context.DangerousHandle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_invite_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
                 if (!info.IsSuccess)
                     state.Complete(Result<PeerId>.Failure(info));
             }
@@ -264,14 +375,15 @@ namespace Quaternar.Qaros
         public Result<Unit> KillTargetApp(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
             using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _context.Owner))
             {
                 var native = targetApp.ToNative();
-                return Results.FromNative(NativeMethods.qar_impl_session_kill_target_app(_context.DangerousHandle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_session_kill_target_app(session.Handle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle));
             }
         }
 
@@ -280,7 +392,7 @@ namespace Quaternar.Qaros
         {
             _context.ThrowIfDisposed();
             var state = new TargetAppAsyncState<Unit>(progress, peer => Unit.Value);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.Complete(Result<Unit>.Failure(cancelHandle.Info));
@@ -289,7 +401,9 @@ namespace Quaternar.Qaros
             try
             {
                 var native = targetApp.ToNative();
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_kill_target_app_async(_context.DangerousHandle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
+                using var session = _context.Borrow();
+                state.HoldUntilCompletion(_context.Owner);
+                var info = Results.ToInfo(NativeMethods.qar_impl_session_kill_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
                 if (!info.IsSuccess)
                     state.Complete(Result<Unit>.Failure(info));
             }
@@ -307,9 +421,31 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Tears the session down but keeps its persisted identity for a later
-        /// <see cref="Runtime.Rejoin"/>. Waits for subscription handlers running on other threads;
-        /// do not call it from one.
+        /// <see cref="Runtime.Rejoin"/>. Waits for the calls and subscription handlers running on
+        /// other threads; do not call it from a callback of the session.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Safe while another thread is inside a call on the session or one of its controls: the
+        /// session refuses new calls at once (<see cref="ObjectDisposedException"/>), cancels the
+        /// calls that wait (render-sender creation, target-app invite and kill, invite request,
+        /// sync and async alike; they fail), waits until every running call returned and every
+        /// async call's completion fired, and then tears the session down on the calling thread.
+        /// When Dispose returns the session is gone and its subscriptions have ended: no handler
+        /// runs and none starts, so a <see cref="Runtime.Dispose"/> or
+        /// <see cref="Library.Destroy"/> may follow at once.
+        /// </para>
+        /// <para>
+        /// The wait is not bounded: a call that does not wait on the hub returns on its own, and the
+        /// waiting ones are cancelled first. Never dispose while holding a lock a call or a handler
+        /// on another thread needs. Called from inside one of the session's own callbacks (a
+        /// subscription handler, a progress report of a session call) it would wait for itself, so
+        /// it throws <see cref="InvalidOperationException"/> and changes nothing (uncaught in a
+        /// handler, the exception is swallowed like any other); dispose from a thread of your own.
+        /// From another QAROS callback it throws too while another thread is in a session call.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">Called from a QAROS callback where it would have to wait (see remarks).</exception>
         public void Dispose()
         {
             _context.Dispose();

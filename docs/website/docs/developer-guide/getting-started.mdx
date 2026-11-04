@@ -19,6 +19,7 @@ This page takes you from a clean Windows PC to a rotating cube streamed into QAR
 | 4 | run it; it asks QAROS to join, with no code | seconds |
 | 5 | click **Allow** in QAROS, once | seconds |
 | 6 | see the cube on the Visualizer or a headset | |
+| 7 | run it again: no prompt | seconds |
 
 ## What you need
 
@@ -26,7 +27,7 @@ This page takes you from a clean Windows PC to a rotating cube streamed into QAR
 |---|---|
 | PC | Windows 10 or 11, x64, NVIDIA GPU (see [System Requirements](/docs/operator-guide/system-requirements)) |
 | Rights | an administrator account, once, to install QAROS |
-| Tools | Visual Studio 2022 Build Tools with "Desktop development with C++", CMake 3.29 or newer, Git |
+| Tools | Visual Studio 2022 Build Tools with "Desktop development with C++" and its recommended components (they include CMake and Ninja), Git. No Vulkan SDK: the build fetches the Vulkan headers, loader and shader compiler itself. |
 
 Install the tools from a PowerShell prompt, if you do not have them yet:
 
@@ -38,8 +39,9 @@ winget install --id Git.Git -e
 
 ## 1. Install QAROS
 
-1. Run `QAROS-Setup-<version>.exe` and accept the Windows administrator prompt. QAROS installs for all users of the PC, into `C:\Program Files\Quaternar\QAROS`.
-2. The QAROS icon appears in the notification area of the taskbar. If it does not, start **QAROS** from the Start menu.
+1. Run `QAROS-Setup-<version>.exe` (or `QAROS-Demo-Setup-<version>.exe` for the demo) and accept the Windows administrator prompt. QAROS installs for all users of the PC, into `C:\Program Files\Quaternar\QAROS`.
+   - Preview builds: SmartScreen may show "Windows protected your PC". Choose **More info**, then **Run anyway** ([Installation](/docs/operator-guide/installation#install)).
+2. When the setup finishes, QAROS is running: its icon is in the notification area of the taskbar. If it is not, start **QAROS** from the Start menu.
 
 Details (what is installed, firewall, upgrade, uninstall): [Installation](/docs/operator-guide/installation).
 
@@ -69,20 +71,26 @@ The first configure downloads vcpkg and builds the Vulkan dependencies, which ta
 .\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
 ```
 
-The console names the GPU, then shows `Waiting for approval in QAROS hub`.
+The console shows `Joining the QAROS on this PC...`, then `Waiting for approval in QAROS hub`. The cube joins with the app tag `vulkan-cube.examples.qaros`, so QAROS knows it again on every start ([App tags](/docs/developer-guide/onboarding-and-sessions#app-tags-telling-instances-apart)).
 
 ## 5. Allow it
 
-QAROS asks **"Allow qar-vulkan-source.exe to join QAROS?"**, in the Visualizer if it is open, otherwise in a window of its own. It shows the app's path and signature. Click **Allow** within 120 seconds.
+QAROS asks **"Allow qar-vulkan-source to join QAROS?"** in a window in front of all other windows. An open Visualizer asks the same question; answer either. The window shows what Windows reports about the app: publisher ("Unknown publisher", your build is not signed), executable, path and signature. Click **Allow** within 120 seconds. **Deny** is the default, and **Allow** stays greyed out for one second after the window opens. Then **Allow** takes a mouse click; in the QAROS window it also takes an accessibility Invoke (Narrator, NVDA, UI Automation). No key ever presses it. Closing the window denies. Any program running as your Windows user can also press **Allow** in the QAROS window once it is enabled, even while the window is covered.
 
-The console shows `Connected. Waiting for rendering targets.` QAROS remembers the approval: the next run joins without asking, as long as you run the same executable from the same place.
+The console shows `Joined QAROS as peer <id>`, names the GPU (`Rendering on ...`), then shows `Connected. Waiting for rendering targets.`
 
 ## 6. See it
 
-- **On this PC:** left-click the QAROS tray icon to open the Visualizer. The cube streams into its own app volume, 1.5 m in front of the room origin.
+- **On this PC:** the Visualizer opens when QAROS starts; if you closed it, left-click the QAROS tray icon. The console shows `Rendering for target ...`, and the cube streams into its own app volume, 1.5 m in front of the room origin.
 - **On a headset:** install the QAROS player on the device ([Player Installation](/docs/operator-guide/player-installation-to-device)) and join the hub with its pairing code ([User Guide: Getting Started](/docs/user-guide/getting-started)). Every viewer gets its own camera of the cube.
 
 Stop the cube with **Ctrl+C**.
+
+## 7. Run it again
+
+Run the same command again. The cube joins without a prompt, under the same peer id as before (the same `Joined QAROS as peer` line), so the Visualizer and every headset see the same app, not a new one. QAROS remembers the approval for this exact file: as long as you neither rebuild nor move it, no one is asked again, also after restarting the PC or updating QAROS.
+
+To remove QAROS, see [Installation: Uninstall](/docs/operator-guide/installation#uninstall).
 
 ## If something goes wrong
 
@@ -93,7 +101,8 @@ The cube prints what happened and what to do. The common cases:
 | `Could not load QAROS. Install QAROS on this machine, then start this app again.` | install QAROS (step 1) |
 | `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.` | the cube starts QAROS when it does not run, and QAROS did not start: start **QAROS** from the Start menu, then run the cube again |
 | `Nobody answered the approval prompt in QAROS in time...` | run the cube again, then click **Allow** |
-| `QAROS did not allow this app to join...` | someone clicked **Deny**: run the cube again |
+| `QAROS did not allow this app to join...` | someone clicked **Deny**: run the cube again. The `Details:` line names any other reason, such as QAROS running for another Windows user |
+| `The program answering on this machine is not the installed QAROS...` | reinstall QAROS from the official setup; the cube does not retry |
 | `This app no longer matches what QAROS approved...` | you moved or copied the executable: revoke its approval ([Source Applications](/docs/operator-guide/source-applications#approved-local-apps)) and run it again |
 
 More: [Troubleshooting](/docs/developer-guide/troubleshooting).
@@ -121,7 +130,7 @@ The C SDK is:
 
 ### Load the installed runtime
 
-Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()` in one source file and call `qar_library_load(NULL)` before any other API call. It looks beside your executable, then in the folder `QAROS_RUNTIME_DIR` names, then loads the installed QAROS (`HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`, `<InstallFolder>\bin\qar-streaming-c.dll`), then searches `PATH` ([the full lookup](/docs/developer-guide/authoring-a-binding#the-default-lookup)). Do not ship `qar-streaming-c.dll` beside your app: that copy would win over the installed one. With no runtime found it prints where it looked and returns `false`, so your app keeps working without AR/VR. Your app does no searching of its own. Leave `QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder the library came from.
+Define `QAR_ENABLE_DYNAMIC_LOADING`, put `QAR_IMPLEMENT_DYNAMIC_LOADING()` in one source file and call `qar_library_load(NULL)` before any other API call. It looks beside your executable, then at the runtime of the QAROS instance `QAR_INSTANCE` names (every QAROS hub sets it for the apps it starts, the Visualizer's included: `default` for the installed QAROS, its own instance for a development hub; you set it only for an app you start by hand), then loads the installed QAROS (`HKLM\SOFTWARE\Quaternar\QAROS`, value `InstallFolder`, `<InstallFolder>\bin\qar-streaming-c.dll`), then searches `PATH` ([the full lookup](/docs/developer-guide/authoring-a-binding#the-default-lookup)). Do not ship `qar-streaming-c.dll` beside your app: that copy would win over the installed one. With no runtime found it prints where it looked and returns `false`, so your app keeps working without AR/VR. Your app does no searching of its own. Leave `QarRuntimeInit::runtime_binaries_folder_path` empty: it defaults to the folder the library came from.
 
 ```c
 #define QAR_ENABLE_DYNAMIC_LOADING
@@ -131,7 +140,7 @@ QAR_IMPLEMENT_DYNAMIC_LOADING() // exactly once per application
 
 int main(int argc, char** argv)
 {
-    if (not qar_library_load(NULL)) // the installed QAROS
+    if (!qar_library_load(NULL)) // the installed QAROS
     {
         // QAROS not installed: run without AR/VR features
         return 1;
@@ -149,7 +158,8 @@ Functions are loaded *by symbol name* into tables your application owns, so newe
 ```powershell
 cmake --preset x64-windows
 cmake --build --preset x64-windows-debug
-# No argument: the default lookup finds the installed QAROS
+# No argument: the default lookup finds the installed QAROS (or the runtime of the
+# instance QAR_INSTANCE names); the other examples load it the same way
 .\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe
 # --qaros-library=PATH loads that qar-streaming-c.dll instead
 .\build\x64-windows\qar-streaming-c\examples\Debug\dynamic_loading.exe --qaros-library=C:\path\to\qar-streaming-c.dll
@@ -161,13 +171,12 @@ cmake --build --preset x64-windows-debug
 The C# binding wraps the C API in the `Quaternar.Qaros` namespace with `SafeHandle`s, `IDisposable` and a `Result<T>` return type: no manual pointers, no exceptions for expected native failures.
 
 - **NuGet package**: multi-targets `netstandard2.0`, `netstandard2.1` and `net8.0`, so it works in Unity and modern .NET alike.
-- **Native library**: the managed assembly calls into `qar-streaming-c`. The NuGet package carries the native runtime and copies it next to your application on build and publish.
+- **Native library**: the package is the binding only. `Library.Init` loads `qar-streaming-c` from the QAROS installed on the PC (`InstalledRuntime`, the same lookup as `qar_library_load(NULL)` in C), release or demo, and fails with a "QAROS is not installed" result when there is none. Ship no copy of the runtime with your app.
 
 ```xml
 <!-- your .csproj -->
 <ItemGroup>
   <PackageReference Include="Quaternar.Qaros" Version="0.*" />
-  <!-- demo runtime: Quaternar.Qaros.Demo -->
 </ItemGroup>
 ```
 
@@ -175,8 +184,8 @@ The C# binding wraps the C API in the `Quaternar.Qaros` namespace with `SafeHand
 The C# snippets in this guide follow the shipping binding but are illustrative: no compiled C# example project is published in this repository yet. See [Language Bindings](/docs/developer-guide/language-bindings).
 :::
 
-Unity projects get this binding, with the runtime, from the QAROS Unity packages instead; see
-[Unity](/docs/developer-guide/unity).
+Unity projects get this binding from the QAROS Unity packages instead, and load the installed
+runtime the same way; see [Unity](/docs/developer-guide/unity).
 
 </Lang>
 <Lang value="rust">
@@ -235,10 +244,10 @@ Functions are loaded by symbol name into a table the binding owns (`qaros_sys::Q
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 
-With an unpacked QAROS package instead, name its `bin` folder with `QAROS_RUNTIME_DIR`:
+To run against a QAROS development hub instead, name its instance with `QAR_INSTANCE`: the hub records its runtime folder under that name, and the examples load that runtime (an app the hub starts receives the variable already):
 
 ```powershell
-$env:QAROS_RUNTIME_DIR = "C:\path\to\QAROS-package\bin"
+$env:QAR_INSTANCE = "dev-0123456789abcdef" # the development hub's instance name
 cargo run -p qaros-examples --bin dynamic_loading
 ```
 
@@ -253,10 +262,17 @@ cargo run -p qaros-examples --bin dynamic_loading
 <Lang value="c">
 
 ```c
+#define QAR_ENABLE_DYNAMIC_LOADING
 #include <qar_streaming.h>
+
+QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 int main(void)
 {
+    // 0. Load the installed runtime
+    if (!qar_library_load(NULL))
+        return 1;
+
     // 1. Library init (process-wide, once)
     QarLibraryInit lib_init = qar_library_init_default();
     lib_init.enable_console_logging = true;
@@ -275,6 +291,7 @@ int main(void)
     // 5. Teardown, in reverse
     qar_runtime_handle_destroy(runtime);
     qar_result_log_if_error(qar_library_destroy());
+    qar_library_unload();
     return 0;
 }
 ```

@@ -79,7 +79,8 @@ and the error names the functions it lacks
 
 The examples load the runtime with the default lookup every binding follows
 ([Authoring a Language Binding](/docs/developer-guide/authoring-a-binding)): a copy beside the
-executable, else the folder `QAROS_RUNTIME_DIR` names, else the installed QAROS, else `PATH`. To
+executable, else on Windows the runtime of the QAROS instance `QAR_INSTANCE` names (a development
+hub sets it for the apps it starts), else the installed QAROS, else `PATH`. To
 load one specific library file instead, pass `--qaros-library=PATH`, set `QAROS_DLL`, or put the
 path on the first line of `qaros-library.txt` beside the executable (for a start without
 arguments). `vulkan_cube` and `local_app_onboarding` always use the default lookup, as
@@ -94,8 +95,7 @@ first argument: they then store the onboarding id they get as `<example>.onboard
 the folder you run them from and rejoin with it on later runs. They pass no Hub address, so the
 code finds only your own Hub, on the Hub machine; a Hub elsewhere needs its host and port
 (`HubAddress`, see [Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)). `onboarding_and_rejoin` is the example of that path: it onboards with a code on
-its first run and keeps one id per runtime, `onboarding_and_rejoin.primary-onboarding-id.txt` and
-`onboarding_and_rejoin.sibling-onboarding-id.txt`.
+its first run and keeps its id in `onboarding_and_rejoin.primary-onboarding-id.txt`.
 
 ### On macOS, against the stub
 
@@ -115,8 +115,8 @@ It runs the program's logic and shows nothing. Like a real run, a stub run store
 id in the folder it runs from, and a later run against QAROS from that folder would first try to
 rejoin with the stub's id; the folder of its own keeps them apart.
 
-`vulkan_cube` and `local_app_onboarding` take no library path: they find the stub through
-`QAROS_RUNTIME_DIR`, as their pages show ([Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering#run-it),
+`vulkan_cube` and `local_app_onboarding` take no library path: they find the stub through the
+dynamic linker's search (`DYLD_LIBRARY_PATH` on macOS, `LD_LIBRARY_PATH` on Linux), as their pages show ([Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering#run-it),
 [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding#run-it)).
 `d3d11_render_sender` prints that it requires Windows and exits; on Windows, against the stub, it
 submits its frames without drawing, since the stub lends no D3D11 textures.
@@ -131,13 +131,15 @@ Read them in order the first time: each builds on the session the earlier ones e
    Hub with a pairing code once, then rejoin with the stored onboarding id.
 3. [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding): join the
    Hub from the Hub machine as a local app, after the user clicks Allow.
-4. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
+4. [Remote App on Another PC](/docs/developer-guide/tutorials/rust/remote-app-onboarding): grant
+   one app on another PC through a member-hub invitation, and join it there with no prompt.
+5. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
    the peer list and stream frames rendered on the CPU to each.
-5. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
+6. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
    drawn with Direct3D 11 into the sender's shared textures.
-6. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
+7. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
    cube rendered with Vulkan into every running target app.
-7. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
+8. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
    room, follow its updates and end a subscription safely.
-8. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
+9. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
    lives in, move the content inside it, and handle an unresolved volume when rendering.

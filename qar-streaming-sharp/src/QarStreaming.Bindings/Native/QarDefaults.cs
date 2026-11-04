@@ -159,22 +159,12 @@ namespace Quaternar.Qaros.Interop
             };
         }
 
-        internal static RequestInviteInitNative RequestInvite(RequestOnboardingInviteOptions options, IntPtr next)
+        internal static RequestInviteInitNative RequestInvite(RequestOnboardingInviteOptions options, NativeMemoryScope scope, IntPtr next)
         {
             return new RequestInviteInitNative
             {
-                Header = NativeDefaults.Header(StructureType.SessionRequestInviteInit, next)
-            };
-        }
-
-        internal static RequestOnboardingCodesInitNative RequestOnboardingCodes(RequestOnboardingCodesOptions options, IntPtr next)
-        {
-            return new RequestOnboardingCodesInitNative
-            {
-                Header = NativeDefaults.Header(StructureType.SessionRequestOnboardingCodesInit, next),
-                Count = options.Count,
-                LifetimeSeconds = (uint)Math.Max(0, Math.Ceiling(options.Lifetime.TotalSeconds)),
-                PlannedPeerId = options.PlannedPeerId.HasValue ? options.PlannedPeerId.Value.ToNative() : PeerIdNative.CreateDefault()
+                Header = NativeDefaults.Header(StructureType.SessionRequestInviteInit, next),
+                AppTag = scope.AllocUtf8(options.AppTag)
             };
         }
 
@@ -190,6 +180,24 @@ namespace Quaternar.Qaros.Interop
         internal static RenderSenderInitNative RenderSender(RenderSenderOptions options, NativeMemoryScope scope)
         {
             var next = GraphicsExtension(options.GraphicsAPI, options.StreamParamsD3D11, options.StreamParamsVulkan, options.StreamParamsOpenGl, scope, nameof(RenderSenderOptions));
+            // Chained only when declared, so a stream that declares nothing reaches the native
+            // library exactly as before.
+            if (options.AlphaMode != ColorAlphaMode.Unspecified)
+            {
+                next = scope.AllocStruct(new RenderSenderAlphaModeExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RenderSenderAlphaModeExt, next),
+                    AlphaMode = options.AlphaMode
+                });
+            }
+            if (options.ColorEncoding != ColorEncoding.Srgb)
+            {
+                next = scope.AllocStruct(new RenderSenderColorEncodingExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RenderSenderColorEncodingExt, next),
+                    ColorEncoding = options.ColorEncoding
+                });
+            }
             var native = new RenderSenderInitNative
             {
                 Header = NativeDefaults.Header(StructureType.RenderingStreamSenderInit, next),

@@ -12,19 +12,19 @@ QAROS is installed on Windows by one signed installer, **per machine**: it needs
 
 | Artifact | For whom | Contents |
 |---|---|---|
-| **Installer** (`QAROS-Setup-<version>.exe`) | every QAROS PC | the Hub (tray, launcher, Visualizer), the runtime and C API library, the `qar-vulkan-source` example app, the C API header, the device player apps |
+| **Installer** (`QAROS-Setup-<version>.exe`, demo: `QAROS-Demo-Setup-<version>.exe`) | every QAROS PC | the Hub (tray, launcher, Visualizer), the runtime and C API library, the `qar-vulkan-source` example app, the C API header, the device player apps |
 | **Unity ZIP** (`QAROS Unity <version>.zip`) | Unity developers | the [Unity packages](/docs/developer-guide/unity) and `devices/` |
-| **C# NuGet** (`Quaternar.Qaros`, `Quaternar.Qaros.Demo`) | .NET developers | the C# binding |
+| **C# NuGet** (`Quaternar.Qaros`) | .NET developers | the C# binding; it loads the installed runtime, release or demo |
 
 Each release comes in two flavors, release and demo. One PC holds one QAROS installation in one flavor.
 
 ## Install
 
-1. Run `QAROS-Setup-<version>.exe` and accept the Windows administrator (UAC) prompt.
+1. Run `QAROS-Setup-<version>.exe` (demo: `QAROS-Demo-Setup-<version>.exe`) and accept the Windows administrator (UAC) prompt.
    :::note Preview builds
    Preview builds are signed with a temporary Quaternar certificate that Windows does not know yet. SmartScreen shows "Windows protected your PC": choose **More info**, then **Run anyway**. The UAC prompt shows an unverified publisher. Releases signed with the final certificate show neither.
    :::
-2. When the setup finishes, the QAROS icon appears in the notification area. If it does not, start **QAROS** from the Start menu.
+2. When the setup finishes, QAROS is running for every signed-in user: its icon is in the notification area. If it is not, start **QAROS** from the Start menu.
 3. Left-click the tray icon to open the Visualizer. Continue with [Running the Hub](/docs/operator-guide/running-the-hub).
 
 Silent install, from an elevated PowerShell:
@@ -32,6 +32,15 @@ Silent install, from an elevated PowerShell:
 ```powershell
 & ".\QAROS-Setup-<version>.exe" /S
 ```
+
+| Option | Effect |
+|---|---|
+| `/S` | silent; accepts the QAROS licence |
+| `/NoFirewall` | adds no firewall rules: devices on the LAN cannot connect, local source apps still work |
+| `/NoAutostart` | QAROS does not start at sign-in for anyone (it still starts once when the setup finishes); each user can still turn it on in the tray menu |
+| `/AutostartAllUsers` | QAROS starts at sign-in for every user of the PC, not only for the account that runs the setup; later upgrades keep it. Use it for a silent install run as SYSTEM or by another account |
+| `/AllowDowngrade` | lets an older setup replace a newer installation (silent setups refuse otherwise) |
+| `/ANARI`, `/NoANARI` | adds or removes the optional ANARI device; without either an upgrade keeps the previous choice |
 
 | Exit code | Meaning |
 |---|---|
@@ -41,6 +50,9 @@ Silent install, from an elevated PowerShell:
 | 3 | an older per-user QAROS is installed; uninstall it first |
 | 4 | Windows version not supported |
 | 5 | administrator prompt declined |
+| 6 | a newer QAROS is installed; nothing changed (`/AllowDowngrade` to install anyway) |
+| 8 | demo setup over a licensed QAROS: uninstall QAROS first |
+| 9 | a running program holds QAROS files open (silent), or you cancelled the list of such programs; nothing changed |
 
 ## What the installer does
 
@@ -48,9 +60,10 @@ Silent install, from an elevated PowerShell:
 |---|---|
 | Program files: `bin\` (Hub processes, runtime, C API library, `qar-vulkan-source.exe`), `include\` (C API header), `devices\` (player apps) | `C:\Program Files\Quaternar\QAROS` (read-only for users) |
 | Windows service `QAROS.SystemService` (`qaros-system-service.exe`) | runs as a service |
-| Firewall rules for every QAROS executable, TCP and UDP, in and out | Windows Defender Firewall, all network profiles |
+| Firewall rules for every QAROS executable, TCP and UDP, in and out, on the QAROS ports below (`/NoFirewall` skips them) | Windows Defender Firewall, all network profiles |
 | Runtime location for apps: value `InstallFolder` | `HKLM\SOFTWARE\Quaternar\QAROS` |
-| QAROS tray starting at sign-in, for every user (`/NoAutostart` skips it) | `HKLM\...\Run\QAROS` |
+| QAROS tray (`qaros.exe`) starting at sign-in, for the user who runs the setup (finish page: **Start QAROS when I sign in**). Each user turns it on or off for themselves with **Start QAROS at login** in the tray menu; an "off" stays off across sign-ins, upgrades and reinstalls | `HKCU\...\Run\QAROS` of that user |
+| Optionally, the tray starting at sign-in for every user (finish page: **Start QAROS when anyone signs in to this PC**, or `/AutostartAllUsers`); a user who turned it off in the tray stays off | `HKLM\...\Run\QAROS` |
 | Start menu shortcut, Add/Remove Programs entry, signed uninstaller | |
 
 The Hub processes (tray, launcher, Visualizer) run in the signed-in user's session, not as the service.
@@ -59,9 +72,12 @@ The Hub processes (tray, launcher, Visualizer) run in the signed-in user's sessi
 
 | Ports | Use |
 |---|---|
-| UDP multicast `239.77.77.77:7445` | discovery |
-| 7447 TCP | session traffic, mutual TLS |
-| 7440-7460, 19120-19199 TCP + UDP | QAROS port ranges (session router, peers, and code pairing: a Hub claims its onboarding port from its range, so a rule for TCP 7445 alone does not let a device pair) |
+| UDP multicast `239.77.77.77:7445` | discovery beacon |
+| one TCP port from 19120-19199 | discovery requests and code pairing: the Hub claims its onboarding port from this range, so a rule for TCP 7445 alone does not let a device pair |
+| TCP 19120-19200 | session traffic, mutual TLS (router and peer links) |
+| one TCP port from 7448-7460 | the Visualizer's HoloLens install page, plain HTTP, only while its install code is shown ([HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2#install-from-the-visualizer)) |
+| one UDP and one TCP port from 7461-7499 per streaming Android headset (Quest, MetaLens) | head poses and WebRTC signalling, sent by the headset to this PC |
+| 7440-7499, 19120-19199 TCP + UDP | what the firewall rules open for each QAROS executable |
 
 Details: [Networking and Federation](/docs/operator-guide/networking-and-federation). If the firewall step fails, the setup warns that LAN devices cannot connect; local source apps still work.
 
@@ -71,15 +87,15 @@ Program files and data are kept apart. Data survives upgrades and uninstall.
 
 | Folder | Holds |
 |---|---|
-| `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA, Hub and session state, device identities, approved local apps, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc`. Every key and approval is in `secure-store`, encrypted under the user's TPM key ([Security Deep Dive](./security-deep-dive.md#what-is-stored-where)) |
-| `%ProgramData%\Quaternar\Qaros` | per machine: service state |
+| `%LOCALAPPDATA%\Quaternar\Qaros` | per user: the Hub's CA certificates, Hub and session state, the identities of apps the user runs, logs, settings, the editable launcher configuration `qar-runtime-launcher.jsonc` |
+| `%ProgramData%\Quaternar\Qaros` | per machine: service state, and in `secure\` the Hub's secrets (CA keys, Hub identity, approved local apps), one partition per Windows user, and the licence once for the whole PC, encrypted under a machine key only the QAROS service can use ([Security Deep Dive](./security-deep-dive.md#what-is-stored-where)) |
 | `QAR_APP_DATA_ROOT` environment variable | overrides the per-user folder |
 
 Logs are kept apart from the data, under the **log root** `%TEMP%\quaternar\logs` (with `QAR_APP_DATA_ROOT` set: that folder).
 
 | Logs of | Folder |
 |---|---|
-| Tray (`qaros-hub-service`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
+| Tray (`qaros`), including the launcher's console output | `<log root>\qaros-hub-service`; launcher crash dumps in its `crashes` subfolder |
 | Launcher and every process it starts (Visualizer, source apps, mixer) | `<log root>\qar-launcher-default\<session-id>`, emptied when the Hub starts |
 
 - Deleting the per-user data folder resets the Hub: devices must onboard again and local apps must be approved again.
@@ -93,7 +109,7 @@ Run the newer `QAROS-Setup-<version>.exe`. It asks the running Hub to exit and r
 
 - Approved local apps, the session and paired devices are kept: approved apps join without a new prompt. Exception: the first update to encrypted storage starts the Hub with a new CA, so devices pair again, apps are approved again and the licence is activated again once ([Maintenance & Updates](./maintenance-and-updates.md#updating-to-encrypted-storage)).
 - Installing the **demo** over a **release** installation deletes the QAROS data first (a demo never runs on release data). Demo to release keeps it.
-- Source apps need no change: they load the runtime from the installation.
+- Source apps need no change: they load the runtime from the installation. A running one holds the runtime open: the setup lists such programs and waits until you close them (**Retry**), or leaves QAROS as it is (**Cancel**). The same applies to uninstalling.
 
 ## Uninstall
 
@@ -103,7 +119,16 @@ Run the newer `QAROS-Setup-<version>.exe`. It asks the running Hub to exit and r
 & "C:\Program Files\Quaternar\QAROS\uninstall.exe" /S
 ```
 
-It removes the program files, the service, the firewall rules, the registry key, the autostart entry and the shortcuts. The data folders above are kept unless you choose to delete them; delete them by hand for a clean machine.
+It removes the program files, the service, the firewall rules, the registry key, the autostart entry and the shortcuts. First it asks whether to delete the data folders above (default: keep them; silently, add `/PurgeData` to delete them):
+
+| Choice | What happens |
+|---|---|
+| Keep (default) | Both data folders stay, including the Hub's protected secrets and the machine key that encrypts them. Installing QAROS again finds approved apps, paired devices and the licence as before. |
+| Delete | The QAROS service deletes its machine key first, then the protected secrets, and the uninstaller removes `%ProgramData%\Quaternar\Qaros` and your `%LOCALAPPDATA%\Quaternar\Qaros`. A copy of the old secrets can no longer be decrypted. Other Windows users' `%LOCALAPPDATA%` folders stay. |
+
+```powershell
+& "C:\Program Files\Quaternar\QAROS\uninstall.exe" /S /PurgeData
+```
 
 ## Player apps on devices
 

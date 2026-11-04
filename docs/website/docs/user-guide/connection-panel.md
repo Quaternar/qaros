@@ -5,14 +5,14 @@ description: The Visualizer's Connection panel - the Hubs in your session, pairi
 ---
 # Connection Panel
 
-The Connection panel is the first panel in the left dock of the QAROS Visualizer. Its header shows
-this Hub, how many Hubs of the session are online and how many devices are streaming. Below it, two
-areas:
+The **Session** button is the first on the QAROS Visualizer's sidebar. Its header shows this Hub,
+how many Hubs of the session are online and how many devices are streaming. It has three tabs:
 
-| Area | What it is for |
+| Tab | What it is for |
 |---|---|
-| **Hubs** (default) | The session: every Hub in it, session actions, pairing another Hub |
-| **Devices** | Headsets this Hub streams to, and inviting a new one |
+| **Devices** (default) | Headsets this Hub streams to, and inviting a new one |
+| **Rooms** | Which devices are in which room |
+| **Hubs** | The session: every Hub in it, session actions, pairing another Hub |
 
 Apps are not managed here: start, approve and revoke them in the
 [Source Applications](/docs/operator-guide/source-applications) panel.
@@ -30,12 +30,12 @@ This Hub and every Hub paired with it share one **session**.
 
 ### Session actions
 
-- **Reset session** deletes the stored data of every Hub in the session and restarts them empty. The
-  confirmation lists what is discarded and what is kept. Use it when the session is stuck on stale
-  state.
-- **Leave session** is not available yet; it will unpair this Hub from the others in a later
-  version. Until then, a pairing cannot be undone from the Visualizer (see
-  [Networking & Federation](/docs/operator-guide/networking-and-federation#what-federation-does-and-does-not-do---read-this)).
+- **New session** retires the session and starts the next one: app volumes, GUI panels and rooms are
+  deleted, while the Hub's name, remembered devices and approved apps are kept and paired devices
+  move to the new session on their own. The confirmation's **(?)** lists what is discarded and what
+  is kept. Use it when the session is stuck on stale state; step by step in
+  [Reset the Session or the Whole Install](/docs/operator-guide/visualizer-tutorials/reset-session-and-install).
+- **Leave session** is for a member Hub: it leaves the primary Hub's session.
 
 ### Pair another Hub
 
@@ -55,27 +55,31 @@ Opens only when you ask for it. Pairing takes both Hubs:
 - **Auto**: this Hub invites the device again whenever it starts.
 - **Invite** / **Stop** starts or stops streaming to it. The trash icon forgets it.
 - A device streaming without being remembered (invited by an app) is listed too, without Auto.
+- **Revoked peers (N)**, folded under the list, holds the revoked peers no remembered device names:
+  each with its name, device kind, the reason, the PC it ran on and when it was last seen, and an
+  unlock button that allows it again. A peer the session no longer knows is shown by its id.
 
 ### Onboard a device
 
 1. Install and start the QAROS player on the device
    ([Player installation](/docs/operator-guide/player-installation-to-device)).
-2. Press **Add device** and pick its kind:
+2. The **Invite device** card is open on the Devices tab. Pick the device's kind:
 
 | Kind | Notes |
 |---|---|
-| HoloLens | Invited by IP address |
-| Headset | Any other headset: Meta Quest, METALENS glasses and other Android devices. *Legacy*: invited by IP address until its player pairs by QR code. The headset reports its exact model itself once it runs |
+| Headset (default) | Meta Quest, METALENS glasses and other Android devices. Invited by IP address until its player pairs by QR code. The headset reports its exact model itself once it runs |
+| HoloLens | *Legacy*: streams over holographic remoting and is invited by IP address only |
 
 A device remembered under an older kind (Meta Quest, Metalens) is not invited any more: forget it
 and add it again as a **Headset**.
 
 3. Enter the device's **Address** and an optional **Label**.
-4. Leave **Invite automatically** checked to remember the device and invite it on every start;
-   uncheck it to invite once.
+4. Check **Invite automatically** to have the Hub invite the device on every start; leave it
+   unchecked to invite once.
 5. Press **Invite**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
-   notification.
+   notification. The card stays open for the next device; **Clear** empties it, and **Invite
+   device** in the title folds it away.
 
 An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
-uses the code shown by **Let another hub join us** above. In Debug mode, **Other devices** in
-**Add device** opens the large QR code for players that scan it.
+uses the code shown by **Let another hub join us** above. In Debug mode, **By QR code invite** in
+the **Invite device** card opens the large QR code for players that scan it.

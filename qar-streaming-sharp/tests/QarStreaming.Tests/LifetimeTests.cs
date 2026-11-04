@@ -1,11 +1,61 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
 using Quaternar.Qaros;
 using Quaternar.Qaros.Interop;
 using Xunit;
 
 namespace Quaternar.Qaros.Tests
 {
+    // Creates native objects: serialized with the fixtures whose Library.Destroy() would
+    // destroy them mid-test (it ends every cancel token).
+    [Collection("QAR Native")]
     public sealed class LifetimeTests
     {
+        [Fact]
+        public void RuntimeHandleReleaseDoesNotDestroyTheSharedRuntime()
+        {
+            // Inspect the actual cleanup call target instead of loading a native runtime:
+            // disposing a Runtime releases only this process's handle, never the shared Hub.
+            var release = typeof(RuntimeSafeHandle).GetMethod("ReleaseHandle", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var nativeCalls = CalledMethods(release).Where(method => method.DeclaringType == typeof(NativeMethods)).ToArray();
+            var call = Assert.Single(nativeCalls);
+            Assert.Equal(nameof(NativeMethods.qar_impl_runtime_handle_destroy), call.Name);
+            var dispose = typeof(Runtime).GetMethod(nameof(Runtime.Dispose))!;
+            Assert.DoesNotContain(CalledMethods(dispose), method => method.DeclaringType == typeof(NativeMethods));
+        }
+
+        private static IEnumerable<MethodBase> CalledMethods(MethodInfo method)
+        {
+            var opcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(field => field.FieldType == typeof(OpCode))
+                .Select(field => (OpCode)field.GetValue(null)!).ToDictionary(opcode => opcode.Value);
+            var body = method.GetMethodBody()!.GetILAsByteArray()!;
+            for (var offset = 0; offset < body.Length;)
+            {
+                var code = (short)body[offset++];
+                if (code == 0xfe)
+                    code = (short)(0xfe00 | body[offset++]);
+                var opcode = opcodes[code];
+                if (opcode == OpCodes.Call || opcode == OpCodes.Callvirt)
+                    yield return method.Module.ResolveMethod(BitConverter.ToInt32(body, offset))!;
+                switch (opcode.OperandType)
+                {
+                    case OperandType.InlineNone: break;
+                    case OperandType.ShortInlineBrTarget:
+                    case OperandType.ShortInlineI:
+                    case OperandType.ShortInlineVar: offset += 1; break;
+                    case OperandType.InlineVar: offset += 2; break;
+                    case OperandType.InlineI8:
+                    case OperandType.InlineR: offset += 8; break;
+                    case OperandType.InlineSwitch: offset += 4 + 4 * BitConverter.ToInt32(body, offset); break;
+                    default: offset += 4; break;
+                }
+            }
+        }
+
         [Fact]
         public void EnsureSuccessThrowsForFailedResultInfo()
         {

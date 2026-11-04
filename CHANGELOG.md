@@ -18,6 +18,28 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
+  crates, under the new *Rust API* menu, beside the Rust tutorials;
+  versioned like the docs, with a version bar on every page.
+
+- **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
+  the player from the Visualizer by code (the code opens App Installer, the certificate goes into
+  Trusted People once per HoloLens, an install page as the fallback); the Device Portal steps remain
+  for managed devices. *Installation* lists the install page's port (one TCP port from 7448-7460),
+  the ports an Android headset sends to (one UDP and one TCP port from 7461-7499) and the firewall
+  range 7440-7499,
+  and *Maintenance and Updates* how to update the HoloLens player.
+
+- **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
+  several API instances, co-process, remote app through a member hub, code pairing on a PC without
+  a hub, launched by QAROS), what each stores, how long its credentials and bootstrap secrets live,
+  whether the peer id survives a restart, and the rules no app can bypass. One compiled C tutorial
+  per mode under *C Examples*: the new `api_instances_in_one_process.c`, `remote_app_onboarding.c`
+  and `launched_app_onboarding.c`, and the reworked `local_app_onboarding.c`,
+  `co_process_onboarding.c` and `onboarding_and_rejoin.c` (now *Code Pairing and Rejoin*: a camera
+  that reads the code from the console and passes the hub's address). *Onboarding and Sessions*
+  documents remote apps through a member hub. *Managing Devices* and *Security Deep Dive* no longer
+  say applications request one-time codes.
 - **Docs:** the minimum SDK for certificate renewal and the migration steps: a hub renews only a
   renewal that proves it holds the certificate's key, so apps and devices on an older SDK are
   updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
@@ -56,13 +78,83 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   list, **Stream To All Targets**, the scripting members) instead of endpoints and connection
   targets.
 - **Docs:** a Developer Guide page, *Authoring a Language Binding*: the one runtime lookup every
-  binding follows (already loaded, beside the binding, `QAROS_RUNTIME_DIR`, installed QAROS,
-  `PATH`), how candidates
+  binding follows (already loaded, beside the binding, the runtime of the instance `QAR_INSTANCE`
+  names, installed QAROS, `PATH`), how candidates
   load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
-  Troubleshooting and Onboarding describe the new fallback.
+  Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
 
+- **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
+  Guide.
+
+- **Docs:** *Unity* says what a join without QAROS Hub shows (the "QAROS Hub is not installed"
+  error and, in the Editor, a dialog that opens the installation guide) and no longer lists
+  `DllFolder` among the coordinator's settings.
+
+- **Docs:** *Player Installation to Device* names the player **QAROS Player** with its package IDs
+  (`com.quaternar.qaros.player` on Meta Quest and HoloLens 2,
+  `com.metalense.com.quaternar.qaros.player` on METALENSE 2) and says how to remove the earlier
+  player (*QAR Player Vulkan*, *QuaternAR Player*) and scan the scene origin code again.
+
+- **Docs:** *Scene Origin: Anchor Several Devices Together* says every player ignores QR codes other
+  than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
+  that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
+- **Docs:** *Onboarding and Sessions* has C, C# and Rust tabs for remote apps through a member
+  hub, and new sections on re-enrolling a slot and onboarding without blocking; it says that a hub
+  that is not a member ignores a remote-app grant and prompts as for any local app. *Rendering
+  Streams* has a section on beginning a frame without blocking. The Rust tabs of *Peers* read the
+  presence and device identity and declare the device with the safe API instead of raw calls, and
+  *API Conventions* names the wrapped async calls. A Rust tutorial, *Remote App on Another PC*,
+  ports the C one.
+
+- **Docs:** the operator guide names the program to start `qaros.exe` and explains the start at
+  sign-in per user: the setup's boxes for this user and for every user, `/AutostartAllUsers`, and
+  turning it on or off in the tray menu.
+- **Docs:** *Connecting to the Hub* and *Managing Devices* describe the Session tabs (Devices
+  first), the always-open invite form, HoloLens as the legacy kind and the Revoked peers section.
+
+- **Docs:** *Running the Hub* says what a crash dump holds on Windows and Linux: the stacks and
+  the QAROS memory they point at, without other libraries' memory or the application's data, and
+  that each process keeps its newest 10 dumps.
+- **Docs:** *Getting Started*, *Source Applications* and *Onboarding and Sessions* describe the
+  approval prompt as it is: **Deny** is the default, **Allow** is greyed out for one second, then
+  takes a mouse click (in the QAROS window also an accessibility Invoke: Narrator, NVDA, UI
+  Automation) but never a key, closing the window denies, and any program running as the same
+  Windows user can press **Allow** in the QAROS window once it is enabled, even while the window is
+  covered.
+- **Docs:** *Troubleshooting* lists `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` with "QAROS instance
+  '…' is not running": `QAR_INSTANCE` names a development hub that did not come up within about a
+  minute, and the app waits for it but neither starts it nor joins the installed QAROS instead.
+
+- **Docs:** *Running the Hub* says an installed QAROS runs one Hub at a time per PC, for one
+  Windows user, and that several Hubs side by side need a portable or development build.
+- **Docs:** *Installation*, *Security Deep Dive* and the launcher config reference say that an
+  installed QAROS keeps one licence for the whole PC, shared by every Windows user, instead of one
+  per user.
+- **Docs:** *API Conventions* says what a C# `Dispose` of a session, sender, frame info or runtime
+  does while another thread is inside a call on it: refuses new calls, cancels the waiting ones,
+  waits for the running ones and releases the native object on the disposing thread; from a QAROS
+  callback where it would have to wait it throws `InvalidOperationException`.
+- **Docs:** *Security Deep Dive*, *Installation* and *Maintenance & Updates* say where an installed
+  Hub keeps its secrets now (the QAROS System Service's store under `%ProgramData%`, reachable only
+  by the installed Hub and `qaros-license.exe`), that the Hub needs the service running, that the
+  update destroys the old secrets (devices pair again) and what a per-user backup no longer holds.
+- **Docs:** *Installation* says what uninstalling keeps and what "delete the data" (`/PurgeData`)
+  destroys: the Hub's protected secrets and the machine key that encrypts them, so a reinstall
+  after keeping the data finds approvals, devices and the licence again.
+
+- **Docs:** *Onboarding and Sessions* explains app tags (several instances of one local app, each
+  keeping its peer id across restarts), several API instances in one process sharing one session,
+  and co-process invites with in-memory storage, with C and C# snippets; *What apps no longer do*
+  replaces the sibling-invite and one-time-code sections. The `onboarding_and_rejoin.c` example no
+  longer onboards a sibling, `local_app_onboarding.c` sets an app tag, and the new
+  `co_process_onboarding.c` example hands a co-process invite over stdin. *Managing Devices* says
+  further one-time codes are minted only for operators.
+- **Docs:** the Unity guide lists Vulkan next to Direct3D 11. A new *Graphics APIs* section says
+  that other APIs are refused, that Vulkan needs `QarUnityGraphics.dll` loaded on startup, and that
+  under Vulkan the frame rate should be capped with `targetFrameRate` instead of VSync, with
+  measured figures and the `Show Vulkan Frames On Worker` option, on by default.
 - **Docs:** Working with Peers, Rendering Streams and Unity pick targets by presence (an unknown
   presence counts as reachable) and mark app state deprecated.
 - **Docs:** the launcher configuration reference lists the catalog device ids for
@@ -120,16 +212,56 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   the plugin, joining the Hub of this PC as a local app or the Hub of another PC with a pairing
   code, the Connection tab, what you see and do in AR, the environment variables, reading the logs
   and the known issues, as checked against the installed runtime 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** *Onboarding and Sessions* has a section *When the hub's session changes*: what a
+  session keeps when its Hub starts a new session or joins another Hub, subscribing to the session
+  lifecycle (`qar_session_subscribe_lifecycle`, C# `Session.SubscribeLifecycle`), reacting to a
+  changed session id rather than to one state, and onboarding again on `RE_PAIR_REQUIRED`. A new
+  compiled C tutorial, *Session Lifecycle* (`session_lifecycle.c`); *Troubleshooting* and the
+  glossary cover it.
+- **Docs:** *Onboarding and Sessions*, *App Volumes* and *GUI Panels* recommend calling
+  get_or_create again for every common name an app owns on each new session id and after
+  onboarding again, and say that a restarted app takes over the objects its previous run left,
+  which then follow it into the hub's next session. The *Session Lifecycle* tutorial
+  (`session_lifecycle.c`) does so on every new session id.
 
 ### Fixed
 
+- **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
+  runtime lookup flow.
+
+- **Docs:** *Getting Started* and *Troubleshooting* say that every QAROS Hub sets `QAR_INSTANCE`
+  for the apps it and the Visualizer start (`default` for the installed QAROS), so only an app
+  started by hand needs it.
+- **Docs:** *Getting Started* (Developer Guide) walks from the installer to a cube on a viewer as
+  it happens: the demo setup name, the SmartScreen step for preview builds, no Vulkan SDK needed,
+  the console lines in their real order, the approval window title (`qar-vulkan-source`) and that it
+  opens in front of all windows whether or not the Visualizer is open, a step 7 showing that a
+  second run joins without a prompt under the same peer id, and an error table that no longer
+  says "press Enter to ask again" and lists `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC` (1807).
+  The cube example's README matches it.
+- **Docs:** *Installation* lists the demo setup, the setup options (`/NoFirewall`, `/NoAutostart`,
+  `/AllowDowngrade`, `/ANARI`, `/NoANARI`), exit codes 6, 8 and 9, and that a running source app
+  holds the runtime open during an upgrade or uninstall; its port table matches *Networking and
+  Federation* (no fixed TCP 7447).
+- **Docs:** *Onboarding and Sessions* and *Troubleshooting* say that QAROS sets
+  `QAR_GPU_ADAPTER_ID` for an app it starts and the library reads it; they said no variable was
+  set. *Troubleshooting* says a 1802 can take up to a minute while the QAROS service waits for a
+  Hub.
+- **Docs:** *Security Model* describes keys at rest and the same-user gap of an installed Hub,
+  whose secrets the QAROS service holds, and no longer links a private issue.
+- **Docs:** *Launcher Configuration Reference* and *Maintenance and Updates* say that
+  `runtimeStorageRoot` also holds the encrypted store with the licence and must be absolute, and
+  how `qaros-license.exe` finds it (`--config`, `--runtime-storage-root`).
+- **Docs:** the CPU and D3D11 rendering examples and their tutorials pick their target app from
+  the session's peer list (role target, presence online) instead of waiting for a render stream
+  request, which never comes for a new app's volume. *Rendering Streams* no longer says to serve
+  targets discovered through the request subscription.
 - **Docs:** *Onboarding and Sessions*, also in the 0.9.0 docs, no longer says a target requests a
   render stream by itself and no longer links to a missing *Accepting render stream requests*
   section: your application picks its targets and creates their senders, as *Finding rendering
   targets* describes.
 - **Docs:** the Managing Devices guide now says the Visualizer's Connection panel shows the Hub's
-  current pairing code, instead of describing no such screen and the code only in the Hub log, and
-  covers the one-time codes an onboarded application can request.
+  current pairing code, instead of describing no such screen and the code only in the Hub log.
 - **Docs:** the Source Applications guide now correctly states that QAROS API apps receive a full
   onboarding invite with the selected GPU when launched, rather than a bare one-time code.
 - **Docs:** *Security deep dive*, *Security model* and *Managing devices* describe the current
@@ -145,14 +277,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
   with the same one-time approval; a launch invite on stdin remains only where local enrollment is
   not available.
-- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers, Rendering Streams and API
-  Conventions guides now match the current API: poses, sizes, render sender options and render frame
-  views are built with their constructors (`Pose` and `Vector3` come from
-  `Quaternar.Qaros.Mathematics`), the `Peers.Updated` event needs a running `SubscribeUpdates()`
-  subscription, and `WithHost` passes the hub's onboarding port.
-- **Docs:** the C code of the Peers, GUI Panels and API Conventions guides now passes the cancel
-  token that `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
-  `qar_gui_panels_subscribe_panel_updates` require, and sets the port of `QarOnboardHostExt`.
+- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers and Rendering Streams guides now
+  match the current API: poses, sizes, render sender options and render frame views are built with
+  their constructors (`Pose` and `Vector3` come from `Quaternar.Qaros.Mathematics`), and the
+  `Peers.Updated` event needs a running `SubscribeUpdates()` subscription.
+- **Docs:** the C code of the Peers and GUI Panels guides now passes the cancel token that
+  `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
+  `qar_gui_panels_subscribe_panel_updates` require.
 - **Docs:** the GUI Panels guide and the Glossary no longer say that GUI panels show web content
   only: a panel can also show the video stream of a video sender.
 - **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
@@ -162,6 +293,18 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   applications that request it".
 - **Docs:** the Welcome page lists the C# API reference next to the C API reference, and the
   documentation site README no longer says that no version is released yet.
+- **Docs:** every current guide, tutorial and example loads the installed runtime with
+  `qar_library_load(NULL)` and joins as a local app on the QAROS PC. The App Volume, GUI Panel, CPU
+  and D3D11 rendering examples join as local apps with an app tag instead of pairing with a code
+  from the command line, and take no runtime path or runtime folder arguments; *Dynamic Loading*
+  explains the lookup and leaves `runtime_binaries_folder_path` empty. *Getting Started* and the
+  Unity guide state that the NuGet and Unity packages carry the binding only and load the installed
+  QAROS, release or demo (no `Quaternar.Qaros.Demo` package, no runtime copied next to a player).
+  *Managing Devices* describes the one rotating code the Visualizer shows, without extra codes for
+  several devices. The API Conventions code example passes the required hub port. The world anchor
+  is described as geographic reference metadata in the glossary, the tutorial and the *World space*
+  heading of *Coordinate Systems* (new anchor `#world-space--a-geographic-reference`). Guides no
+  longer recount earlier behaviour.
 
 ## [0.9.0] - 2026-10-12
 

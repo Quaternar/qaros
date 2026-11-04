@@ -20,6 +20,10 @@ yarn-debug.log*
 yarn-error.log*
 
 api
+# Rust API reference (docs:rust) and its cargo build folder
+/static/api/qar-streaming-rust
+/.rustdoc-target
+/rust-versions.json
 doxygen/*/doxygen
 doxygen/.tools
 docusaurus-config-navbar-*

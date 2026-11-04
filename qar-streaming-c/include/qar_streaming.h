@@ -29,11 +29,18 @@
  * 1. `qar-streaming-c.dll` beside the module that calls it: the executable, or
  *    the plugin DLL that loads QAROS (a test binary, a development ZIP, an app
  *    built into a QAROS tree);
- * 2. the runtime of the QAROS development build that started the application,
- *    which names it to the processes it starts; a runtime missing there is an
- *    error, not a reason to go on;
- * 3. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll` (Windows);
- *    an installed copy that fails to load is an error;
+ * 2. when the `QAR_INSTANCE` environment variable names a QAROS instance,
+ *    that instance's runtime folder: `default` is the installed QAROS, any
+ *    other name the folder recorded as `RuntimeFolder` under
+ *    `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a QAROS development hub
+ *    records its build output there and sets `QAR_INSTANCE` for the apps it
+ *    starts), else that record's `<InstallFolder>/bin`. When the variable is
+ * set, an unknown instance or a runtime that does not load there is an error,
+ * never a reason to load another instance's runtime. Windows only; Linux has no
+ * instance records;
+ * 3. the installed QAROS, `<InstallFolder>/bin/qar-streaming-c.dll` (Windows
+ *    only; Linux has no installation record); an installed copy that fails to
+ *    load is an error;
  * 4. `qar-streaming-c.dll` in a folder on `PATH` (Linux: the dynamic linker's
  *    search). The current directory is never searched.
  * Each loads from its absolute path, with the runtime's dependencies from its
@@ -265,9 +272,10 @@ typedef struct QarRuntimeHandle QarRuntime;
 /// Session instance (opaque)
 typedef struct QarSessionHandle QarSession;
 
-/// Onboarding invite (opaque) — full invite blob for onboarding a sibling
-/// instance (see qar_session_request_onboarding_invite /
-/// qar_runtime_onboard).
+/// Onboarding invite (opaque) — a full invite blob: a co-process invite this
+/// app requested (qar_session_request_onboarding_invite) or the launch invite
+/// QAROS hands an app it starts; redeemed with QarOnboardInviteExt in
+/// qar_runtime_onboard.
 typedef struct QarOnboardingInviteHandle QarOnboardingInvite;
 
 /// Member-hub invitation (opaque) — a primary hub's signed invitation that
@@ -397,6 +405,14 @@ typedef enum QarStatusCode
 	 * qar_render_sender_create() before any receiver is waited for; nothing
 	 * was created. The result's message lists the accepted formats. */
 	QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED = 806,
+	/** The device in the graphics extension of QarRenderSenderInit lacks
+	 * what sharing the sender's images needs. For QAR_GRAPHICS_API_VULKAN:
+	 * VK_KHR_external_memory_win32 and VK_KHR_external_semaphore_win32 on
+	 * Windows, their fd equivalents elsewhere, enabled when the application
+	 * created its VkDevice. Returned by qar_render_sender_create() before any
+	 * receiver is waited for; nothing was created. The result's message names
+	 * what is missing. */
+	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
 	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
 	/// user to re-check the code shown on the hub and retry.
 	QAR_STATUS_PAKE_ERROR = 1600,
@@ -435,6 +451,11 @@ typedef enum QarStatusCode
 	 * SDK older than the hub never makes the proof and cannot renew there;
 	 * update the app or device, pairing again is not enough. */
 	QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN = 1810,
+	/** The hub refused qar_session_request_onboarding_invite: it mints a
+	 * co-process invite only for a local app it enrolled on its own PC (local
+	 * enrollment) or a process its launcher started. A device, or an app that
+	 * joined with a code or an invite, gets none. Final; nothing was minted. */
+	QAR_STATUS_ONBOARDING_INVITE_REFUSED = 1812,
 	/** The hub has no target app it can launch for the requested device (an
 	 * unknown connection-string scheme family, or a device kind that is never
 	 * invited, such as a camera). Nothing was invited; pick another target. */
@@ -1379,7 +1400,10 @@ typedef struct QarAppVolumeControllerRayStyle
  * Retired codes are never reused: 0x1001 (RUNTIME_JOIN_INIT),
  * 0x2000 (SESSION_CREATE_INIT), 0x2001 (SESSION_JOIN_INIT),
  * 0x2002 (PEER_SPEC_INIT), 0x100B (RUNTIME_MEMBER_JOIN_REQUEST_INIT),
- * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT). The never-released
+ * 0x100C (RUNTIME_MEMBER_JOIN_COMPLETE_INIT), 0x2005 (the untagged
+ * SESSION_REQUEST_INVITE_INIT, refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED
+ * "app tag required"), 0x2008 (SESSION_REQUEST_ONBOARDING_CODES_INIT, removed
+ * with qar_session_request_onboarding_codes). The never-released
  * SESSION_SPONSOR_MEMBER_INIT shared 0x2009 by mistake; 0x2009 stays
  * PEER_DEVICE_IDENTITY.
  */
@@ -1398,12 +1422,16 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT = 0x100A,
 	QAR_STRUCTURE_TYPE_RUNTIME_CREATE_MEMBER_HUB_INVITATION_INIT = 0x100D,
 	QAR_STRUCTURE_TYPE_RUNTIME_JOIN_HUB_AS_MEMBER_INIT = 0x100E,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT = 0x100F,
+	QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT = 0x1010,
+	QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT = 0x1011,
+	QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT = 0x1012,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID = 0x2004,
-	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x2005,
-	QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT = 0x2008,
+	QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT = 0x200A,
 	QAR_STRUCTURE_TYPE_SESSION_INVITE_TARGET_APP_INIT = 0x2007,
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
+	QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO = 0x200B,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -1563,20 +1591,42 @@ typedef struct QarRuntimeInit
 	const char* storage_folder_path;
 } QarRuntimeInit;
 
+/**
+ * @brief Extension: keep this runtime's identities in memory only.
+ *
+ * Chain into QarRuntimeInit.header.next. For a process that must leave
+ * nothing on disk, typically a co-process joining with a co-process invite
+ * (see QarRequestInviteInit): the identity it onboards with lives in an
+ * in-memory secure store and is gone when the runtime is.
+ *
+ * - qar_runtime_onboard writes nothing under the storage root, and
+ *   out_onboarding_id is the zero id. A non-zero QarOnboardInit.onboarding_id
+ *   is refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Certificate renewal
+ *   works as usual.
+ * - The identity is forgotten when its session handle is destroyed.
+ * - qar_runtime_rejoin and qar_runtime_forget return
+ *   QAR_STATUS_ARGUMENT_NOT_SUPPORTED: there is no persisted slot. A restarted
+ *   process onboards again (a fresh co-process invite from its parent).
+ * - Only identities are kept off disk. Logs still go to
+ *   QarLibraryInit.log_folder_path and carry no key or invite secret. A crash
+ *   dump (its `crashes` subfolder, or QAR_CRASH_DUMP_DIR) holds process memory
+ *   and may hold the in-memory key, which is good until its certificate
+ *   expires (30 minutes for a co-process).
+ * - QarOnboardLocalAppExt is stateless already and is unaffected.
+ * - A runtime older than this extension skips it like any unknown chained
+ *   struct and stores the identity on disk. Before relying on it, check
+ *   QarRuntimeInfo::version (qar_runtime_info) against the version whose
+ *   changelog introduces it. The same holds for QarOnboardLocalAppTagExt.
+ */
+typedef struct QarRuntimeEphemeralStorageExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT */
+} QarRuntimeEphemeralStorageExt;
+
 // ============================================================================
 // ONBOARDING TYPES
 // ============================================================================
-#if 0 // Obsolete pre-onboarding session API.
-typedef struct QarRuntimeJoinInit
-{
-	// Attach QarGraphicsDeviceId through header.next to select the adapter.
-	QarStructureHeader header;
-	const char*
-		launcher_config_json; // Optional JSON object for launcher config
-} QarRuntimeJoinInit;
-
-#endif // Obsolete pre-onboarding session API.
-
 /**
  * @brief Identity slot key, generated by the runtime on first onboard.
  *
@@ -1613,53 +1663,6 @@ typedef void (*qar_progress_callback_t)(
 	const char* message,
 	void* user_state
 );
-
-#if 0 // Obsolete pre-onboarding session API.
-/**
- * @brief Legacy presentation arguments for qar_session_join.
- *
- * Retained for ABI compatibility. New onboarding callers use
- * QarPeerPresentation instead.
- */
-typedef struct QarPeerSpecInit
-{
-	QarStructureHeader header;
-	QarPeerId* id;			  // Optional, can be NULL
-	const char* display_name; // Optional, can be NULL. Will get generated name
-	const char* app_version;  // Optional, can be NULL
-	const char* app_custom_peer_info; // Optional, can be NULL
-} QarPeerSpecInit;
-
-typedef struct QarSessionCreateInit
-{
-	// Attach QarGraphicsDeviceId through header.next to select the adapter.
-	QarStructureHeader header;
-	QarSessionId* session_id; // Optional session ID
-	const char*
-		launcher_config_json; // Optional JSON object for launcher config
-} QarSessionCreateInit;
-
-typedef struct QarSessionJoinInit
-{
-	// Attach QarGraphicsDeviceId through header.next to select the adapter.
-	QarStructureHeader header;
-	const uint8_t* invite_data;
-	size_t invite_data_size;
-	QarPeerSpecInit peer_spec_init;
-} QarSessionJoinInit;
-
-/**
- * @brief Legacy connection-string invite arguments.
- *
- * Retained for ABI compatibility; new callers request QarOnboardingInvite.
- */
-typedef struct QarSessionInvitePeerInit
-{
-	QarStructureHeader header;
-	const char* connection_string;
-} QarSessionInvitePeerInit;
-
-#endif // Obsolete pre-onboarding session API.
 
 /**
  * @brief Which onboarding path a QarOnboardingInvite carries.
@@ -1790,8 +1793,9 @@ typedef struct QarOnboardHostExt
 } QarOnboardHostExt;
 
 /**
- * @brief Extension: onboard from a full invite blob (sibling app / second API
- * instance).
+ * @brief Extension: onboard from a full invite blob - a co-process invite
+ * (qar_session_request_onboarding_invite) or the launch invite QAROS hands an
+ * app it starts.
  */
 typedef struct QarOnboardInviteExt
 {
@@ -1805,11 +1809,16 @@ typedef struct QarOnboardInviteExt
 /**
  * @brief Extension: join the session under a peer id chosen by the caller.
  *
- * Chain into QarOnboardInit.header.next, next to the mode extension. For a
- * process whose peer id was planned by someone else - the runtime launcher
- * assigns one to every process it starts and reports it to the rest of the
- * session - so the process must appear under that id. Absent, onboarding mints
- * a fresh id. The id is persisted with the slot, so a later rejoin keeps it.
+ * Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
+ * QarOnboardInviteExt, for a process whose peer id was planned and announced
+ * to the session by someone else, so the process must appear under that id.
+ * - Absent: the process takes the peer id the hub bound to the code or invite
+ *   (a co-process invite always carries one), else a fresh one.
+ * - Present: it must equal any peer id the hub bound to the code or invite;
+ *   a different id fails onboarding.
+ * - Refused with QarOnboardLocalAppExt, which gets its peer id from the hub
+ *   (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ * The id is persisted with the slot, so a later rejoin keeps it.
  */
 typedef struct QarOnboardPeerIdExt
 {
@@ -1842,7 +1851,7 @@ typedef struct QarOnboardPeerIdExt
  *   (the hub assigns the peer id): QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  * - The progress callback reports "Waiting for approval in QAROS hub" while
  *   the prompt is open.
- * - Starts the QAROS hub when it does not run: qaros-hub-service from the
+ * - Starts the QAROS hub when it does not run: qaros.exe from the
  *   installation's bin/, else from
  * QarRuntimeInit::runtime_binaries_folder_path. A running hub is left as it is,
  * and the hub outlives the app.
@@ -1855,6 +1864,45 @@ typedef struct QarOnboardLocalAppExt
 	/// Max wait for the user's first-time approval; 0 -> hub default (120 s).
 	uint32_t approval_timeout_ms;
 } QarOnboardLocalAppExt;
+
+/** @brief Longest app tag in bytes (QarOnboardLocalAppTagExt::app_tag,
+ * QarRequestInviteInit::app_tag). */
+#define QAR_MAX_APP_TAG_LENGTH 256
+
+/**
+ * @brief Extension: the app tag of a local source app, telling several
+ * instances of one approved app apart.
+ *
+ * Chain into QarOnboardInit.header.next next to QarOnboardLocalAppExt; it is
+ * refused with any other mode (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ *
+ * The hub remembers a peer id per approval and tag: the next start of the app
+ * with the same tag gets the same peer id while no other live process holds
+ * it, and a one-off id otherwise. Absent, the app has the default tag, which
+ * is remembered the same way. The hub keeps at most 64 tags per approval,
+ * dropping the least recently used, forgets a tag unused for 30 days, and
+ * forgets all of them when the approval is revoked or narrowed.
+ *
+ * An app tag is an identity key, treated like the common name of an app
+ * volume or GUI panel:
+ * - non-empty printable ASCII (0x20-0x7E, no control characters), no space
+ *   at either end, at most QAR_MAX_APP_TAG_LENGTH bytes; anything else is
+ * refused with QAR_STATUS_ARGUMENT_NOT_SUPPORTED. Put non-ASCII text in
+ *   QarPeerPresentation::display_name.
+ * - never starting with `member/`, which the hub keeps for the apps of its
+ *   member hubs (QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ * - compared exactly (case-sensitive) and kept constant across versions of
+ *   the app.
+ * - a DNS-style name scoped by the app is recommended, e.g.
+ *   `left.terraexplorer.skyline`.
+ */
+typedef struct QarOnboardLocalAppTagExt
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT */
+	/// Required; the app tag (rules above). Copied before the call returns.
+	const char* app_tag;
+} QarOnboardLocalAppTagExt;
 
 /**
  * @brief What the loaded qar-streaming-c reports about itself
@@ -1871,38 +1919,38 @@ typedef struct QarRuntimeInfo
 } QarRuntimeInfo;
 
 /**
- * @brief Mint an invite to hand to a sibling instance (session-scoped).
+ * @brief Mint a co-process invite: a one-time invite for a process this app
+ * starts on the same PC (a companion in another language, a helper process).
  *
- * Deliberately empty: the invite is always requested from the hub this
- * session onboarded through, and nothing else is configurable today. The
- * header keeps it an ABI-safe growth point (new fields or header.next).
+ * The hub binds the invite to the peer id it remembers for this session's
+ * approval and app_tag (see QarOnboardLocalAppTagExt), so the co-process joins
+ * as the same peer on every start while no other live process holds that id.
+ *
+ * - Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
+ *   process the QAROS launcher started, may request one.
+ * - Single use, valid for 60 s (set by the hub), redeemable only from the
+ *   hub's PC.
+ * - The co-process gets the short local certificate profile under this app's
+ *   approval; its certificate renews only while the requesting session is
+ *   still in the session, and revoking the approval revokes both.
+ * - The co-process should chain QarRuntimeEphemeralStorageExt so it writes
+ *   nothing to disk.
+ *
+ * An invite for another PC, or for a new device, is not available to apps:
+ * pairing codes and unbound invites are minted by the hub's operators.
+ *
+ * A struct whose header carries any other structure type, including a retired
+ * one (see QarStructureType), is refused with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  */
 typedef struct QarRequestInviteInit
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT */
+	/// Required; the co-process's app tag. Same rules as
+	/// QarOnboardLocalAppTagExt::app_tag. Copied before the call returns.
+	const char* app_tag;
 } QarRequestInviteInit;
-
-/**
- * @brief Ask the hub for a new set of one-time onboarding codes.
- *
- * Every request mints codes of its own: codes other callers hold and the
- * code on the hub's onboarding screen stay valid, and none of the new ones is
- * announced or displayed. Each code works once and lapses after its
- * lifetime.
- */
-typedef struct QarRequestOnboardingCodesInit
-{
-	QarStructureHeader header; /**<
-		QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT */
-	/// How many codes, 1 to 64. Also the length of the caller's out array.
-	uint32_t count;
-	/// Seconds each code stays valid; 0 -> 120. At most 600.
-	uint32_t lifetime_seconds;
-	/// Zero -> any device may use the codes. Otherwise a device pairing with
-	/// one of them can only join under this peer id (QarOnboardPeerIdExt).
-	QarPeerId planned_peer_id;
-} QarRequestOnboardingCodesInit;
 
 /**
  * @brief Ask this machine's hub to start a target app for one AR device.
@@ -1911,11 +1959,9 @@ typedef struct QarRequestOnboardingCodesInit
  *   - `"hololens:<host>"` — HoloLens
  *   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
  *     served by the Android streamer; it reports its exact model itself
- *   - `"quest:<host>"`, `"android:<host>"` — older spellings of
- *     `"headset:<host>"`
- * `<host>` is a hostname or an IP address; the two are interchangeable. A bare
- * `"<host>"` with no scheme is accepted as the legacy spelling of
- * `"hololens:<host>"`.
+ *   - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
+ *   - `"<host>"` with no scheme — alias of `"hololens:<host>"`
+ * `<host>` is a hostname or an IP address; the two are interchangeable.
  *
  * Only these device kinds can be invited. Anything else — a visualizer, a
  * desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
@@ -2041,6 +2087,68 @@ typedef struct QarMemberHubInvitationInit
 } QarMemberHubInvitationInit;
 
 /**
+ * @brief Extension: the invitation also grants one remote app on the joining
+ * PC, chained into QarMemberHubInvitationInit.header.next.
+ *
+ * The grant is bound to the calling app's approval and `app_tag`. On a member
+ * hub of this primary, the first executable that onboards as a local app with
+ * the invitation chained (QarOnboardRemoteAppGrantExt) is approved there
+ * without a prompt, recorded by its publisher or image hash. Later starts of
+ * that executable onboard with no invitation and no prompt, and the primary
+ * gives them the same peer id while no other live process holds it (the peer
+ * is remembered under the grant's tag). A different executable is refused the
+ * grant once it is redeemed, also with a later invitation of the same app and
+ * tag.
+ *
+ * - One grant admits one app on one member PC, however many hubs the
+ *   invitation's max_uses lets join; issue one tag per remote app.
+ * - With a grant the calling app's own approval is not extended to the member
+ *   hub (it is without one).
+ * - Revoking the calling app's approval, or the granted one, on the primary
+ *   revokes the granted app and forgets its peer id.
+ * - `app_tag` follows the app tag rules of QarOnboardLocalAppTagExt;
+ *   QAR_STATUS_ARGUMENT_NOT_SUPPORTED otherwise.
+ */
+typedef struct QarMemberHubInvitationAppGrantExt
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT */
+	/// Required; the grant's app tag. Copied before the call returns.
+	const char* app_tag;
+} QarMemberHubInvitationAppGrantExt;
+
+/**
+ * @brief Extension: redeem a remote-app grant while onboarding as a local app
+ * on another PC, chained into QarOnboardInit.header.next next to
+ * QarOnboardLocalAppExt (with any other mode:
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED).
+ *
+ * Only a member hub redeems a grant: join the hub on this PC to the
+ * invitation's primary first (qar_runtime_join_hub_as_member). A hub that is
+ * not a member ignores the grant, with no error of its own, and asks its own
+ * operator as for any local app: the approval prompt, then
+ * QAR_STATUS_ONBOARDING_APPROVAL_DENIED or
+ * QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT when nobody allows it.
+ *
+ * On a member hub, when no approval admits this executable there yet, the
+ * primary records it as the app the invitation's grant admits, without a
+ * prompt; once redeemed by another executable, or when the primary refuses
+ * the grant, the onboarding fails with QAR_STATUS_ONBOARDING_APPROVAL_DENIED.
+ * When an approval already admits it, the invitation is not used. The app tag
+ * of the grant applies; a QarOnboardLocalAppTagExt is not needed.
+ */
+typedef struct QarOnboardRemoteAppGrantExt
+{
+	QarStructureHeader header; /**<
+		QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT */
+	/// Required; the invitation the primary's app created with
+	/// QarMemberHubInvitationAppGrantExt, as
+	/// qar_member_hub_invitation_deserialize returned it. Borrowed for the
+	/// duration of the call.
+	const QarMemberHubInvitation* invitation;
+} QarOnboardRemoteAppGrantExt;
+
+/**
  * @brief Join the QAROS hub on this PC to a primary hub as its member
  * (qar_runtime_join_hub_as_member).
  *
@@ -2093,6 +2201,81 @@ typedef struct QarGraphicsDeviceId
 	QarLuid luid;
 	uint8_t uuid[16];
 } QarGraphicsDeviceId;
+
+// --- Session lifecycle -------------------------------------------------------
+
+/**
+ * @brief Where a session stands in its hub's session lifecycle.
+ *
+ * Treat a value this header does not name as
+ * QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE: the session keeps trying.
+ */
+typedef enum QarSessionLifecycleState
+{
+	/// In the hub's current session; traffic flows.
+	QAR_SESSION_LIFECYCLE_STATE_CONNECTED = 0,
+	/// Moving into another session in place; traffic resumes once CONNECTED.
+	QAR_SESSION_LIFECYCLE_STATE_MIGRATING = 1,
+	/// The hub has not answered for a while; the session keeps trying by
+	/// itself.
+	QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE = 2,
+	/// The hub no longer admits this peer (its approval was revoked, it missed
+	/// too many rotations, or the hub was reset to a new install). Terminal:
+	/// nothing is retried. Destroy the session and onboard again.
+	QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED = 3,
+} QarSessionLifecycleState;
+
+/**
+ * @brief Why the session moved into another session id.
+ *
+ * Informational only: the move itself is the same. Treat a value this header
+ * does not name as QAR_SESSION_CHANGE_CAUSE_ROTATED.
+ */
+typedef enum QarSessionChangeCause
+{
+	/// No move: a state change within the same session.
+	QAR_SESSION_CHANGE_CAUSE_NONE = 0,
+	/// The hub serves a new session of its own: its operator started a new
+	/// session, a member hub left its primary, or this peer missed the
+	/// announcement of a join.
+	QAR_SESSION_CHANGE_CAUSE_ROTATED = 1,
+	/// The hub this app paired with joined another hub as its member; the
+	/// session moved into that primary hub's session.
+	QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY = 2,
+} QarSessionChangeCause;
+
+/**
+ * @brief One state of a session's lifecycle.
+ *
+ * Read with qar_session_get_lifecycle_state() (initialize it with
+ * qar_session_lifecycle_info_default()) or received by a
+ * qar_session_subscribe_lifecycle() callback.
+ */
+typedef struct QarSessionLifecycleInfo
+{
+	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO */
+	QarSessionLifecycleState state;
+	/// Why the latest move happened; QAR_SESSION_CHANGE_CAUSE_NONE on a state
+	/// that is not part of a move.
+	QarSessionChangeCause cause;
+	/// The session the app is in now: during MIGRATING still the old one, the
+	/// new one once the move completed. qar_session_get_id() answers the same.
+	QarSessionId session_id;
+	/// The session it moved from; valid only when has_previous_session.
+	QarSessionId previous_session_id;
+	/// Set on the CONNECTED (or HUB_UNREACHABLE) state that ends a move. The
+	/// state stays current until the next change, so the first state of a
+	/// subscription made after a move, and qar_session_get_lifecycle_state(),
+	/// still carry it with its cause: compare session_id with the id the app
+	/// last saw to tell a new move from an old one.
+	bool has_previous_session;
+	/// UTF-8 text for logs and the operator, never a secret. Valid only during
+	/// the callback; NULL from qar_session_get_lifecycle_state().
+	const char* reason;
+} QarSessionLifecycleInfo;
+
+// --- end of session lifecycle
+// --------------------------------------------------
 
 typedef struct QarGuiPanelInit
 {
@@ -2547,10 +2730,11 @@ typedef struct QarRenderFrameShowViewOverridesExt
 /**
  * @brief Load the qar-streaming-c shared library for dynamic mode.
  *
- * @param library_path NULL is the normal call: the library beside the calling
- *        module, else that of the QAROS development build that started the
- *        application, else the installed QAROS, else one on `PATH` (see "Prefer
- * dynamic loading" above for the full order). A non-NULL path names the library
+ * @param library_path NULL is the normal call: the one already loaded in the
+ *        process, else the library beside the calling module, else the
+ *        runtime of the QAROS instance `QAR_INSTANCE` names, else the
+ *        installed QAROS, else one on `PATH` (see "Prefer dynamic loading"
+ *        above for the full order). A non-NULL path names the library
  * **file** itself, absolute or relative to the current working directory, and
  * only that file is tried. The runtime's dependency libraries are resolved from
  * the library's own folder and System32. UTF-8, like every path in this API
@@ -2602,7 +2786,10 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @brief Deinitialize global library state and free process-wide resources.
  *
  * After this call, no other API should be used until the next
- * qar_library_init().
+ * qar_library_init(). It also removes the crash hooks qar_library_init()
+ * installed in the process, so the library can then be unloaded with
+ * qar_library_unload() while the application keeps running. A crash handler
+ * the application installed after qar_library_init() is left in place.
  *
  * @return QarResult Success or error code.
  */
@@ -2730,6 +2917,27 @@ static inline void qar_result_log_if_error(QarResult result);
  * qar_cancel_token_cancel_after()) stops its subscriptions shortly after it
  * expires but does not wait for a running callback. Cancel or destroy the
  * token before freeing `user_state`.
+ *
+ * @anchor qar_c_async_calls
+ * **Async calls.** Every `qar_*_async` function that returns success fires
+ * its result callback **exactly once**, on a library thread:
+ * - with the outcome, success or error;
+ * - with `QAR_STATUS_TIMEOUT` when its cancel token is cancelled, times out
+ *   or is destroyed before the call finished;
+ * - with `QAR_STATUS_TIMEOUT` when its owner goes away first:
+ *   qar_session_handle_destroy() (calls on a session or a render sender),
+ *   qar_render_stream_handle_destroy() (calls on that render sender),
+ *   qar_runtime_handle_destroy() (onboard, rejoin) or qar_library_destroy().
+ *   That destroy call returns only after the callback has returned, unless
+ *   it is made from that very callback (a render sender destroyed from its
+ *   begin-frame callback).
+ *
+ * When the call itself returns an error, the callback never fires. Keep
+ * `user_state` valid until the result callback has returned; no progress
+ * callback of the call fires after it. A cancel arriving just as the call
+ * finishes may still deliver the outcome instead of `QAR_STATUS_TIMEOUT`.
+ * Do not destroy the call's session, runtime or the library from its result
+ * callback.
  * @{ */
 // Forward declarations
 /** @brief Create a new cancellation token (non-signaled). */
@@ -2784,6 +2992,10 @@ static inline void qar_runtime_handle_destroy(QarRuntime* handle);
  * qar_session_invite_target_app() and starts the device applications. Left
  * empty, it defaults to the folder the loaded qar-streaming-c came from: the
  * installed QAROS `bin/` for every distributed application.
+ *
+ * Chain QarRuntimeEphemeralStorageExt to keep every identity in memory only:
+ * nothing is written under storage_folder_path, onboarding returns the zero
+ * id, and qar_runtime_rejoin / qar_runtime_forget are refused.
  *
  * @param init Runtime initialization parameters.
  * @param out_runtime Out pointer receiving the created runtime handle.
@@ -2841,17 +3053,16 @@ static inline QarOnboardPeerIdExt qar_onboard_peer_id_ext_default(void);
 /** @brief Default init for QarOnboardLocalAppExt (hub default approval
  * timeout). */
 static inline QarOnboardLocalAppExt qar_onboard_local_app_ext_default(void);
-/** @brief Default init for QarRequestInviteInit. */
+/** @brief Default init for QarOnboardLocalAppTagExt (app_tag NULL; set it).
+ */
+static inline QarOnboardLocalAppTagExt
+qar_onboard_local_app_tag_ext_default(void);
+/** @brief Default init for QarRequestInviteInit (app_tag NULL; set it). */
 static inline QarRequestInviteInit qar_request_invite_init_default(void);
-/** @brief Default init for QarRequestOnboardingCodesInit (one code, hub
- * default lifetime, any device). */
-static inline QarRequestOnboardingCodesInit
-qar_request_onboarding_codes_init_default(void);
-/** @brief Default init for QarForgetInit. */
 /** @brief Default init for QarSessionInviteTargetAppInit. */
 static inline QarSessionInviteTargetAppInit
 qar_session_invite_target_app_init_default(void);
-
+/** @brief Default init for QarForgetInit. */
 static inline QarForgetInit qar_forget_init_default(void);
 
 /**
@@ -2889,7 +3100,8 @@ static inline QarResult qar_runtime_rejoin(
  * @brief Async variant of qar_runtime_rejoin.
  *
  * Returns immediately after starting the restore; result_callback fires
- * exactly once on a background thread (also on cancellation).
+ * exactly once on a background thread (also on cancellation, see
+ * @ref qar_c_async_calls "Async calls").
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero (the
  *   callback does not fire in this case).
  */
@@ -2907,12 +3119,15 @@ static inline QarResult qar_runtime_rejoin_async(
  *
  * Chain one of:
  * - QarOnboardCodeExt: PAKE code shown on the hub onboarding screen
- * - QarOnboardInviteExt: full invite blob from a sibling instance
+ * - QarOnboardInviteExt: a co-process invite blob from the app that started
+ *   this process (on an ephemeral runtime), or a launch invite
  *
  * QarOnboardHostExt is optional and only applies when QarOnboardCodeExt is
  * chained.
  *
  * Optional, alongside the mode extension:
+ * - QarOnboardLocalAppTagExt (with QarOnboardLocalAppExt only): the app tag
+ *   the hub remembers this instance's peer id by.
  * - QarOnboardPeerIdExt: join under a caller-chosen peer id instead of a fresh
  *   one; the id is persisted with the slot and kept by every later rejoin.
  * - QarGraphicsDeviceId: create the session's GPU devices on this adapter.
@@ -2928,8 +3143,9 @@ static inline QarResult qar_runtime_rejoin_async(
  * @param out_session Receives the onboarded session handle on success.
  * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE discovery could not reach a
  *   hub — verify host/port and retry.
- * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected, the invite expired,
- *   out — re-prompt the user for the code.
+ * @retval QAR_STATUS_PAKE_ERROR the handshake was rejected or timed out, or
+ *   the invite expired — re-prompt the user for the code, or get a fresh
+ *   invite.
  */
 static inline QarResult qar_runtime_onboard(
 	QarRuntime* runtime,
@@ -2942,7 +3158,8 @@ static inline QarResult qar_runtime_onboard(
 );
 
 /** @brief Async variant of qar_runtime_onboard. The result
- * callback delivers the generated onboarding id — persist it. */
+ * callback delivers the generated onboarding id — persist it. It fires
+ * exactly once, see @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_runtime_onboard_async(
 	QarRuntime* runtime,
 	const QarOnboardInit* init,
@@ -2953,31 +3170,28 @@ static inline QarResult qar_runtime_onboard_async(
 );
 
 /**
- * @brief Onboard from a complete invite (init->invite) received from a
- * sibling instance.
+ * @brief Ask the hub this session onboarded through for a co-process invite:
+ * a one-time invite for a process this app starts on the same PC.
  *
- * The method (PAKE or password) is auto-detected from the invite. No
- * discovery, no GUI.
+ * See QarRequestInviteInit for who may ask, what the hub binds the invite to
+ * and how long it lasts. The hub peer is resolved internally from the
+ * session. Serialize the delivered invite with
+ * qar_onboarding_invite_serialize and send the bytes to the co-process over
+ * IPC / shared memory / a pipe; it onboards with QarOnboardInviteExt.
  *
- * @param out_onboarding_id Required; receives the generated (or re-enrolled)
- *   id. Persist it.
- * @retval QAR_STATUS_PAKE_ERROR the invite handshake was rejected or the
- *   invite expired — mint a fresh invite on the sibling and retry.
- */
-
-/**
- * @brief Ask the hub this session onboarded through for a fresh onboarding
- * invite to hand to another instance.
- *
- * The hub peer is resolved internally from the session — nothing to
- * configure. Serialize the delivered invite with
- * qar_onboarding_invite_serialize and send the bytes to the sibling over
- * IPC / shared memory / a pipe.
- *
+ * @param init Required; init->app_tag names the co-process.
  * @param out_invite Receives the minted invite handle; owned by the caller
  *   (release with qar_onboarding_invite_handle_destroy).
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the hub peer could not be
- *   resolved from this session (e.g. the hub is not connected right now).
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init has the structure type of
+ *   the old untagged struct ("app tag required"), app_tag is missing, empty,
+ *   not printable ASCII, longer than QAR_MAX_APP_TAG_LENGTH or starts with
+ *   the reserved `member/` prefix.
+ * @retval QAR_STATUS_ONBOARDING_INVITE_REFUSED the hub mints co-process
+ *   invites only for a local app it enrolled on its PC (QarOnboardLocalAppExt)
+ *   or a process its launcher started; this session is neither (a device, or
+ *   an app that joined with a code or an invite). Final.
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE the session names no hub to
+ *   ask yet (e.g. the hub is not connected right now); retry.
  */
 static inline QarResult qar_session_request_onboarding_invite(
 	QarSession* session,
@@ -2988,7 +3202,10 @@ static inline QarResult qar_session_request_onboarding_invite(
 	QarOnboardingInvite** out_invite
 );
 
-/** @brief Async variant of qar_session_request_onboarding_invite. */
+/** @brief Async variant of qar_session_request_onboarding_invite. The init is
+ * validated (and app_tag copied) before the call returns; a refused init
+ * returns the error and the callback does not fire. Otherwise it fires
+ * exactly once, see @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_session_request_onboarding_invite_async(
 	QarSession* session,
 	const QarRequestInviteInit* init,
@@ -2996,38 +3213,6 @@ static inline QarResult qar_session_request_onboarding_invite_async(
 	qar_progress_callback_t update_callback,
 	void* user_state,
 	QarCancelToken* cancel
-);
-
-/**
- * @brief Ask the hub this session onboarded through for a new set of
- * one-time onboarding codes, for several devices to onboard at once.
- *
- * Every call mints codes of its own. Codes other callers hold and the code
- * on the hub's onboarding screen stay valid, and none of the new codes is
- * announced or displayed. Each works once, for init->lifetime_seconds. Hand
- * a device either the invite itself (qar_onboarding_invite_serialize, then
- * QarOnboardInviteExt) or its code text (qar_onboarding_invite_get_code, then
- * QarOnboardCodeExt). Blocks until the hub answers.
- *
- * @param init Required; count, lifetime and optional planned peer id.
- * @param on_progress Optional progress callback.
- * @param progress_state Passed to on_progress.
- * @param cancel Optional cancel token.
- * @param out_invites Required; an array of init->count handles, filled on
- *   success. Each is owned by the caller (release with
- *   qar_onboarding_invite_handle_destroy). Untouched entries are NULL on
- *   failure.
- * @return Success, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED count is 0 or above 64, the
- *   lifetime is above 600 s, or the hub peer could not be resolved.
- */
-static inline QarResult qar_session_request_onboarding_codes(
-	QarSession* session,
-	const QarRequestOnboardingCodesInit* init,
-	qar_progress_callback_t on_progress,
-	void* progress_state,
-	QarCancelToken* cancel,
-	QarOnboardingInvite** out_invites
 );
 
 /**
@@ -3067,8 +3252,8 @@ static inline QarResult qar_onboarding_invite_serialized_size(
 );
 
 /**
- * @brief Serialize the invite to wire bytes so the blob can be handed to a
- * sibling instance.
+ * @brief Serialize the invite to wire bytes so the blob can be handed to the
+ * co-process over a private channel (stdin, never a command line).
  *
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED out_buffer is too small —
  *   *out_bytes_written is still set to the required size; resize and retry.
@@ -3154,6 +3339,14 @@ qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
  * rejoin and bring devices). */
 static inline QarMemberHubInvitationInit
 qar_member_hub_invitation_init_default(void);
+/** @brief Default init for QarMemberHubInvitationAppGrantExt (app_tag NULL;
+ * set it). */
+static inline QarMemberHubInvitationAppGrantExt
+qar_member_hub_invitation_app_grant_ext_default(void);
+/** @brief Default init for QarOnboardRemoteAppGrantExt (invitation NULL; set
+ * it). */
+static inline QarOnboardRemoteAppGrantExt
+qar_onboard_remote_app_grant_ext_default(void);
 /** @brief Default init for QarJoinHubAsMemberInit (set init.invitation; the
  * timeouts default to 60 s and 120 s). */
 static inline QarJoinHubAsMemberInit qar_join_hub_as_member_init_default(void);
@@ -3388,6 +3581,110 @@ static inline QarResult qar_session_get_graphics_device_id(
 	bool* out_present
 );
 
+/**
+ * @anchor qar_c_session_lifecycle
+ * @par Session lifecycle: rotation, join, reset
+ * A session follows its hub by itself, in place. When the hub starts a new
+ * session (its operator's *New session*, a member hub's *Leave*) or joins
+ * another hub as its member, the same QarSession moves into the new session:
+ * - **Kept, nothing to do:** this QarSession and every handle obtained from it;
+ *   the app volumes, GUI panels and rooms this session created or took over
+ *   with a get_or_create call (one a previous run of the app left, say),
+ *   which it proposes again in the new session; its render and video senders,
+ *   which renegotiate through their reconnect path (create them with
+ *   QarRenderSenderInit::enable_auto_reconnects or
+ *   QarVideoSenderInit::enable_reconnects, or recreate them after a move);
+ *   its subscriptions, which keep delivering; its peer id.
+ * - **Interrupted:** frames stop for the move (a few seconds) while senders
+ *   renegotiate. Objects owned by other peers disappear until their owners
+ *   have moved too.
+ * - **Changed:** qar_session_get_id() answers the new id. Anything the app
+ *   keyed by the session id (its own files, caches, a shared link) belongs to
+ *   the old session.
+ * - **Lost for good:** QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED (the
+ *   approval was revoked, the hub was reset to a new install, or it missed too
+ *   many rotations). Nothing is retried: destroy the session, onboard again,
+ *   and recreate what you own in the new session.
+ *
+ * Subscribe with qar_session_subscribe_lifecycle() to learn about each step:
+ * react to a change of QarSessionLifecycleInfo::session_id (re-read
+ * session-scoped state, re-announce what only the app knows), to
+ * HUB_UNREACHABLE (show it, keep running), and to RE_PAIR_REQUIRED
+ * (reinitialize). An app that only polls sees a move as a new
+ * qar_session_get_id().
+ *
+ * Recommended pattern: on a new session_id, and after onboarding again on
+ * RE_PAIR_REQUIRED, call qar_app_volumes_get_or_create() and
+ * qar_gui_panels_get_or_create() again for every common name the app owns.
+ * The calls are idempotent: each returns the same id, takes the object over
+ * when it is there and re-creates it when it is missing (a move that
+ * outran it, or a new install after a re-pair, where nothing else brings it
+ * back).
+ */
+
+/**
+ * @brief The session's current lifecycle state.
+ *
+ * @param session Active session handle.
+ * @param out_info Initialized with qar_session_lifecycle_info_default();
+ *   receives the state, the current session id and, after a move, the
+ *   previous one and its cause. `reason` is set to NULL. Its header is left
+ *   untouched.
+ * @return Success; QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ *   output; QAR_STATUS_ARGUMENT_NOT_SUPPORTED when `out_info->header.type` is
+ *   not QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO.
+ */
+static inline QarResult qar_session_get_lifecycle_state(
+	const QarSession* session, QarSessionLifecycleInfo* out_info
+);
+
+/**
+ * @brief Callback of qar_session_subscribe_lifecycle().
+ *
+ * @param info The new state; valid only during the callback, `info->reason`
+ *   included. Copy what you keep.
+ * @param user_state The pointer passed to qar_session_subscribe_lifecycle().
+ */
+typedef void (*qar_session_lifecycle_callback_t)(
+	const QarSessionLifecycleInfo* info, void* user_state
+);
+
+/**
+ * @brief Subscribe to the session's lifecycle: every state change from now
+ * on, the current state first.
+ *
+ * A move reports MIGRATING (still the old session_id), then CONNECTED with
+ * the new session_id, the previous one and the cause
+ * (QAR_SESSION_CHANGE_CAUSE_ROTATED or
+ * QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY). A move whose new session does not
+ * answer in time reports HUB_UNREACHABLE with the new id and later CONNECTED
+ * without a previous id, so compare session_id with the last one you saw
+ * rather than waiting for one particular state. A callback that falls behind
+ * may miss intermediate states, never the newest one.
+ *
+ * Callbacks run on a library thread, one at a time. Keep them short: copy the
+ * info and do the reinitialization on a thread of your own. Never destroy the
+ * session or the library from the callback. See
+ * @ref qar_c_session_lifecycle "Session lifecycle" for what the session keeps
+ * by itself.
+ *
+ * @param session Active session handle.
+ * @param callback Required.
+ * @param user_state Passed to every callback; keep it valid until the
+ *   subscription has ended.
+ * @param token Required; cancelling or destroying it ends the subscription
+ *   and waits for a running callback, see
+ *   @ref qar_c_subscription_end "Ending a subscription".
+ * @return Success; QAR_STATUS_LOGIC_ERROR for an invalid handle, a null
+ *   callback or a null token.
+ */
+static inline QarResult qar_session_subscribe_lifecycle(
+	QarSession* session,
+	qar_session_lifecycle_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
 /** @} */ /* end of qar_c_session */
 
 // ============================================================================
@@ -3439,7 +3736,7 @@ static inline QarResult qar_session_get_graphics_device_id(
  *   names; which devices can be invited is the hub's decision.
  *
  * A device is invited as a HoloLens (`"hololens:<host>"`) or a Headset
- * (`"headset:<host>"`; `"quest:"` and `"android:"` are older spellings of it).
+ * (`"headset:<host>"`; `"quest:"` and `"android:"` are aliases of it).
  * The headset reports its exact model itself once it runs.
  */
 static inline QarResult qar_session_invite_target_app(
@@ -3456,11 +3753,12 @@ static inline QarResult qar_session_invite_target_app(
  *
  * Non-blocking form of qar_session_invite_target_app. A device is invited as a
  * HoloLens (`"hololens:<host>"`) or a Headset (`"headset:<host>"`;
- * `"quest:"` and `"android:"` are older spellings of it) - see
+ * `"quest:"` and `"android:"` are aliases of it) - see
  * QarSessionInviteTargetAppInit.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
- * @param result_callback Fires exactly once with the outcome. Required.
+ * @param result_callback Fires exactly once with the outcome, see
+ *   @ref qar_c_async_calls "Async calls". Required.
  * @param update_callback Optional progress callback (can be NULL).
  * @param user_state User pointer passed to both callbacks unchanged.
  * @param cancel Optional cancellation token (can be NULL).
@@ -3501,7 +3799,8 @@ static inline QarResult qar_session_kill_target_app(
  * @brief Ask this machine's hub to stop a target app it started.
  * @param session Active session handle.
  * @param target_app Peer id returned by qar_session_invite_target_app.
- * @param result_callback Fires exactly once with the outcome. Required.
+ * @param result_callback Fires exactly once with the outcome, see
+ *   @ref qar_c_async_calls "Async calls". Required.
  * @param update_callback Optional progress callback (can be NULL).
  * @param user_state User pointer passed to both callbacks unchanged.
  * @param cancel Optional cancellation token (can be NULL).
@@ -3527,7 +3826,7 @@ static inline QarResult qar_target_app_connection_string_hololens(
 
 /**
  * @brief Build the connection string for a headset target app, spelled
- * `"quest:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * `"quest:<host>"`, an alias of `"headset:<host>"`. The device is
  * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
@@ -3539,7 +3838,7 @@ static inline QarResult qar_target_app_connection_string_quest(
 
 /**
  * @brief Build the connection string for a headset target app, spelled
- * `"android:<host>"`: an older spelling of `"headset:<host>"`. The device is
+ * `"android:<host>"`, an alias of `"headset:<host>"`. The device is
  * invited as a Headset and reports its exact model itself.
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
@@ -3834,7 +4133,14 @@ static inline QarResult qar_peer_subscribe_updates(
  * @ingroup qar_c_api
  * @{ */
 // Forward declarations
-/** @brief Destroy a render stream sender handle. */
+/**
+ * @brief Destroy a render stream sender handle.
+ *
+ * A begin-frame still waiting on the sender is stopped and fails; the call
+ * returns once it has let go of the sender, usually within a frame and at most
+ * after 5 s. Avoid calling it from a callback of this library, which runs on
+ * the library's own threads.
+ */
 static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
 /** @brief Subscribe to render stream requests for this application's content.
  *
@@ -3909,7 +4215,9 @@ static inline QarResult qar_render_sender_create(
 typedef void (*qar_render_sender_create_callback_t)(
 	QarResult status, QarRenderSender* out_stream, void* user_state
 );
-/** @brief Async variant of qar_render_sender_create. */
+/** @brief Async variant of qar_render_sender_create. The callback fires
+ * exactly once, see @ref qar_c_async_calls "Async calls"; `out_stream` is
+ * the app's only on success. */
 static inline QarResult qar_render_sender_create_async(
 	QarSession* session,
 	QarRenderSenderInit* init,
@@ -4036,7 +4344,8 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 );
 /** @brief Async version of begin_frame. Same poses, same space, same
  * failures and the same wait through a paused stream as
- * qar_render_sender_begin_frame(). */
+ * qar_render_sender_begin_frame(). The callback fires exactly once, see
+ * @ref qar_c_async_calls "Async calls". */
 static inline QarResult qar_render_sender_begin_frame_async(
 	QarRenderSender* stream,
 	qar_render_sender_begin_frame_callback_t callback,
@@ -4198,6 +4507,14 @@ static inline QarResult qar_video_sender_show_frame(QarVideoSender* sender);
  * QarGuiPanelInit::header.next. With neither extension, the panel starts with
  * the default website content. Stream receiver resolution is taken from the
  * session-owned sender identified by QarGuiPanelStreamIdExt::stream_id.
+ *
+ * The id derives from the common name, so every call with one name answers
+ * the same panel. When it already exists and is not closed, init is ignored
+ * and this session takes the panel over (a previous run of the app may have
+ * left it): it is carried into the hub's next session like a panel this
+ * session created. Call it again for every common name the app owns on a new
+ * session id and after a re-pair, see
+ * @ref qar_c_session_lifecycle "Session lifecycle".
  */
 static inline QarResult qar_gui_panels_get_or_create(
 	QarSession* session,
@@ -4601,6 +4918,14 @@ static inline QarResult qar_gui_panel_get_visible_to_peers(
 // Forward declarations
 /** @brief Get the app volume identified by init->common_name, creating it
  * (via init) if it does not exist yet.
+ *
+ * The id derives from the common name, so every call with one name answers
+ * the same volume. When it already exists and is not closed, init is ignored
+ * and this session takes the volume over (a previous run of the app may have
+ * left it): it is carried into the hub's next session like a volume this
+ * session created. Call it again for every common name the app owns on a new
+ * session id and after a re-pair, see
+ * @ref qar_c_session_lifecycle "Session lifecycle".
  *
  * Fails with QAR_STATUS_ARGUMENT_NOT_SUPPORTED when init->has_app_world_anchor
  * is set and init->app_world_anchor.handedness is QAR_HANDEDNESS_UNSPECIFIED.
@@ -5309,21 +5634,16 @@ qar_render_sender_color_encoding_ext_default(void);
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
 static inline QarRuntimeInit qar_runtime_init_default(void);
-#if 0 // Obsolete pre-onboarding session API.
-/** @brief Default init for QarRuntimeJoinInit. */
-static inline QarRuntimeJoinInit qar_runtime_join_init_default(void);
-/** @brief Default init for QarPeerSpecInit. */
-static inline QarPeerSpecInit qar_peer_spec_init_default(void);
-/** @brief Default init for QarSessionCreateInit. */
-static inline QarSessionCreateInit qar_session_create_init_default(void);
-/** @brief Default init for QarSessionJoinInit. */
-static inline QarSessionJoinInit qar_session_join_init_default(void);
-/** @brief Default graphics-device extension for session initialization. */
+/** @brief Default init for QarRuntimeEphemeralStorageExt; chain it on
+ * QarRuntimeInit::header.next. */
+static inline QarRuntimeEphemeralStorageExt
+qar_runtime_ephemeral_storage_ext_default(void);
+/** @brief Default QarGraphicsDeviceId: the platform's id type (LUID on
+ * Windows, UUID elsewhere), chained on QarOnboardInit or QarRejoinInit. */
 static inline QarGraphicsDeviceId qar_graphics_device_id_default(void);
-/** @brief Default init for QarSessionInvitePeerInit. */
-static inline QarSessionInvitePeerInit
-qar_session_invite_peer_init_default(void);
-#endif
+/** @brief A QarSessionLifecycleInfo with its structure type set, for
+ * qar_session_get_lifecycle_state(). */
+static inline QarSessionLifecycleInfo qar_session_lifecycle_info_default(void);
 /** @brief Default init for QarRenderFrameShow. */
 static inline QarRenderFrameShow qar_render_frame_show_default(void);
 /** @brief Default init for QarGuiPanelInit. */
@@ -6607,6 +6927,15 @@ qar_runtime_init_default(void)
 	return init;
 }
 
+static inline QarRuntimeEphemeralStorageExt
+qar_runtime_ephemeral_storage_ext_default(void)
+{
+	QarRuntimeEphemeralStorageExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_EPHEMERAL_STORAGE_EXT, NULL } // header
+	};
+	return ext;
+}
+
 static inline QarOnboardingId
 qar_onboarding_id_default(void)
 {
@@ -6712,23 +7041,23 @@ qar_onboard_local_app_ext_default(void)
 	return ext;
 }
 
+static inline QarOnboardLocalAppTagExt
+qar_onboard_local_app_tag_ext_default(void)
+{
+	QarOnboardLocalAppTagExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_TAG_EXT,
+		  NULL }, // header
+		NULL	  // app_tag (required, caller must set)
+	};
+	return ext;
+}
+
 static inline QarRequestInviteInit
 qar_request_invite_init_default(void)
 {
 	QarRequestInviteInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL } // header
-	};
-	return init;
-}
-
-static inline QarRequestOnboardingCodesInit
-qar_request_onboarding_codes_init_default(void)
-{
-	QarRequestOnboardingCodesInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_ONBOARDING_CODES_INIT, NULL },
-		1,					  // count
-		0,					  // lifetime_seconds -> hub default
-		qar_peer_id_default() // planned_peer_id -> any device
+		{ QAR_STRUCTURE_TYPE_SESSION_REQUEST_INVITE_INIT, NULL }, // header
+		NULL // app_tag (required, caller must set)
 	};
 	return init;
 }
@@ -6757,6 +7086,28 @@ qar_member_hub_invitation_init_default(void)
 	return init;
 }
 
+static inline QarMemberHubInvitationAppGrantExt
+qar_member_hub_invitation_app_grant_ext_default(void)
+{
+	QarMemberHubInvitationAppGrantExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_MEMBER_HUB_INVITATION_APP_GRANT_EXT,
+		  NULL }, // header
+		NULL	  // app_tag (required, caller must set)
+	};
+	return ext;
+}
+
+static inline QarOnboardRemoteAppGrantExt
+qar_onboard_remote_app_grant_ext_default(void)
+{
+	QarOnboardRemoteAppGrantExt ext = {
+		{ QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_REMOTE_APP_GRANT_EXT,
+		  NULL }, // header
+		NULL	  // invitation (required, caller must set)
+	};
+	return ext;
+}
+
 static inline QarJoinHubAsMemberInit
 qar_join_hub_as_member_init_default(void)
 {
@@ -6779,45 +7130,6 @@ qar_forget_init_default(void)
 	return init;
 }
 
-#if 0 // Obsolete pre-onboarding session API.
-static inline QarPeerSpecInit
-qar_peer_spec_init_default(void)
-{
-	QarPeerSpecInit init = {
-		{ QAR_STRUCTURE_TYPE_PEER_SPEC_INIT, NULL }, // header
-		NULL,										 // id
-		NULL,										 // display_name
-		NULL,										 // app_version
-		NULL										 // app_custom_peer_info
-	};
-	return init;
-}
-
-static inline QarSessionCreateInit
-qar_session_create_init_default(void)
-{
-	QarSessionCreateInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_CREATE_INIT, NULL }, // header
-		NULL,											  // session_id
-		NULL // launcher_config_json
-	};
-	return init;
-}
-
-static inline QarSessionJoinInit
-qar_session_join_init_default(void)
-{
-	QarSessionJoinInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_JOIN_INIT, NULL }, // header
-		NULL,											// invite_data
-		0,												// invite_data_size
-		qar_peer_spec_init_default()					// peer_spec_init
-	};
-	return init;
-}
-
-#endif // Obsolete pre-onboarding session API.
-
 static inline QarGraphicsDeviceId
 qar_graphics_device_id_default(void)
 {
@@ -6832,17 +7144,20 @@ qar_graphics_device_id_default(void)
 	return device;
 }
 
-#if 0  // Obsolete pre-onboarding session API.
-static inline QarSessionInvitePeerInit
-qar_session_invite_peer_init_default(void)
+static inline QarSessionLifecycleInfo
+qar_session_lifecycle_info_default(void)
 {
-	QarSessionInvitePeerInit init = {
-		{ QAR_STRUCTURE_TYPE_SESSION_INVITE_PEER_INIT, NULL }, // header
-		NULL, // connection_string
+	QarSessionLifecycleInfo info = {
+		{ QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO, NULL }, // header
+		QAR_SESSION_LIFECYCLE_STATE_CONNECTED,				 // state
+		QAR_SESSION_CHANGE_CAUSE_NONE,						 // cause
+		QAR_ID_DEFAULT,										 // session_id
+		QAR_ID_DEFAULT, // previous_session_id
+		false,			// has_previous_session
+		NULL			// reason
 	};
-	return init;
+	return info;
 }
-#endif // Obsolete pre-onboarding session API.
 
 static inline QarRenderSenderInit
 qar_render_sender_init_default(void)
@@ -7377,16 +7692,6 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  onboarding_invite_handle_destroy,                                        \
 	  (QarOnboardingInvite * invite),                                          \
 	  (invite))                                                                \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  session_request_onboarding_codes,                                        \
-	  (QarSession * session,                                                   \
-	   const QarRequestOnboardingCodesInit* init,                              \
-	   qar_progress_callback_t on_progress,                                    \
-	   void* progress_state,                                                   \
-	   QarCancelToken* cancel,                                                 \
-	   QarOnboardingInvite** out_invites),                                     \
-	  (session, init, on_progress, progress_state, cancel, out_invites))       \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  onboarding_invite_get_code,                                              \
@@ -7939,6 +8244,11 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 #define QAR_STREAMING_C_V0_DETAIL_SESSION_H
 
 
+/// Documented in api.h (qar_session_subscribe_lifecycle).
+typedef void (*qar_session_lifecycle_callback_t)(
+	const QarSessionLifecycleInfo* info, void* user_state
+);
+
 #define QAR_SESSION_FUNCTION_LIST(X)                                           \
 	X(ACTIVE, void, session_handle_destroy, (QarSession * handle), (handle))   \
 	X(ACTIVE,                                                                  \
@@ -7959,7 +8269,20 @@ QAR_RUNTIME_FUNCTION_LIST(QAR_RUNTIME_DECLARE_WRAPPER)
 	  (const QarSession* session,                                              \
 	   QarGraphicsDeviceId* out_device_id,                                     \
 	   bool* out_present),                                                     \
-	  (session, out_device_id, out_present))
+	  (session, out_device_id, out_present))                                   \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_get_lifecycle_state,                                             \
+	  (const QarSession* session, QarSessionLifecycleInfo* out_info),          \
+	  (session, out_info))                                                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  session_subscribe_lifecycle,                                             \
+	  (QarSession * session,                                                   \
+	   qar_session_lifecycle_callback_t callback,                              \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, callback, user_state, token))
 
 QAR_DECLARE_MODULE_COMMON(SESSION, Session, session, QAR_SESSION_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_SESSION_FUNCTION_LIST)
@@ -8303,35 +8626,6 @@ qar_loadlib_beside_module(void)
 	return qar_loadlib_in_folder_w(folder);
 }
 
-/// Environment variable naming a folder that holds the runtime (step 2).
-#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
-#define QAR_RUNTIME_DIR_ENV_NAME_W L"QAROS_RUNTIME_DIR"
-
-/// The folder QAROS_RUNTIME_DIR names, wide. False when it is unset or empty.
-static inline bool
-qar_runtime_env_folder_w(wchar_t* out, DWORD capacity_chars)
-{
-	const DWORD length = GetEnvironmentVariableW(
-		QAR_RUNTIME_DIR_ENV_NAME_W, out, capacity_chars
-	);
-	return length > 0 && length < capacity_chars;
-}
-
-/// UTF-8 form of qar_runtime_env_folder_w.
-static inline bool
-qar_runtime_env_folder(char* out, size_t capacity)
-{
-	wchar_t folder[MAX_PATH];
-	if(!qar_runtime_env_folder_w(folder, MAX_PATH))
-	{
-		return false;
-	}
-	const int written = WideCharToMultiByte(
-		CP_UTF8, 0, folder, -1, out, (int)capacity, NULL, NULL
-	);
-	return written > 0;
-}
-
 /// Step 4 of the default lookup: every folder on PATH, in order. The current
 /// directory is not searched: a library planted there would be loaded.
 static inline HMODULE
@@ -8369,8 +8663,8 @@ qar_loadlib_on_path(void)
 	return handle;
 }
 
-/// Key the QAROS installer writes, per machine, under HKLM. An installation is
-/// never read from HKCU: every process of the user can write that hive.
+/// Key the QAROS installer writes, per machine, under HKLM: the default
+/// instance.
 #define QAR_INSTALL_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS"
 
 /// `<InstallFolder>\bin` of the installed QAROS, wide. False when QAROS is not
@@ -8419,16 +8713,234 @@ qar_installed_bin_folder(char* out, size_t capacity)
 	return written > 0;
 }
 
+/// Environment variable naming the QAROS instance an app belongs to: step 2 of
+/// the default lookup loads that instance's runtime, and the runtime enrols
+/// with that instance's hub. A development hub sets it for the apps it starts.
+#define QAR_INSTANCE_ENV_NAME_W L"QAR_INSTANCE"
+
+/// Name of the installed (HKLM) instance.
+#define QAR_DEFAULT_INSTANCE_NAME_W L"default"
+
+/// Longest instance name. A name is 1-64 characters of A-Z a-z 0-9 . _ -.
+#define QAR_INSTANCE_NAME_MAX_LENGTH 64
+
+/// Per-user instance records, under HKCU: the same records the runtime reads to
+/// pick the hub of a named instance.
+#define QAR_INSTANCES_REGISTRY_KEY L"SOFTWARE\\Quaternar\\QAROS\\Instances"
+
+/// Value of a per-user instance record naming the folder that holds that
+/// instance's runtime (a development hub records its build output there).
+#define QAR_INSTANCE_RUNTIME_FOLDER_VALUE L"RuntimeFolder"
+
+/// Whether `name` is a QAROS instance name: 1-64 of A-Z a-z 0-9 . _ -.
+static inline bool
+qar_is_valid_instance_name_w(const wchar_t* name)
+{
+	size_t length = 0;
+	for(; name[length] != L'\0'; ++length)
+	{
+		const wchar_t c = name[length];
+		const bool allowed =
+			(c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z')
+			|| (c >= L'0' && c <= L'9') || c == L'.' || c == L'_' || c == L'-';
+		if(!allowed || length >= QAR_INSTANCE_NAME_MAX_LENGTH)
+		{
+			return false;
+		}
+	}
+	return length > 0;
+}
+
+/// Whether `folder` is a fully qualified path: `X:\...` or a UNC
+/// `\\server\...`. A relative or drive-relative folder would load against the
+/// current directory, which the lookup never searches.
+static inline bool
+qar_is_absolute_folder_w(const wchar_t* folder)
+{
+	const bool drive = ((folder[0] >= L'A' && folder[0] <= L'Z')
+						|| (folder[0] >= L'a' && folder[0] <= L'z'))
+					   && folder[1] == L':'
+					   && (folder[2] == L'\\' || folder[2] == L'/');
+	const bool unc = folder[0] == L'\\' && folder[1] == L'\\';
+	return drive || unc;
+}
+
+/// The instance QAR_INSTANCE names, wide. False when it is unset or empty.
+/// True with an empty `out` when it is set to something longer than
+/// `capacity_chars - 1`: that is no valid name, and the lookup reports it.
+static inline bool
+qar_requested_instance_w(wchar_t* out, DWORD capacity_chars)
+{
+	out[0] = L'\0';
+	const DWORD length =
+		GetEnvironmentVariableW(QAR_INSTANCE_ENV_NAME_W, out, capacity_chars);
+	if(length >= capacity_chars)
+	{
+		out[0] = L'\0';
+		return true;
+	}
+	return length > 0;
+}
+
+/// Reads the folder in value `value` of the per-user record `key` (HKCU), wide.
+/// False when it is missing, does not fit, or is not a fully qualified path.
+static inline bool
+qar_read_instance_folder_w(
+	const wchar_t* key, const wchar_t* value, wchar_t* out, DWORD capacity_chars
+)
+{
+	DWORD size = capacity_chars * (DWORD)sizeof(wchar_t);
+	const LSTATUS status = RegGetValueW(
+		HKEY_CURRENT_USER, key, value, RRF_RT_REG_SZ, NULL, out, &size
+	);
+	return status == ERROR_SUCCESS && qar_is_absolute_folder_w(out);
+}
+
+/// The folder holding the runtime of instance `instance`, wide: for "default"
+/// the installed QAROS's `<InstallFolder>\bin` (HKLM); for any other name the
+/// value RuntimeFolder of HKCU\SOFTWARE\Quaternar\QAROS\Instances\<instance>,
+/// else that record's `<InstallFolder>\bin` (a registered named instance).
+/// False when the name is not valid or no fully qualified folder is recorded.
+///
+/// HKCU is writable by every process of the user, like the environment that
+/// QAR_INSTANCE comes from: a per-user record carries the same trust as an
+/// environment variable naming a folder, and is read only when QAR_INSTANCE
+/// names that instance. No step of the lookup checks the runtime's signature
+/// before loading it.
+static inline bool
+qar_instance_runtime_folder_w(
+	const wchar_t* instance, wchar_t* out, DWORD capacity_chars
+)
+{
+	if(!qar_is_valid_instance_name_w(instance))
+	{
+		return false;
+	}
+	if(wcscmp(instance, QAR_DEFAULT_INSTANCE_NAME_W) == 0)
+	{
+		return qar_installed_bin_folder_w(out, capacity_chars);
+	}
+	wchar_t
+		key[sizeof(QAR_INSTANCES_REGISTRY_KEY) / sizeof(wchar_t) + 1
+			+ QAR_INSTANCE_NAME_MAX_LENGTH];
+	wcscpy_s(key, sizeof(key) / sizeof(wchar_t), QAR_INSTANCES_REGISTRY_KEY);
+	wcscat_s(key, sizeof(key) / sizeof(wchar_t), L"\\");
+	wcscat_s(key, sizeof(key) / sizeof(wchar_t), instance);
+	if(qar_read_instance_folder_w(
+		   key, QAR_INSTANCE_RUNTIME_FOLDER_VALUE, out, capacity_chars
+	   ))
+	{
+		return true;
+	}
+	if(!qar_read_instance_folder_w(key, L"InstallFolder", out, capacity_chars)
+	   || wcslen(out) + 5 >= capacity_chars)
+	{
+		return false;
+	}
+	wcscat_s(out, capacity_chars, L"\\bin");
+	return true;
+}
+
+/// Step 2 of the default lookup: the runtime of the instance QAR_INSTANCE
+/// names. NULL, with a printed reason, when the name is not valid, no runtime
+/// folder is recorded for it, or the runtime there does not load; never another
+/// instance's runtime.
+static inline HMODULE
+qar_loadlib_requested_instance(const wchar_t* instance)
+{
+	if(!qar_is_valid_instance_name_w(instance))
+	{
+		printf(
+			"QAR_INSTANCE is not a QAROS instance name "
+			"(1-%d of A-Z a-z 0-9 . _ -); no runtime is loaded.\n",
+			QAR_INSTANCE_NAME_MAX_LENGTH
+		);
+		return NULL;
+	}
+	wchar_t folder[MAX_PATH];
+	if(!qar_instance_runtime_folder_w(instance, folder, MAX_PATH))
+	{
+		if(wcscmp(instance, QAR_DEFAULT_INSTANCE_NAME_W) == 0)
+		{
+			printf(
+				"QAR_INSTANCE is 'default', but QAROS is not installed (no "
+				"InstallFolder under HKLM\\SOFTWARE\\Quaternar\\QAROS).\n"
+			);
+		}
+		else
+		{
+			printf(
+				"QAR_INSTANCE is '%ls', but no runtime folder is recorded "
+				"for that instance (no full-path RuntimeFolder or InstallFolder "
+				"under HKCU\\SOFTWARE\\Quaternar\\QAROS\\Instances\\%ls). Start "
+				"its hub, or unset QAR_INSTANCE.\n",
+				instance,
+				instance
+			);
+		}
+		return NULL;
+	}
+	HMODULE handle = qar_loadlib_in_folder_w(folder);
+	if(handle == NULL)
+	{
+		printf(
+			"QAR_INSTANCE is '%ls', but no loadable qar-streaming-c.dll "
+			"is in its runtime folder '%ls'.\n",
+			instance,
+			folder
+		);
+	}
+	return handle;
+}
+
+/// Steps 2-4 of the default lookup, after the runtime already in the process
+/// and the one beside the calling module.
+static inline HMODULE
+qar_loadlib_by_instance(void)
+{
+	wchar_t instance[QAR_INSTANCE_NAME_MAX_LENGTH + 2];
+	if(qar_requested_instance_w(instance, QAR_INSTANCE_NAME_MAX_LENGTH + 2))
+	{
+		return qar_loadlib_requested_instance(instance);
+	}
+	wchar_t folder[MAX_PATH];
+	if(qar_installed_bin_folder_w(folder, MAX_PATH))
+	{
+		HMODULE installed = qar_loadlib_in_folder_w(folder);
+		if(installed == NULL)
+		{
+			printf(
+				"The installed QAROS runtime in '%ls' could not be loaded. "
+				"Repair or reinstall QAROS.\n",
+				folder
+			);
+		}
+		return installed;
+	}
+	HMODULE handle = qar_loadlib_on_path();
+	if(handle == NULL)
+	{
+		printf(
+			"qar-streaming-c.dll is not beside this module, QAR_INSTANCE "
+			"is not set, QAROS is not installed (no InstallFolder under "
+			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and it is not on PATH.\n"
+		);
+	}
+	return handle;
+}
+
 /// qar_library_load(NULL): the runtime lookup every QAROS binding follows
 /// (docs: authoring a binding). The first match wins:
 ///   0. a qar-streaming-c.dll already loaded in this process: nothing is
 ///   loaded;
 ///   1. the folder of the module this header is compiled into (the
 ///      executable, or the plugin DLL that loads QAROS);
-///   2. the folder named by QAROS_RUNTIME_DIR; when it is set, a runtime
-///      missing there or failing to load is an error;
-///   3. the installed QAROS, `<InstallFolder>\bin` from HKLM; when installed, a
-///      copy failing to load there is an error;
+///   2. when QAR_INSTANCE is set, the runtime folder of that instance
+///      (qar_instance_runtime_folder_w); an invalid or unknown instance, or a
+///      runtime there that does not load, is an error, never a reason to load
+///      another instance's runtime;
+///   3. the installed QAROS (the default instance), `<InstallFolder>\bin` from
+///      HKLM; when installed, a copy failing to load there is an error;
 ///   4. every folder on PATH, in order.
 /// Each candidate loads from its absolute path, with its dependencies from its
 /// own folder and System32 only.
@@ -8446,45 +8958,7 @@ qar_loadlib_default(void)
 	{
 		return handle;
 	}
-	wchar_t folder[MAX_PATH];
-	if(qar_runtime_env_folder_w(folder, MAX_PATH))
-	{
-		handle = qar_loadlib_in_folder_w(folder);
-		if(handle == NULL)
-		{
-			printf(
-				"QAROS_RUNTIME_DIR is '%ls', but no loadable "
-				"qar-streaming-c.dll "
-				"is there.\n",
-				folder
-			);
-		}
-		return handle;
-	}
-	if(qar_installed_bin_folder_w(folder, MAX_PATH))
-	{
-		handle = qar_loadlib_in_folder_w(folder);
-		if(handle == NULL)
-		{
-			printf(
-				"The installed QAROS runtime in '%ls' could not be loaded. "
-				"Repair or reinstall QAROS.\n",
-				folder
-			);
-		}
-		return handle;
-	}
-	handle = qar_loadlib_on_path();
-	if(handle == NULL)
-	{
-		printf(
-			"qar-streaming-c.dll is not beside this module, QAROS_RUNTIME_DIR "
-			"is "
-			"not set, QAROS is not installed (no InstallFolder under "
-			"HKLM\\SOFTWARE\\Quaternar\\QAROS), and it is not on PATH.\n"
-		);
-	}
-	return handle;
+	return qar_loadlib_by_instance();
 }
 
 static inline void
@@ -8533,9 +9007,6 @@ qar_loadlib(const char* path)
 }
 
 #define QAR_RUNTIME_LIBRARY_FILE_NAME "libqar-streaming-c.so"
-
-/// Environment variable naming a folder that holds the runtime (step 2).
-#define QAR_RUNTIME_DIR_ENV_NAME "QAROS_RUNTIME_DIR"
 
 /// Loads `<folder>/libqar-streaming-c.so` when the file exists there. NULL
 /// when it is not there, or (with a printed reason) when it fails to load.
@@ -8600,24 +9071,11 @@ qar_loadlib_beside_module(void)
 	return handle;
 }
 
-/// The folder QAROS_RUNTIME_DIR names. False when it is unset or empty.
-static inline bool
-qar_runtime_env_folder(char* out, size_t capacity)
-{
-	const char* folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
-	if(folder == NULL || folder[0] == '\0' || strlen(folder) >= capacity)
-	{
-		return false;
-	}
-	snprintf(out, capacity, "%s", folder);
-	return true;
-}
-
-/// qar_library_load(NULL) on Linux: the Windows lookup without step 3 (there is
-/// no installation record yet). 0. already loaded in this process; 1. the
-/// folder of the module this header is compiled into; 2. QAROS_RUNTIME_DIR;
-/// 4. the dynamic linker's own search (LD_LIBRARY_PATH, runpath, ld.so cache),
-/// its counterpart of PATH.
+/// qar_library_load(NULL) on Linux: the Windows lookup without steps 2 and 3
+/// (there are no instance or installation records yet, so QAR_INSTANCE is not
+/// read). 0. already loaded in this process; 1. the folder of the module this
+/// header is compiled into; 4. the dynamic linker's own search
+/// (LD_LIBRARY_PATH, runpath, ld.so cache), its counterpart of PATH.
 static inline void*
 qar_loadlib_default(void)
 {
@@ -8633,27 +9091,12 @@ qar_loadlib_default(void)
 	{
 		return handle;
 	}
-	const char* env_folder = getenv(QAR_RUNTIME_DIR_ENV_NAME);
-	if(env_folder != NULL && env_folder[0] != '\0')
-	{
-		handle = qar_loadlib_in_folder(env_folder, strlen(env_folder));
-		if(handle == NULL)
-		{
-			printf(
-				"QAROS_RUNTIME_DIR is '%s', but no loadable %s is there.\n",
-				env_folder,
-				QAR_RUNTIME_LIBRARY_FILE_NAME
-			);
-		}
-		return handle;
-	}
 	handle = dlopen(QAR_RUNTIME_LIBRARY_FILE_NAME, RTLD_NOW | RTLD_LOCAL);
 	if(handle == NULL)
 	{
 		printf(
-			"%s is not beside this module, QAROS_RUNTIME_DIR is not set, and "
-			"it "
-			"is not on the library search path: %s\n",
+			"%s is not beside this module and not on the library search path: "
+			"%s\n",
 			QAR_RUNTIME_LIBRARY_FILE_NAME,
 			dlerror()
 		);
@@ -8783,7 +9226,7 @@ qar_library_load(const char* library_path)
 		return true;
 	}
 
-	// NULL: the default lookup (qar_loadlib_default), installed QAROS first.
+	// NULL: the default lookup (qar_loadlib_default).
 	g_qar_dynamic_library_handle = library_path != NULL
 									   ? qar_loadlib(library_path)
 									   : qar_loadlib_default();

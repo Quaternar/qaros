@@ -58,11 +58,6 @@ impl D3D11Sender {
         }
         // SAFETY: the type identifies the structure.
         let params = unsafe { &*extension.cast::<QarStreamParamsD3D11>() };
-        // Where the bindings have the colour extensions, the chain walk has checked what follows.
-        #[cfg(not(qaros_color_extensions))]
-        if !params.header.next.is_null() {
-            return Err("QarStreamParamsD3D11 header.next must be NULL".into());
-        }
         if params.d3d11_device.is_null() || params.d3d11_context.is_null() {
             return Err("QarStreamParamsD3D11 needs both d3d11_device and d3d11_context".into());
         }

@@ -18,7 +18,7 @@ winget install --id LLVM.LLVM ---exact
 
 Install QAROS on the PC with `QAROS-Setup-<version>.exe` (per machine, one administrator prompt). The examples load its runtime at run time (`qar_library_load(NULL)`); this repository needs no runtime download. Step by step: Developer Guide, *Getting Started* (`docs/website/docs/developer-guide/getting-started.mdx`).
 
-Run without arguments, the examples load the installed QAROS with the default lookup of `qar_library_load(NULL)`. The core examples other than `local_app_onboarding` also take `--qaros-library=PATH` to load one `qar-streaming-c.dll` instead.
+Run without arguments, the examples load the installed QAROS with the default lookup of `qar_library_load(NULL)` and ship no copy of the runtime. The core examples other than `local_app_onboarding` also take `--qaros-library=PATH` to load one `qar-streaming-c.dll` instead, for development builds of QAROS itself; to run any example against the runtime of a QAROS development hub, set `QAR_INSTANCE` to that hub's instance name.
 
 ## Documentation
 
@@ -28,11 +28,12 @@ Run without arguments, the examples load the installed QAROS with the default lo
   - **User Guide** (`docs/website/docs/user-guide/`): for people who join a Hub from a device, no code: the QAROS world, getting started, connecting to the Hub, onboarding devices, the shared space, working in a session, and troubleshooting.
   - **Developer Guide** (`docs/website/docs/developer-guide/`): for engineers integrating the API in **C, C# or Rust**: getting started, concepts, API conventions, coordinate systems, onboarding and sessions, peers, GUI panels, rendering streams, app volumes, language bindings, troubleshooting, and the compiled **Tutorials**. Code samples are selectable per language via a site-wide switcher.
   - **Administrator & Operator Guide** (`docs/website/docs/operator-guide/`): for people who install, secure, configure, run, and maintain a Hub: system requirements, installation, running the Hub, launcher configuration, networking and federation, the security model (and an auditor-level deep dive), device management, the mixer, and maintenance.
-  - **C API Reference**: generated with Doxygen from the headers and the example sources in `qar-streaming-c/examples/`. The examples are compiled by this repository's build, so every tutorial snippet is guaranteed-valid code and doubles as the source for the Developer Guide Tutorials. The examples that open a session rejoin with a persisted onboarding id, else onboard with a pairing code when you pass one, else, on Windows, join the Hub on this machine as a local app (click **Allow** in QAROS once).
+  - **C API Reference**: generated with Doxygen from the headers and the example sources in `qar-streaming-c/examples/`. The examples are compiled by this repository's build, so every tutorial snippet is guaranteed-valid code and doubles as the source for the Developer Guide Tutorials. The examples that open a session rejoin with a persisted onboarding id, else onboard with a pairing code when you pass one, else, on Windows, join the Hub on this machine as a local app (click **Allow** in QAROS once); the onboarding tutorials cover each mode on its own, and `onboarding_and_rejoin` shows code pairing and rejoin for a PC without a hub.
 - Deferred documentation work (unshipped features, items needing team input) is tracked in [`docs/TODO.md`](docs/TODO.md), not inside the published pages.
 
 ## Repository structure
 
+- `ci/` - The checks and builds of the GitHub workflows: `python ci/run.py rust|csharp|c|capi|vulkan-cube|docs` (Python 3, standard library only, Windows and Linux) and `ci/ci.env`, its defaults. The workflows only set up the tools and call it; run it locally the same way, from any folder.
 - `cmake/` - CMake helper files, including the vcpkg toolchain integration.
 - `docs/website/` - Documentation site source, authored with Docusaurus.
 - `package/` - Drop-in location for an SDK build the C# tests run against (`package/bin`, see C# binding).
@@ -62,13 +63,23 @@ dotnet test Quaternar.Qaros.sln --no-build
 The integration tests drive the C API against `qar-streaming-c-ext`, a test-only DLL with the
 counterparts an application talks to (an in-process hub, peers, receivers), so no running QAROS
 is needed. It is built only in Debug and RelWithDebInfo SDK builds and never ships in a release
-package. The tests copy the native binaries from `QarStreamingNativeBinDir`:
+package. The tests copy the native binaries from `QarStreamingNativeBinDir`, the first of:
 
-- default `package/bin`: put a Debug or RelWithDebInfo SDK build there, including
-  `qar-streaming-c-ext.dll`;
-- inside the Quaternar repository, its `qaros-native.props` points at that repository's own build
-  (build the `qar-streaming-c-ext_gtests` target first);
-- `-p:QarStreamingNativeBinDir=<folder>` overrides both.
+- `-p:QarStreamingNativeBinDir=<folder>`;
+- the `QAROS_NATIVE_BIN` environment variable: the folder holding `qar-streaming-c.dll`,
+  `qar-streaming-c-ext.dll` and every DLL they load (the same variable the Rust tests read);
+- inside the Quaternar repository, its `qaros-native.props`, which reads that repository's root
+  `ci.env` and so points at its own build (build the CMake targets `qar-streaming-c-ext_gtests` and
+  `qar-hub-test-ext_gtests` first);
+- `package/bin`: put a Debug or RelWithDebInfo SDK build there, including `qar-streaming-c-ext.dll`.
+
+`QAROS_HUB_TEST_EXT_BIN` names the folder of `qar-hub-test-ext.dll` (a secured hub that rotates its
+session, built only inside the Quaternar repository, whose `qaros-native.props` sets it too) for the
+hub follow tests; without either they are skipped.
+
+CI runs `python ci/run.py csharp` (in `capi`, with the C API suite and the Rust integration tests).
+Run it the same way: it uses `QAROS_NATIVE_BIN` when set, else downloads the C API runtime of the
+Quaternar release `ci/ci.env` names (`--release <tag>` picks another) with `gh`.
 
 The optional [Vulkan cube source](qar-streaming-c/examples/vulkan_cube/README.md) loads the installed QAROS, joins as a local app with one approval in QAROS (no code), and runs a separate stereo camera and sender for each target app in the session's peer list.
 
@@ -86,9 +97,11 @@ cargo test --workspace
 
 The tests run against `qaros-stub`, an in-memory stand-in for the runtime, so no QAROS is needed.
 The integration tests drive the C API against `qar-streaming-c-ext`, as the C# tests do: set
-`QAROS_PACKAGE_BIN` to the `bin` folder of a Debug or RelWithDebInfo SDK build, then
-`cargo test -p qar-streaming-rust-ext --features e2e`. The runtime is found the way every binding
-finds it, with `QAROS_RUNTIME_DIR` to point a run at another one. Details:
+`QAROS_NATIVE_BIN` to the `bin` folder of a Debug or RelWithDebInfo SDK build, then
+`cargo test -p qar-streaming-rust-ext --features e2e`. CI's checks are `python ci/run.py rust`; run
+it the same way (`--e2e` runs the integration tests, downloading a C API runtime without
+`QAROS_NATIVE_BIN`). The runtime is found the way every binding
+finds it, with `QAR_INSTANCE` to point a run at another QAROS instance's runtime. Details:
 [qar-streaming-rust/README.md](qar-streaming-rust/README.md).
 
 ## Support channels

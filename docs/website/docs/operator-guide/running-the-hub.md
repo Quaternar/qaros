@@ -10,13 +10,13 @@ The Hub is not a single program but three cooperating processes that ship togeth
 
 | Process | Role |
 |---|---|
-| `qaros-hub-service.exe` | Tray companion. Always-on supervisor: starts the launcher, restarts it if it crashes, and gives you the tray menu. |
+| `qaros.exe` | Tray companion. Always-on supervisor: starts the launcher, restarts it if it crashes, and gives you the tray menu. |
 | `qar-runtime-launcher.exe` | The actual Hub runtime: hosts the session and message router, runs the private CA and onboarding services, broadcasts discovery, and orchestrates the streaming pipeline (source apps, mixers, targets). |
 | `qar-streaming-viz.exe` | The visualizer - the interactive desktop window where you see and manipulate the shared room. |
 
 ## Starting the Hub
 
-1. Start **`qaros-hub-service`** (the installer makes it start at sign-in; the tray menu's "Start QAROS at login" turns that off; otherwise **QAROS** in the Start menu). Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
+1. Start **`qaros.exe`** (**QAROS** in the Start menu, or `bin\qaros.exe`). It starts at sign-in by default: the installer sets that up for every user, the portable ZIP at its first start. The tray menu's **Start QAROS at login** turns it off for you, and it stays off across sign-ins, upgrades and reinstalls. Development builds never start at sign-in. Do not start the launcher or the visualizer directly. It launches the runtime launcher automatically and keeps it running - crashes are restarted with backoff.
 2. **Left-click the tray icon** to open the visualizer window.
 3. The tray menu offers: *Open visualizer*, *Restart*, *New session…* and *Join hub…* (both greyed on a member), *Leave and start own session…* (on a member), and *Exit*. The tray tooltip shows the role: "Primary hub" or "Member of *primary*".
 
@@ -26,18 +26,19 @@ Hub configuration is managed through the Hub UI and persists across restarts. St
 
 ## Running several Hubs on one PC
 
-For development and testing, one PC can run several independent Hubs from the same release, demo or development build. Give each its own data root:
+For development and testing, one PC can run several independent Hubs from the same portable (ZIP) or development build. Give each its own data root:
 
 ```powershell
-$env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros-hub-service.exe
+$env:QAR_APP_DATA_ROOT = "D:\qaros\hub-b"; .\bin\qaros.exe
 ```
 
-- A Hub is identified by its data root. Starting `qaros-hub-service.exe` again with the same root replaces the running one; a different root starts a second Hub next to it, with its own tray icon, launcher and visualizer.
+- A Hub is identified by its data root. Starting `qaros.exe` again with the same root replaces the running one; a different root starts a second Hub next to it, with its own tray icon, launcher and visualizer.
 - Each Hub has its own identity, CA, session, Hub configuration and source-app presets. Devices onboarded to one are not onboarded to the other.
 - Ports do not collide: each Hub takes the next free router port (19120, 19121, ...) and its own onboarding (pairing) port from the same range, bound exclusively, so a second Hub never shares the first one's. Pin them with `routerPort` / `routerPortRangeStart` / `discoveryPort` only for firewalled setups ([Launcher Configuration Reference](/docs/operator-guide/launcher-config-reference#networking)).
 - To pair with a specific Hub by address, use `host:port`: the port is shown with that Hub's onboarding code. An app given only a code finds the Hub of the same Windows user on its own.
 - With `QAR_APP_DATA_ROOT` set, logs and crash dumps stay under that root, so runs never mix.
 - A Hub started without `QAR_APP_DATA_ROOT` uses the default root of its install ([Installation: Where data and logs live](/docs/operator-guide/installation#where-data-and-logs-live)).
+- An installed QAROS runs one Hub at a time on a PC, for one Windows user: the GPU is shared by everything a Hub streams. While one runs, a second installed Hub (another data root, or another Windows user's Hub after fast user switching) does not start; its tray shows "QAROS is active for another user on this PC" (or names the other Hub of the same user) and starts it once the first Hub has stopped.
 
 ## The visualizer
 
@@ -76,7 +77,7 @@ Restarting a source app (crash, kill, or **Stop** then **Launch**) is safe: the 
 
 ## Crash dumps
 
-A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a short report) and `<time>_<process>_<pid>.dmp` (the dump).
+A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a short report) and the dump, `<time>_<process>_<pid>.dmp` on Windows or `<time>_<process>_<pid>.core` on Linux.
 
 | Process | Where |
 |---|---|
@@ -86,6 +87,10 @@ A crashing process writes a pair of files: `<time>_<process>_<pid>.crash.txt` (a
 | Anything else | `%TEMP%\quaternar\crashes` |
 
 When reporting a crash, send both files together with the log files next to them. The crash report below collects all of them for you.
+
+A dump holds the thread stacks and the QAROS memory they point at, usually a few MB. It leaves out the memory of other libraries and your application's own data. On Linux no other core file is written for a QAROS process. No setting changes what a dump holds: only Debug and RelWithDebInfo builds of QAROS write the whole process, secrets included.
+
+Each process keeps only its newest 10 dumps in its crash folder and deletes older ones when it starts, so a process that keeps crashing cannot fill the disk. Copy a dump away before you restart the process many times.
 
 ## When something goes wrong
 

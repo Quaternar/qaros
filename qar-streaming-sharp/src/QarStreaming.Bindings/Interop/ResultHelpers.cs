@@ -81,6 +81,8 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly List<IntPtr> _allocations = new List<IntPtr>();
 
+        private readonly List<SafeHandle> _borrowed = new List<SafeHandle>();
+
         /// <summary>
         /// A NUL-terminated UTF-8 copy of a UTF-16 string, freed with the scope: every <c>char*</c>
         /// of the C API is UTF-8, whatever the ANSI code page. Null for null.
@@ -141,11 +143,458 @@ namespace Quaternar.Qaros.Interop
             return ptr;
         }
 
+        /// <summary>
+        /// The raw value of <paramref name="handle"/>, kept alive until the scope is disposed: the
+        /// reference taken here stops a finalizer or a concurrent <c>Dispose</c> from releasing the
+        /// native object while a native call still borrows it.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The handle is already closed.</exception>
+        public IntPtr Borrow(SafeHandle handle)
+        {
+            var added = false;
+            handle.DangerousAddRef(ref added);
+            if (added)
+                _borrowed.Add(handle);
+            return handle.DangerousGetHandle();
+        }
+
         public void Dispose()
         {
+            for (var i = _borrowed.Count - 1; i >= 0; i--)
+                _borrowed[i].DangerousRelease();
+            _borrowed.Clear();
             for (var i = _allocations.Count - 1; i >= 0; i--)
                 Marshal.FreeHGlobal(_allocations[i]);
             _allocations.Clear();
+        }
+    }
+
+    /// <summary>
+    /// The native handle of one wrapper object (runtime, session, sender, frame info, cancel token)
+    /// and its dispose state. Every native call takes the handle through <see cref="Borrow"/>, which
+    /// holds a reference on it until the borrow is released, so neither a concurrent
+    /// <see cref="Dispose"/> nor the finalizer frees the native object while a call still uses it
+    /// (hub G56). The owning wrapper keeps no other path to the raw handle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Dispose"/> refuses new borrows, cancels the calls that may wait on the object
+    /// (<see cref="Disposing"/>, <see cref="DisposeToken"/>), waits until every borrow is released
+    /// (a sync call returned, an async call's native completion fired) and then destroys the
+    /// native object on the disposing thread. So the destroy happens before Dispose returns (before
+    /// a following <c>Runtime.Dispose</c> or <c>Library.Destroy</c>), a graphics sender is
+    /// destroyed on the thread that disposes it (its GL, D3D11 or Vulkan context), and a session's
+    /// subscriptions have ended when its Dispose returns.
+    /// </para>
+    /// <para>
+    /// The wait is not bounded. The waiting calls are cancelled first and every async C API call
+    /// delivers its completion once, also on cancellation, so they end; a native call that ignores
+    /// its cancellation keeps Dispose waiting, which is right: destroying the object under it would
+    /// be a use after free. Dispose from inside one of the object's own callbacks (a subscription
+    /// handler, a progress report) would wait for itself, so it throws (<see cref="EnterCallback"/>);
+    /// so does a Dispose from another object's callback while a call on this object runs, since it
+    /// would wait on a library thread that call's completion may need.
+    /// The finalizer never waits: a borrow references its owner, so the handle cannot be finalized
+    /// while one is outstanding, and the SafeHandle finalizer only releases an unborrowed handle.
+    /// </para>
+    /// <para>
+    /// A cancel token's owner does not wait (<c>disposeWaitsForCalls</c> false): a token's destroy
+    /// has no thread affinity and joins nothing, and an owner's Dispose ends its shared
+    /// <see cref="DisposeToken"/> while the calls borrowing it still run. Its last borrow destroys it.
+    /// </para>
+    /// </remarks>
+    internal sealed class NativeHandleOwner
+    {
+        // Also the lock and the monitor of the borrow count: a private object no SafeHandle code
+        // locks, so no gate is allocated per wrapper.
+        private readonly SafeHandle _handle;
+
+        private readonly string _objectName;
+
+        private readonly bool _disposeWaitsForCalls;
+
+        // The borrows not yet released, counted when Dispose waits for calls. Guarded by _handle.
+        private int _borrows;
+
+        private volatile bool _disposed;
+
+        // The native object is destroyed; a concurrent second Dispose waits for it. Guarded by _handle.
+        private bool _destroyed;
+
+        // Cancelled by Dispose, created on first use: a waiting call linked to it ends, so Dispose
+        // does not wait for it forever (see Disposing).
+        private CancellationTokenSource? _disposing;
+
+        // The native form of Disposing, created on first use and shared by every waiting call made
+        // without a cancelable token of the caller's (see DisposeToken).
+        private CancelToken? _disposeToken;
+
+        // The owners whose callback this thread is running, innermost last (EnterCallback).
+        [ThreadStatic]
+        private static List<NativeHandleOwner>? _callbacksOnThisThread;
+
+        internal NativeHandleOwner(SafeHandle handle, string objectName)
+            : this(handle, objectName, true)
+        {
+        }
+
+        /// <param name="handle">The native handle this owner destroys.</param>
+        /// <param name="objectName">The wrapper's name for <see cref="ObjectDisposedException"/>.</param>
+        /// <param name="disposeWaitsForCalls">
+        /// True: <see cref="Dispose"/> waits for the borrows and destroys on its own thread. False
+        /// (cancel tokens only): the last of the owner and its borrows to let go destroys.
+        /// </param>
+        internal NativeHandleOwner(SafeHandle handle, string objectName, bool disposeWaitsForCalls)
+        {
+            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _objectName = objectName;
+            _disposeWaitsForCalls = disposeWaitsForCalls;
+        }
+
+        /// <summary>
+        /// Disposed by its owner, or its handle closed or invalid. A borrow taken before the
+        /// <see cref="Dispose"/> keeps the native object alive, but the owner is unusable from it on.
+        /// </summary>
+        internal bool IsDisposed { get { return _disposed || _handle.IsClosed || _handle.IsInvalid; } }
+
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        internal void ThrowIfDisposed()
+        {
+            if (IsDisposed)
+                throw new ObjectDisposedException(_objectName);
+        }
+
+        /// <summary>
+        /// Cancelled when the owner is disposed. A call that may wait (a begin-frame through a
+        /// paused stream, a sender creation, a hub request) links its native cancel token to it, so
+        /// a Dispose ends the call: Dispose waits for the call's borrow, and an async call whose
+        /// native completion never came would keep it waiting forever.
+        /// </summary>
+        internal CancellationToken Disposing
+        {
+            get
+            {
+                var source = Volatile.Read(ref _disposing);
+                if (source == null)
+                {
+                    var created = new CancellationTokenSource();
+                    source = Interlocked.CompareExchange(ref _disposing, created, null) ?? created;
+                    if (!ReferenceEquals(source, created))
+                        created.Dispose();
+                }
+                // A Dispose that ran before the source was published did not see it.
+                if (_disposed)
+                    CancelQuietly(source);
+                return source.Token;
+            }
+        }
+
+        /// <summary>
+        /// A native token cancelled when the owner is disposed, shared by the waiting calls that
+        /// carry no cancelable token of the caller's, so the per-frame begin-frame creates no token of
+        /// its own. A call borrows it for its duration (its async completion included); null when
+        /// the token cannot be created, then the call makes one of its own.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        internal CancelToken? DisposeToken
+        {
+            get
+            {
+                ThrowIfDisposed();
+                var token = Volatile.Read(ref _disposeToken);
+                if (token == null)
+                {
+                    var created = CancelToken.Create();
+                    if (!created.IsSuccess)
+                        return null;
+                    token = Interlocked.CompareExchange(ref _disposeToken, created.Value, null) ?? created.Value;
+                    if (!ReferenceEquals(token, created.Value))
+                        created.Value.Dispose();
+                }
+                // A Dispose that ran before the token was published did not see it.
+                if (_disposed)
+                    EndDisposeToken(token);
+                return token;
+            }
+        }
+
+        /// <summary>
+        /// Borrows <see cref="DisposeToken"/> for one waiting call; false when no shared token can
+        /// be created, then the call makes one of its own.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        internal bool TryBorrowDisposeToken(out CancelToken? token, out HandleBorrow borrow)
+        {
+            token = DisposeToken;
+            borrow = default(HandleBorrow);
+            if (token == null)
+                return false;
+            try
+            {
+                borrow = token.Borrow();
+            }
+            catch (ObjectDisposedException)
+            {
+                // A concurrent Dispose ended the shared token: report the owner, not the token.
+                throw new ObjectDisposedException(_objectName);
+            }
+            return true;
+        }
+
+        // Cancels the waiting calls that share the token, then drops the owner's reference on it;
+        // their borrows keep the native token until they are done. Safe to run twice.
+        private static void EndDisposeToken(CancelToken token)
+        {
+            try
+            {
+                token.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            token.Dispose();
+        }
+
+        private static void CancelQuietly(CancellationTokenSource source)
+        {
+            try
+            {
+                source.Cancel();
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+
+        /// <summary>
+        /// Marks the current thread as running a callback of <paramref name="owner"/> until the
+        /// returned scope is disposed. The callback trampolines (subscription handlers, progress
+        /// reports) wrap the application's code in it, so a <see cref="Dispose"/> from inside the
+        /// callback throws instead of waiting for itself or for a call on the library thread.
+        /// Every trampoline that runs application code must use it. Null marks nothing.
+        /// </summary>
+        internal static CallbackScope EnterCallback(NativeHandleOwner? owner)
+        {
+            if (owner == null)
+                return default(CallbackScope);
+            var running = _callbacksOnThisThread;
+            if (running == null)
+            {
+                running = new List<NativeHandleOwner>();
+                _callbacksOnThisThread = running;
+            }
+            running.Add(owner);
+            return new CallbackScope(owner);
+        }
+
+        private static void ExitCallback(NativeHandleOwner owner)
+        {
+            var running = _callbacksOnThisThread;
+            if (running == null)
+                return;
+            var index = running.LastIndexOf(owner);
+            if (index >= 0)
+                running.RemoveAt(index);
+        }
+
+        private static bool IsInAnyCallbackOnThisThread()
+        {
+            var running = _callbacksOnThisThread;
+            return running != null && running.Count > 0;
+        }
+
+        private bool IsInCallbackOnThisThread()
+        {
+            var running = _callbacksOnThisThread;
+            if (running == null)
+                return false;
+            foreach (var owner in running)
+            {
+                if (ReferenceEquals(owner, this))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The raw handle with a reference held on it until the returned borrow is disposed. A
+        /// disposed owner refuses before the call.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        internal HandleBorrow Borrow()
+        {
+            ThrowIfDisposed();
+            if (!_disposeWaitsForCalls)
+                return BorrowUncounted();
+            lock (_handle)
+            {
+                // Checked under the lock: a Dispose waiting for the count to reach zero sees it grow
+                // only from a borrow taken before the Dispose.
+                if (_disposed)
+                    throw new ObjectDisposedException(_objectName);
+                var borrow = BorrowUncounted();
+                _borrows++;
+                return borrow;
+            }
+        }
+
+        private HandleBorrow BorrowUncounted()
+        {
+            var added = false;
+            // Throws ObjectDisposedException when the handle was closed since the check.
+            _handle.DangerousAddRef(ref added);
+            if (!added)
+                throw new ObjectDisposedException(_objectName);
+            return new HandleBorrow(this, _handle.DangerousGetHandle());
+        }
+
+        /// <summary>
+        /// Drops one borrow. Never destroys the native object when Dispose waits for calls: the
+        /// owner holds its own reference until no borrow is left, then its Dispose destroys on its
+        /// thread. The last release wakes that Dispose.
+        /// </summary>
+        internal void Release()
+        {
+            if (!_disposeWaitsForCalls)
+            {
+                _handle.DangerousRelease();
+                return;
+            }
+            lock (_handle)
+            {
+                _handle.DangerousRelease();
+                _borrows--;
+                if (_borrows == 0 && _disposed)
+                    Monitor.PulseAll(_handle);
+            }
+        }
+
+        /// <summary>
+        /// Makes the owner unusable, cancels the waiting calls linked to <see cref="Disposing"/> and
+        /// <see cref="DisposeToken"/>, waits until every borrow is released and destroys the native
+        /// object on this thread. A second Dispose waits for the first one's destroy, except from
+        /// inside a callback, where it returns at once: the first may be waiting for that callback.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// The first Dispose, called from inside a QAROS callback (see <see cref="EnterCallback"/>):
+        /// always from one of this object's own callbacks, which it would wait for; from another
+        /// object's callback while a call on this object is running, which it would wait for on a
+        /// library thread that call may need. Nothing is changed then.
+        /// </exception>
+        internal void Dispose()
+        {
+            var inCallback = IsInAnyCallbackOnThisThread();
+            bool first;
+            lock (_handle)
+            {
+                first = !_disposed;
+                if (first && inCallback && _disposeWaitsForCalls)
+                    ThrowIfDisposeWouldWaitInCallback();
+                _disposed = true;
+            }
+            if (first)
+                CancelWaitingCalls();
+            if (!_disposeWaitsForCalls)
+            {
+                _handle.Dispose();
+                return;
+            }
+            if (!first && inCallback)
+                return;
+            lock (_handle)
+            {
+                while (_borrows > 0 || (!first && !_destroyed))
+                    Monitor.Wait(_handle);
+            }
+            if (first)
+                Destroy();
+        }
+
+        // Under the _handle lock, before the flag is set: a refused Dispose leaves the object usable.
+        private void ThrowIfDisposeWouldWaitInCallback()
+        {
+            if (IsInCallbackOnThisThread())
+                throw new InvalidOperationException(_objectName + " cannot be disposed from inside one of its own callbacks (a subscription handler or a progress report): Dispose waits until the object's running calls end, and this callback runs inside one of them. Dispose it from a thread of your own.");
+            if (_borrows > 0)
+                throw new InvalidOperationException(_objectName + " cannot be disposed from inside a QAROS callback while another thread is in a call on it: Dispose would wait for that call on a library thread the call may need. Dispose it from a thread of your own.");
+        }
+
+        private void CancelWaitingCalls()
+        {
+            // Orders the flag before the reads below: a Disposing or DisposeToken getter that
+            // publishes after this point sees the flag and cancels on its own.
+            Thread.MemoryBarrier();
+            var source = Volatile.Read(ref _disposing);
+            if (source != null)
+                CancelQuietly(source);
+            var token = Volatile.Read(ref _disposeToken);
+            if (token != null)
+                EndDisposeToken(token);
+        }
+
+        // No borrow is left and none can be taken: this releases the last reference, so the
+        // native object is destroyed here, on the disposing thread.
+        private void Destroy()
+        {
+            try
+            {
+                _handle.Dispose();
+            }
+            finally
+            {
+                lock (_handle)
+                {
+                    _destroyed = true;
+                    Monitor.PulseAll(_handle);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The thread's mark of a running callback of one owner (<see cref="EnterCallback"/>);
+        /// dispose it when the callback's application code returned. The default value marks
+        /// nothing.
+        /// </summary>
+        internal readonly struct CallbackScope : IDisposable
+        {
+            private readonly NativeHandleOwner? _owner;
+
+            internal CallbackScope(NativeHandleOwner owner)
+            {
+                _owner = owner;
+            }
+
+            public void Dispose()
+            {
+                if (_owner != null)
+                    ExitCallback(_owner);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One reference on a <see cref="NativeHandleOwner"/>'s handle, held for a native call:
+    /// <c>using (var borrowed = owner.Borrow())</c> around the call, or kept by an async call's state
+    /// until its native completion fires. The owner's Dispose waits for it. A struct, so the
+    /// per-frame calls allocate nothing. Dispose it exactly once; the default value holds nothing.
+    /// </summary>
+    internal readonly struct HandleBorrow : IDisposable
+    {
+        private readonly NativeHandleOwner? _owner;
+
+        internal HandleBorrow(NativeHandleOwner owner, IntPtr handle)
+        {
+            _owner = owner;
+            Handle = handle;
+        }
+
+        /// <summary>The raw handle, valid until this borrow is disposed.</summary>
+        public IntPtr Handle { get; }
+
+        public void Dispose()
+        {
+            if (_owner != null)
+                _owner.Release();
         }
     }
 
@@ -153,18 +602,40 @@ namespace Quaternar.Qaros.Interop
     {
         private readonly CancelToken? _token;
 
+        // False for an owner's shared dispose token (NativeHandleOwner.DisposeToken).
+        private readonly bool _ownsToken;
+
+        // The token is borrowed for the scope's lifetime, which encloses the native call.
+        private readonly HandleBorrow _tokenBorrow;
+
         private CancellationTokenRegistration _registration;
 
         private bool _hasRegistration;
 
-        private bool _detached;
+        private CancellationTokenRegistration _ownerRegistration;
+
+        private bool _hasOwnerRegistration;
+
+        private bool _disposed;
 
         private NativeCancellationScope(CancelToken? token)
         {
             _token = token;
+            _ownsToken = true;
+            if (token != null)
+                _tokenBorrow = token.Borrow();
         }
 
-        public IntPtr Handle { get { return _token == null ? IntPtr.Zero : _token.DangerousHandle; } }
+        // A shared token the caller already borrowed for the scope.
+        private NativeCancellationScope(CancelToken shared, HandleBorrow borrow)
+        {
+            _token = shared;
+            _ownsToken = false;
+            _tokenBorrow = borrow;
+        }
+
+        /// <summary>The native token for a call inside this scope, or null without a token.</summary>
+        public IntPtr Handle { get { return _tokenBorrow.Handle; } }
 
         public CancelToken? Token { get { return _token; } }
 
@@ -178,6 +649,45 @@ namespace Quaternar.Qaros.Interop
             var scope = new NativeCancellationScope(tokenResult.Value);
             scope.Register(cancellationToken);
             return Result<NativeCancellationScope>.Success(tokenResult.Info, scope);
+        }
+
+        /// <summary>
+        /// A scope for a call on <paramref name="endedBy"/> that may wait: always a native token,
+        /// cancelled by the owner's Dispose, so disposing the object ends the call. Without a
+        /// cancelable <paramref name="cancellationToken"/> it is the owner's shared
+        /// <see cref="NativeHandleOwner.DisposeToken"/>; with one, a token of the call's own, also
+        /// linked to <see cref="NativeHandleOwner.Disposing"/>.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The owner is disposed.</exception>
+        public static Result<NativeCancellationScope> Create(CancellationToken cancellationToken, NativeHandleOwner endedBy)
+        {
+            if (!cancellationToken.CanBeCanceled && endedBy.TryBorrowDisposeToken(out var shared, out var borrow))
+                return Result<NativeCancellationScope>.Success(new ResultInfo(StatusCode.Success, 0, string.Empty), new NativeCancellationScope(shared!, borrow));
+            endedBy.ThrowIfDisposed();
+            return Create(cancellationToken, endedBy.Disposing);
+        }
+
+        /// <summary>
+        /// A scope for a call that may wait: always a native token of the call's own, cancelled by
+        /// <paramref name="cancellationToken"/> and by <paramref name="endedBy"/>, the Dispose of
+        /// the object the call is made on.
+        /// </summary>
+        public static Result<NativeCancellationScope> Create(CancellationToken cancellationToken, CancellationToken endedBy)
+        {
+            var created = Create(cancellationToken, true);
+            if (!created.IsSuccess)
+                return created;
+            var scope = created.Value;
+            try
+            {
+                scope.RegisterOwner(endedBy);
+            }
+            catch
+            {
+                scope.Dispose();
+                throw;
+            }
+            return created;
         }
 
         private void Register(CancellationToken cancellationToken)
@@ -194,6 +704,17 @@ namespace Quaternar.Qaros.Interop
             }
         }
 
+        private void RegisterOwner(CancellationToken disposing)
+        {
+            if (disposing.IsCancellationRequested)
+            {
+                _token!.Cancel();
+                return;
+            }
+            _ownerRegistration = disposing.Register(OnCanceled, _token);
+            _hasOwnerRegistration = true;
+        }
+
         private static void OnCanceled(object? state)
         {
             try
@@ -207,18 +728,22 @@ namespace Quaternar.Qaros.Interop
 
         public void Dispose()
         {
+            if (_disposed)
+                return;
+            _disposed = true;
             if (_hasRegistration)
             {
                 _registration.Dispose();
                 _hasRegistration = false;
             }
-            if (_token != null && !_detached)
+            if (_hasOwnerRegistration)
+            {
+                _ownerRegistration.Dispose();
+                _hasOwnerRegistration = false;
+            }
+            _tokenBorrow.Dispose();
+            if (_token != null && _ownsToken)
                 _token.Dispose();
-        }
-
-        public void Detach()
-        {
-            _detached = true;
         }
     }
 
@@ -234,10 +759,20 @@ namespace Quaternar.Qaros.Interop
         public static NativeStructureChain From(params Structure?[] heads)
         {
             var chain = new NativeStructureChain();
-            IntPtr previous = IntPtr.Zero;
-            foreach (var head in heads)
-                previous = chain.Build(head, previous);
-            return chain;
+            try
+            {
+                IntPtr previous = IntPtr.Zero;
+                foreach (var head in heads)
+                    previous = chain.Build(head, previous);
+                return chain;
+            }
+            catch
+            {
+                // Frees what was copied and releases every borrowed handle; the caller never gets
+                // the chain to dispose.
+                chain.Dispose();
+                throw;
+            }
         }
 
         private IntPtr Build(Structure? head, IntPtr previous)
@@ -249,7 +784,7 @@ namespace Quaternar.Qaros.Interop
                     Head = currentPtr;
                 else
                     NativeExtensions.SetNextPointer(previous, currentPtr);
-                previous = currentPtr;
+                previous = NativeExtensions.Tail(currentPtr);
             }
             return previous;
         }
@@ -265,7 +800,10 @@ namespace Quaternar.Qaros.Interop
     {
         /// <summary>
         /// Allocates the exact C layout of one managed extension in
-        /// <paramref name="scope"/>, with header.next zero.
+        /// <paramref name="scope"/>. Most map to one native struct with header.next zero; an
+        /// <see cref="OnboardLocalApp"/> with a tag or a remote-app grant maps to two or three,
+        /// already chained, so the caller
+        /// links what follows after <see cref="Tail"/>.
         /// </summary>
         internal static IntPtr AllocateNativeCopy(Structure structure, NativeMemoryScope scope)
         {
@@ -338,10 +876,11 @@ namespace Quaternar.Qaros.Interop
                         Port = onboardHost.Port
                     });
                 case OnboardInvite onboardInvite:
+                    // The scope holds a reference on the invite until the native onboard is done.
                     return scope.AllocStruct(new OnboardInviteExtNative
                     {
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardInviteExt),
-                        Invite = onboardInvite.Invite == null ? IntPtr.Zero : onboardInvite.Invite.DangerousHandle
+                        Invite = onboardInvite.Invite == null ? IntPtr.Zero : onboardInvite.Invite.BorrowHandle(scope)
                     });
                 case OnboardPeerId onboardPeerId:
                     return scope.AllocStruct(new OnboardPeerIdExtNative
@@ -352,7 +891,7 @@ namespace Quaternar.Qaros.Interop
                 case OnboardLocalApp onboardLocalApp:
                     return scope.AllocStruct(new OnboardLocalAppExtNative
                     {
-                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppExt),
+                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppExt, AllocateLocalAppTag(onboardLocalApp.Tag, AllocateRemoteAppGrant(onboardLocalApp.RemoteAppGrant, scope), scope)),
                         ApprovalTimeoutMs = (uint)Math.Min(Math.Max(onboardLocalApp.ApprovalTimeout.TotalMilliseconds, 0.0), uint.MaxValue)
                     });
                 case GraphicsDeviceId graphicsDeviceId:
@@ -366,9 +905,50 @@ namespace Quaternar.Qaros.Interop
                         DeviceFamily = scope.AllocUtf8(identity.DeviceFamily),
                         DeviceName = scope.AllocUtf8(identity.DeviceName)
                     });
+                case RuntimeEphemeralStorage _:
+                    return scope.AllocStruct(new RuntimeEphemeralStorageExtNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.RuntimeEphemeralStorageExt)
+                    });
                 default:
                     throw new NotSupportedException("Unsupported QAR extension structure type: " + structure.Type);
             }
+        }
+
+        // QarOnboardLocalAppTagExt, chained right after QarOnboardLocalAppExt and followed by
+        // `next`; none for the default tag, which then links `next` directly.
+        private static IntPtr AllocateLocalAppTag(string? tag, IntPtr next, NativeMemoryScope scope)
+        {
+            if (tag == null)
+                return next;
+            return scope.AllocStruct(new OnboardLocalAppTagExtNative
+            {
+                Header = NativeDefaults.Header(StructureType.RuntimeOnboardLocalAppTagExt, next),
+                AppTag = scope.AllocUtf8(tag)
+            });
+        }
+
+        // QarOnboardRemoteAppGrantExt, chained after the local-app (and tag) ext; none without a
+        // grant. The scope holds a reference on the invitation until the native call is done.
+        private static IntPtr AllocateRemoteAppGrant(MemberHubInvitation? invitation, NativeMemoryScope scope)
+        {
+            if (invitation == null)
+                return IntPtr.Zero;
+            return scope.AllocStruct(new OnboardRemoteAppGrantExtNative
+            {
+                Header = NativeDefaults.Header(StructureType.RuntimeOnboardRemoteAppGrantExt),
+                Invitation = invitation.BorrowHandle(scope)
+            });
+        }
+
+        /// <summary>The last struct of the native chain starting at <paramref name="structurePtr"/>.</summary>
+        internal static IntPtr Tail(IntPtr structurePtr)
+        {
+            var offset = Marshal.OffsetOf(typeof(StructureHeaderNative), nameof(StructureHeaderNative.Next)).ToInt32();
+            var tail = structurePtr;
+            for (var next = Marshal.ReadIntPtr(tail, offset); next != IntPtr.Zero; next = Marshal.ReadIntPtr(tail, offset))
+                tail = next;
+            return tail;
         }
 
         internal static void SetNextPointer(IntPtr structurePtr, IntPtr next)

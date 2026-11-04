@@ -181,7 +181,7 @@ fn a_d3d11_sender_chains_its_parameters_and_lends_the_shared_textures() {
     let frame_info_destroyed = position_of(&calls, "render_frame_info_handle_destroy");
     let sender_destroyed = position_of(&calls, "render_stream_handle_destroy");
     let session_destroyed = position_of(&calls, "session_handle_destroy");
-    let runtime_destroyed = position_of(&calls, runtime_release_call());
+    let runtime_destroyed = position_of(&calls, RUNTIME_RELEASE_CALL);
     let library_destroyed = position_of(&calls, "library_destroy");
     assert!(shown < frame_info_destroyed);
     assert!(frame_info_destroyed < sender_destroyed);
@@ -389,8 +389,8 @@ fn a_d3d11_creation_started_without_waiting_delivers_and_a_dropped_one_is_cancel
     }
     .expect("second start");
     drop(abandoned);
-    // The session's teardown gives a cancelled creation a bounded wait only; waiting for the
-    // stub's callback here keeps the test independent of that budget on a loaded machine.
+    // Waiting for the cancelled creation's callback here makes the log order below fixed: the
+    // session's destroy would end it otherwise.
     super::async_create::wait_for_log_entry(
         &fixture.control,
         "render_sender_create_async cancelled",
@@ -507,4 +507,45 @@ mod real_device {
         assert!(fixture.control.calls().contains(&report));
         assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
     }
+}
+
+/// The async begin-frame hands out the same D3D11 frame record as the blocking one.
+#[test]
+fn an_async_begin_frame_lends_the_shared_textures() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (runtime, session) = onboarded_session(&fixture, &library);
+    let fake_device = FakeDevice::new();
+    let mut sender = create_d3d11_sender(
+        &session,
+        &stereo_color_and_depth(VISUALIZER_PEER),
+        fake_device.stream_params(true),
+    )
+    .expect("sender");
+    let shared_textures = texture_addresses(&sender.d3d11_frame_state().expect("record"));
+
+    let pending = sender.start_owned_frame(None, || {}).expect("start");
+    let frame = pending.wait().expect("frame");
+    assert_eq!(
+        texture_addresses(&frame.d3d11_frame().expect("frame record")),
+        shared_textures
+    );
+    frame
+        .show(&ShowParams {
+            near: 0.1,
+            far: 10.0,
+            depth_scale: 1.0,
+        })
+        .expect("show");
+    drop(sender);
+    drop(session);
+    drop(runtime);
+    drop(library);
+    let calls = fixture.control.calls();
+    assert!(
+        calls.contains(&"d3d11 frame 0 shown".to_string()),
+        "{calls:?}"
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+    assert_eq!(fixture.control.live_handle_count(), 0);
 }

@@ -16,7 +16,7 @@ A Hub is not one program. Three processes ship together and start in a chain:
 
 | Process | Role |
 |---|---|
-| `qaros-hub-service.exe` | The tray supervisor. It is the always-on parent: it starts the runtime launcher, restarts it with backoff if it crashes, and gives you the tray menu. This is what you launch (or what autostart launches). |
+| `qaros.exe` | The tray supervisor. It is the always-on parent: it starts the runtime launcher, restarts it with backoff if it crashes, and gives you the tray menu. This is what you launch (or what autostart launches). Earlier versions named it `qaros-hub-service.exe`. |
 | `qar-runtime-launcher.exe` | The runtime. It hosts the session and message router, runs the private CA (in process) and onboarding services, broadcasts the discovery beacon, keeps the audit log, and orchestrates the streaming pipeline (source apps, mixers, targets). Everything operationally interesting happens here. |
 | `qar-streaming-viz.exe` | The visualizer - the interactive desktop window where you see and manipulate the shared room, and where you join another Hub or manage member Hubs. |
 

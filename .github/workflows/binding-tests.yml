@@ -1,0 +1,69 @@
+name: C API and binding tests
+
+# Runs the C API suite (qar-streaming-c_dynamic_gtests), the Quaternar.Qaros C# tests and the Rust
+# integration tests against one published QAROS C API runtime: the
+# QAROS-CApi-<version>-RelWithDebInfo.zip asset of a Quaternar/Quaternar release (signed
+# qar-streaming-c, qar-streaming-c-ext and the GPU-memory transfer with every DLL they load, headers,
+# PDBs, and in tests/ the C API suite). `python ci/run.py capi` downloads it once and runs all three;
+# run it locally the same way, or with QAROS_NATIVE_BIN / QAROS_C_TESTS_BIN set (ci/ci.env).
+#
+# Needs a self-hosted Windows runner registered for this repository (or the organization) with Python
+# 3, the .NET 8 runtime and SDK, and a GPU: the tests drive Direct3D 11 and Vulkan, which hosted
+# runners do not offer. Repository variable QAROS_TEST_RUNNER (JSON label list) picks it; the default
+# is ["self-hosted", "Windows", "X64"].
+# Secret QAR_RELEASES_TOKEN: a token that can read Quaternar/Quaternar releases (contents: read).
+# The release: the `release` input, else repository variable QAROS_DEFAULT_RUNTIME_RELEASE, else
+# QAROS_RUNTIME_RELEASE in ci/ci.env.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Quaternar release to test against (a vX.Y.Z tag, or dev-<branch> for a branch build; empty for ci/ci.env's)
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - "qar-streaming-sharp/**"
+      - "qar-streaming-rust/**"
+      - "qar-streaming-c/include/**"
+      - ".github/workflows/binding-tests.yml"
+      - "ci/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binding-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  c-api-tests:
+    runs-on: ${{ fromJSON(vars.QAROS_TEST_RUNNER || '["self-hosted", "Windows", "X64"]') }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # C API suite, C# tests and Rust integration tests against one downloaded C API runtime.
+      - name: Download the C API runtime and test
+        env:
+          GH_TOKEN: ${{ secrets.QAR_RELEASES_TOKEN }}
+          # Empty: ci/ci.env's QAROS_RUNTIME_RELEASE.
+          QAROS_RUNTIME_RELEASE: ${{ inputs.release || vars.QAROS_DEFAULT_RUNTIME_RELEASE }}
+          QAROS_RUNTIME_DIR: ${{ github.workspace }}\qaros-capi-runtime
+        run: python ci/run.py capi --results-dir "$env:RUNNER_TEMP\test-results"
+
+      - name: Upload the test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: binding-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore

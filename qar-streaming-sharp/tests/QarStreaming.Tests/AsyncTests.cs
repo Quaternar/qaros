@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Threading;
 using Quaternar.Qaros;
 using Quaternar.Qaros.Interop;
 using Xunit;
@@ -7,6 +8,23 @@ namespace Quaternar.Qaros.Tests
 {
     public sealed class AsyncTests
     {
+        [Fact]
+        public async Task RejoinCompletionDoesNotInlineCallersOnNativeCallbackThread()
+        {
+            var state = new RuntimeOnboardAsyncState(null, false);
+            var callbackThread = Thread.CurrentThread.ManagedThreadId;
+            var insideCallback = true;
+            var inlined = false;
+            var continuation = state.SessionTask.ContinueWith(_ =>
+            {
+                inlined = Thread.CurrentThread.ManagedThreadId == callbackThread && insideCallback;
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            state.CompleteRejoin(Result<Session>.Failure(new ResultInfo(StatusCode.LogicError, 0, "test failed rejoin")));
+            insideCallback = false;
+            await continuation;
+            Assert.False(inlined);
+        }
+
         [Fact]
         public async Task ResultTasksCompleteWithResultObject()
         {

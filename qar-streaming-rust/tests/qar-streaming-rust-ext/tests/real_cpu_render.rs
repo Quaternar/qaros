@@ -19,7 +19,7 @@ use qaros::BlockingOptions;
 
 #[test]
 fn cpu_frames_reach_the_extension_receiver_with_the_known_picture() {
-    let Some(bin) = common::package_bin() else {
+    let Some(bin) = common::native_bin() else {
         return;
     };
     let (eye_width, eye_height) = common::eye_size_from_environment();

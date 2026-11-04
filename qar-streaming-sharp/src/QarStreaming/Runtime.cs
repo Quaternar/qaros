@@ -18,14 +18,13 @@ namespace Quaternar.Qaros
     /// </remarks>
     public sealed class Runtime : IDisposable
     {
-        private readonly RuntimeSafeHandle _handle;
+        // Every native call borrows the runtime through it, and its Dispose waits for them.
+        private readonly NativeHandleOwner _owner;
 
         internal Runtime(RuntimeSafeHandle handle)
         {
-            _handle = handle ?? throw new ArgumentNullException(nameof(handle));
+            _owner = new NativeHandleOwner(handle, nameof(Runtime));
         }
-
-        internal IntPtr DangerousHandle { get { ThrowIfDisposed(); return _handle.DangerousGetHandle(); } }
 
         /// <summary>
         /// Creates the runtime. Set <see cref="RuntimeOptions.RuntimeBinariesFolderPath"/> to the
@@ -36,7 +35,7 @@ namespace Quaternar.Qaros
         {
             options = options ?? new RuntimeOptions();
             using (var scope = new NativeMemoryScope())
-            using (var chain = NativeStructureChain.From(options.Extension))
+            using (var chain = NativeStructureChain.From(options.EphemeralStorage ? new RuntimeEphemeralStorage() : null, options.Extension))
             {
                 var native = new RuntimeInitNative
                 {
@@ -64,7 +63,8 @@ namespace Quaternar.Qaros
         /// Expected failures: <see cref="StatusCode.OnboardingSessionNotFound"/> means this slot has
         /// nothing persisted here, fall back to <see cref="Onboard"/>.
         /// <see cref="StatusCode.ArgumentNotSupported"/> means the onboarding id is
-        /// <see cref="OnboardingId.Default"/>.
+        /// <see cref="OnboardingId.Default"/>, or the runtime was created with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/>, which persists no slot.
         /// </para>
         /// <para>
         /// <paramref name="progress"/> is reported from a library thread while this call blocks.
@@ -80,19 +80,20 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _owner);
             if (!cancellationResult.IsSuccess)
                 return Result<Session>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
             using (var presentationChain = NativeStructureChain.From(options.Presentation == null ? null : options.Presentation.Extension))
-            using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _owner))
             {
                 var native = NativeInit.Rejoin(options, scope, chain.Head, presentationChain.Head);
                 IntPtr session;
+                using var runtime = _owner.Borrow();
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_rejoin(
-                    _handle.DangerousGetHandle(),
+                    runtime.Handle,
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -112,7 +113,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
             var state = new RuntimeOnboardAsyncState(progress, false);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.CompleteRejoin(Result<Session>.Failure(cancelHandle.Info));
@@ -126,8 +127,12 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                // The call's own borrow: the completion may fire, and drop the state's borrow,
+                // before the call returns (hub G56).
+                using var runtime = _owner.Borrow();
+                state.HoldUntilCompletion(_owner);
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_rejoin_async(
-                    _handle.DangerousGetHandle(),
+                    runtime.Handle,
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -160,8 +165,15 @@ namespace Quaternar.Qaros
         /// invite. <see cref="StatusCode.OnboardingHubUnreachable"/> means no hub answered: check
         /// that it runs and pass its host and port with <see cref="OnboardOptions.WithHost"/>.
         /// <see cref="StatusCode.ArgumentNotSupported"/> means a zero
-        /// <see cref="OnboardOptions.WithPeerId"/> id, a host port of 0, or a GPU the session
-        /// cannot create its devices on.
+        /// <see cref="OnboardOptions.WithPeerId"/> id, a host port of 0, an
+        /// <see cref="OnboardLocalApp.Tag"/> the runtime refuses, an invalid
+        /// <see cref="OnboardLocalApp.RemoteAppGrant"/>, or a GPU the session cannot create its
+        /// devices on. <see cref="StatusCode.OnboardingApprovalDenied"/> with a remote-app grant
+        /// means another executable already redeemed it.
+        /// </para>
+        /// <para>
+        /// With <see cref="RuntimeOptions.EphemeralStorage"/> nothing is persisted and the returned
+        /// id is <see cref="OnboardingId.Default"/>; so it is for <see cref="OnboardOptions.UseLocalApp"/>.
         /// </para>
         /// <para>
         /// <paramref name="progress"/> is reported from a library thread while this call blocks.
@@ -179,20 +191,21 @@ namespace Quaternar.Qaros
             if (options.Mode == null)
                 throw new ArgumentNullException(nameof(options.Mode));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _owner);
             if (!cancellationResult.IsSuccess)
                 return Result<OnboardSession>.Failure(cancellationResult.Info);
+            using (var cancellation = cancellationResult.Value)
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Mode, options.Extension))
             using (var presentationChain = NativeStructureChain.From(options.Presentation == null ? null : options.Presentation.Extension))
-            using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var progressState = ProgressState.Create(progress, _owner))
             {
                 var native = NativeInit.Onboard(options, scope, chain.Head, presentationChain.Head);
                 OnboardingIdNative onboardingId;
                 IntPtr session;
+                using var runtime = _owner.Borrow();
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_onboard(
-                    _handle.DangerousGetHandle(),
+                    runtime.Handle,
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -220,7 +233,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options.Mode));
             ThrowIfDisposed();
             var state = new RuntimeOnboardAsyncState(progress, true);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken);
+            var cancelHandle = state.UseStandardCancellation(cancellationToken, _owner);
             if (!cancelHandle.IsSuccess)
             {
                 state.CompleteOnboard(Result<OnboardSession>.Failure(cancelHandle.Info));
@@ -234,8 +247,12 @@ namespace Quaternar.Qaros
             try
             {
                 var native = state.CreateNative(options);
+                // The call's own borrow: the completion may fire, and drop the state's borrow,
+                // before the call returns (hub G56).
+                using var runtime = _owner.Borrow();
+                state.HoldUntilCompletion(_owner);
                 var info = Results.ToInfo(NativeMethods.qar_impl_runtime_onboard_async(
-                    _handle.DangerousGetHandle(),
+                    runtime.Handle,
                     ref native,
                     state.ResultCallback,
                     state.ProgressCallback,
@@ -259,7 +276,9 @@ namespace Quaternar.Qaros
         /// <remarks>
         /// Fails with <see cref="StatusCode.OnboardingSessionStillActive"/> while a session of the
         /// slot is alive: dispose it first. A slot with nothing persisted fails with
-        /// <see cref="StatusCode.OnboardingSessionNotFound"/>.
+        /// <see cref="StatusCode.OnboardingSessionNotFound"/>. A runtime created with
+        /// <see cref="RuntimeOptions.EphemeralStorage"/> has no slots and fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>.
         /// </remarks>
         public Result<Unit> Forget(ForgetOptions options)
         {
@@ -269,14 +288,15 @@ namespace Quaternar.Qaros
             using (var chain = NativeStructureChain.From(options.Extension))
             {
                 var native = NativeInit.Forget(options, chain.Head);
-                return Results.FromNative(NativeMethods.qar_impl_runtime_forget(_handle.DangerousGetHandle(), ref native));
+                using var runtime = _owner.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_runtime_forget(runtime.Handle, ref native));
             }
         }
 
         /// <summary>
         /// Member-hub invitation, on the primary hub's PC: asks the QAROS hub on this PC, the
         /// session's primary, for an invitation that joins the hub on another PC as its member. Carry
-        /// its <see cref="MemberHubInvitation.Serialize"/> bytes to your app on that PC, which calls
+        /// its <see cref="MemberHubInvitation.Serialize()"/> bytes to your app on that PC, which calls
         /// <see cref="JoinHubAsMember"/>. Blocks until the hub answers. Needs no session.
         /// </summary>
         /// <remarks>
@@ -287,7 +307,8 @@ namespace Quaternar.Qaros
         /// <see cref="StatusCode.OnboardingApprovalDenied"/>,
         /// <see cref="StatusCode.MemberSponsorNotAllowed"/>,
         /// <see cref="StatusCode.MemberSponsorQuotaExceeded"/>,
-        /// <see cref="StatusCode.ArgumentNotSupported"/> (an option out of range). The caller owns
+        /// <see cref="StatusCode.ArgumentNotSupported"/> (an option out of range, or a
+        /// <see cref="MemberHubInvitationOptions.AppTag"/> the runtime refuses). The caller owns
         /// and disposes the invitation. Windows only.
         /// </remarks>
         public Result<MemberHubInvitation> CreateMemberHubInvitation(MemberHubInvitationOptions options, CancellationToken cancellationToken = default(CancellationToken))
@@ -295,15 +316,16 @@ namespace Quaternar.Qaros
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _owner);
             if (!cancellationResult.IsSuccess)
                 return Result<MemberHubInvitation>.Failure(cancellationResult.Info);
-            using (var scope = new NativeMemoryScope())
             using (var cancellation = cancellationResult.Value)
+            using (var scope = new NativeMemoryScope())
             {
                 var native = MemberHubInvitationNative.Create(options, scope);
                 IntPtr invitation;
-                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_create_member_hub_invitation(_handle.DangerousGetHandle(), ref native, cancellation.Handle, out invitation));
+                using var runtime = _owner.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_runtime_create_member_hub_invitation(runtime.Handle, ref native, cancellation.Handle, out invitation));
                 return Results.FromHandle(info, invitation, MemberHubInvitationNative.FromHandle);
             }
         }
@@ -338,15 +360,17 @@ namespace Quaternar.Qaros
             if (options.Invitation == null)
                 throw new ArgumentNullException(nameof(options.Invitation));
             ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, false);
+            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _owner);
             if (!cancellationResult.IsSuccess)
                 return Result<Unit>.Failure(cancellationResult.Info);
             using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress))
+            using (var scope = new NativeMemoryScope())
+            using (var progressState = ProgressState.Create(progress, _owner))
             {
-                var native = MemberHubInvitationNative.Join(options);
+                var native = MemberHubInvitationNative.Join(options, scope);
+                using var runtime = _owner.Borrow();
                 return Results.FromNative(NativeMethods.qar_impl_runtime_join_hub_as_member(
-                    _handle.DangerousGetHandle(),
+                    runtime.Handle,
                     ref native,
                     progressState.Callback,
                     progressState.UserState,
@@ -354,16 +378,31 @@ namespace Quaternar.Qaros
             }
         }
 
-        /// <summary>Releases the runtime. Dispose its sessions first.</summary>
+        /// <summary>
+        /// Releases this process's runtime handle. Dispose its sessions first.
+        /// Does not shut down the shared Hub or other applications using it.
+        /// </summary>
+        /// <remarks>
+        /// Safe while another thread is inside a call on the runtime: new calls are refused at once
+        /// (<see cref="ObjectDisposedException"/>), the calls that wait on the hub
+        /// (<see cref="Onboard"/>, <see cref="Rejoin"/>, their async forms,
+        /// <see cref="JoinHubAsMember"/>, <see cref="CreateMemberHubInvitation"/>) are cancelled and
+        /// fail, and Dispose waits until every running call returned and every async call's
+        /// completion fired. Only then is the runtime released, on the calling thread, so a
+        /// <see cref="Library.Destroy"/> may follow at once. The wait is not bounded: do not call it
+        /// from a QAROS callback or event handler, whose library thread a completion it waits for
+        /// may need. From a progress report of a runtime call, or from another callback while a
+        /// runtime call runs, it throws <see cref="InvalidOperationException"/> instead of waiting.
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">Called from a QAROS callback where it would have to wait (see remarks).</exception>
         public void Dispose()
         {
-            _handle.Dispose();
+            _owner.Dispose();
         }
 
         private void ThrowIfDisposed()
         {
-            if (_handle.IsClosed || _handle.IsInvalid)
-                throw new ObjectDisposedException(nameof(Runtime));
+            _owner.ThrowIfDisposed();
         }
     }
 }

@@ -115,7 +115,7 @@
  *
  * \ref qar_c_tutorial_local_app_onboarding "Local App Onboarding"
  * explains the local-app join and its exit codes, 3 to 7.
- * \ref qar_c_tutorial_onboarding "Onboarding and Rejoin"
+ * \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
  * explains the rejoin and the code.
  *
  * \subsection cpu_rendering_volume 3. Create the app volume
@@ -298,7 +298,7 @@
  * |---|---|---|
  * | exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
  * | `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.`, exit 3 | the local-app join could neither start the Hub nor reach it | start QAROS from the Start menu and run again |
- * | `No QAROS runtime loaded.`, exit 2 | no runtime found | install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
+ * | `No QAROS runtime loaded.`, exit 2 | no runtime found | install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
  * | stays at `Looking for target apps ...` | no running target app in the session | open the Visualizer or start a headset |
  * | `No sender for <target> yet; trying again in 30 s`, repeated | the target does not answer the sender creation within 10 s | check that the target is running; each attempt blocks the loop for up to 10 s |
  * | `Stopped streaming to <target>` | a failure that is not part of the normal flow, `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` included | the next listing creates a new sender while the target still runs |
@@ -315,7 +315,7 @@
  * \section cpu_rendering_code With a pairing code
  * The program also takes a pairing code, as its first argument that does not
  * start with `--`. It passes no Hub address, so the code finds a Hub of your
- * own user, as \ref qar_c_tutorial_onboarding "Onboarding and Rejoin"
+ * own user, as \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
  * explains. An app on another machine also names the Hub with a
  * QarOnboardHostExt; that tutorial shows how.
  * \code{.bash}

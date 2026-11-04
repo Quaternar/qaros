@@ -761,6 +761,10 @@ macro_rules! qar_impl_function_list {
                 session: *const QarSession,
                 out_session_id: *mut QarSessionId,
             ) -> QarResult;
+            pub fn qar_impl_session_get_lifecycle_state(
+                session: *const QarSession,
+                out_info: *mut QarSessionLifecycleInfo,
+            ) -> QarResult;
             pub fn qar_impl_session_get_my_spec(
                 session: *const QarSession,
                 out_handle: *mut *mut QarPeerSpec,
@@ -798,14 +802,6 @@ macro_rules! qar_impl_function_list {
                 user_state: *mut ::std::os::raw::c_void,
                 cancel: *mut QarCancelToken,
             ) -> QarResult;
-            pub fn qar_impl_session_request_onboarding_codes(
-                session: *mut QarSession,
-                init: *const QarRequestOnboardingCodesInit,
-                on_progress: qar_progress_callback_t,
-                progress_state: *mut ::std::os::raw::c_void,
-                cancel: *mut QarCancelToken,
-                out_invites: *mut *mut QarOnboardingInvite,
-            ) -> QarResult;
             pub fn qar_impl_session_request_onboarding_invite(
                 session: *mut QarSession,
                 init: *const QarRequestInviteInit,
@@ -821,6 +817,12 @@ macro_rules! qar_impl_function_list {
                 update_callback: qar_progress_callback_t,
                 user_state: *mut ::std::os::raw::c_void,
                 cancel: *mut QarCancelToken,
+            ) -> QarResult;
+            pub fn qar_impl_session_subscribe_lifecycle(
+                session: *mut QarSession,
+                callback: qar_session_lifecycle_callback_t,
+                user_state: *mut ::std::os::raw::c_void,
+                token: *mut QarCancelToken,
             ) -> QarResult;
             pub fn qar_impl_target_app_connection_string_android(
                 host: *const ::std::os::raw::c_char,

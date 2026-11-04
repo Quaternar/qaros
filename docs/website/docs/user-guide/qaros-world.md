@@ -57,7 +57,7 @@ The operator controls which devices are accepted, removed, or re-invited.
 
 Multiple AR devices can be aligned into the same physical space with a synchronization QR code.
 
-- Show or print it from the Visualizer's **Devices** tab, under **Scene origin**: **Show** draws it at true size on screen, **Print…** prints it at 100 % with a 10 cm check ruler. Its black area must measure 10 cm.
+- Show or print it from the Visualizer's **Tools** › **Origin** panel, one code per room: **Show** draws it at true size on screen, **Print…** prints it at 100 % with a 10 cm check ruler. Its black area must measure 10 cm. Step by step, with which headsets scan it: [Scene Origin: Anchor Several Devices Together](/docs/operator-guide/visualizer-tutorials/scene-origin-and-rooms).
 - Or download and print the QR code: [room-sync QR code](https://drive.google.com/file/d/1auIbOQZTqQ-4FCTpde53D-Mp1pJ_YFX4/view?usp=sharing).
 - If you need to generate your own, encode the text `qar-remoting:0_0_0_0;S`.
 - Keep the white margins around the QR code intact. They make tracking faster and more reliable.

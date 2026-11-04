@@ -1,5 +1,6 @@
 //! Value types: identifiers, math, and the C enums the safe API uses.
 
+use std::ffi::CStr;
 use std::fmt;
 
 use qaros_sys as sys;
@@ -217,24 +218,18 @@ impl Fov {
 
 /// Maps a newtype C enum to a Rust enum with an `Other` variant for values
 /// this binding does not know, so values coming from the library never cause
-/// undefined behaviour. Values only the public header declares follow
-/// `by value:` with their number, so the same sources build against the
-/// bindings of the header of runtime 0.9.0-dev.2916, which lacks them.
+/// undefined behaviour.
 macro_rules! c_enum {
     (
         $(#[$documentation:meta])*
         $name:ident: $raw:ident {
             $($(#[$variant_documentation:meta])* $variant:ident = $constant:ident),* $(,)?
-            $(; by value: $(
-                $(#[$by_value_documentation:meta])* $by_value_variant:ident = $value:literal
-            ),* $(,)?)?
         }
     ) => {
         $(#[$documentation])*
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum $name {
             $($(#[$variant_documentation])* $variant,)*
-            $($($(#[$by_value_documentation])* $by_value_variant,)*)?
             /// A value not in the C header.
             Other(sys::$raw),
         }
@@ -245,16 +240,12 @@ macro_rules! c_enum {
                 $(if raw == sys::$raw::$constant {
                     return Self::$variant;
                 })*
-                $($(if raw == sys::$raw($value) {
-                    return Self::$by_value_variant;
-                })*)?
                 Self::Other(raw)
             }
 
             pub(crate) fn to_raw(self) -> sys::$raw {
                 match self {
                     $(Self::$variant => sys::$raw::$constant,)*
-                    $($(Self::$by_value_variant => sys::$raw($value),)*)?
                     Self::Other(raw) => raw,
                 }
             }
@@ -270,16 +261,15 @@ c_enum!(
         B8G8R8A8 = QAR_PIXEL_FORMAT_B8G8R8A8,
         R16G16B16A16 = QAR_PIXEL_FORMAT_R16G16B16A16,
         B8G8R8X8 = QAR_PIXEL_FORMAT_B8G8R8X8,
-        D32Float = QAR_PIXEL_FORMAT_D32_FLOAT;
-        by value:
+        D32Float = QAR_PIXEL_FORMAT_D32_FLOAT,
         /// 16-bit normalized depth, accepted only as a render sender's depth format; the sender
         /// widens it to 32-bit float before the frame leaves the application.
-        D16Unorm = 100,
+        D16Unorm = QAR_PIXEL_FORMAT_D16_UNORM,
         /// Depth with stencil, accepted only as an OpenGL or Vulkan sender's depth format (the
         /// CPU and D3D11 senders refuse it); only the depth is streamed, as 32-bit float.
-        D24UnormS8Uint = 102,
+        D24UnormS8Uint = QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT,
         /// 32-bit float depth with stencil, accepted as [`Self::D24UnormS8Uint`] is.
-        D32FloatS8X24Uint = 103,
+        D32FloatS8X24Uint = QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT,
     }
 );
 
@@ -376,7 +366,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_depth_formats_named_by_value_carry_the_public_headers_values() {
+    fn the_depth_formats_carry_the_headers_values() {
         for (format, value) in [
             (PixelFormat::D16Unorm, 100),
             (PixelFormat::D32Float, 101),
@@ -398,5 +388,72 @@ mod tests {
         assert_eq!(AppState::from_raw(raw), AppState::Retired);
         assert_eq!(AppState::Retired.to_raw(), raw);
         assert_eq!(format!("{:?}", AppState::from_raw(raw)), "Retired");
+    }
+}
+
+c_enum!(
+    /// Where a session stands in its hub's session lifecycle (`QarSessionLifecycleState`).
+    /// Treat [`Self::Other`] as [`Self::HubUnreachable`]: the session keeps trying.
+    SessionLifecycleState: QarSessionLifecycleState {
+        /// In the hub's current session; traffic flows.
+        Connected = QAR_SESSION_LIFECYCLE_STATE_CONNECTED,
+        /// Moving into another session in place; traffic resumes once connected.
+        Migrating = QAR_SESSION_LIFECYCLE_STATE_MIGRATING,
+        /// The hub has not answered for a while; the session keeps trying by itself.
+        HubUnreachable = QAR_SESSION_LIFECYCLE_STATE_HUB_UNREACHABLE,
+        /// The hub no longer admits this peer (its approval was revoked, it missed too many
+        /// rotations, or the hub was reset). Terminal: drop the session and onboard again.
+        RePairRequired = QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED,
+    }
+);
+
+c_enum!(
+    /// Why the session moved into another session id (`QarSessionChangeCause`). Informational
+    /// only; treat [`Self::Other`] as [`Self::Rotated`].
+    SessionChangeCause: QarSessionChangeCause {
+        /// No move: a state change within the same session.
+        None = QAR_SESSION_CHANGE_CAUSE_NONE,
+        /// The hub serves a new session of its own.
+        Rotated = QAR_SESSION_CHANGE_CAUSE_ROTATED,
+        /// The hub this app paired with joined another hub as its member.
+        JoinedPrimary = QAR_SESSION_CHANGE_CAUSE_JOINED_PRIMARY,
+    }
+);
+
+/// One state of a session's lifecycle (`QarSessionLifecycleInfo`), copied out of the library.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionLifecycle {
+    pub state: SessionLifecycleState,
+    /// Why the latest move happened; [`SessionChangeCause::None`] outside a move.
+    pub cause: SessionChangeCause,
+    /// The session the app is in now: during [`SessionLifecycleState::Migrating`] still the old
+    /// one. Compare it with the id the app last saw to tell a new move from an old one.
+    pub session_id: SessionId,
+    /// The session it moved from, on the state that ends a move.
+    pub previous_session_id: Option<SessionId>,
+    /// Text for logs and the operator, never a secret. Empty from
+    /// [`crate::Session::lifecycle`].
+    pub reason: String,
+}
+
+impl SessionLifecycle {
+    pub(crate) fn from_raw(info: &sys::QarSessionLifecycleInfo) -> Self {
+        let reason = if info.reason.is_null() {
+            String::new()
+        } else {
+            // SAFETY: non-null and NUL-terminated; valid during the callback that delivered it.
+            unsafe { CStr::from_ptr(info.reason) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        Self {
+            state: SessionLifecycleState::from_raw(info.state),
+            cause: SessionChangeCause::from_raw(info.cause),
+            session_id: SessionId::from_raw(info.session_id),
+            previous_session_id: info
+                .has_previous_session
+                .then(|| SessionId::from_raw(info.previous_session_id)),
+            reason,
+        }
     }
 }

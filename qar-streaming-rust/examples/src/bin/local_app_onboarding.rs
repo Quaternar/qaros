@@ -1,15 +1,17 @@
 //! Port of `local_app_onboarding.c`: the smallest source app that joins the QAROS installed on
-//! this PC as a local app. No code: QAROS asks the user once to allow the app.
+//! this PC as a local app. No code: QAROS asks the user once to allow the app, and an app tag
+//! keeps its peer id across restarts.
 //!
 //! ```text
-//! cargo run -p qaros-examples --bin local_app_onboarding [-- approval-timeout-ms]
+//! cargo run -p qaros-examples --bin local_app_onboarding [-- approval-timeout-ms [app-tag]]
 //! ```
 //!
 //! It loads the runtime with the default lookup (`Library::load_default`, the C sample's
 //! `qar_library_load(NULL)`) and joins with `OnboardMethod::LocalApp`. The first run opens
 //! "Allow `local_app_onboarding.exe` to join QAROS?" in the QAROS Visualizer or as a QAROS tray
-//! window; later runs join silently while the executable is unchanged. Without a timeout, or
-//! with 0, the hub's default applies.
+//! window; later runs join silently while the executable is unchanged, and print the same peer id
+//! while no other instance with the same tag runs. Without a timeout, or with 0, the hub's
+//! default applies. The tag is `main.local-app-onboarding.examples.quaternar` when absent.
 //!
 //! Exit codes, as in the C sample:
 //!
@@ -29,8 +31,12 @@ use std::time::Duration;
 
 use qaros::{
     BlockingOptions, Library, LibraryConfig, OnboardMethod, PeerPresentation, Progress,
-    RuntimeConfig, StatusCode,
+    RuntimeConfig, Session, StatusCode,
 };
+
+/// An app tag is an identity key: printable ASCII, constant across versions, scoped by the app
+/// (DNS style).
+const DEFAULT_APP_TAG: &str = "main.local-app-onboarding.examples.quaternar";
 
 fn main() -> ExitCode {
     let approval_timeout = match parse_approval_timeout(std::env::args().nth(1).as_deref()) {
@@ -40,10 +46,13 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    let app_tag = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| DEFAULT_APP_TAG.to_string());
 
     // ANCHOR: load
-    // SAFETY: the runtime found is the installed QAROS (or one QAROS_RUNTIME_DIR names), which
-    // matches these bindings.
+    // SAFETY: the runtime found is the installed QAROS (or that of the instance QAR_INSTANCE
+    // names), which matches these bindings.
     let loaded = unsafe {
         Library::load_default(&LibraryConfig {
             console_logging: false,
@@ -87,7 +96,11 @@ fn main() -> ExitCode {
         ..PeerPresentation::default()
     };
     let joined = runtime.onboard(
-        &OnboardMethod::LocalApp { approval_timeout },
+        &OnboardMethod::LocalApp {
+            approval_timeout,
+            // Optional: without it the app has the default tag.
+            app_tag: Some(&app_tag),
+        },
         &presentation,
         &BlockingOptions {
             progress: Some(progress),
@@ -100,12 +113,28 @@ fn main() -> ExitCode {
     // ANCHOR_END: onboard
     // ANCHOR: teardown
     let exit_code = explain_result(joined.as_ref().map(|_| ()));
+    if let Ok(onboarded) = &joined {
+        // The same tag prints the same peer id on the next start.
+        print_my_peer_id(&onboarded.session);
+    }
     // The session, the runtime and the library are destroyed in that order as they drop.
     drop(joined);
     drop(runtime);
     drop(library);
     ExitCode::from(exit_code)
     // ANCHOR_END: teardown
+}
+
+/// Prints the peer id the hub gave this app. Joining succeeded either way, so a failure here is
+/// only reported.
+fn print_my_peer_id(session: &Session) {
+    let peer = session
+        .my_peer()
+        .and_then(|me| session.library().uuid_to_string(&me.id.0));
+    match peer {
+        Ok(text) => println!("This app joined as peer {text}"),
+        Err(error) => eprintln!("Could not read this app's peer id: {error}"),
+    }
 }
 
 // ANCHOR: timeout

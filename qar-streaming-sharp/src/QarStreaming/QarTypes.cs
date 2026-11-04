@@ -53,6 +53,47 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// Where a session stands in its hub's session lifecycle (C <c>QarSessionLifecycleState</c>);
+    /// see <see cref="Session.SubscribeLifecycle(EventHandler{SessionLifecycleChangedEventArgs})"/>.
+    /// Treat a value not named here as <see cref="HubUnreachable"/>.
+    /// </summary>
+    public enum SessionLifecycleState
+    {
+        /// <summary>In the hub's current session; traffic flows.</summary>
+        Connected = 0,
+        /// <summary>Moving into another session in place; traffic resumes once <see cref="Connected"/>.</summary>
+        Migrating = 1,
+        /// <summary>The hub has not answered for a while; the session keeps trying by itself.</summary>
+        HubUnreachable = 2,
+        /// <summary>
+        /// The hub no longer admits this app (its approval was revoked, it missed too many
+        /// rotations, or the hub was reset to a new install). Terminal: dispose the session,
+        /// onboard again and recreate what the app owns.
+        /// </summary>
+        RePairRequired = 3
+    }
+
+    /// <summary>
+    /// Why a session moved into another session id (C <c>QarSessionChangeCause</c>).
+    /// Informational: the move is the same. Treat a value not named here as <see cref="Rotated"/>.
+    /// </summary>
+    public enum SessionChangeCause
+    {
+        /// <summary>No move: a state change within the same session.</summary>
+        None = 0,
+        /// <summary>
+        /// The hub serves a new session of its own: its operator started a new session, a member hub
+        /// left its primary, or this app missed the announcement of a join.
+        /// </summary>
+        Rotated = 1,
+        /// <summary>
+        /// The hub this app paired with joined another hub as its member; the session moved into
+        /// that primary hub's session.
+        /// </summary>
+        JoinedPrimary = 2
+    }
+
+    /// <summary>
     /// What a peer is in the streaming graph (C <c>QarPeerRole</c>). An application using this
     /// API is always <see cref="Source"/>; it renders for peers whose role is <see cref="Target"/>.
     /// </summary>
@@ -201,7 +242,55 @@ namespace Quaternar.Qaros
         /// <summary>Four-byte BGR colour with an unused X byte. X is not alpha.</summary>
         B8G8R8X8 = 56,
         R16G16B16A16 = 55,
-        D32Float = 101
+        /// <summary>16-bit normalized depth; render sender depth only, widened to 32-bit float before it is sent.</summary>
+        D16Unorm = 100,
+        D32Float = 101,
+        /// <summary>Depth-stencil; OpenGL or Vulkan render sender depth only. The stencil is dropped, the depth widened to 32-bit float.</summary>
+        D24UnormS8Uint = 102,
+        /// <summary>Depth-stencil; OpenGL or Vulkan render sender depth only. The stencil is dropped, the depth sent as 32-bit float.</summary>
+        D32FloatS8X24Uint = 103
+    }
+
+    /// <summary>
+    /// What a render sender's colour alpha means. Published with the stream, so a receiver
+    /// composites by it instead of guessing.
+    /// </summary>
+    public enum ColorAlphaMode
+    {
+        /// <summary>Not declared: a receiver keeps its own default.</summary>
+        Unspecified = 0,
+        /// <summary>The alpha channel means nothing; every pixel is fully covered.</summary>
+        Opaque = 1,
+        /// <summary>
+        /// The colour is premultiplied by the alpha, and the alpha is the pixel's coverage: what a
+        /// renderer produces drawing over a transparent-black clear.
+        /// </summary>
+        Premultiplied = 2,
+        /// <summary>
+        /// The colour is not multiplied by the alpha, and the alpha is the pixel's coverage. The
+        /// sender premultiplies the colour before the frame leaves the application, so the stream
+        /// publishes Premultiplied. Costs one shader pass per frame.
+        /// </summary>
+        Straight = 3
+    }
+
+    /// <summary>
+    /// What the numbers in a render sender's colour texture mean. Whatever is declared, the stream
+    /// carries sRGB-encoded colour: a linear colour is encoded by the sender.
+    /// </summary>
+    public enum ColorEncoding
+    {
+        /// <summary>
+        /// sRGB-encoded, as a display shows it: what a renderer stores in an sRGB render target.
+        /// The default; nothing is converted.
+        /// </summary>
+        Srgb = 0,
+        /// <summary>
+        /// Linear light, as a renderer stores it in a plain UNORM render target without encoding.
+        /// The sender encodes it, at one GPU pass per frame. 8-bit linear values have already lost
+        /// precision in the darks; R16G16B16A16 keeps them.
+        /// </summary>
+        Linear = 1
     }
 
     /// <summary>How the views of one video frame are packed into textures.</summary>
@@ -381,17 +470,25 @@ namespace Quaternar.Qaros
         // 0x100B and 0x100C (the retired member join request and complete inits) are never reused.
         RuntimeCreateMemberHubInvitationInit = 0x100D,
         RuntimeJoinHubAsMemberInit = 0x100E,
+        RuntimeOnboardLocalAppTagExt = 0x100F,
+        RuntimeEphemeralStorageExt = 0x1010,
+        RuntimeMemberHubInvitationAppGrantExt = 0x1011,
+        RuntimeOnboardRemoteAppGrantExt = 0x1012,
         SessionGraphicsDeviceId = 0x2004,
-        SessionRequestInviteInit = 0x2005,
+        // 0x2005 was the untagged request-invite init; the runtime refuses it ("app tag required").
+        SessionRequestInviteInit = 0x200A,
         PeerPresentation = 0x2006,
         PeerDeviceIdentity = 0x2009,
+        SessionLifecycleInfo = 0x200B,
         SessionInviteTargetAppInit = 0x2007,
-        SessionRequestOnboardingCodesInit = 0x2008,
+        // 0x2008 (the removed request-onboarding-codes init) is never reused.
         RenderingStreamSenderInit = 0x3000,
         RenderingBeginFrame = 0x3001,
         RenderingEndFrame = 0x3002,
         RenderingEndFrameViewOverridesExt = 0x3004,
         VideoSenderInit = 0x3005,
+        RenderSenderAlphaModeExt = 0x3006,
+        RenderSenderColorEncodingExt = 0x3007,
         StreamD3D11ParamsExt = 0x4000,
         StreamVulkanParamsExt = 0x4002,
         StreamOpenGlEglParamsExt = 0x4003,
@@ -805,6 +902,8 @@ namespace Quaternar.Qaros
     /// </summary>
     public sealed class OnboardLocalApp : Structure
     {
+        private string? _tag;
+
         public OnboardLocalApp()
             : base(StructureType.RuntimeOnboardLocalAppExt)
         {
@@ -812,6 +911,100 @@ namespace Quaternar.Qaros
 
         /// <summary>Max wait for the user's first-time approval; zero takes the hub default (120 s).</summary>
         public TimeSpan ApprovalTimeout { get; set; } = TimeSpan.Zero;
+
+        /// <summary>
+        /// The app tag telling several instances of one approved app apart (C
+        /// <c>QarOnboardLocalAppTagExt</c>); null, the default, is the app's default tag.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The hub remembers a peer id per approval and tag: the next start with the same tag gets
+        /// the same peer id while no other live process holds it, and a one-off id otherwise. A
+        /// second onboard with the same tag in this process shares the first one's session (same
+        /// peer); different tags are different peers.
+        /// </para>
+        /// <para>
+        /// An identity key like an app volume's common name: non-empty printable ASCII, no space at
+        /// either end, at most 256 bytes, compared exactly, not starting with the reserved
+        /// <c>member/</c> prefix, kept constant across versions of the
+        /// app. Recommended: a DNS-style name scoped by the app, such as
+        /// <c>left.terraexplorer.skyline</c>. Put non-ASCII text in
+        /// <see cref="PeerPresentationOptions.DisplayName"/>.
+        /// </para>
+        /// <para>
+        /// A runtime older than the tag ignores it and joins with the default tag.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentException">The value breaks the rules above (checked as a courtesy; the runtime checks too).</exception>
+        public string? Tag
+        {
+            get { return _tag; }
+            set { _tag = value == null ? null : AppTagRules.Validate(value, nameof(value)); }
+        }
+
+        /// <summary>
+        /// Optional remote-app grant to redeem while onboarding (C
+        /// <c>QarOnboardRemoteAppGrantExt</c>): a <see cref="MemberHubInvitation"/> the primary's
+        /// app created with <see cref="MemberHubInvitationOptions.AppTag"/> set, as
+        /// <see cref="MemberHubInvitation.Deserialize"/> returned it. Null, the default, redeems
+        /// none.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The hub on this PC must already be a member of the invitation's primary
+        /// (<see cref="Runtime.JoinHubAsMember"/>). When no approval admits this executable there
+        /// yet, the primary approves it as the app the grant admits, without a prompt, and later
+        /// starts onboard with no grant and no prompt. The first executable that redeems the grant
+        /// wins: once another one has, the onboarding fails with
+        /// <see cref="StatusCode.OnboardingApprovalDenied"/>. When an approval already admits this
+        /// executable, the invitation is not used.
+        /// </para>
+        /// <para>
+        /// The grant's app tag applies; <see cref="Tag"/> is not needed. Only the local-app mode
+        /// takes a grant.
+        /// </para>
+        /// <para>
+        /// The invitation is a secret bearer credential: receive it only over a private channel and
+        /// never log it. It is borrowed, not owned: the caller keeps ownership and disposes it, and
+        /// the binding holds a reference on it for the duration of the onboard call, so disposing
+        /// it meanwhile takes effect once the call is done.
+        /// </para>
+        /// </remarks>
+        public MemberHubInvitation? RemoteAppGrant { get; set; }
+    }
+
+    /// <summary>
+    /// Client-side check of an app tag against the C API rules (<c>qar::ValidateAppTag</c>), so a
+    /// mistake fails at the line that made it. The runtime checks again and stays authoritative.
+    /// </summary>
+    internal static class AppTagRules
+    {
+        /// <summary>Returns <paramref name="tag"/> when it is valid; the message never echoes the tag.</summary>
+        internal static string Validate(string tag, string paramName)
+        {
+            if (tag == null)
+                throw new ArgumentNullException(paramName);
+            if (tag.Length == 0)
+                throw new ArgumentException("An app tag must not be empty.", paramName);
+            if (tag.Length > NativeConstants.MaxAppTagLength)
+                throw new ArgumentException("An app tag is at most " + NativeConstants.MaxAppTagLength + " bytes.", paramName);
+            foreach (var c in tag)
+            {
+                if (c < ' ' || c > '~')
+                    throw new ArgumentException("An app tag must be printable ASCII; put other text in the display name.", paramName);
+            }
+            if (tag[0] == ' ' || tag[tag.Length - 1] == ' ')
+                throw new ArgumentException("An app tag must not start or end with a space.", paramName);
+            if (tag.StartsWith(ReservedPrefix, StringComparison.Ordinal))
+                throw new ArgumentException("App tags starting with \"" + ReservedPrefix + "\" are reserved for the primary hub's member apps.", paramName);
+            return tag;
+        }
+
+        /// <summary>
+        /// The prefix the primary hub keeps for the tags it remembers its member hubs' apps under
+        /// (<c>qar::kReservedAppTagPrefix</c>); an app passing one would select a member PC's peer.
+        /// </summary>
+        internal const string ReservedPrefix = "member/";
     }
 
     /// <summary>
@@ -1100,12 +1293,48 @@ namespace Quaternar.Qaros
         /// application data folder, on Windows <c>%LOCALAPPDATA%\Quaternar\QarOS</c>.
         /// </summary>
         public string? StorageFolderPath { get; set; }
+
+        /// <summary>
+        /// Keep the identity this runtime onboards with in memory only (C
+        /// <c>QarRuntimeEphemeralStorageExt</c>), for a process that must leave nothing on disk:
+        /// typically a co-process joining with an invite from
+        /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>.
+        /// Defaults to false.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="Runtime.Onboard"/> writes nothing under the storage folder and returns
+        /// <see cref="OnboardingId.Default"/>; certificate renewal works as usual. The identity is
+        /// gone with the runtime, so a restarted process onboards again with a fresh invite.
+        /// <see cref="Runtime.Rejoin"/> and <see cref="Runtime.Forget"/> fail with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>: there is no persisted slot.
+        /// <see cref="OnboardOptions.UseLocalApp"/> is stateless already and unaffected.
+        /// </para>
+        /// <para>
+        /// A runtime older than this option ignores it and stores the identity on disk; check
+        /// <see cref="RuntimeInfo.Version"/> before relying on it.
+        /// </para>
+        /// </remarks>
+        public bool EphemeralStorage { get; set; }
+
         internal Structure? Extension { get; private set; }
 
         public RuntimeOptions WithExtension(Structure extension)
         {
             Extension = StructureChainBuilder.Append(Extension, extension);
             return this;
+        }
+    }
+
+    /// <summary>
+    /// The native <c>QarRuntimeEphemeralStorageExt</c> behind
+    /// <see cref="RuntimeOptions.EphemeralStorage"/>; never chained by hand.
+    /// </summary>
+    internal sealed class RuntimeEphemeralStorage : Structure
+    {
+        internal RuntimeEphemeralStorage()
+            : base(StructureType.RuntimeEphemeralStorageExt)
+        {
         }
     }
 
@@ -1169,6 +1398,16 @@ namespace Quaternar.Qaros
         public PixelFormat ColorFormat { get; set; }
         /// <summary>Defaults to <see cref="PixelFormat.D32Float"/>.</summary>
         public PixelFormat DepthFormat { get; set; }
+        /// <summary>
+        /// What the colour's alpha means. Unspecified, the default, declares nothing; any other
+        /// value is chained to the native init as QarRenderSenderAlphaModeExt.
+        /// </summary>
+        public ColorAlphaMode AlphaMode { get; set; }
+        /// <summary>
+        /// What the colour's numbers mean. Srgb, the default, is not chained; Linear is chained to
+        /// the native init as QarRenderSenderColorEncodingExt and encoded by the sender.
+        /// </summary>
+        public ColorEncoding ColorEncoding { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.D3D11"/>; must be null otherwise.</summary>
         public StreamParamsD3D11? StreamParamsD3D11 { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.Vulkan"/>; must be null otherwise.</summary>
@@ -1237,7 +1476,11 @@ namespace Quaternar.Qaros
         /// non-empty; put any other text in <see cref="DisplayName"/>.
         /// </summary>
         public string CommonName { get; set; }
-        /// <summary>Label shown to users; any text, emoji included.</summary>
+        /// <summary>
+        /// Required non-empty label when creating or reopening this object; Unicode and emoji
+        /// are allowed. The constructor leaves it null: set it before calling GetOrCreate.
+        /// CommonName supplies identity only and is not a fallback display name.
+        /// </summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// The panel's pose in room space: the midpoint of its top edge, front
@@ -1300,7 +1543,11 @@ namespace Quaternar.Qaros
         /// non-empty; put any other text in <see cref="DisplayName"/>.
         /// </summary>
         public string CommonName { get; set; }
-        /// <summary>Label shown to users; any text, emoji included.</summary>
+        /// <summary>
+        /// Required non-empty label when creating or reopening this object; Unicode and emoji
+        /// are allowed. The constructor leaves it null: set it before calling GetOrCreate.
+        /// CommonName supplies identity only and is not a fallback display name.
+        /// </summary>
         public string? DisplayName { get; set; }
         /// <summary>
         /// Placement of the cuboid's centre in room space, and the rotation taking

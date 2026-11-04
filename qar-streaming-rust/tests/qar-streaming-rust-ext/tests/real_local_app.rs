@@ -4,8 +4,9 @@
 //! code 0. Unlike the other tests of this crate it talks to a running Hub, not to
 //! `qar-streaming-c-ext`, because local-app onboarding is served by the Hub only.
 //!
-//! - `QAROS_PACKAGE_BIN`: the runtime's `bin` folder, passed to the cube as `QAROS_RUNTIME_DIR`
-//!   (skipped when unset).
+//! - `QAR_INSTANCE`: inherited by the cube, as QAROS sets it for the apps it starts: the QAROS
+//!   instance whose Hub the cube joins and whose runtime it loads (a development hub's instance
+//!   name); unset, the installed QAROS.
 //! - `QAROS_E2E_APP`: the `vulkan_cube` executable (skipped when unset).
 //! - `QAROS_E2E_START_BUDGET`: seconds until the cube has joined, default 180, long enough to
 //!   click Allow in QAROS on its first run.
@@ -33,9 +34,6 @@ const STOPPING_LINE: &str = "Stopping.";
 
 #[test]
 fn the_cube_joins_as_a_local_app_and_stops_when_stdin_closes() {
-    let Some(bin) = common::package_bin() else {
-        return;
-    };
     let Some(program) = std::env::var_os("QAROS_E2E_APP").map(PathBuf::from) else {
         eprintln!("skipped: set QAROS_E2E_APP to the vulkan_cube executable");
         return;
@@ -47,7 +45,7 @@ fn the_cube_joins_as_a_local_app_and_stops_when_stdin_closes() {
     eprintln!("scratch: {}", scratch.display());
 
     let started = Instant::now();
-    let (app_child, app_stdin) = start_app(&program, &bin, &scratch);
+    let (app_child, app_stdin) = start_app(&program, &scratch);
     let mut app = ChildGuard(app_child);
 
     wait_for_line(&mut app.0, &scratch, JOINED_LINE, start_budget);
@@ -103,10 +101,10 @@ fn seconds_from_environment(variable: &str, default_seconds: u64) -> u64 {
         })
 }
 
-fn start_app(program: &Path, bin: &Path, scratch: &Path) -> (Child, ChildStdin) {
+/// The cube inherits this process's environment, `QAR_INSTANCE` included.
+fn start_app(program: &Path, scratch: &Path) -> (Child, ChildStdin) {
     let mut app = Command::new(program)
         .current_dir(scratch)
-        .env("QAROS_RUNTIME_DIR", bin)
         .stdin(Stdio::piped())
         .stdout(Stdio::from(
             std::fs::File::create(scratch.join("app.stdout.log")).expect("stdout log"),

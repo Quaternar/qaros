@@ -36,6 +36,21 @@ fn skipped(reason: &str) -> Option<TestDevice> {
     None
 }
 
+/// The loader's instance extensions. `VK_INCOMPLETE` means the list changed between the count
+/// and the fill (implicit layers of the tests running beside this one), so it is asked again.
+fn instance_extensions(entry: &ash::Entry) -> Vec<vk::ExtensionProperties> {
+    const ATTEMPTS: usize = 5;
+    for _ in 1..ATTEMPTS {
+        // SAFETY: valid entry.
+        match unsafe { entry.enumerate_instance_extension_properties(None) } {
+            Err(vk::Result::INCOMPLETE) => {}
+            result => return result.expect("instance extensions"),
+        }
+    }
+    // SAFETY: valid entry.
+    unsafe { entry.enumerate_instance_extension_properties(None) }.expect("instance extensions")
+}
+
 impl TestDevice {
     /// `None` (with the reason printed) when no Vulkan loader, driver or device is reachable.
     fn create() -> Option<Self> {
@@ -44,9 +59,7 @@ impl TestDevice {
             Ok(entry) => entry,
             Err(error) => return skipped(&format!("no Vulkan loader ({error})")),
         };
-        // SAFETY: valid entry.
-        let instance_extensions = unsafe { entry.enumerate_instance_extension_properties(None) }
-            .expect("instance extensions");
+        let instance_extensions = instance_extensions(&entry);
         let has_portability_enumeration = instance_extensions.iter().any(|extension| {
             extension.extension_name_as_c_str() == Ok(ash::khr::portability_enumeration::NAME)
         });
@@ -688,4 +701,33 @@ fn a_vulkan_sender_without_device_handles_is_refused_by_the_stub() {
             .contains("needs a physical device and a device"),
         "{error}"
     );
+}
+
+/// The async begin-frame hands out the same Vulkan frame record as the blocking one.
+#[test]
+fn an_async_begin_frame_hands_out_the_vulkan_images() {
+    let Some(gpu) = TestDevice::create() else {
+        return;
+    };
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut sender = vulkan_sender(&session, &gpu);
+
+    let pending = sender.start_owned_frame(None, || {}).expect("start");
+    let mut frame = pending.wait().expect("frame");
+    let mut vulkan_frame = frame.vulkan_frame().expect("vulkan frame");
+    gpu.submit_and_wait(vulkan_frame.semaphore(), |_| {});
+    vulkan_frame.release_to_external(SHOWN_LAYOUT);
+    show(frame);
+    drop(sender);
+
+    let calls = fixture.control.calls();
+    assert!(
+        calls.contains(&"vulkan semaphore consumed frame=0".to_string()),
+        "{calls:?}"
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+    drop(session);
+    drop(library);
 }

@@ -124,3 +124,24 @@ fn last_hands(library: &Library, sender: &RenderSender) {
     }
     // ANCHOR_END: last_hands
 }
+
+fn begin_without_blocking(sender: &mut RenderSender) -> qaros::Result<()> {
+    // ANCHOR: begin_frame_async
+    // Starts the begin-frame; the frame counts as open on this sender from now on.
+    let mut pending = sender.start_owned_frame(None, || { /* request a repaint */ })?;
+
+    // Later, in your loop:
+    if let Some(begun) = pending.poll() {
+        let mut frame = begun?; // StatusCode::TIMEOUT when it was cancelled
+        let view = frame.view(0)?;
+        render_my_scene(&mut frame.cpu_frame()?, &view);
+        frame.show(&qaros::ShowParams {
+            near: 0.1,
+            far: 100.0,
+            depth_scale: 1.0,
+        })?;
+    }
+    // Dropping `pending` cancels it; the next begin on this sender settles it first.
+    // ANCHOR_END: begin_frame_async
+    Ok(())
+}

@@ -16,9 +16,9 @@
  * room that holds your rendered content. It moves and resizes the box, moves
  * and shrinks your content inside it, and prints the distinct updates its
  * subscription delivers. It then reads the volume's latest values, maps a
- * room-space point into your content, changes the gesture rules, pins the
- * volume to a place on the Earth, lists every volume in the session and
- * clears the pin again.
+ * room-space point into your content, changes the gesture rules, publishes a
+ * world anchor with the volume, lists every volume in the session and clears
+ * the anchor again.
  *
  * What you will learn:
  * - how a volume's common name makes creation idempotent,
@@ -265,11 +265,14 @@
  * What can go wrong: `QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID`
  * means a rule could never work, and the volume keeps its previous rules.
  *
- * \subsection app_volume_anchor 9. Pin the volume to the Earth
+ * \subsection app_volume_anchor 9. Publish a world anchor
  *
- * A world anchor states where app volume space sits on the Earth, as an ECEF
- * WGS84 frame. Here the volume's +X points east, +Y up and +Z south of a
- * latitude and longitude, which keeps the frame right-handed.
+ * A world anchor is geographic reference metadata the volume carries: an
+ * Earth-fixed frame in ECEF WGS84 meters with unit axes. The SDK stores and
+ * replicates it; it does not move the volume, change the app pose or scale, or
+ * transform render poses. Applications that read it apply their own mapping.
+ * Here the frame's +X points east, +Y up and +Z south of a latitude and
+ * longitude, which keeps it right-handed.
  *
  * \snippet app_volume_management.c app_world_anchor
  *
@@ -303,10 +306,9 @@
  *
  * \snippet app_volume_management.c app_clear_world_anchor
  *
- * The volume is shared and stays after the program ends, so the example pin
+ * The volume is shared and stays after the program ends, so the example anchor
  * would stay too, for every peer. qar_app_volumes_clear_app_world_anchor()
- * lets the volume float again. Clear an anchor of your own only when your
- * content should no longer be tied to that place.
+ * removes it. Clear an anchor of your own only when it no longer applies.
  *
  * \section app_volume_rendering Using the volume for rendering
  *
@@ -351,7 +353,7 @@
  * | `Volume values not available` | The latest getters failed for this volume | Check the status in the line before; get or create the volume again |
  * | `No update of the volume arrived within 10 s of the changes.`, exit code 1 | The Hub delivered no update of the volume within 10 s after the changes | Check that the Hub is still running and run again. In your app, read updates as they come instead of waiting for them a fixed time |
  * | The program hangs while ending the subscription | A callback is waiting for a lock the ending thread holds | Release the lock before qar_cancel_token_cancel() |
- * | `No QAROS runtime loaded` | The default lookup found no runtime | Install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
+ * | `No QAROS runtime loaded` | The default lookup found no runtime | Install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
  *
  * \section app_volume_next Next
  *
@@ -939,7 +941,7 @@ geo_anchor_from_lat_lon(double lat_deg, double lon_deg, double height_m)
 }
 
 static bool
-pin_to_earth(QarSession* session, const QarAppVolumeId* volume_id)
+set_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
 {
 	const QarGeoAnchorFrame anchor = geo_anchor_from_lat_lon(50.0870, 14.4208, 200.0);
 	return example_logged_success(
@@ -1020,7 +1022,7 @@ list_volumes(QarSession* session)
 /* The volume is shared and persistent: without this, the example pin would
  * stay on it for every peer after the program ends. */
 static bool
-clear_earth_pin(QarSession* session, const QarAppVolumeId* volume_id)
+clear_world_anchor(QarSession* session, const QarAppVolumeId* volume_id)
 {
 	return example_logged_success(
 		"qar_app_volumes_clear_app_world_anchor",
@@ -1039,14 +1041,14 @@ run_volume_steps(QarSession* session)
 	}
 
 	/* Every step runs only when the one before succeeded, except the clear: a
-	 * pin that was set is cleared even when the listing failed. */
-	const bool pinned = change_volume_and_follow_updates(session, &volume_id)
-						&& print_latest_volume_values(session, &volume_id)
-						&& map_point_above_volume_center(session, &volume_id, 0.25f)
-						&& configure_gestures(session, &volume_id)
-						&& pin_to_earth(session, &volume_id);
-	const bool listed = pinned && list_volumes(session);
-	const bool cleared = pinned && clear_earth_pin(session, &volume_id);
+	 * world anchor that was set is cleared even when the listing failed. */
+	const bool anchored = change_volume_and_follow_updates(session, &volume_id)
+						  && print_latest_volume_values(session, &volume_id)
+						  && map_point_above_volume_center(session, &volume_id, 0.25f)
+						  && configure_gestures(session, &volume_id)
+						  && set_world_anchor(session, &volume_id);
+	const bool listed = anchored && list_volumes(session);
+	const bool cleared = anchored && clear_world_anchor(session, &volume_id);
 	return listed && cleared ? 0 : 1;
 }
 

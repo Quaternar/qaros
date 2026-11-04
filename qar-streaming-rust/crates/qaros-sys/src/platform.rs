@@ -4,13 +4,28 @@
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 
-use crate::lookup::{RUNTIME_DIR_VARIABLE, RuntimeLocator, SearchPath};
+use crate::lookup::{INSTANCE_VARIABLE, RuntimeLocator, SearchPath};
 
-/// The folder `QAROS_RUNTIME_DIR` names, when it is set and not empty.
-pub fn runtime_dir_from_environment() -> Option<PathBuf> {
-    std::env::var_os(RUNTIME_DIR_VARIABLE)
+/// The value of `QAR_INSTANCE`, exactly as set, when it is set and not empty (read lossily when
+/// it is not Unicode, which no instance name is). The default lookup reads it on Windows only.
+pub fn requested_instance() -> Option<String> {
+    std::env::var_os(INSTANCE_VARIABLE)
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
+        .map(|value| value.to_string_lossy().into_owned())
+}
+
+/// The folder holding the runtime of QAROS instance `instance`, as step 2 of the default lookup
+/// picks it: for `default` the installed QAROS's `<InstallFolder>\bin` ([`installed_bin_folder`]);
+/// for any other name the fully qualified value `RuntimeFolder` of
+/// `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>`, which a QAROS development hub writes for
+/// the apps it starts, else that record's fully qualified `<InstallFolder>\bin`. `None` when the
+/// name is not valid ([`crate::is_valid_instance_name`]), no folder is recorded, or outside
+/// Windows, which has no instance records.
+pub fn instance_runtime_folder(instance: &str) -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    crate::lookup::instance_runtime_folder(&SystemLocator, instance)
 }
 
 /// `<InstallFolder>\bin` of the QAROS installed on this PC, read from
@@ -66,8 +81,18 @@ impl RuntimeLocator for SystemLocator {
             .map(Path::to_path_buf)
     }
 
-    fn runtime_dir_variable(&self) -> Option<PathBuf> {
-        runtime_dir_from_environment()
+    fn requested_instance(&self) -> Option<String> {
+        // Outside Windows there are no instance records, and the C loader does not read the
+        // variable either.
+        if cfg!(windows) {
+            requested_instance()
+        } else {
+            None
+        }
+    }
+
+    fn instance_record_value(&self, instance: &str, value: &str) -> Option<String> {
+        os::instance_record_value(instance, value)
     }
 
     fn installed_bin_folder(&self) -> Option<PathBuf> {
@@ -108,13 +133,15 @@ mod os {
     use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
     use std::path::{Path, PathBuf};
 
-    use crate::lookup::{INSTALL_FOLDER_VALUE, INSTALL_REGISTRY_KEY};
+    use crate::lookup::{INSTALL_FOLDER_VALUE, INSTALL_REGISTRY_KEY, INSTANCES_REGISTRY_KEY};
 
     type ModuleHandle = *mut c_void;
     type RegistryKey = isize;
 
     const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: u32 = 0x0000_0002;
     const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u32 = 0x0000_0004;
+    #[allow(clippy::cast_possible_wrap)]
+    const HKEY_CURRENT_USER: RegistryKey = 0x8000_0001_u32 as i32 as RegistryKey;
     #[allow(clippy::cast_possible_wrap)]
     const HKEY_LOCAL_MACHINE: RegistryKey = 0x8000_0002_u32 as i32 as RegistryKey;
     const RRF_RT_REG_SZ: u32 = 0x0000_0002;
@@ -214,14 +241,33 @@ mod os {
         None
     }
 
+    /// `InstallFolder` of the installed QAROS, from `HKLM` only: `HKCU` is writable by every
+    /// process of the user.
     pub(super) fn install_folder() -> Option<PathBuf> {
-        let key = wide(INSTALL_REGISTRY_KEY);
-        let value = wide(INSTALL_FOLDER_VALUE);
+        read_registry_string(
+            HKEY_LOCAL_MACHINE,
+            INSTALL_REGISTRY_KEY,
+            INSTALL_FOLDER_VALUE,
+        )
+        .map(PathBuf::from)
+    }
+
+    /// Value `value` of the per-user record of `instance`, under `HKCU`. The caller passes only
+    /// valid instance names, so the key cannot leave the instances key.
+    pub(super) fn instance_record_value(instance: &str, value: &str) -> Option<String> {
+        let key = format!("{INSTANCES_REGISTRY_KEY}\\{instance}");
+        read_registry_string(HKEY_CURRENT_USER, &key, value)
+    }
+
+    /// A `REG_SZ` value, as stored; `None` when it is missing, empty or of another type.
+    fn read_registry_string(root: RegistryKey, key: &str, value: &str) -> Option<String> {
+        let key = wide(key);
+        let value = wide(value);
         let mut size_in_bytes: u32 = 0;
         // SAFETY: a size query: no data pointer, a valid size out-pointer.
         let status = unsafe {
             RegGetValueW(
-                HKEY_LOCAL_MACHINE,
+                root,
                 key.as_ptr(),
                 value.as_ptr(),
                 RRF_RT_REG_SZ,
@@ -237,7 +283,7 @@ mod os {
         // SAFETY: the buffer holds `size_in_bytes` bytes.
         let status = unsafe {
             RegGetValueW(
-                HKEY_LOCAL_MACHINE,
+                root,
                 key.as_ptr(),
                 value.as_ptr(),
                 RRF_RT_REG_SZ,
@@ -253,7 +299,11 @@ mod os {
             .iter()
             .position(|&character| character == 0)
             .unwrap_or(buffer.len());
-        (length > 0).then(|| PathBuf::from(OsString::from_wide(&buffer[..length])))
+        (length > 0).then(|| {
+            OsString::from_wide(&buffer[..length])
+                .to_string_lossy()
+                .into_owned()
+        })
     }
 }
 
@@ -293,6 +343,10 @@ mod os {
     }
 
     pub(super) fn install_folder() -> Option<PathBuf> {
+        None
+    }
+
+    pub(super) fn instance_record_value(_instance: &str, _value: &str) -> Option<String> {
         None
     }
 

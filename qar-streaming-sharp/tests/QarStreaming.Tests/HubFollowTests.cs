@@ -147,6 +147,54 @@ namespace Quaternar.Qaros.Tests
             }
         }
 
+        // The lifecycle subscription tells the app about a real rotation: the current state first,
+        // then Connected in the new session with the previous id and the cause Rotated.
+        [HubTestExtFact]
+        public void SubscribeLifecycleReportsARealRotation()
+        {
+            var storageRoot = Path.Combine(Path.GetTempPath(), "qar-sharp-tests", Guid.NewGuid().ToString("N"));
+            var seen = new System.Collections.Concurrent.ConcurrentQueue<SessionLifecycleChangedEventArgs>();
+            using var hub = new HubTestExt();
+            using var runtime = Runtime.Create(new RuntimeOptions { StorageFolderPath = storageRoot }).ValueOrThrow();
+            using var invite = OnboardingInvite.Deserialize(Encoding.UTF8.GetBytes(hub.MintInvite())).ValueOrThrow();
+            var onboarded = runtime.Onboard(new OnboardOptions()
+                .UseInvite(invite)
+                .WithPresentation(new PeerPresentationOptions { DisplayName = "QarStreamingSharpTests lifecycle" })).ValueOrThrow();
+            using var session = onboarded.Session;
+            var before = session.GetId().ValueOrThrow().ToByteArray();
+            using (session.SubscribeLifecycle((sender, args) => seen.Enqueue(args)).ValueOrThrow())
+            {
+                var current = session.GetLifecycleState().ValueOrThrow();
+                Assert.Equal(SessionLifecycleState.Connected, current.State);
+                Assert.Equal(before, current.SessionId.ToByteArray());
+
+                var next = hub.RotateSession();
+                var deadline = DateTime.UtcNow + FollowBudget;
+                while (DateTime.UtcNow < deadline && !seen.Any(e => e.State == SessionLifecycleState.Connected && e.SessionId.ToByteArray().SequenceEqual(next)))
+                    Thread.Sleep(20);
+
+                var first = seen.First();
+                Assert.Equal(SessionLifecycleState.Connected, first.State);
+                Assert.Equal(before, first.SessionId.ToByteArray());
+                var moved = seen.FirstOrDefault(e => e.SessionId.ToByteArray().SequenceEqual(next) && e.PreviousSessionId.HasValue);
+                Assert.NotNull(moved);
+                Assert.Equal(before, moved!.PreviousSessionId!.Value.ToByteArray());
+                Assert.Equal(SessionChangeCause.Rotated, moved.Cause);
+                Assert.Equal(next, session.GetId().ValueOrThrow().ToByteArray());
+            }
+
+            try
+            {
+                Directory.Delete(storageRoot, true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
         private static bool IsIn(Session session, byte[] next)
         {
             var id = session.GetId();

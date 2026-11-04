@@ -14,11 +14,12 @@
 //! Callbacks run on threads of their own, as the real library's do:
 //! - subscription callbacks and the progress callbacks of blocking calls run
 //!   on a spawned thread that is joined before the triggering call returns;
-//! - the callback of `qar_render_sender_create_async` runs on a detached
-//!   thread after the call has returned, honouring cancellation, and is
-//!   shaped with `qar_stub_set_render_sender_create_delay_ms`,
+//! - the result callback of every `_async` call runs once on a thread of its own after the call
+//!   has returned, with `QAR_STATUS_TIMEOUT` when its token is cancelled, times out or is
+//!   destroyed, or its owner (runtime, session, render sender) is destroyed first, whose destroy
+//!   waits for it. The render sender creation is shaped with
+//!   `qar_stub_set_render_sender_create_delay_ms`,
 //!   `qar_stub_set_render_sender_create_cancel_delay_ms`,
-//!   `qar_stub_set_render_sender_create_never_calls_back`,
 //!   `qar_stub_set_render_sender_create_ignores_cancel` and
 //!   `qar_stub_set_peer_unanswering` (a dead peer listed as running).
 //!

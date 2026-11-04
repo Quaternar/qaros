@@ -6,6 +6,7 @@ This website is built using [Docusaurus](https://docusaurus.io/), a modern stati
 
 - Node.js >= 18 (see `engines` in `package.json`).
 - .NET SDK >= 8 (C# API reference, see below).
+- Stable Rust with the `x86_64-pc-windows-msvc` target (Rust API reference, see below).
 - A `tar` binary on `PATH` that can extract `.zip` (Windows 10/11 ships one
   at `%SystemRoot%\System32\tar.exe`) and `.tar.gz` (any Linux/macOS system
   `tar`). Used only to unpack the Doxygen archive below.
@@ -55,6 +56,25 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
 - Page content comes from the `///` XML doc comments. A public type or member without
   one has an empty description.
 
+### Rust API reference
+
+- Needs the latest stable Rust on `PATH` with the `x86_64-pc-windows-msvc` target
+  (`rustup target add x86_64-pc-windows-msvc`); nothing is linked.
+- `npm run docs:rust` (part of `docs:generate`) runs `scripts/run-rustdoc.js`: `cargo doc`
+  documents the `qaros` and `qaros-sys` crates for the Windows target (the runtime's
+  platform) with the `vulkan` and `d3d11` features, and copies rustdoc's own HTML into the
+  gitignored `static/api/qar-streaming-rust/`. The navbar's *Rust API* link reads the
+  generated `rust-versions.json`.
+- Versioned like the docs, but built, never committed (~14 MB per version): the working copy
+  from this checkout, each released version from its `vX.Y.Z` tag (`git archive`), so a
+  build needs the tags fetched (CI checks out with `fetch-depth: 0`). Paths: newest release at
+  `/api/qar-streaming-rust/`, the working copy at `.../next/` (at the root while nothing is
+  released with a Rust binding, through a redirect), older releases at `.../X.Y.Z/`. A
+  release whose tag has no Rust binding (0.9.0) gets none, and its pages link the working
+  copy's reference.
+- Every rustdoc page carries a bar (`--html-before-content`) naming its version and linking
+  the other versions and the Developer Guide.
+
 ### Versioned docs
 
 - Both docs instances are versioned in lockstep: guides (`docs/` ->
@@ -102,6 +122,14 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
 
 The SVGs are tracked in Git LFS, via the repo-wide `*.svg`/`*.png` rule in
 the top-level `.gitattributes` (see `qaros/.gitattributes`).
+
+### Mermaid diagrams
+
+- A ` ```mermaid ` code block renders as a diagram (`@docusaurus/theme-mermaid`), in light and
+  dark theme, and is versioned with its page like any other text.
+- Use it for flows, sequences and state machines that read as text; keep the SVG -> PNG route for
+  drawn diagrams that need a fixed layout.
+- In `sequenceDiagram` notes, no semicolons: Mermaid reads them as statement separators.
 
 ## Installation
 

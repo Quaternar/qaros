@@ -418,6 +418,7 @@ example_print_loaded_runtime(const char* library_path)
 		&& _wcsnicmp(loaded_file, executable_file, (size_t)(loaded_separator - loaded_file)) == 0;
 
 	char folder[1024] = { 0 };
+	wchar_t instance[QAR_INSTANCE_NAME_MAX_LENGTH + 2] = { 0 };
 	const char* lookup_step = NULL;
 	if(library_path != NULL)
 	{
@@ -427,9 +428,9 @@ example_print_loaded_runtime(const char* library_path)
 	{
 		lookup_step = "beside the executable";
 	}
-	else if(qar_runtime_env_folder(folder, sizeof(folder)))
+	else if(qar_requested_instance_w(instance, QAR_INSTANCE_NAME_MAX_LENGTH + 2))
 	{
-		lookup_step = "QAROS_RUNTIME_DIR";
+		lookup_step = "QAR_INSTANCE";
 	}
 	else if(qar_installed_bin_folder(folder, sizeof(folder)))
 	{
@@ -485,8 +486,8 @@ example_load_library(const char* library_path)
 	{
 		fprintf(
 			stderr,
-			"No QAROS runtime loaded. Install QAROS, set QAROS_RUNTIME_DIR to the folder of "
-			"qar-streaming-c.dll, or pass --qaros-library=PATH.\n"
+			"No QAROS runtime loaded. Install QAROS, fix or unset QAR_INSTANCE, or pass "
+			"--qaros-library=PATH.\n"
 		);
 		return 2;
 	}
@@ -916,3 +917,81 @@ example_join_session(
 #endif
 }
 //! [example_join_session]
+
+//! [example_join_local_app]
+/** \brief Join the QAROS Hub on this machine as a local app with an app tag:
+ *  no code, the user approves the app once in QAROS, and the tag keeps the
+ *  peer id across restarts. Nothing is stored, so every start calls it again.
+ *  See the \ref qar_c_tutorial_local_app_onboarding tutorial.
+ *
+ *  Returns 0 with *out_session set, or the exit code of
+ *  example_local_app_exit_code after printing why. */
+static int
+example_join_as_local_app(
+	QarRuntime* runtime, const char* display_name, const char* app_tag, QarSession** out_session
+)
+{
+	QarOnboardInit init = qar_onboard_init_default();
+	init.presentation.display_name = display_name; /* any UTF-8 */
+	QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+	local.approval_timeout_ms = EXAMPLE_LOCAL_APP_APPROVAL_TIMEOUT_MS;
+	QarOnboardLocalAppTagExt tag = qar_onboard_local_app_tag_ext_default();
+	tag.app_tag = app_tag;			  /* printable ASCII, constant across versions */
+	init.header.next = &local.header; /* the one mode extension */
+	local.header.next = &tag.header;
+
+	QarOnboardingId unused = qar_onboarding_id_default(); /* stays zero */
+	/* A GUI app passes a QarCancelToken: the call can wait minutes for the
+	 * user's answer. */
+	QarResult joined = qar_runtime_onboard(
+		runtime, &init, example_print_progress, NULL, NULL, &unused, out_session
+	);
+	return example_local_app_exit_code(joined);
+}
+//! [example_join_local_app]
+
+//! [example_own_peer_id]
+/** \brief Read the peer id this session joined under. The hub picks it (for a
+ *  local app: the id it remembers for the app's approval and tag). Returns
+ *  false and logs the reason when it cannot be read. */
+static bool
+example_get_own_peer_id(QarSession* session, QarPeerId* out_peer_id)
+{
+	QarPeerSpec* spec = NULL;
+	QarResult got_spec = qar_session_get_my_spec(session, &spec);
+	if(qar_result_is_error(got_spec) || spec == NULL)
+	{
+		log_result("qar_session_get_my_spec", got_spec);
+		return false;
+	}
+	memset(out_peer_id, 0, sizeof(*out_peer_id));
+	QarResult got_id = qar_peer_spec_get_id(spec, out_peer_id);
+	qar_peer_spec_handle_destroy(spec);
+	if(qar_result_is_error(got_id))
+	{
+		log_result("qar_peer_spec_get_id", got_id);
+		return false;
+	}
+	return true;
+}
+
+/** \brief Print "<who> joined as peer <uuid>". A peer id is not a secret. */
+static bool
+example_print_own_peer_id(const char* who, QarSession* session)
+{
+	QarPeerId peer_id;
+	char text[64] = { 0 };
+	if(!example_get_own_peer_id(session, &peer_id))
+	{
+		return false;
+	}
+	QarResult formatted = qar_uuid_to_string(peer_id.data, text, sizeof(text));
+	if(qar_result_is_error(formatted))
+	{
+		log_result("qar_uuid_to_string", formatted);
+		return false;
+	}
+	printf("%s joined as peer %s\n", who, text);
+	return true;
+}
+//! [example_own_peer_id]

@@ -79,7 +79,7 @@ fn workspace_root() -> PathBuf {
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
-/// Where and how one generated binding set is written.
+/// Where and how the bindings of one target are written.
 struct BindingOutput<'a> {
     command: &'a str,
     directory: PathBuf,

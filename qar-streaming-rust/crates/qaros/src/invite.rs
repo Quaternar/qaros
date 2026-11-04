@@ -1,3 +1,4 @@
+use std::ffi::c_char;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
 
@@ -7,10 +8,14 @@ use crate::callbacks::BlockingOptions;
 use crate::error::{Error, Result, StatusCode, check};
 use crate::library::{LibraryInner, require_handle};
 use crate::session::SessionInner;
+use crate::strings;
 use crate::types::OnboardingMethod;
 
-/// A `QarOnboardingInvite`: lets a sibling API instance onboard without a
-/// pairing code. Expires; mint it on demand and hand it over at once.
+/// A `QarOnboardingInvite`: a full invite blob, onboarded with [`crate::OnboardMethod::Invite`].
+/// A co-process invite ([`crate::Session::request_onboarding_invite`]) or the launch invite
+/// QAROS hands an app it starts. A secret until it is used: a co-process invite is single use,
+/// valid for 60 s and redeemable only on the hub's PC. Mint it on demand, hand it over at once
+/// over a private channel (stdin, a pipe), never on a command line.
 #[derive(Debug)]
 pub struct OnboardingInvite {
     handle: NonNull<sys::QarOnboardingInvite>,
@@ -20,13 +25,16 @@ pub struct OnboardingInvite {
 impl OnboardingInvite {
     pub(crate) fn request(
         session: &Rc<SessionInner>,
+        app_tag: &str,
         options: &BlockingOptions<'_>,
     ) -> Result<Self> {
         let api = session.api();
-        let init = defaults::qar_request_invite_init_default();
+        let app_tag_text = strings::to_c_string(app_tag, "app tag")?;
+        let mut init = defaults::qar_request_invite_init_default();
+        init.app_tag = app_tag_text.as_ptr();
         let mut handle: *mut sys::QarOnboardingInvite = ptr::null_mut();
-        // SAFETY: live session; init is stamped; options borrow the progress
-        // sender and token for the call; valid out-pointer.
+        // SAFETY: live session; init is stamped and its tag outlives the call; options borrow
+        // the progress sender and token for the call; valid out-pointer.
         let result = unsafe {
             (api.qar_impl_session_request_onboarding_invite)(
                 session.handle.as_ptr(),
@@ -42,6 +50,17 @@ impl OnboardingInvite {
             handle: require_handle(handle, "qar_session_request_onboarding_invite")?,
             library: Rc::clone(session.library()),
         })
+    }
+
+    /// Takes ownership of an invite handle the library handed over.
+    pub(crate) fn from_handle(
+        handle: NonNull<sys::QarOnboardingInvite>,
+        library: &Rc<LibraryInner>,
+    ) -> Self {
+        Self {
+            handle,
+            library: Rc::clone(library),
+        }
     }
 
     pub(crate) fn deserialize(library: &Rc<LibraryInner>, wire_bytes: &[u8]) -> Result<Self> {
@@ -122,8 +141,40 @@ impl OnboardingInvite {
         Ok(OnboardingMethod::from_raw(method))
     }
 
+    /// The code text of a pairing-code invite (`qar_onboarding_invite_get_code`), to onboard
+    /// with as [`crate::OnboardMethod::Code`]: the text names its own invitation, so it works for
+    /// any invite the hub minted. A secret: never log it. An invite that is not a pairing-code
+    /// invite ([`OnboardingMethod::Pake`]) fails with [`StatusCode::ARGUMENT_NOT_SUPPORTED`].
+    pub fn code(&self) -> Result<String> {
+        let api = &self.library.api;
+        let mut length = 0_usize;
+        // SAFETY: live invite; a NULL buffer asks for the length only; valid out-pointer.
+        let result = unsafe {
+            (api.qar_impl_onboarding_invite_get_code)(
+                self.handle.as_ptr(),
+                ptr::null_mut(),
+                0,
+                &raw mut length,
+            )
+        };
+        check(api, "qar_onboarding_invite_get_code", result)?;
+        let mut buffer = vec![0 as c_char; length + 1];
+        // SAFETY: live invite; the buffer is writable for its length, one byte more than the
+        // text; the length out-pointer may be NULL.
+        let result = unsafe {
+            (api.qar_impl_onboarding_invite_get_code)(
+                self.handle.as_ptr(),
+                buffer.as_mut_ptr(),
+                buffer.len(),
+                ptr::null_mut(),
+            )
+        };
+        check(api, "qar_onboarding_invite_get_code", result)?;
+        Ok(strings::from_buffer(&buffer))
+    }
+
     /// The `QarOnboardingInvite` handle, for the functions only the raw table of
-    /// [`crate::Library::raw_api`] reaches, such as `qar_onboarding_invite_get_code`.
+    /// [`crate::Library::raw_api`] reaches, such as `qar_onboarding_invite_handle_is_valid`.
     ///
     /// Taking the pointer is safe; using it is `unsafe`, under the rules of
     /// [`crate::Session::as_raw`] for an invite: valid while this `OnboardingInvite` lives, never

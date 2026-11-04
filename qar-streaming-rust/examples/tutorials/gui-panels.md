@@ -24,8 +24,8 @@ What you will learn:
 - **Platform.** The real runtime runs on Windows. On macOS and Linux you can run the example
   against `qaros-stub`, the in-memory stand-in library the binding's tests use; it behaves like a
   Hub for panels but shows nothing.
-- **QAROS.** Installed on the Hub machine, where the example runs, or a runtime folder named by
-  `QAROS_RUNTIME_DIR` (see [How to run the examples](/docs/developer-guide/tutorials/rust/#build-and-run)).
+- **QAROS.** Installed on the Hub machine, where the example runs, or a QAROS development hub
+  whose instance `QAR_INSTANCE` names (see [How to run the examples](/docs/developer-guide/tutorials/rust/#build-and-run)).
   Joining as a local app starts the Hub when it is not running.
 - **Joining.** The example joins the Hub as a local app
   ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)):
@@ -311,7 +311,7 @@ What it does not guarantee:
 | The program hangs in `cancel()` or at the end of a scope | A callback is waiting for a lock the cancelling thread holds | Release the lock before ending the subscription |
 | `No update of the panel arrived within 10 s of the changes.`, exit code 1 | The Hub delivered no update of the panel within 10 s after the changes | Check that the Hub is still running and run again. In your app, read updates as they come instead of waiting for them a fixed time |
 | Many more updates received than printed | The Hub reports your own changes back, repeated | Expected; skip repeats as the example does |
-| A runtime cannot be loaded | Default lookup found nothing | Install QAROS, set `QAROS_RUNTIME_DIR`, or pass `--qaros-library=PATH` |
+| A runtime cannot be loaded | Default lookup found nothing, or `QAR_INSTANCE` names an instance without a loadable runtime | Install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
 
 ## From C
 

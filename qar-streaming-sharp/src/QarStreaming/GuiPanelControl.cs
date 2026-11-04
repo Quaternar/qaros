@@ -58,11 +58,20 @@ namespace Quaternar.Qaros
         /// same panel in every session, from every peer and after a restart: call this on every
         /// start instead of persisting the id. The common name is the identity key and must be
         /// ASCII; put user-facing text, which may be any UTF-8, in
-        /// <see cref="GuiPanelOptions.DisplayName"/>.
+        /// <see cref="GuiPanelOptions.DisplayName"/>. Set a non-empty DisplayName when
+        /// creating or reopening a panel; CommonName does not supply a default label.
         /// </para>
         /// <para>
         /// When an open panel of that name exists, the rest of <paramref name="options"/> is
         /// ignored. A closed panel is reopened, visible, with <paramref name="options"/>.
+        /// </para>
+        /// <para>
+        /// An existing panel is taken over by this session (a previous run of the app may have
+        /// left it) and carried into the hub's next session like one this session created. Call
+        /// GetOrCreate again for every common name the app owns when the session id changes and
+        /// after onboarding again on <see cref="SessionLifecycleState.RePairRequired"/>
+        /// (<see cref="Session.SubscribeLifecycle(EventHandler{SessionLifecycleChangedEventArgs})"/>):
+        /// it returns the same id and re-creates the panel when it is missing.
         /// </para>
         /// <para>
         /// The content is a web page (<see cref="GuiPanelOptions.ContentUri"/>) or a video stream
@@ -90,7 +99,8 @@ namespace Quaternar.Qaros
                 var content = CreateContentExtension(options, scope, chain.Head);
                 var native = NativeInit.GuiPanel(options, scope, content);
                 var id = GuiPanelIdNative.CreateDefault();
-                var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_get_or_create(_context.DangerousHandle, ref native, ref id));
+                using var session = _context.Borrow();
+                var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_get_or_create(session.Handle, ref native, ref id));
                 return info.IsSuccess ? Result<GuiPanelId>.Success(info, GuiPanelId.FromNative(id)) : Result<GuiPanelId>.Failure(info);
             }
         }
@@ -133,7 +143,7 @@ namespace Quaternar.Qaros
                 cancellationToken,
                 token => GuiPanelGestureSubscription.Create(token, true, handler),
                 (token, registration) => GuiPanelGestureSubscription.Create(token, registration, handler),
-                (subscription, token) => NativeMethods.qar_impl_gui_panels_subscribe_gesture_events(_context.DangerousHandle, ref nativeId, gestureKind, subscription.Callback, subscription.UserState, token));
+                (subscription, session, token) => NativeMethods.qar_impl_gui_panels_subscribe_gesture_events(session, ref nativeId, gestureKind, subscription.Callback, subscription.UserState, token));
         }
 
         /// <summary>
@@ -157,7 +167,7 @@ namespace Quaternar.Qaros
                 cancellationToken,
                 token => GuiPanelGestureSubscription.Create(token, true, handler),
                 (token, registration) => GuiPanelGestureSubscription.Create(token, registration, handler),
-                (subscription, token) => NativeMethods.qar_impl_gui_panels_subscribe_all_gesture_events(_context.DangerousHandle, ref nativeId, subscription.Callback, subscription.UserState, token));
+                (subscription, session, token) => NativeMethods.qar_impl_gui_panels_subscribe_all_gesture_events(session, ref nativeId, subscription.Callback, subscription.UserState, token));
         }
 
         /// <summary>Moves a panel. <paramref name="pose"/> is in room space.</summary>
@@ -170,7 +180,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativePose = pose.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_gui_panels_update_pose(_context.DangerousHandle, ref nativeId, ref nativePose));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_gui_panels_update_pose(session.Handle, ref nativeId, ref nativePose));
         }
 
         /// <summary>
@@ -181,7 +192,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativeSize = size.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_gui_panels_change_size(_context.DangerousHandle, ref nativeId, ref nativeSize));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_gui_panels_change_size(session.Handle, ref nativeId, ref nativeSize));
         }
 
         /// <summary>
@@ -192,7 +204,8 @@ namespace Quaternar.Qaros
         public Result<Unit> SetState(GuiPanelId id, GuiPanelState state)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_state(_context.DangerousHandle, ref nativeId, state));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_state(session.Handle, ref nativeId, state));
         }
 
         /// <summary>
@@ -203,7 +216,8 @@ namespace Quaternar.Qaros
         public Result<Unit> Close(GuiPanelId id)
         {
             var nativeId = id.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_gui_panels_close_panel(_context.DangerousHandle, ref nativeId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_gui_panels_close_panel(session.Handle, ref nativeId));
         }
 
         /// <summary>
@@ -214,7 +228,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             using (var nativeUri = NativeUtf8String.FromUtf8(uri))
-                return Results.FromNative(NativeMethods.qar_impl_gui_panels_navigate_to_uri(_context.DangerousHandle, ref nativeId, nativeUri.Pointer));
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_gui_panels_navigate_to_uri(session.Handle, ref nativeId, nativeUri.Pointer));
         }
 
         /// <summary>
@@ -226,7 +241,8 @@ namespace Quaternar.Qaros
         {
             var nativeId = id.ToNative();
             var nativeStreamId = streamId.ToNative();
-            return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_stream(_context.DangerousHandle, ref nativeId, ref nativeStreamId));
+            using var session = _context.Borrow();
+            return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_stream(session.Handle, ref nativeId, ref nativeStreamId));
         }
 
         /// <summary>
@@ -241,7 +257,8 @@ namespace Quaternar.Qaros
             {
                 IntPtr addPtr = scope.AllocPointerArray(additions ?? Array.Empty<PeerId>());
                 IntPtr removePtr = scope.AllocPointerArray(removals ?? Array.Empty<PeerId>());
-                return Results.FromNative(NativeMethods.qar_impl_gui_panels_update_visible_to(_context.DangerousHandle, ref nativeId, addPtr, (UIntPtr)(additions == null ? 0 : additions.Length), removePtr, (UIntPtr)(removals == null ? 0 : removals.Length)));
+                using var session = _context.Borrow();
+                return Results.FromNative(NativeMethods.qar_impl_gui_panels_update_visible_to(session.Handle, ref nativeId, addPtr, (UIntPtr)(additions == null ? 0 : additions.Length), removePtr, (UIntPtr)(removals == null ? 0 : removals.Length)));
             }
         }
 
@@ -326,8 +343,7 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
             var subscription = GuiPanelUpdateSubscription.Create(cancelToken, ownsToken, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, cancelToken.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(subscription, StartUpdates);
         }
 
         private Result<IDisposable> SubscribeUpdatesCore(EventHandler<GuiPanelUpdatedEventArgs> handler, CancellationToken cancellationToken)
@@ -335,29 +351,11 @@ namespace Quaternar.Qaros
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            try
-            {
-                var tokenResult = CancelToken.Create();
-                if (!tokenResult.IsSuccess)
-                    return Result<IDisposable>.Failure(tokenResult.Info);
-                var hasRegistration = false;
-                if (cancellationToken.IsCancellationRequested)
-                    tokenResult.Value.Cancel();
-                else if (cancellationToken.CanBeCanceled)
-                {
-                    registration = cancellationToken.Register(CancelNativeToken, tokenResult.Value);
-                    hasRegistration = true;
-                }
-                var subscription = hasRegistration ? GuiPanelUpdateSubscription.Create(tokenResult.Value, registration, handler) : GuiPanelUpdateSubscription.Create(tokenResult.Value, true, handler);
-                var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_subscribe_updates(_context.DangerousHandle, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-                return Results.SubscriptionResult(info, subscription);
-            }
-            catch
-            {
-                registration.Dispose();
-                throw;
-            }
+            return _context.StartSubscription(
+                cancellationToken,
+                token => GuiPanelUpdateSubscription.Create(token, true, handler),
+                (token, registration) => GuiPanelUpdateSubscription.Create(token, registration, handler),
+                StartUpdates);
         }
 
 #if NET8_0_OR_GREATER
@@ -443,8 +441,9 @@ namespace Quaternar.Qaros
             _context.ThrowIfDisposed();
             var nativeId = id.ToNative();
             var subscription = GuiPanelUpdateSubscription.Create(cancelToken, ownsToken, handler);
-            var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_subscribe_panel_updates(_context.DangerousHandle, ref nativeId, subscription.Callback, subscription.UserState, cancelToken.DangerousHandle));
-            return Results.SubscriptionResult(info, subscription);
+            return _context.StartSubscription(
+                subscription,
+                (started, session, token) => NativeMethods.qar_impl_gui_panels_subscribe_panel_updates(session, ref nativeId, started.Callback, started.UserState, token));
         }
 
         private Result<IDisposable> SubscribeUpdatesCore(GuiPanelId id, EventHandler<GuiPanelUpdatedEventArgs> handler, CancellationToken cancellationToken)
@@ -453,40 +452,16 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(handler));
             _context.ThrowIfDisposed();
             var nativeId = id.ToNative();
-            CancellationTokenRegistration registration = default(CancellationTokenRegistration);
-            try
-            {
-                var tokenResult = CancelToken.Create();
-                if (!tokenResult.IsSuccess)
-                    return Result<IDisposable>.Failure(tokenResult.Info);
-                var hasRegistration = false;
-                if (cancellationToken.IsCancellationRequested)
-                    tokenResult.Value.Cancel();
-                else if (cancellationToken.CanBeCanceled)
-                {
-                    registration = cancellationToken.Register(CancelNativeToken, tokenResult.Value);
-                    hasRegistration = true;
-                }
-                var subscription = hasRegistration ? GuiPanelUpdateSubscription.Create(tokenResult.Value, registration, handler) : GuiPanelUpdateSubscription.Create(tokenResult.Value, true, handler);
-                var info = Results.ToInfo(NativeMethods.qar_impl_gui_panels_subscribe_panel_updates(_context.DangerousHandle, ref nativeId, subscription.Callback, subscription.UserState, tokenResult.Value.DangerousHandle));
-                return Results.SubscriptionResult(info, subscription);
-            }
-            catch
-            {
-                registration.Dispose();
-                throw;
-            }
+            return _context.StartSubscription(
+                cancellationToken,
+                token => GuiPanelUpdateSubscription.Create(token, true, handler),
+                (token, registration) => GuiPanelUpdateSubscription.Create(token, registration, handler),
+                (started, session, token) => NativeMethods.qar_impl_gui_panels_subscribe_panel_updates(session, ref nativeId, started.Callback, started.UserState, token));
         }
 
-        private static void CancelNativeToken(object? state)
+        private static ResultNative StartUpdates(GuiPanelUpdateSubscription subscription, IntPtr session, IntPtr token)
         {
-            try
-            {
-                ((CancelToken)state!).Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            return NativeMethods.qar_impl_gui_panels_subscribe_updates(session, subscription.Callback, subscription.UserState, token);
         }
 
 #if NET8_0_OR_GREATER

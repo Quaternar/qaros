@@ -9,7 +9,9 @@ on:
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
+      - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
+      - "ci/**"
   pull_request:
     paths:
       - "docs/website/**"
@@ -17,7 +19,9 @@ on:
       - "qar-streaming-c/examples/**"
       - "qar-streaming-sharp/src/**"
       - "qar-streaming-sharp/Quaternar.Qaros.csproj"
+      - "qar-streaming-rust/crates/**"
       - ".github/workflows/docs-website.yml"
+      - "ci/**"
   workflow_dispatch:
 
 permissions:
@@ -32,14 +36,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs/website
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           lfs: true
+          # The Rust API reference of each release is built from its v<version> tag.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -55,19 +58,29 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      # Rust API reference: rustdoc documents the binding for the Windows target, the
+      # runtime's platform; only that target's standard library is needed, nothing is linked.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y doxygen cmake
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 
-      - name: Install dependencies
-        run: npm ci
-
+      # npm ci and npm run build in docs/website; run it locally the same way.
       - name: Build website
-        run: npm run build
+        run: python ci/run.py docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

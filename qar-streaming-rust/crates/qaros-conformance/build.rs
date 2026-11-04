@@ -7,11 +7,6 @@
 // compiles nothing: the header needs the Windows SDK there, and nothing is
 // linked.
 fn main() {
-    // The colour extension ports exist where qaros-sys's bindings declare the extensions.
-    println!("cargo::rustc-check-cfg=cfg(qaros_color_extensions)");
-    if std::env::var_os("DEP_QAR_STREAMING_C_COLOR_EXTENSIONS").is_some() {
-        println!("cargo::rustc-cfg=qaros_color_extensions");
-    }
     println!("cargo::rerun-if-changed=src/defaults.c");
     println!("cargo::rerun-if-changed=../../../qar-streaming-c/include/qar_streaming.h");
     println!("cargo::rerun-if-changed=../../xtask/shim-vulkan/vulkan/vulkan_core.h");
