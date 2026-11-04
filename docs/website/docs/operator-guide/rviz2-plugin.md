@@ -22,7 +22,7 @@ The document `docs/INSTALL.md` of the repository installs everything below from 
 - **An NVIDIA GPU with a current OpenGL driver.** The C API currently supports NVIDIA adapters only, as its header states, and no minimum GPU or driver version is stated. On a laptop with an integrated and a discrete GPU, RViz2 should render on the adapter that QAROS uses, or every picture passes through a copy between the adapters, so the live launcher sets the graphics preference of `rviz2.exe` to high performance.
 - **PowerShell 7.** The scripts and every command on this page run in `pwsh`.
 - **The ROS 2 Humble binary distribution for Windows, repaired.** The plugin runs inside the `rviz2.exe` of the official binary release. That release has gaps: some runtime libraries are missing, the C++ runtime beside `rviz2.exe` is too old for the QAROS library, and `tinyxml.dll` is missing. The repository ships the scripts that repair the distribution in place, and the plugin needs all nine repairs.
-- **The plugin and the libraries it builds on.** `colcon` builds the plugin, and the installation puts it into one prefix together with `qar_ogre_adapter` ([github.com/Quaternar/qaros-ogre](https://github.com/Quaternar/qaros-ogre)) and `qar_qt_streaming` ([github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaros-qt)), on Qt 5.15.2.
+- **The plugin and the libraries it builds on.** `colcon` builds the plugin against the installed packages of `qar_ogre_adapter` ([github.com/Quaternar/qaros-ogre](https://github.com/Quaternar/qaros-ogre)) and `qar_qt_streaming` ([github.com/Quaternar/qaros-qt](https://github.com/Quaternar/qaros-qt)), both at version 0.2.0, on Qt 5.15.2. The two libraries are independent of each other, and what only the plugin needs (the repair scripts for the ROS 2 distribution, `requirements-ros.txt`, and the glue that lets the Qt panels use the plugin's QAROS session) is in the plugin's repository.
 - **A QAROS Hub to join.** Either QAROS installed on this PC ([Installation](/docs/operator-guide/installation)), so that the plugin can join its Hub as a local app, or a Hub on another PC and the code that Hub shows ([Join with a Hub on another PC](#join-with-a-hub-on-another-pc)). The plugin loads the installed runtime through the vendor's runtime lookup (`qar_library_load(NULL)`), so QAROS needs no entry in `PATH`; a `qar-streaming-c.dll` beside `rviz2.exe` or a `QAROS_RUNTIME_DIR` would win over the installation, and [Troubleshooting](/docs/developer-guide/troubleshooting#joining-qaros-as-a-local-app) says what that causes.
 - **One local network.** The documented runs put the machine and its devices on one local network. QAROS has its own ports; [Networking & Federation](/docs/operator-guide/networking-and-federation#ports-and-firewall) lists them.
 
@@ -139,13 +139,13 @@ What the authors ran: the join with **Allow**, a second start of RViz2 without a
 
 A Hub on another PC cannot identify `rviz2.exe` from its own Windows, so the plugin pairs with the code that Hub shows, as [Onboarding code: a hub on another PC](/docs/developer-guide/onboarding-and-sessions#onboarding-code-a-hub-on-another-pc) describes. Choose **Another PC (pairing code)**; the fields **Host:** and **Port:** appear.
 
-1. On the other PC, open the Visualizer's Connection panel and let the Hub share: [Pair another Hub](/docs/user-guide/connection-panel#pair-another-hub) shows the pairing code, its countdown and the addresses of the Hub. The onboarding port is shown with the code.
-2. In the panel, type the host name or address and the port, press **Connect to QarOS**, and when the state line reads `QarOS: type the pairing code of the Hub at <host>:<port> (Connection tab)`, type the code in **Code:** and press Enter or **Pair**. The code lives about ten seconds and works once, so type it at once. The field is cleared when it is sent; the plugin neither stores nor logs the code.
+1. On the other PC, get the pairing code that its Hub shows for a new device (see [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#onboarding-code-a-hub-on-another-pc)). The onboarding port is shown with the code.
+2. In the panel, type the host name or address and the port, press **Connect to QarOS**, and when the state line reads `QarOS: type the pairing code of the Hub at <host>:<port> (Connection tab)`, type the code in **Code:** and press Enter or **Pair**. Type the code as the Hub shows it. The field is cleared when it is sent; the plugin neither stores nor logs the code.
 3. The state line reads `QarOS: connected (paired) - ...` and the identity line reads `Paired with <host>:<port> (id <first digits>)`. The plugin stores the onboarding id, the host and the port in the identity folder (below), and every later **Connect to QarOS** rejoins silently without a code.
 
 **Forget pairing** erases the stored pairing: press it, then press it again within five seconds (the button reads `Click again to forget`). The next connect needs a new code. In the mode **This PC** the button is disabled and reads `Approval: revoke in the Visualizer`, because a local approval lives in the Hub.
 
-A wrong or expired code gives the message `The code was wrong or has expired (codes live about 10 s and work once). Type the code the Hub shows at that moment.`, and a pairing that has expired or was revoked asks for a new code. **This path was not run in a live session** against a Hub on another PC; it is designed from the behavior of the vendor's calls and covered by the unit tests of the plugin only. The group **Invite a device** is disabled in this mode, because the Hub serves device invites only to an app that joined it on its own PC.
+A wrong or expired code gives the message `The code was wrong or has expired. Type the code the Hub shows now.`, and a pairing that has expired or was revoked asks for a new code. **This path was not run in a live session** against a Hub on another PC; it is designed from the behavior of the vendor's calls and covered by the unit tests of the plugin only. The group **Invite a device** is disabled in this mode, because the Hub serves device invites only to an app that joined it on its own PC.
 
 ### Where the plugin keeps its identity
 
@@ -356,11 +356,11 @@ When the last Visualizer has closed, or while RViz2 closes, the log can hold the
 
 ## Related pages
 
-- [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries, how they stack and what to install.
+- [Ogre, Qt and RViz2 on QAROS](/docs/developer-guide/ogre-qt-rviz) — the three libraries, how they depend on each other and what to install.
 - [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming) — how `qar_ogre_adapter` streams an Ogre scene, which the plugin does for the scene of RViz2.
 - [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) — how a GUI panel shows a video, and what the Qt library does with a widget.
 - [Limits and Behaviors to Design Around](/docs/developer-guide/sdk-limits) — what the header leaves open about streams, sizes and the position of the operator, and what a QAROS query costs.
 - [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) — the local app, the approval and the pairing code that the plugin uses.
 - [Source Applications](/docs/operator-guide/source-applications) — the approved local apps, and the applications that stream content into the room.
-- [Connection Panel](/docs/user-guide/connection-panel) — pairing another Hub and inviting devices from the Visualizer.
+- [Connection Panel](/docs/user-guide/connection-panel) — the Visualizer's Hubs and Devices areas, from which devices are invited.
 - [Running the Hub](/docs/operator-guide/running-the-hub) — the Hub that the plugin joins.
