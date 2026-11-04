@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website
+  panels uses for certificate data updates (`update.googleapis.com` and `*.gvt1.com`, TCP 443),
+  why to allow them, and what happens on an offline PC; *Maintenance and Updates* links to it.
+
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
