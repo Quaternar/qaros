@@ -8,7 +8,7 @@ description: Three C++ libraries that build on QAROS — an Ogre integration lay
 
 Three libraries build on QAROS from C++ and run on Windows 11. **`qar_ogre_adapter`** streams an Ogre scene into the room, **`qar_qt_streaming`** turns Qt widgets into GUI panels, and **`qar_rviz_plugin`** brings RViz2 and the ROS 2 graph into AR. Each one is C++17 code in a repository of its own on GitHub, licensed under MIT, at version 0.2.0.
 
-The first two are **independent** of each other: you can use either without the other, and neither needs ROS 2 for anything but Ogre. The RViz2 plugin builds on both. This page tells you what each library does, when to use which, what you need installed and where the detail lives. The installation steps, the API and the troubleshooting stay in the repositories; this site links to them and does not copy them.
+The first two are **independent** of each other: you can use either without the other. The Qt package needs no ROS 2 at all, and the Ogre library uses the ROS 2 Humble distribution only as the source of Ogre. The RViz2 plugin builds on both. This page tells you what each library does, when to use which, what you need installed and where the detail lives. The installation steps, the API and the troubleshooting stay in the repositories; this site links to them and does not copy them.
 
 :::info Which QAROS runtime
 The libraries were built and checked against the installed QAROS runtime **0.9.0-dev.3008+65dc9aeb**, a development build of the setup that precedes the 0.9.0 release, and against its header. The Qt package asks for at least QAROS 0.9 with the onboarding C API; the C headers carry no version macro, so the package records that number in its CMake configuration and cannot check it. The libraries that join QAROS themselves do it the way [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions) describes: a program on the PC that runs the Hub joins as a **local app** (one **Allow** in the Hub, nothing stored), and a program that talks to a Hub on another PC pairs with the code the Hub shows for a new device or app. They have not been checked against another build, and the observations about earlier SDK drops that these pages report are marked with their drop. The document `docs/SDK_COMPATIBILITY.md` of each repository lists the runtime that the library supports and how to identify yours.
@@ -67,7 +67,7 @@ The page [Streaming an Ogre Scene to QAROS](/docs/developer-guide/ogre-streaming
 - **Panels sized for reading in AR.** By default a panel hangs in the room at 1.2 mm for each logical pixel of the widget, whatever the pixel density of the display.
 - **AR input as Qt events.** A tap, a drag or a hover on a panel reaches the widget as touch events, or as mouse events for a widget that does not take touch.
 - **Popups, dialogs and video.** The popups of a panel are drawn into its picture, a dialog that a panel opens becomes a GUI panel of its own, and a video widget paints the newest frame that a decoding thread delivers.
-- **An example program.** `qt_panel_example` joins the Hub and streams two widgets.
+- **An example program.** `qar_qt_panel_example` joins the Hub and streams two widgets.
 
 The page [Video in GUI Panels, and Qt Widgets as AR Panels](/docs/developer-guide/qt-ar-panels) describes how a GUI panel displays a video, what the package consists of and what it does with a widget.
 
