@@ -22,7 +22,7 @@ description: Short definitions of every QAROS term used in this documentation.
 
 **Forget** — the operation that wipes a device's persisted identity slot, requiring a fresh pairing to return.
 
-**GUI panel** — a shared 2D interface quad (currently web content) placed directly in room space.
+**GUI panel** — a shared 2D interface quad (web content or a video stream) placed directly in room space.
 
 **Hub** — the workstation that runs the QAROS runtime, source applications, mixer, CA, and session; the trust root of a deployment.
 
