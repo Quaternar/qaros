@@ -256,16 +256,24 @@ impl QarStatusCode {
     it resumes when the receiver does. A render sender's begin-frame does
     not report it: it waits through the pause.*/
     pub const QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: QarStatusCode = QarStatusCode(607);
-    /** The receiver paused this stream (for example, its display is not
-    visible). Not a failure: keep the sender and try the next frame later;
-    it resumes when the receiver does. A render sender's begin-frame does
-    not report it: it waits through the pause.*/
+    /** The application's own graphics device (QarStreamParamsVulkan, or the
+    D3D11 device in QarStreamParamsD3D11) is on another GPU than the
+    session's. Nothing was created. Create the device on the adapter
+    qar_session_get_graphics_device_id() reports.*/
+    pub const QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER: QarStatusCode =
+        QarStatusCode(609);
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA: QarStatusCode = QarStatusCode(801);
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME: QarStatusCode =
         QarStatusCode(803);
-    /** The receiver paused this stream (for example, its display is not
-    visible). Not a failure: keep the sender and try the next frame later;
-    it resumes when the receiver does. A render sender's begin-frame does
-    not report it: it waits through the pause.*/
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED: QarStatusCode = QarStatusCode(804);
     /** The render sender's app volume does not resolve - it is not known to
     this session yet, or it was removed - so app content space is undefined
@@ -880,6 +888,22 @@ stream carries sRGB-encoded colour: a linear colour is encoded by the sender
 before the frame leaves the application. Values are appended, never reused.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarColorEncoding(pub ::std::os::raw::c_uint);
+impl QarRenderLoop {
+    /** The application renders a frame when the receiver asks: begin-frame
+    waits for the receiver's render request and renders for the display time
+    it names. The default.*/
+    pub const QAR_RENDER_LOOP_REQUEST_DRIVEN: QarRenderLoop = QarRenderLoop(0);
+    /** The application renders from a loop of its own, at its own rate:
+    begin-frame waits only for the receiver to have a destination ready, and
+    the view poses are predicted from the newest head pose for when the
+    frame will be shown. The receiver keeps a destination ready instead of
+    timing one.*/
+    pub const QAR_RENDER_LOOP_FREE_RUNNING: QarRenderLoop = QarRenderLoop(1);
+}
+#[repr(transparent)]
+/// When a render sender's application renders its frames.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarRenderLoop(pub ::std::os::raw::c_uint);
 impl QarFrameLayout {
     pub const QAR_FRAME_LAYOUT_SIDE_BY_SIDE: QarFrameLayout = QarFrameLayout(0);
     pub const QAR_FRAME_LAYOUT_SEPARATED_TEXTURES: QarFrameLayout = QarFrameLayout(1);
@@ -1551,6 +1575,8 @@ impl QarStructureType {
         QarStructureType(12294);
     pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT: QarStructureType =
         QarStructureType(12295);
+    pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT: QarStructureType =
+        QarStructureType(12296);
     pub const QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT: QarStructureType =
         QarStructureType(16384);
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
@@ -3045,6 +3071,36 @@ const _: () = {
         [::std::mem::offset_of!(QarRenderSenderColorEncodingExt, header) - 0usize];
     ["Offset of field: QarRenderSenderColorEncodingExt::color_encoding"]
         [::std::mem::offset_of!(QarRenderSenderColorEncodingExt, color_encoding) - 16usize];
+};
+/** @brief Declares when a render sender's application renders.
+
+Chain it on QarRenderSenderInit::header.next, in any position beside the
+graphics extension and the other render sender extensions. Without it the
+sender is QAR_RENDER_LOOP_REQUEST_DRIVEN. Declare
+QAR_RENDER_LOOP_FREE_RUNNING when the application renders from a loop of its
+own and polls qar_render_sender_try_begin_frame(): begin-frame then never
+waits for a render request, and each frame's pose is predicted from the
+newest head pose for when the frame will be shown.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarRenderSenderRenderLoopExt {
+    /** QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT. Set with
+    qar_render_sender_render_loop_ext_default().*/
+    pub header: QarStructureHeader,
+    /** The declared loop. A value this library does not know is rejected with
+    QAR_STATUS_ARGUMENT_NOT_SUPPORTED.*/
+    pub render_loop: QarRenderLoop,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarRenderSenderRenderLoopExt"]
+        [::std::mem::size_of::<QarRenderSenderRenderLoopExt>() - 24usize];
+    ["Alignment of QarRenderSenderRenderLoopExt"]
+        [::std::mem::align_of::<QarRenderSenderRenderLoopExt>() - 8usize];
+    ["Offset of field: QarRenderSenderRenderLoopExt::header"]
+        [::std::mem::offset_of!(QarRenderSenderRenderLoopExt, header) - 0usize];
+    ["Offset of field: QarRenderSenderRenderLoopExt::render_loop"]
+        [::std::mem::offset_of!(QarRenderSenderRenderLoopExt, render_loop) - 16usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]

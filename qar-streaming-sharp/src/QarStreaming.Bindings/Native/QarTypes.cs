@@ -802,6 +802,13 @@ namespace Quaternar.Qaros.Interop
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct RenderSenderRenderLoopExtNative
+    {
+        public StructureHeaderNative Header;
+        public RenderLoop RenderLoop;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct StreamParamsVulkanNative
     {
         public StructureHeaderNative Header;

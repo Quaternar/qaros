@@ -149,6 +149,13 @@ Design rules, following the SDK's API conventions:
   something else. `PixelFormat::D16Unorm` works on every graphics API, the depth-stencil formats
   on Vulkan only; a format the API cannot take is
   `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`.
+- `RenderSenderConfig::render_loop` is `RenderLoop::RequestDriven` by default: begin-frame waits
+  for the receiver's render request. An application rendering from a loop of its own declares
+  `RenderLoop::FreeRunning` and polls `try_begin_owned_frame`; begin-frame then waits only for a
+  destination, and the poses are predicted for when the frame will be shown. Chained as
+  `QarRenderSenderRenderLoopExt` only when free-running. Such a sender takes its poses before
+  begin-frame with `RenderSender::next_render_pose`, renders into its own target, then begins
+  the frame (which opens with exactly those poses), copies into it and shows it.
 - Subscription callbacks run on library threads and receive owned snapshots. `qaros::channel()`
   forwards them into a `std::sync::mpsc` receiver.
 - The Vulkan render sender is behind the feature `vulkan`, with `ash` 0.38 types:
@@ -210,6 +217,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | D3D11 render sender | feature `d3d11` (Windows; on macOS only for the tests against `qaros-stub`): `create_d3d11_render_sender`, `D3D11Frame` | | yes |
 | OpenGL render sender | not bound: the bindings are generated without `QAR_ENABLE_OPENGL` | | yes |
 | Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` | | yes |
+| Render sender render loop | `RenderSenderConfig::render_loop` (`RenderLoop`), chained as `QarRenderSenderRenderLoopExt`; `RenderSender::next_render_pose` | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |

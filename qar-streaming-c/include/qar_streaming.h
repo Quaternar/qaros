@@ -392,6 +392,15 @@ typedef enum QarStatusCode
 	QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED = 605,
 	QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED = 606,
 	QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED = 607,
+	/** The application's own graphics device (QarStreamParamsVulkan, or the
+	 * D3D11 device in QarStreamParamsD3D11) is on another GPU than the
+	 * session's. Nothing was created. Create the device on the adapter
+	 * qar_session_get_graphics_device_id() reports. */
+	QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER = 609,
+	/** No head pose has arrived from the viewer yet, so there is no pose to
+	 * render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+	 * once the viewer's first pose is in. */
+	QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA = 801,
 	QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME = 803,
 	QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED = 804,
 	/** The render sender's app volume does not resolve - it is not known to
@@ -909,6 +918,21 @@ typedef enum QarColorEncoding
 	/// band slightly; QAR_PIXEL_FORMAT_R16G16B16A16 keeps them.
 	QAR_COLOR_ENCODING_LINEAR = 1,
 } QarColorEncoding;
+
+/// When a render sender's application renders its frames.
+typedef enum QarRenderLoop
+{
+	/// The application renders a frame when the receiver asks: begin-frame
+	/// waits for the receiver's render request and renders for the display time
+	/// it names. The default.
+	QAR_RENDER_LOOP_REQUEST_DRIVEN = 0,
+	/// The application renders from a loop of its own, at its own rate:
+	/// begin-frame waits only for the receiver to have a destination ready, and
+	/// the view poses are predicted from the newest head pose for when the
+	/// frame will be shown. The receiver keeps a destination ready instead of
+	/// timing one.
+	QAR_RENDER_LOOP_FREE_RUNNING = 1,
+} QarRenderLoop;
 
 // ============================================================================
 // VIDEO STREAM LAYOUT TYPES
@@ -1439,6 +1463,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT = 0x3005,
 	QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT = 0x3006,
 	QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT = 0x3007,
+	QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT = 0x3008,
 	QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT = 0x4000,
 	/// 0x4001 was QarStreamParamsOpenGl, one struct for all three context
 	/// types. Retired rather than reused: the layout behind it changed.
@@ -2490,6 +2515,27 @@ typedef struct QarRenderSenderColorEncodingExt
 	QarColorEncoding color_encoding;
 } QarRenderSenderColorEncodingExt;
 
+/**
+ * @brief Declares when a render sender's application renders.
+ *
+ * Chain it on QarRenderSenderInit::header.next, in any position beside the
+ * graphics extension and the other render sender extensions. Without it the
+ * sender is QAR_RENDER_LOOP_REQUEST_DRIVEN. Declare
+ * QAR_RENDER_LOOP_FREE_RUNNING when the application renders from a loop of its
+ * own and polls qar_render_sender_try_begin_frame(): begin-frame then never
+ * waits for a render request, and each frame's pose is predicted from the
+ * newest head pose for when the frame will be shown.
+ */
+typedef struct QarRenderSenderRenderLoopExt
+{
+	/// QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT. Set with
+	/// qar_render_sender_render_loop_ext_default().
+	QarStructureHeader header;
+	/// The declared loop. A value this library does not know is rejected with
+	/// QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+	QarRenderLoop render_loop;
+} QarRenderSenderRenderLoopExt;
+
 #ifdef QAR_ENABLE_D3D11
 typedef struct QarStreamParamsD3D11
 {
@@ -2639,6 +2685,12 @@ typedef struct QarStreamParamsOpenGlGlx
 #endif
 
 #ifdef QAR_ENABLE_VULKAN
+/**
+ * The application's own Vulkan device for a sender or receiver. It must be on
+ * the session's GPU, the adapter qar_session_get_graphics_device_id() reports;
+ * a device on another GPU is refused with
+ * QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER.
+ */
 typedef struct QarStreamParamsVulkan
 {
 	QarStructureHeader header;
@@ -4201,7 +4253,10 @@ static inline QarResult qar_render_request_get_stream_id(
  * @param cancel Optional cancellation token for creation.
  * @param out_stream Receives the created stream sender handle.
  * @return QarResult QAR_STATUS_APP_VOLUME_INVALID_ID when no app volume id is
- *         given.
+ *         given. QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER when the
+ *         device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on
+ *         another GPU than the session's: create it on the adapter
+ *         qar_session_get_graphics_device_id() reports.
  */
 static inline QarResult qar_render_sender_create(
 	QarSession* session,
@@ -4330,6 +4385,12 @@ static inline QarResult qar_render_sender_begin_frame(
  * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
  * not resolve. While the receiver has paused the stream the wait does not
  * complete: @p out_ready stays false and the call succeeds until it resumes.
+ *
+ * A loop that polls once per frame calls it once more right after
+ * qar_render_sender_show_frame(): the next wait then runs while the loop is
+ * idle, and the next frame's call finds it ready. Started only by the next
+ * frame's call, the wait completes a frame later, and the loop serves the
+ * stream every other frame.
  */
 static inline QarResult qar_render_sender_try_begin_frame(
 	QarRenderSender* stream,
@@ -4404,6 +4465,62 @@ static inline QarResult qar_render_frame_info_get_view_pose(
 static inline QarResult qar_render_frame_info_get_view_fov(
 	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
 );
+/**
+ * @brief For a sender declared QAR_RENDER_LOOP_FREE_RUNNING: the poses and
+ *        fields of view to render the next frame with, taken before
+ *        begin-frame.
+ *
+ * Predicted now from the newest head pose for when the frame is shown, in the
+ * same app content space as the frame info's poses. The next begin-frame opens
+ * its frame with exactly these poses, so an application renders into its own
+ * target first, then begins the frame, copies into the sender's textures and
+ * shows it: while it renders, the receiver hands the frame's destination back.
+ * A second call before that begin-frame replaces the poses. Views are in the
+ * frame's view order, as qar_render_frame_info_get_view_pose() indexes them.
+ *
+ * @param stream A render sender created with QarRenderSenderRenderLoopExt set
+ *        to QAR_RENDER_LOOP_FREE_RUNNING.
+ * @param view_count How many views to write, at most the sender's views.
+ * @param out_view_poses Receives view_count poses.
+ * @param out_view_fovs Receives view_count fields of view, in radians.
+ * @return QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA before the first
+ *         head pose arrived,
+ * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
+ * not resolve, QAR_STATUS_LOGIC_ERROR for a request-driven sender or too many
+ * views.
+ */
+static inline QarResult qar_render_sender_next_render_pose(
+	QarRenderSender* stream,
+	size_t view_count,
+	QarPose* out_view_poses,
+	QarFov* out_view_fovs
+);
+/**
+ * @brief For a sender declared QAR_RENDER_LOOP_FREE_RUNNING: whether a frame
+ *        rendered now can be sent without waiting. Never blocks.
+ *
+ * @p out_ready is true once the receiver has handed back the destination of
+ * the previous frame: the destination is then reserved for the next frame, and
+ * the next qar_render_sender_begin_frame() returns without waiting for it. It
+ * stays reserved until that begin-frame. @p out_ready is false while the
+ * destination is still out, and while the stream is paused, reconnecting or has
+ * no receiver yet; none of these is an error.
+ *
+ * A loop serving several senders calls this for each first, then takes
+ * qar_render_sender_next_render_pose(), renders, begins, copies and shows
+ * only for the senders that are ready. A slower receiver or a reconnecting
+ * stream then holds back no other sender.
+ *
+ * @param stream A render sender created with QarRenderSenderRenderLoopExt set
+ *        to QAR_RENDER_LOOP_FREE_RUNNING.
+ * @param out_ready Receives whether the next frame can be sent without waiting.
+ * @return QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED once the stream
+ *         closed, QAR_STATUS_LOGIC_ERROR for a request-driven sender or while a
+ *         begin-frame of this sender is waiting or its frame is not shown yet.
+ */
+static inline QarResult qar_render_sender_is_ready_for_next_frame(
+	QarRenderSender* stream, bool* out_ready
+);
 
 /** @} */ /* end of qar_c_render_sender */
 
@@ -4435,6 +4552,11 @@ static inline void qar_video_sender_handle_destroy(QarVideoSender* handle);
  * QarVideoSenderInit::graphics_api and attach the matching stream-parameter
  * extension when external graphics objects are required. Call
  * qar_video_sender_stream_id() to publish the generated identity.
+ *
+ * Fails with QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER when the
+ * device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on another GPU
+ * than the session's: create it on the adapter
+ * qar_session_get_graphics_device_id() reports.
  */
 static inline QarResult qar_video_sender_create(
 	QarSession* session,
@@ -5627,6 +5749,11 @@ qar_render_sender_alpha_mode_ext_default(void);
  * QarRenderSenderInit::header.next. */
 static inline QarRenderSenderColorEncodingExt
 qar_render_sender_color_encoding_ext_default(void);
+/** @brief A QarRenderSenderRenderLoopExt with its header set and
+ * QAR_RENDER_LOOP_REQUEST_DRIVEN; set render_loop and chain it on
+ * QarRenderSenderInit::header.next. */
+static inline QarRenderSenderRenderLoopExt
+qar_render_sender_render_loop_ext_default(void);
 /** @brief Default init for QarLibraryInit. */
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
@@ -7194,6 +7321,16 @@ qar_render_sender_color_encoding_ext_default(void)
 	return extension;
 }
 
+static inline QarRenderSenderRenderLoopExt
+qar_render_sender_render_loop_ext_default(void)
+{
+	QarRenderSenderRenderLoopExt extension = {
+		{ QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT, NULL }, // header
+		QAR_RENDER_LOOP_REQUEST_DRIVEN // render_loop
+	};
+	return extension;
+}
+
 static inline QarGuiPanelInit
 qar_gui_panel_init_default(void)
 {
@@ -8069,7 +8206,20 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	  QarResult,                                                               \
 	  render_frame_info_get_view_fov,                                          \
 	  (QarRenderFrameInfo * handle, size_t view_index, QarFov* out_fov),       \
-	  (handle, view_index, out_fov))
+	  (handle, view_index, out_fov))                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_next_render_pose,                                          \
+	  (QarRenderSender * stream,                                               \
+	   size_t view_count,                                                      \
+	   QarPose* out_view_poses,                                                \
+	   QarFov* out_view_fovs),                                                 \
+	  (stream, view_count, out_view_poses, out_view_fovs))                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_is_ready_for_next_frame,                                   \
+	  (QarRenderSender * stream, bool* out_ready),                             \
+	  (stream, out_ready))
 
 #ifdef QAR_ENABLE_D3D11
 #define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)                        \

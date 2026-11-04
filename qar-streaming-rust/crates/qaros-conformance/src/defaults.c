@@ -67,6 +67,8 @@ EXPORT_DEFAULT(QarRenderSenderAlphaModeExt,
                qar_render_sender_alpha_mode_ext_default)
 EXPORT_DEFAULT(QarRenderSenderColorEncodingExt,
                qar_render_sender_color_encoding_ext_default)
+EXPORT_DEFAULT(QarRenderSenderRenderLoopExt,
+               qar_render_sender_render_loop_ext_default)
 EXPORT_DEFAULT(QarGuiPanelStreamIdExt, qar_gui_panel_stream_id_ext_default)
 EXPORT_DEFAULT(QarGuiPanelUrlExt, qar_gui_panel_url_ext_default)
 EXPORT_DEFAULT(QarAppVolumeGestureAllowedPeersExt,

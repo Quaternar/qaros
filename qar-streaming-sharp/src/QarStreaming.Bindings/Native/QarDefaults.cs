@@ -198,6 +198,14 @@ namespace Quaternar.Qaros.Interop
                     ColorEncoding = options.ColorEncoding
                 });
             }
+            if (options.RenderLoop != RenderLoop.RequestDriven)
+            {
+                next = scope.AllocStruct(new RenderSenderRenderLoopExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.RenderSenderRenderLoopExt, next),
+                    RenderLoop = options.RenderLoop
+                });
+            }
             var native = new RenderSenderInitNative
             {
                 Header = NativeDefaults.Header(StructureType.RenderingStreamSenderInit, next),

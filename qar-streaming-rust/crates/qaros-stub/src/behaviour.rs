@@ -216,6 +216,8 @@ struct RenderSenderValue {
     /// has not completed. On the real runtime that wait holds the sender
     /// alive past its handle's destruction.
     begin_wait_started: Option<Instant>,
+    /// Created with `QAR_RENDER_LOOP_FREE_RUNNING`, so `next_render_pose` answers.
+    free_running: bool,
 }
 
 struct FrameInfoValue {
@@ -1649,8 +1651,9 @@ unsafe fn create_sender_value(
         ));
     }
     // SAFETY: the chain is the caller's stamped extension structures.
-    let graphics_extension = unsafe { render_sender_graphics_extension(init) }?;
+    let (graphics_extension, free_running) = unsafe { render_sender_graphics_extension(init) }?;
     let mut sender = build_sender(session as usize, init);
+    sender.free_running = free_running;
     if init.graphics_api == QarGraphicsAPI::QAR_GRAPHICS_API_VULKAN {
         // SAFETY: the extension is one of the caller's stamped extension structures.
         sender.vulkan = Some(unsafe { create_vulkan_sender(graphics_extension, &sender) }?);
@@ -1669,22 +1672,25 @@ unsafe fn create_sender_value(
     Ok(sender)
 }
 
-/// The graphics extension of a render sender init's chain, or null. The colour declarations
-/// the header allows beside it in any position are taken out: at most one
-/// `QarRenderSenderAlphaModeExt` and one `QarRenderSenderColorEncodingExt`, each with a value
-/// the header names (another is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as the header states), and
-/// what they declare goes to the call log. At most one other extension may be chained; the
-/// graphics API's own checks then take it.
+/// The graphics extension of a render sender init's chain, or null. The declarations the
+/// header allows beside it in any position are taken out: at most one
+/// `QarRenderSenderAlphaModeExt`, one `QarRenderSenderColorEncodingExt` and one
+/// `QarRenderSenderRenderLoopExt`, each with a value the header names (another is
+/// `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as the header states), and what they declare goes to
+/// the call log. At most one other extension may be chained; the
+/// graphics API's own checks then take it. The second value is whether the chain declares
+/// `QAR_RENDER_LOOP_FREE_RUNNING`.
 ///
 /// # Safety
 ///
 /// `init.header.next` must be null or a chain of stamped extension structures.
 unsafe fn render_sender_graphics_extension(
     init: &QarRenderSenderInit,
-) -> Result<*const QarStructureHeader, QarResult> {
+) -> Result<(*const QarStructureHeader, bool), QarResult> {
     let mut graphics_extension: *const QarStructureHeader = std::ptr::null();
     let mut alpha_mode = None;
     let mut color_encoding = None;
+    let mut render_loop = None;
     let mut next = init.header.next.cast_const().cast::<QarStructureHeader>();
     while !next.is_null() {
         // SAFETY: forwarded to the caller.
@@ -1715,6 +1721,19 @@ unsafe fn render_sender_graphics_extension(
                 ));
             }
             color_encoding = Some(extension.color_encoding.0);
+        } else if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT
+        {
+            // SAFETY: the type identifies the structure.
+            let extension = unsafe { &*next.cast::<QarRenderSenderRenderLoopExt>() };
+            if render_loop.is_some() {
+                return Err(invalid("QarRenderSenderRenderLoopExt is chained twice"));
+            }
+            if extension.render_loop.0 > QarRenderLoop::QAR_RENDER_LOOP_FREE_RUNNING.0 {
+                return Err(invalid(
+                    "QarRenderSenderRenderLoopExt::render_loop is not a known loop",
+                ));
+            }
+            render_loop = Some(extension.render_loop.0);
         } else if graphics_extension.is_null() {
             graphics_extension = next;
         } else {
@@ -1733,7 +1752,11 @@ unsafe fn render_sender_graphics_extension(
             declared(color_encoding)
         ));
     }
-    Ok(graphics_extension)
+    if let Some(render_loop) = render_loop {
+        note(format!("render sender render_loop={render_loop}"));
+    }
+    let free_running = render_loop == Some(QarRenderLoop::QAR_RENDER_LOOP_FREE_RUNNING.0);
+    Ok((graphics_extension, free_running))
 }
 
 /// The deferred half of `qar_render_sender_create_async`: the outcome its
@@ -3640,6 +3663,83 @@ impl StubApi for Stub {
         success()
     }
 
+    unsafe fn qar_impl_render_sender_next_render_pose(
+        stream: *mut QarRenderSender,
+        view_count: usize,
+        out_view_poses: *mut QarPose,
+        out_view_fovs: *mut QarFov,
+    ) -> QarResult {
+        // SAFETY: stream comes from this stub.
+        let Some(sender) =
+            (unsafe { handle_value::<RenderSenderValue, QarRenderSender>(stream, RENDER_SENDER) })
+        else {
+            return invalid("render sender is not a live handle");
+        };
+        if !sender.free_running {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_next_render_pose needs a sender created with                  QAR_RENDER_LOOP_FREE_RUNNING",
+            );
+        }
+        if view_count > sender.views.len() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "view_count exceeds the sender's views",
+            );
+        }
+        if view_count > 0 && (out_view_poses.is_null() || out_view_fovs.is_null()) {
+            return invalid("out_view_poses and out_view_fovs must not be NULL");
+        }
+        // The poses the next begin-frame opens its frame with, as its frame info reports them.
+        for (index, view) in sender.views.iter().take(view_count).enumerate() {
+            let pose = issued_eye_pose(sender.target_peer, sender.frames_begun, view.eye);
+            // SAFETY: both out-arrays hold view_count elements.
+            unsafe {
+                *out_view_poses.add(index) = pose;
+                *out_view_fovs.add(index) = defaults::qar_fov_default();
+            }
+        }
+        note(format!(
+            "next render pose frame={} views={view_count}",
+            sender.frames_begun
+        ));
+        success()
+    }
+
+    unsafe fn qar_impl_render_sender_is_ready_for_next_frame(
+        stream: *mut QarRenderSender,
+        out_ready: *mut bool,
+    ) -> QarResult {
+        // SAFETY: stream comes from this stub.
+        let Some(sender) =
+            (unsafe { handle_value::<RenderSenderValue, QarRenderSender>(stream, RENDER_SENDER) })
+        else {
+            return invalid("render sender is not a live handle");
+        };
+        if out_ready.is_null() {
+            return invalid("out_ready must not be NULL");
+        }
+        if !sender.free_running {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_is_ready_for_next_frame needs a sender created with \
+                 QAR_RENDER_LOOP_FREE_RUNNING",
+            );
+        }
+        if sender.begin_wait_started.is_some() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_is_ready_for_next_frame while a begin-frame is waiting",
+            );
+        }
+        // The stub's receiver hands the destination back as soon as the frame is shown.
+        let ready = sender.open_frame.is_none();
+        // SAFETY: out_ready is writable.
+        unsafe { *out_ready = ready };
+        note(format!("is ready for next frame ready={ready}"));
+        success()
+    }
+
     unsafe fn qar_impl_render_sender_begin_frame(
         stream: *mut QarRenderSender,
         _token: *mut QarCancelToken,
@@ -4957,6 +5057,7 @@ fn build_sender(session: usize, init: &QarRenderSenderInit) -> RenderSenderValue
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         d3d11: None,
         begin_wait_started: None,
+        free_running: false,
     }
 }
 
