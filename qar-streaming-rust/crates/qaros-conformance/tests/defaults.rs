@@ -98,6 +98,7 @@ conformance!(
     QarVideoFrameVulkan => qar_video_frame_vulkan_default,
     QarRenderSenderAlphaModeExt => qar_render_sender_alpha_mode_ext_default,
     QarRenderSenderColorEncodingExt => qar_render_sender_color_encoding_ext_default,
+    QarRenderSenderRenderLoopExt => qar_render_sender_render_loop_ext_default,
     QarMemberHubInvitationInit => qar_member_hub_invitation_init_default,
     QarMemberHubInvitationAppGrantExt => qar_member_hub_invitation_app_grant_ext_default,
     QarOnboardRemoteAppGrantExt => qar_onboard_remote_app_grant_ext_default,

@@ -293,6 +293,23 @@ namespace Quaternar.Qaros
         Linear = 1
     }
 
+    /// <summary>When a render sender's application renders its frames.</summary>
+    public enum RenderLoop
+    {
+        /// <summary>
+        /// The application renders a frame when the receiver asks: begin-frame waits for the
+        /// receiver's render request and renders for the display time it names. The default.
+        /// </summary>
+        RequestDriven = 0,
+        /// <summary>
+        /// The application renders from a loop of its own, at its own rate, and polls
+        /// <see cref="RenderSender.TryBeginFrame"/>: begin-frame waits only for the receiver to
+        /// have a destination ready, and the view poses are predicted from the newest head pose
+        /// for when the frame will be shown.
+        /// </summary>
+        FreeRunning = 1
+    }
+
     /// <summary>How the views of one video frame are packed into textures.</summary>
     public enum FrameLayout
     {
@@ -489,6 +506,7 @@ namespace Quaternar.Qaros
         VideoSenderInit = 0x3005,
         RenderSenderAlphaModeExt = 0x3006,
         RenderSenderColorEncodingExt = 0x3007,
+        RenderSenderRenderLoopExt = 0x3008,
         StreamD3D11ParamsExt = 0x4000,
         StreamVulkanParamsExt = 0x4002,
         StreamOpenGlEglParamsExt = 0x4003,
@@ -552,6 +570,32 @@ namespace Quaternar.Qaros
         internal static Fov FromNative(FovNative value)
         {
             return new Fov(value.AngleLeft, value.AngleRight, value.AngleUp, value.AngleDown);
+        }
+    }
+
+    /// <summary>
+    /// The pose and field of view to render one view with, from
+    /// <see cref="RenderSender.NextRenderPose"/>.
+    /// </summary>
+    public readonly struct RenderViewPose
+    {
+        public RenderViewPose(Pose pose, Fov fov)
+        {
+            Pose = pose;
+            Fov = fov;
+        }
+
+        /// <summary>In the bound app volume's app content space, as <see cref="RenderFrameInfo.GetViewPose"/> hands it out.</summary>
+        public Pose Pose { get; }
+        /// <summary>In view space, radians.</summary>
+        public Fov Fov { get; }
+
+        internal static RenderViewPose[] FromNative(PoseNative[] poses, FovNative[] fovs)
+        {
+            var views = new RenderViewPose[Math.Min(poses.Length, fovs.Length)];
+            for (int i = 0; i < views.Length; i++)
+                views[i] = new RenderViewPose(Pose.FromNative(poses[i]), Fov.FromNative(fovs[i]));
+            return views;
         }
     }
 
@@ -1408,6 +1452,11 @@ namespace Quaternar.Qaros
         /// the native init as QarRenderSenderColorEncodingExt and encoded by the sender.
         /// </summary>
         public ColorEncoding ColorEncoding { get; set; }
+        /// <summary>
+        /// When the application renders. RequestDriven, the default, is not chained; FreeRunning
+        /// is chained to the native init as QarRenderSenderRenderLoopExt.
+        /// </summary>
+        public RenderLoop RenderLoop { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.D3D11"/>; must be null otherwise.</summary>
         public StreamParamsD3D11? StreamParamsD3D11 { get; set; }
         /// <summary>Required when <see cref="GraphicsAPI"/> is <see cref="GraphicsAPI.Vulkan"/>; must be null otherwise.</summary>

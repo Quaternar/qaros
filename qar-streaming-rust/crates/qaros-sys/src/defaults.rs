@@ -613,6 +613,15 @@ pub fn qar_render_sender_color_encoding_ext_default() -> QarRenderSenderColorEnc
     }
 }
 
+pub fn qar_render_sender_render_loop_ext_default() -> QarRenderSenderRenderLoopExt {
+    QarRenderSenderRenderLoopExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT,
+        ),
+        render_loop: QarRenderLoop::QAR_RENDER_LOOP_REQUEST_DRIVEN,
+    }
+}
+
 /// The zero stream id; the caller sets it.
 pub fn qar_gui_panel_stream_id_ext_default() -> QarGuiPanelStreamIdExt {
     QarGuiPanelStreamIdExt {

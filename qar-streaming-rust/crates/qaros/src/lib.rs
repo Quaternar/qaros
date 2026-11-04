@@ -89,8 +89,8 @@ pub use pending_sender::PendingRenderSender;
 pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
-    RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,
-    VideoFrameView, ViewPose,
+    RenderLoop, RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize,
+    VideoFrameLayout, VideoFrameView, ViewPose,
 };
 pub use runtime::{
     HubAddress, OnboardExtensions, OnboardMethod, Onboarded, PeerPresentation, Runtime,

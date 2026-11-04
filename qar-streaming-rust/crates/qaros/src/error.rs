@@ -16,6 +16,11 @@ impl StatusCode {
     pub const LOGIC_ERROR: Self = Self(QarStatusCode::QAR_STATUS_LOGIC_ERROR);
     pub const GUI_PANEL_INVALID_ID: Self = Self(QarStatusCode::QAR_STATUS_GUI_PANEL_INVALID_ID);
     pub const APP_VOLUME_INVALID_ID: Self = Self(QarStatusCode::QAR_STATUS_APP_VOLUME_INVALID_ID);
+    /// No head pose has arrived from the viewer yet, so there is no pose to render with.
+    /// Recoverable: [`crate::RenderSender::next_render_pose`] succeeds once the viewer's first
+    /// pose is in.
+    pub const RENDERING_MISSING_POSE_DATA: Self =
+        Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA);
     pub const RENDERING_UNABLE_TO_BEGIN_FRAME: Self =
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME);
     pub const RENDERING_STREAM_IS_CLOSED: Self =
@@ -82,6 +87,11 @@ impl StatusCode {
         Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED);
     pub const MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: Self =
         Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED);
+    /// The application's own graphics device given to a sender or receiver is on another GPU
+    /// than the session's; nothing was created, and the message names both adapters. Create the
+    /// device on the adapter [`crate::Session::graphics_adapter`] reports.
+    pub const MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER: Self =
+        Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER);
     pub const HUB_TARGET_APP_DEVICE_NOT_INVITABLE: Self =
         Self(QarStatusCode::QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE);
     /// A declared device category other than desktop PC, server or camera.
@@ -168,6 +178,7 @@ impl StatusCode {
             Self::LOGIC_ERROR => "LOGIC_ERROR",
             Self::GUI_PANEL_INVALID_ID => "GUI_PANEL_INVALID_ID",
             Self::APP_VOLUME_INVALID_ID => "APP_VOLUME_INVALID_ID",
+            Self::RENDERING_MISSING_POSE_DATA => "RENDERING_PRODUCER_MISSING_POSE_DATA",
             Self::RENDERING_UNABLE_TO_BEGIN_FRAME => "RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME",
             Self::RENDERING_STREAM_IS_CLOSED => "RENDERING_PRODUCER_STREAM_IS_CLOSED",
             Self::MEDIA_STREAMING_STREAM_IS_PAUSED => "MEDIA_STREAMING_STREAM_IS_PAUSED",
@@ -206,6 +217,9 @@ impl StatusCode {
             }
             Self::MEDIA_STREAMING_SEND_PIPELINE_FAILED => "MEDIA_STREAMING_SEND_PIPELINE_FAILED",
             Self::MEDIA_STREAMING_LAYOUT_CHANGE_FAILED => "MEDIA_STREAMING_LAYOUT_CHANGE_FAILED",
+            Self::MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER => {
+                "MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER"
+            }
             Self::HUB_TARGET_APP_DEVICE_NOT_INVITABLE => "HUB_TARGET_APP_DEVICE_NOT_INVITABLE",
             Self::PEER_DEVICE_CATEGORY_NOT_ALLOWED => "PEER_DEVICE_CATEGORY_NOT_ALLOWED",
             Self::HUB_LIFECYCLE_OPERATION_RUNNING => "HUB_LIFECYCLE_OPERATION_RUNNING",

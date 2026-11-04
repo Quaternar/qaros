@@ -30,6 +30,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset
   sees from the Visualizer over USB; the headset remembers the password).
 
+- **Docs:** the Vulkan cube example and its *Vulkan Rendering* tutorial serve every viewer from one
+  render loop: free-running senders by default, request-driven with `--render-loop request-driven`,
+  on a fixed 60 fps schedule (`--fps <n>`) that a slow frame does not shift, or as fast as the
+  viewers take frames (`--uncapped`). *Getting Started* and *Render Loops* point at it.
+- **Docs:** *Render Loops* in the Developer Guide: the request-driven and free-running modes, how to
+  create a sender in each, and how to drive senders for several viewers — blocking with a thread per
+  viewer, non-blocking from one loop, free-running with the readiness check — in C, C# and Rust,
+  with the stream states each loop handles, what each renders for a slow, paused or departed
+  viewer, and which to choose.
+
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.

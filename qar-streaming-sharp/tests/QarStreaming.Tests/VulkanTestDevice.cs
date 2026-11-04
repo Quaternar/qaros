@@ -9,8 +9,9 @@ namespace Quaternar.Qaros.Tests
     /// <summary>
     /// An application Vulkan device the way a Unity player has one: Vulkan 1.1, no layers, and only
     /// the device extensions asked for. Raw vulkan-1.dll calls, so the tests need no Vulkan
-    /// package. It takes the first physical device with a graphics queue, which must be the GPU the
-    /// session runs on (the sender refuses a device on another GPU).
+    /// package. It is created on the GPU the session runs on (<see cref="Session.GetGraphicsDeviceId"/>),
+    /// as an application does: the sender refuses a device on another GPU, and a machine with an
+    /// integrated and a discrete GPU may list either one first.
     /// </summary>
     internal sealed class VulkanTestDevice : IDisposable
     {
@@ -42,12 +43,14 @@ namespace Quaternar.Qaros.Tests
         public uint QueueFamily { get; private set; }
         public IntPtr Queue { get; private set; }
 
-        public static VulkanTestDevice Create(params string[] deviceExtensions)
+        /// <param name="adapter">The GPU to create the device on, matched by LUID; null takes the
+        /// first physical device with a graphics queue.</param>
+        public static VulkanTestDevice Create(GraphicsDeviceId? adapter, params string[] deviceExtensions)
         {
             var result = new VulkanTestDevice();
             try
             {
-                result.CreateInstanceAndDevice(deviceExtensions);
+                result.CreateInstanceAndDevice(adapter, deviceExtensions);
                 return result;
             }
             catch
@@ -131,7 +134,44 @@ namespace Quaternar.Qaros.Tests
             }
         }
 
-        private void CreateInstanceAndDevice(string[] deviceExtensions)
+        private const int PhysicalDeviceIdPropertiesType = 1000071004;
+        private const int PhysicalDeviceProperties2Type = 1000059001;
+        // VkPhysicalDeviceProperties is 824 bytes on 64-bit; the buffer leaves room to spare.
+        private const int PhysicalDeviceProperties2Size = 1024;
+        // VkPhysicalDeviceIDProperties: sType, pNext, deviceUUID[16], driverUUID[16], deviceLUID[8],
+        // deviceNodeMask, deviceLUIDValid.
+        private const int IdPropertiesSize = 64;
+        private const int IdPropertiesLuidOffset = 48;
+        private const int IdPropertiesLuidValidOffset = 60;
+
+        /// <summary>Whether the physical device is the adapter, by its LUID (Windows).</summary>
+        private static bool IsAdapter(IntPtr physicalDevice, GraphicsDeviceId adapter)
+        {
+            if (adapter.IdType != GpuDeviceIdType.Luid)
+                throw new NotSupportedException("The test devices select an adapter by LUID only.");
+            var idProperties = Marshal.AllocHGlobal(IdPropertiesSize);
+            var properties = Marshal.AllocHGlobal(PhysicalDeviceProperties2Size);
+            try
+            {
+                for (var i = 0; i < IdPropertiesSize; i++)
+                    Marshal.WriteByte(idProperties, i, 0);
+                for (var i = 0; i < PhysicalDeviceProperties2Size; i++)
+                    Marshal.WriteByte(properties, i, 0);
+                Marshal.WriteInt32(idProperties, 0, PhysicalDeviceIdPropertiesType);
+                Marshal.WriteInt32(properties, 0, PhysicalDeviceProperties2Type);
+                Marshal.WriteIntPtr(properties, IntPtr.Size, idProperties);
+                vkGetPhysicalDeviceProperties2(physicalDevice, properties);
+                return Marshal.ReadInt32(idProperties, IdPropertiesLuidValidOffset) != 0
+                    && Marshal.ReadInt64(idProperties, IdPropertiesLuidOffset) == adapter.Luid;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(properties);
+                Marshal.FreeHGlobal(idProperties);
+            }
+        }
+
+        private void CreateInstanceAndDevice(GraphicsDeviceId? adapter, string[] deviceExtensions)
         {
             var allocations = new List<IntPtr>();
             try
@@ -147,6 +187,8 @@ namespace Quaternar.Qaros.Tests
                 Check(vkEnumeratePhysicalDevices(_instance, ref count, physicalDevices), "vkEnumeratePhysicalDevices");
                 foreach (var candidate in physicalDevices)
                 {
+                    if (adapter != null && !IsAdapter(candidate, adapter))
+                        continue;
                     uint familyCount = 0;
                     vkGetPhysicalDeviceQueueFamilyProperties(candidate, ref familyCount, null);
                     var families = new QueueFamilyProperties[familyCount];
@@ -159,7 +201,9 @@ namespace Quaternar.Qaros.Tests
                     break;
                 }
                 if (PhysicalDevice == IntPtr.Zero)
-                    throw new InvalidOperationException("No Vulkan physical device with a graphics queue.");
+                    throw new InvalidOperationException(adapter == null
+                        ? "No Vulkan physical device with a graphics queue."
+                        : $"No Vulkan physical device with a graphics queue on adapter LUID 0x{adapter.Luid:x16}.");
                 var priority = Alloc(1.0f, allocations);
                 var queueInfo = Alloc(new DeviceQueueCreateInfo { SType = 2, QueueFamilyIndex = QueueFamily, QueueCount = 1, PQueuePriorities = priority }, allocations);
                 var extensionNames = new IntPtr[deviceExtensions.Length];
@@ -362,6 +406,7 @@ namespace Quaternar.Qaros.Tests
         [DllImport(Vulkan)] private static extern int vkCreateInstance(ref InstanceCreateInfo info, IntPtr allocator, out IntPtr instance);
         [DllImport(Vulkan)] private static extern void vkDestroyInstance(IntPtr instance, IntPtr allocator);
         [DllImport(Vulkan)] private static extern int vkEnumeratePhysicalDevices(IntPtr instance, ref uint count, [Out] IntPtr[]? devices);
+        [DllImport(Vulkan)] private static extern void vkGetPhysicalDeviceProperties2(IntPtr physicalDevice, IntPtr properties);
         [DllImport(Vulkan)] private static extern void vkGetPhysicalDeviceQueueFamilyProperties(IntPtr physicalDevice, ref uint count, [Out] QueueFamilyProperties[]? properties);
         [DllImport(Vulkan)] private static extern int vkCreateDevice(IntPtr physicalDevice, ref DeviceCreateInfo info, IntPtr allocator, out IntPtr device);
         [DllImport(Vulkan)] private static extern void vkDestroyDevice(IntPtr device, IntPtr allocator);

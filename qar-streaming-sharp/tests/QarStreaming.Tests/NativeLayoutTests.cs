@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Quaternar.Qaros;
 using Quaternar.Qaros.Interop;
@@ -263,9 +264,11 @@ namespace Quaternar.Qaros.Tests
         [Fact]
         public void StatusCodesMirrorC()
         {
+            Assert.Equal(801, (int)StatusCode.RenderingProducerMissingPoseData);
             Assert.Equal(805, (int)StatusCode.RenderingProducerAppVolumeUnresolved);
             Assert.Equal(806, (int)StatusCode.RenderingProducerDepthFormatNotSupported);
             Assert.Equal(807, (int)StatusCode.RenderingProducerExternalDeviceNotSupported);
+            Assert.Equal(609, (int)StatusCode.MediaStreamingDeviceOnAnotherAdapter);
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
@@ -304,7 +307,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(60, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(62, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -495,6 +498,76 @@ namespace Quaternar.Qaros.Tests
                 var extension = Marshal.PtrToStructure<RenderSenderColorEncodingExtNative>(native.Header.Next);
                 Assert.Equal(StructureType.RenderSenderColorEncodingExt, extension.Header.Type);
                 Assert.Equal(ColorEncoding.Linear, extension.ColorEncoding);
+                Assert.Equal(IntPtr.Zero, extension.Header.Next);
+            }
+        }
+
+        [Fact]
+        public void NextRenderPoseBindsTheNativeSignature()
+        {
+            var method = typeof(NativeMethods).GetMethod(
+                nameof(NativeMethods.qar_impl_render_sender_next_render_pose),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            Assert.Equal(typeof(ResultNative), method!.ReturnType);
+            Assert.Equal(
+                new[] { typeof(IntPtr), typeof(UIntPtr), typeof(PoseNative[]), typeof(FovNative[]) },
+                Array.ConvertAll(method.GetParameters(), parameter => parameter.ParameterType));
+        }
+
+        [Fact]
+        public void IsReadyForNextFrameBindsTheNativeSignature()
+        {
+            var method = typeof(NativeMethods).GetMethod(
+                nameof(NativeMethods.qar_impl_render_sender_is_ready_for_next_frame),
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            Assert.Equal(typeof(ResultNative), method!.ReturnType);
+            Assert.Equal(
+                new[] { typeof(IntPtr), typeof(bool).MakeByRefType() },
+                Array.ConvertAll(method.GetParameters(), parameter => parameter.ParameterType));
+        }
+
+        [Fact]
+        public void RenderViewPoseKeepsTheViewOrderOfBothArrays()
+        {
+            var poses = new PoseNative[2];
+            poses[0].Position.X = -0.03f;
+            poses[1].Position.X = 0.03f;
+            var fovs = new FovNative[2];
+            fovs[0].AngleLeft = -0.9f;
+            fovs[1].AngleLeft = -0.7f;
+            var views = RenderViewPose.FromNative(poses, fovs);
+            Assert.Equal(2, views.Length);
+            Assert.Equal(-0.03f, views[0].Pose.Position.X);
+            Assert.Equal(0.03f, views[1].Pose.Position.X);
+            Assert.Equal(-0.9f, views[0].Fov.AngleLeft);
+            Assert.Equal(-0.7f, views[1].Fov.AngleLeft);
+        }
+
+        [Fact]
+        public void RenderSenderRenderLoopExtMatchesNativeLayout()
+        {
+            int pointerSize = IntPtr.Size;
+            Assert.Equal(pointerSize * 2, Marshal.OffsetOf(typeof(RenderSenderRenderLoopExtNative), nameof(RenderSenderRenderLoopExtNative.RenderLoop)).ToInt32());
+            Assert.Equal(pointerSize * 3, Marshal.SizeOf(typeof(RenderSenderRenderLoopExtNative)));
+        }
+
+        [Fact]
+        public void RenderSenderChainsTheRenderLoopOnlyWhenFreeRunning()
+        {
+            using (var scope = new NativeMemoryScope())
+            {
+                var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
+                Assert.Equal(RenderLoop.RequestDriven, options.RenderLoop);
+                Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
+
+                options.RenderLoop = RenderLoop.FreeRunning;
+                var native = NativeInit.RenderSender(options, scope);
+                Assert.NotEqual(IntPtr.Zero, native.Header.Next);
+                var extension = Marshal.PtrToStructure<RenderSenderRenderLoopExtNative>(native.Header.Next);
+                Assert.Equal(StructureType.RenderSenderRenderLoopExt, extension.Header.Type);
+                Assert.Equal(RenderLoop.FreeRunning, extension.RenderLoop);
                 Assert.Equal(IntPtr.Zero, extension.Header.Next);
             }
         }

@@ -225,6 +225,67 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
+        /// For a sender created with <see cref="RenderLoop.FreeRunning"/>: the poses and fields of
+        /// view to render the next frame with, taken before begin-frame. Predicted now from the
+        /// newest head pose for when the frame is shown, in the same app content space as
+        /// <see cref="RenderFrameInfo.GetViewPose"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The next begin-frame opens its frame with exactly these poses, so render into your own
+        /// target first, then begin the frame (<see cref="BeginFrame"/> or
+        /// <see cref="TryBeginFrame"/>), copy into the sender's textures and show it. A second
+        /// call before that begin-frame replaces the poses.
+        /// </para>
+        /// <para>
+        /// <paramref name="viewCount"/> is at most the sender's views; the result is in the frame's
+        /// view order. Fails with <see cref="StatusCode.RenderingProducerMissingPoseData"/> before
+        /// the viewer's first head pose, <see cref="StatusCode.RenderingProducerAppVolumeUnresolved"/>
+        /// while the app volume does not resolve, and <see cref="StatusCode.LogicError"/> for a
+        /// request-driven sender or too many views.
+        /// </para>
+        /// </remarks>
+        public Result<RenderViewPose[]> NextRenderPose(int viewCount)
+        {
+            if (viewCount < 0)
+                throw new ArgumentOutOfRangeException(nameof(viewCount), viewCount, "must not be negative");
+            ThrowIfDisposed();
+            var poses = new PoseNative[viewCount];
+            var fovs = new FovNative[viewCount];
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_next_render_pose(sender.Handle, (UIntPtr)viewCount, poses, fovs));
+            return info.IsSuccess ? Result<RenderViewPose[]>.Success(info, RenderViewPose.FromNative(poses, fovs)) : Result<RenderViewPose[]>.Failure(info);
+        }
+
+        /// <summary>
+        /// For a sender created with <see cref="RenderLoop.FreeRunning"/>: whether a frame rendered
+        /// now can be sent without waiting. Never blocks.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// True once the receiver has handed back the previous frame's destination: it is then
+        /// reserved for this sender's next frame, and the next begin-frame takes it without waiting.
+        /// False while it is still out, and while the stream is paused, reconnecting or has no
+        /// receiver yet.
+        /// </para>
+        /// <para>
+        /// A loop serving several senders checks each one first and takes
+        /// <see cref="NextRenderPose"/>, renders and begins only for those that are ready, so a
+        /// slower receiver or a reconnecting stream holds back no other. Fails with
+        /// <see cref="StatusCode.RenderingProducerStreamIsClosed"/> once the stream closed, and
+        /// with <see cref="StatusCode.LogicError"/> for a request-driven sender or while a
+        /// begin-frame is waiting.
+        /// </para>
+        /// </remarks>
+        public Result<bool> IsReadyForNextFrame()
+        {
+            ThrowIfDisposed();
+            using var sender = _owner.Borrow();
+            var info = Results.ToInfo(NativeMethods.qar_impl_render_sender_is_ready_for_next_frame(sender.Handle, out var ready));
+            return info.IsSuccess ? Result<bool>.Success(info, ready) : Result<bool>.Failure(info);
+        }
+
+        /// <summary>
         /// OpenGL-backed frame access; requires a library built with
         /// QAR_ENABLE_OPENGL (otherwise <see cref="EntryPointNotFoundException"/>).
         /// Readable before the first begin-frame, writable only inside a frame cycle.
