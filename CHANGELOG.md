@@ -212,6 +212,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   the plugin, joining the Hub of this PC as a local app or the Hub of another PC with a pairing
   code, the Connection tab, what you see and do in AR, the environment variables, reading the logs
   and the known issues, as checked against the installed runtime 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** the Ogre, Qt and RViz2 pages follow the division of the three libraries into
+  independent repositories. The Qt panel package `qar_qt_streaming` is standalone (Qt 5.15 or
+  Qt 6.5 and newer, the C++ SDK `qar-streaming-cpp`, no Ogre, ROS 2 or RViz2): *Video in GUI
+  Panels, and Qt Widgets as AR Panels* describes its three layers, the CMake package and its
+  components, how a program joins the Hub and hands the session to it, the threads, the example
+  program, touch input under Qt 6 and the drop shadow of popups; *Limits and Behaviors to Design
+  Around* lists what a build needs from the C++ SDK headers. *Ogre, Qt and RViz2 on QAROS* shows
+  that the Ogre and Qt libraries are independent and that the RViz2 plugin builds on both, all at
+  version 0.2.0; *Streaming an Ogre Scene* lists five adapter components. The pages that name
+  the pairing code of a Hub on another PC no longer name a Hub screen or a lifetime of the code.
 - **Docs:** *Onboarding and Sessions* has a section *When the hub's session changes*: what a
   session keeps when its Hub starts a new session or joins another Hub, subscribing to the session
   lifecycle (`qar_session_subscribe_lifecycle`, C# `Session.SubscribeLifecycle`), reacting to a
