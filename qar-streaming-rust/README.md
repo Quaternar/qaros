@@ -194,11 +194,11 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | Error handling | `qaros::Error` with function, `StatusCode`, message and wrapped causes (`has_code`, `has_cause`) | the `qar_result_*` constructors and predicates, `qar_error_wrap_result`, `qar_result_log_if_error` | yes (`ResultInfo`, `StatusCode`) |
 | Cancellation | `CancelToken` with or without a timeout, `is_timed_out`, `CancelHandle` from another thread | `qar_cancel_token_cancel_after` | partly: a `CancellationToken` bridged to an internal native token; no timeout token or timeout query |
 | Runtime | `Runtime` | | yes |
-| Onboarding: pairing code, remote Hub, invite, local app and its app tag; rejoin; forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, the planned peer id, re-enrolling a slot, a remote-app grant), `rejoin`, `forget`, `OnboardMethod`, `RuntimeConfig::ephemeral_storage` | | yes |
-| Co-process invites and the invite handle | `Session::request_onboarding_invite`, `start_onboarding_invite`, `OnboardingInvite` (serialize, deserialize, expiry, method, `code`) | `qar_onboarding_invite_handle_is_valid` (an `OnboardingInvite` is always valid) | yes |
+| Onboarding: local app and its app tag, invite (a companion), remote-app grant; deprecated: pairing code, remote Hub, planned peer id, re-enrolling a slot, rejoin, forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, a remote-app grant), `OnboardMethod`, `RuntimeConfig::ephemeral_storage`; deprecated: `OnboardMethod::Code`, `HubAddress`, `OnboardExtensions::peer_id` and `onboarding_id`, `Onboarded::onboarding_id`, `rejoin`, `rejoin_on_adapter`, `forget` | | yes |
+| Co-process invites and the invite handle | `Session::request_onboarding_invite`, `start_onboarding_invite`, `OnboardingInvite` (serialize, deserialize) | `qar_onboarding_invite_handle_is_valid` (an `OnboardingInvite` is always valid) | yes |
 | Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
 | Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` | | yes |
-| Async calls | `PendingCall` from `Runtime::start_onboard`, `start_rejoin` (`PendingOnboard`), `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, `RenderSender::start_owned_frame` (`PendingFrame`); `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | | yes (`Task` forms) |
+| Async calls | `PendingCall` from `Runtime::start_onboard`, the deprecated `start_rejoin` (`PendingOnboard`), `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, `RenderSender::start_owned_frame` (`PendingFrame`); `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | | yes (`Task` forms) |
 | Session | `Session::id`, `Session::graphics_adapter`, `Session::find_render_target` | | yes |
 | Session lifecycle | `Session::lifecycle`, `Session::subscribe_lifecycle`, `SessionLifecycle` | | yes |
 | Target apps | `Session::invite_target_app`, `kill_target_app` and their `start_` forms, `Library::target_app_connection_string` (`TargetDevice`) | | yes |
@@ -259,7 +259,7 @@ it would be loaded first, and a Hub verifies only the runtime it installed.
 
 ## Examples
 
-`examples/` ports the C examples: `dynamic_loading`, `onboarding_and_rejoin`,
+`examples/` ports the C examples: `dynamic_loading`,
 `app_volume_management`, `gui_panel_operations`, `cpu_rendering_visualizer`,
 `local_app_onboarding`, `remote_app_onboarding`, `vulkan_cube` (feature `vulkan`) and
 `d3d11_render_sender` (Windows; the
@@ -290,34 +290,23 @@ cargo run -p qaros-examples --bin gui_panel_operations
 cargo run -p qaros-examples --bin app_volume_management
 cargo run --release -p qaros-examples --bin cpu_rendering_visualizer -- --frames=300
 cargo run --release -p qaros-examples --bin d3d11_render_sender -- --frames=300
-
-# Onboard with the Hub's pairing code once; later runs rejoin. No Hub address is passed, so
-# the code finds only your own Hub, on the Hub machine (see the Onboarding and Rejoin tutorial).
-cargo run -p qaros-examples --bin onboarding_and_rejoin -- <PAIRING-CODE>
-cargo run -p qaros-examples --bin onboarding_and_rejoin -- --forget
 ```
 
 `gui_panel_operations`, `app_volume_management`, `cpu_rendering_visualizer` and
-`d3d11_render_sender` join the Hub as a local app on Windows (`join_session` in
-`examples/src/lib.rs`). A local app has the zero onboarding id, so nothing is stored. A refused
+`d3d11_render_sender` join the Hub as a local app (`join_session` in `examples/src/lib.rs`), so
+nothing is stored and every run joins the same way. A refused
 local-app join exits with `local_app_onboarding`'s codes: 2 when no runtime loads (that sample
 only; the others exit 1), 3 to 7 for a Hub that cannot be reached, an approval denied,
 unanswered, a Hub that is not the installed QAROS, and an app that no longer matches its approval.
-They also take a pairing code as their first argument, as their C originals do: they rejoin with
-a stored onboarding id first, then onboard with the code and store the new id as
-`<example>.onboarding-id.txt` in the working directory. Like `onboarding_and_rejoin`, they pass
-no Hub address, so the code finds only your own Hub, on the Hub machine: through the
-`hub-endpoint.json` file the Hub writes there, then through a discovery beacon whose owner is
-your user. A Hub elsewhere needs its host and port, `HubAddress` in `OnboardMethod::Code`.
-`onboarding_and_rejoin` keeps one per
-runtime, `onboarding_and_rejoin.primary-onboarding-id.txt` and
-`onboarding_and_rejoin.sibling-onboarding-id.txt`.
 
-The pairing code comes from a Hub onboarding screen when one shows it, or from the Hub's
-operators, who mint pairing codes and addressed codes (`qar-code:...`); an app cannot mint one.
-`OnboardingInvite::code` (`qar_onboarding_invite_get_code`) reads the code text of a pairing-code
-invite. A local app mints co-process invites instead (`Session::request_onboarding_invite`), for a
-process it starts on the same PC, which onboards with `OnboardMethod::Invite`.
+An app joins in one of three ways: as a local app (`OnboardMethod::LocalApp`), as a companion
+process of a local app, or through a member hub (`OnboardMethod::LocalApp` with
+`OnboardExtensions::remote_app_grant`, the `remote_app_onboarding` example). For a companion, the
+local app calls `Session::request_onboarding_invite` once per session and hands the serialized
+invite to every start of the companion over a private channel; the companion onboards with
+`OnboardMethod::Invite` on a runtime with `RuntimeConfig::ephemeral_storage`, and the call
+retries (250 ms, doubling to 5 s) until it joins, is cancelled or fails for good. Code
+onboarding, rejoin and forget of a persisted slot, and the planned peer id are deprecated.
 
 `vulkan_cube` ports the C `vulkan_cube` source app:
 
@@ -394,14 +383,10 @@ is not read.
 - The examples run against the stub. Build it first with `cargo build -p qaros-stub`, then set
   `QAROS_DLL` to the absolute path of the library it builds: `target/debug/libqaros_stub.dylib`
   on macOS, `target\debug\qaros_stub.dll` on Windows, `target/debug/libqaros_stub.so` on Linux.
-  Pass any pairing code, for example
-  `cargo run -p qaros-examples --bin cpu_rendering_visualizer -- ANY-CODE --frames=3`. The stub
-  refuses the codes `WRONG` (PAKE error) and `UNREACHABLE` (hub unreachable). The stub's D3D11
+  The stub accepts the local-app join without a prompt, for example
+  `cargo run -p qaros-examples --bin cpu_rendering_visualizer -- --frames=3`. The stub's D3D11
   emulation lends placeholder addresses, not textures, so `d3d11_render_sender` submits its
-  frames without drawing there. A stub run stores its onboarding id in the working directory
-  as a real run does, and a later run against QAROS from the same folder tries to rejoin with
-  it first: run the stub from a folder of its own, or delete `<example>.onboarding-id.txt` (and
-  `onboarding_and_rejoin`'s `*-state` folders) before a real run.
+  frames without drawing there.
 - `vulkan_cube` has a test of its own that renders one frame through the stub on the first
   supported GPU and reads both eyes back:
   `QAROS_REQUIRE_VULKAN=1 cargo test -p qaros-examples --features vulkan --bin vulkan_cube`.
@@ -467,7 +452,7 @@ pages and the guide tabs; `--step` picks some of them.
 `QAROS_E2E_EYE=<width>x<height>` and `QAROS_E2E_FRAMES` size the runs. Each test prints `RATE`
 and `PHASES` lines.
 
-Not covered by these tests: pairing-code onboarding and rejoin against a Hub, frames on screen or
+Not covered by these tests: the deprecated pairing-code onboarding and rejoin against a Hub, frames on screen or
 in a headset, GUI panels on screen, the `link` feature, and eye poses (the extension's receivers
 report identity poses).
 
@@ -524,7 +509,7 @@ bindings land in one commit; run the conformance tests after it.
 | Path | What it is |
 | --- | --- |
 | `crates/qaros-sys` | Raw bindings to every exported `qar_impl_*` function, generated per target and committed. The runtime lookup, runtime loading (default) or import-library linking (feature `link`). Ports of the `qar_*_default()` initializers. |
-| `crates/qaros` | The safe API: library and runtime, onboarding and rejoin, peers, CPU, Vulkan and D3D11 render senders, app volumes, GUI panels. |
+| `crates/qaros` | The safe API: library and runtime, onboarding, peers, CPU, Vulkan and D3D11 render senders, app volumes, GUI panels. |
 | `crates/qaros-stub` | The in-memory stand-in library for tests. |
 | `crates/qaros-conformance` | Test-only: checks the ported initializers against the C header. |
 | `tests/qar-streaming-rust-ext` | Test-only: the Rust layer of `qar-streaming-c-ext` and the integration tests. Not a default member. |

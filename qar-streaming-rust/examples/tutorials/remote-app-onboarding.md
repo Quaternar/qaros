@@ -96,7 +96,7 @@ A plain local onboard: the app is approved now, so no invitation and no prompt a
 
 | Where | What | How long |
 |---|---|---|
-| either app | nothing; onboarding ids stay zero | |
+| either app | nothing | |
 | your channel | the invitation | until used up or expired (one hub, 24 h by default) |
 | the remote app's memory | its key and a 30-minute certificate, renewed while it runs | the process |
 | the primary hub | the granted approval and the remembered peer id | until revoked; the peer id until unused for 30 days |

@@ -23,7 +23,7 @@ The program is `examples/src/bin/cpu_rendering_visualizer.rs` in the Rust bindin
 - **Platform.** Windows for the real runtime. On macOS and Linux the example runs against `qaros-stub`, the in-memory stand-in for the runtime that ships with the binding's tests. The stub is enough to follow the frame cycle; it shows no picture.
 - **QAROS.** Installed on the Hub machine, where the example runs, or the runtime of a QAROS development hub whose instance `QAR_INSTANCE` names, or a library file named with `--qaros-library=PATH`. The example finds the runtime the way every binding does ([Language Bindings](/docs/developer-guide/language-bindings#rust)).
 - **A target.** At least one target app in the session: open the Visualizer, or start a headset. Joining as a local app starts the Hub when it is not running.
-- **Joining.** On Windows the example joins the Hub as a local app ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)): the first run of the executable opens the QAROS approval prompt, you click **Allow** once, and later runs of the same executable join without a prompt. A local app has no onboarding id, so nothing is stored.[^code]
+- **Joining.** On Windows the example joins the Hub as a local app ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)): the first run of the executable opens the QAROS approval prompt, you click **Allow** once, and later runs of the same executable join without a prompt. Nothing is stored.
 - **The latest stable Rust.**
 
 ## Run it
@@ -43,26 +43,19 @@ Without QAROS, run it against the stub. Build the stub first; it is a test libra
 cargo build -p qaros-stub
 mkdir -p target/stub-run && cd target/stub-run
 # Windows: qaros_stub.dll; Linux: libqaros_stub.so
-QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" cargo run -p qaros-examples --bin cpu_rendering_visualizer -- ANY-CODE --frames=3
+QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" cargo run -p qaros-examples --bin cpu_rendering_visualizer -- --frames=3
 ```
 
-Outside Windows the example does not try the local-app join, so the stub run passes a code: the stub accepts any code except `WRONG` (a rejected code) and `UNREACHABLE` (no Hub). The stub run stores `cpu_rendering_visualizer.onboarding-id.txt` in its folder, which a later run against QAROS from that folder would try to rejoin with: keep stub runs in a folder of their own ([On macOS, against the stub](/docs/developer-guide/tutorials/rust/#on-macos-against-the-stub)). A first run and then a second one, which rejoins, print (with your own path):
+The stub accepts the local-app join without a prompt. The run prints (with your own path):
 
 ```text
 Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
 Loaded .../target/debug/libqaros_stub.dylib
 qar_runtime_create: SUCCESS
-qar_runtime_onboard: SUCCESS
-Looking for target apps in the peer list (open a visualizer or start a headset) ...
-Rendering for Stub Visualizer (peer 56:56:56:56:56:56:56:56:56:56:56:56:56:56:56:56)
-Submitted 3 frames.
-```
-
-```text
-Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
-Loaded .../target/debug/libqaros_stub.dylib
-qar_runtime_create: SUCCESS
-qar_runtime_rejoin: SUCCESS
+Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
+stub onboarding complete
+qar_runtime_onboard: SUCCESS (local app)
+Nothing to store: the next run joins as a local app again, without a prompt while this executable is unchanged.
 Looking for target apps in the peer list (open a visualizer or start a headset) ...
 Rendering for Stub Visualizer (peer 56:56:56:56:56:56:56:56:56:56:56:56:56:56:56:56)
 Submitted 3 frames.
@@ -86,21 +79,19 @@ Send depth whenever you can. QAROS uses it for occlusion between app volumes and
 
 ### 2. Load the runtime and get a session
 
-Every session comes from onboarding: there is no "connect" call. The helpers in `examples/src/lib.rs` load the runtime, create a `Runtime`, then rejoin with the stored onboarding id, onboard with the pairing code, or join as a local app.
+Every session comes from onboarding: there is no "connect" call. The helpers in `examples/src/lib.rs` load the runtime, create a `Runtime`, then join the Hub on this machine as a local app.
 
 ```rust
 {{#include ../src/bin/cpu_rendering_visualizer.rs:session}}
 ```
 
-`join_session` tries the three in that order:
+`join_session` presents the example under its display name and joins:
 
 ```rust
 {{#include ../src/lib.rs:join_session}}
 ```
 
-- **Rejoin.** With a stored id it calls `Runtime::rejoin`. When the Hub has no session for that id, the error carries `StatusCode::ONBOARDING_SESSION_NOT_FOUND`, which is normal flow: it goes on to the next way. Any other rejoin error is real and ends the run.
-- **Pairing code.** With a code it calls `Runtime::onboard` with `OnboardMethod::Code` and stores the new id, as the C example does. A rejected or expired code fails with `StatusCode::PAKE_ERROR`; read the current code and try again.
-- **Local app.** With neither, on Windows, it calls `Runtime::onboard` with `OnboardMethod::LocalApp`, as [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding) explains, and waits up to 120 s for **Allow**. The returned onboarding id is the zero id: there is nothing to store, and the next run joins the same way. A refusal ends the run with the exit codes of `local_app_onboarding`, 3 to 7. Elsewhere it stops with "No persisted onboarding id".
+It calls `Runtime::onboard` with `OnboardMethod::LocalApp`, as [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding) explains, and waits up to 120 s for **Allow**. There is nothing to store: the next run joins the same way. A refusal ends the run with the exit codes of `local_app_onboarding`, 3 to 7.
 
 ### 3. Create the app volume
 
@@ -224,11 +215,8 @@ What it does not guarantee:
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `No persisted onboarding id in '...'` | not on Windows, no code, and no id file in the working directory | pass the Hub's pairing code |
-| exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
+| exit 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
 | exit 3 | the local-app join, which starts a Hub that is not running, reached no Hub | start QAROS and run again |
-| `Pairing code rejected or expired` (`QAR_STATUS_PAKE_ERROR`) | wrong code, or the code changed (they live about 10 s) | read the current code and run again at once |
-| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | with a code: no Hub of your user answered; the example finds only your own Hub, on the Hub machine | start QAROS and run again |
 | a not-found error naming every place it looked | no runtime found, or `QAR_INSTANCE` names an instance without a loadable runtime | install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
 | stays at `Looking for target apps ...` | no running target app in the session | open the Visualizer or start a headset |
 | `No sender for <target> yet: ...`, repeated | the target does not answer the sender creation within 10 s | check the target is running; each attempt blocks the loop for up to 10 s, so the Vulkan tutorial's example retries less often |
@@ -243,7 +231,7 @@ The C tutorial is [CPU Rendering with a Visualizer](/docs/developer-guide/tutori
 | --- | --- |
 | `example_load_library`: `qar_library_load`, `qar_library_init` | `Library::load_default`, `Library::load` |
 | `example_create_runtime`: `qar_runtime_create` | `Library::create_runtime` |
-| `example_join_session` (rejoin, else code, else local app) | `join_session` in `examples/src/lib.rs` (rejoin, else code, else local app) |
+| `example_join_session` | `join_session` in `examples/src/lib.rs` (a local-app join) |
 | `qar_app_volumes_get_or_create` | `session.app_volumes().get_or_create` |
 | `qar_peer_subscribe_updates`, `qar_query_peer_specs` | `session.subscribe_peer_updates`, `session.peers()` |
 | `example_is_running_target`: role `QAR_PEER_ROLE_TARGET`, presence `ONLINE` or `UNKNOWN` | `is_running_target`: `PeerInfo::is_target_app` and `AppState::Running`, the deprecated app state computed from the presence, so the same targets |
@@ -264,4 +252,3 @@ The two programs do the same thing: join, find the targets in the peer list, ser
 - [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): the same frame cycle with sender-owned Vulkan images, with a device of your own on the session's GPU.
 - [Rendering Streams](/docs/developer-guide/rendering-streams): layouts, layout changes, hand tracking.
 
-[^code]: The example also takes a pairing code, as its first argument that does not start with `--`; it passes no Hub address, so the code finds only your own Hub, on the Hub machine (a Hub elsewhere needs its host and port, `HubAddress`): `cargo run --release -p qaros-examples --bin cpu_rendering_visualizer -- <PAIRING-CODE> --frames=300`. It then stores the onboarding id it gets back in `cpu_rendering_visualizer.onboarding-id.txt` in the working directory, and later runs rejoin with it ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)).

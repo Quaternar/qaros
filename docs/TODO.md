@@ -134,7 +134,8 @@ guarantees in the meantime):
 - **Run-verify examples against a real runtime** — TODO / T14. The 5 C examples pass
   `clang -fsyntax-only` but are not yet link/run-verified end-to-end against a real
   runtime DLL + Hub. Drop a binary package into `qaros/package/`, build, and run
-  `onboarding_and_rejoin.exe` twice (onboard, then silent rejoin) then `--forget`.
+  `local_app_onboarding.exe` twice (approval, then a silent join under the same peer id)
+  and `co_process_onboarding.exe`.
 - **Commit & submodule pinning** — NEEDS-INPUT(human) / T18. Work spans two repos.
   Commit inside `qaros` first (docs, components, config, examples), push a branch;
   then in Quaternar commit `.gitmodules` + the `qaros` gitlink + the CMake mirror

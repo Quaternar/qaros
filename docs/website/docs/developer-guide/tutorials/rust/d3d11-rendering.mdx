@@ -24,7 +24,7 @@ The program is `examples/src/bin/d3d11_render_sender.rs` in the Rust binding, a 
 - **Platform.** Windows with a D3D11.1-capable GPU. On any other system the example prints that it requires Windows and exits with 0.
 - **QAROS.** Installed on the Hub machine, where the example runs, or the runtime of a QAROS development hub whose instance `QAR_INSTANCE` names, or a library file named with `--qaros-library=PATH`.
 - **A target.** At least one target app in the session (the Visualizer, a headset). Joining as a local app starts the Hub when it is not running.
-- **Joining.** The example joins the Hub as a local app, as the CPU example does: click **Allow** in the QAROS approval prompt on the first run of the executable; nothing is stored, and later runs join without a prompt ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)).[^code]
+- **Joining.** The example joins the Hub as a local app, as the CPU example does: click **Allow** in the QAROS approval prompt on the first run of the executable; nothing is stored, and later runs join without a prompt ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)).
 - **The latest stable Rust.** The D3D11 types come from the `windows` crate 0.62, a Windows-only dependency of `qaros` (feature `d3d11`) and of the examples.
 
 In your own application, add `qaros` with the `d3d11` feature to the `[dependencies]` section of your crate's `Cargo.toml`. The crates are not on crates.io, so the dependency names the QAROS repository, and Cargo finds the crate inside it:
@@ -56,7 +56,7 @@ The arguments are those of the CPU example: `--frames=N` (300 by default) and `-
 
 The program prints the runtime it loaded, `qar_runtime_create: SUCCESS`, the local-app join, `Waiting for a target app in the peer list ...`, `qar_render_sender_create: SUCCESS`, `Rendering for target <target name> (peer <peer id>)`, and `Submitted <N> frames.` at the end. On the target, the "D3D11 Tutorial Volume" app volume shows the two pulsing eyes.
 
-Against the stub on Windows (`QAROS_DLL` naming `target\debug\qaros_stub.dll`, and any code as the first argument, as in [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering#run-it)), the example follows the same steps but prints `qaros-stub lends no D3D11 textures: submitting the frames without drawing.` and draws nothing: the stub's D3D11 emulation lends placeholder addresses, not textures, and Direct3D would crash on them. The stub run stores `d3d11_render_sender.onboarding-id.txt` in its folder, which a later run against QAROS from that folder would try to rejoin with: keep stub runs in a folder of their own.
+Against the stub on Windows (`QAROS_DLL` naming `target\debug\qaros_stub.dll`, as in [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering#run-it)), the example follows the same steps but prints `qaros-stub lends no D3D11 textures: submitting the frames without drawing.` and draws nothing: the stub's D3D11 emulation lends placeholder addresses, not textures, and Direct3D would crash on them.
 
 ## Walkthrough
 
@@ -85,13 +85,7 @@ pub fn run() -> ExampleResult {
 
     let library = load_library()?;
     let runtime = create_runtime(&library, None)?;
-    let session = join_session(
-        &library,
-        &runtime,
-        arguments.pairing_code.as_deref(),
-        Path::new(ID_FILE),
-        DISPLAY_NAME,
-    )?;
+    let session = join_session(&runtime, DISPLAY_NAME)?;
 
     let mut volume_config = AppVolumeConfig::new("d3d11-volume.examples.qaros");
     volume_config.display_name = Some("D3D11 Tutorial Volume".to_string());
@@ -145,7 +139,7 @@ pub fn run() -> ExampleResult {
 }
 ```
 
-The session comes from the same helper as the CPU example (`join_session` in `examples/src/lib.rs`: rejoin, else the pairing code, else a local-app join), and the app volume from `session.app_volumes().get_or_create` with the common name `d3d11-volume.examples.qaros`. The `draws` check matters only against `qaros-stub` (runtime flavor `stub`); against QAROS every frame is drawn, and your own application needs no such check.
+The session comes from the same helper as the CPU example (`join_session` in `examples/src/lib.rs`, a local-app join), and the app volume from `session.app_volumes().get_or_create` with the common name `d3d11-volume.examples.qaros`. The `draws` check matters only against `qaros-stub` (runtime flavor `stub`); against QAROS every frame is drawn, and your own application needs no such check.
 
 ### 3. Find the target
 
@@ -438,9 +432,8 @@ On the Vulkan path your device must outlive the session ([Vulkan Rendering](/doc
 | Symptom | Cause | What to do |
 | --- | --- | --- |
 | `d3d11_render_sender requires Windows (QAR_ENABLE_D3D11).` | built for another system | run it on Windows |
-| exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
+| exit 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
 | exit 3 | the local-app join, which starts a Hub that is not running, reached no Hub | start QAROS and run again |
-| `Pairing code rejected or expired` (`QAR_STATUS_PAKE_ERROR`) | wrong or expired code | read the current code and run again at once |
 | stays at `Waiting for a target app in the peer list ...` | no running target app in the session | open the Visualizer or start a headset |
 | `the session's adapter (LUID ...) is not among this machine's DXGI adapters` | the session names an adapter DXGI does not list | check the GPU driver; report it with the LUID |
 | `D3D11CreateDevice failed (...)` or `D3D11.1 interfaces not available` | the adapter does not support D3D11.1 | use a GPU that does |
@@ -449,7 +442,7 @@ On the Vulkan path your device must outlive the session ([Vulkan Rendering](/doc
 
 ## From C
 
-The C tutorial is [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering). The two programs do the same thing: join with a stored onboarding id, a pairing code or as a local app, take the first running target app from the peer list, create the device on the session's adapter, bind depth as depth stencil only, declare color and depth of both eyes, and skip the frame on paused, reconnecting, transfer-less and unresolved-volume statuses. The Rust example makes the same C calls in the same order through the safe API, except where the last rows say otherwise:
+The C tutorial is [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rendering). The two programs do the same thing: join the session, take the first running target app from the peer list, create the device on the session's adapter, bind depth as depth stencil only, declare color and depth of both eyes, and skip the frame on paused, reconnecting, transfer-less and unresolved-volume statuses. The Rust example makes the same C calls in the same order through the safe API, except where the last rows say otherwise:
 
 | C example | Rust example |
 | --- | --- |
@@ -473,4 +466,3 @@ The C tutorial is [D3D11 Rendering](/docs/developer-guide/tutorials/c/d3d11-rend
 - [Rendering Streams](/docs/developer-guide/rendering-streams#the-d3d11-path): the D3D11 path in the guide.
 - [API Conventions](/docs/developer-guide/api-conventions#6-ownership-and-lifetime): handle ownership and the teardown order on the C API.
 
-[^code]: Like the CPU example, it also takes a pairing code as its first argument; it passes no Hub address, so the code finds only your own Hub, on the Hub machine (a Hub elsewhere needs its host and port, `HubAddress`): `cargo run --release -p qaros-examples --bin d3d11_render_sender -- <PAIRING-CODE> --frames=300`. It then stores the onboarding id in `d3d11_render_sender.onboarding-id.txt` in the working directory and rejoins with it later ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)).

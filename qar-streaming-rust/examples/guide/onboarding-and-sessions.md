@@ -14,13 +14,9 @@
 {{#include ../tests/guide/onboarding_and_sessions.rs:app_tag}}
 ```
 
-## Rejoin, else onboard
-
-```rust
-{{#include ../tests/guide/onboarding_and_sessions.rs:obtain_session}}
-```
-
 ## Co-process
+
+Request the invite once per session and hand the same bytes to every start of the companion. Its `onboard` retries while your app or the hub is away: bound it with `BlockingOptions::cancel`.
 
 ```rust
 {{#include ../tests/guide/onboarding_and_sessions.rs:co_process}}
@@ -46,26 +42,12 @@
 {{#include ../tests/guide/onboarding_and_sessions.rs:session_adapter}}
 ```
 
-## Re-enrolling a slot
-
-`OnboardExtensions::onboarding_id` sets `QarOnboardInit::onboarding_id`. The zero id, and a local app, are refused with `Error::InvalidArgument` before the call.
-
-```rust
-{{#include ../tests/guide/onboarding_and_sessions.rs:re_enroll}}
-```
-
 ## Onboarding without blocking
 
-`Runtime::start_onboard` (and `start_rejoin`) returns a `PendingOnboard`; `poll` never blocks, `wait` does, `cancel_handle` cancels from any thread.
+`Runtime::start_onboard` returns a `PendingOnboard`; `poll` never blocks, `wait` does, `cancel_handle` cancels from any thread.
 
 ```rust
 {{#include ../tests/guide/onboarding_and_sessions.rs:onboard_async}}
-```
-
-## Platforms without local enrollment
-
-```rust
-{{#include ../tests/guide/onboarding_and_sessions.rs:launch_invite}}
 ```
 
 ## When the hub's session changes
@@ -74,10 +56,4 @@
 
 ```rust
 {{#include ../tests/guide/onboarding_and_sessions.rs:session_lifecycle}}
-```
-
-## Teardown: destroy vs. forget
-
-```rust
-{{#include ../tests/guide/onboarding_and_sessions.rs:teardown}}
 ```

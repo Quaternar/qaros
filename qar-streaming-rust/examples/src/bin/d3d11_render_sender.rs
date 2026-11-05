@@ -3,12 +3,10 @@
 //! Windows only; elsewhere `main` says so and exits 0, like the C sample's non-D3D11 build.
 //!
 //! ```text
-//! cargo run -p qaros-examples --bin d3d11_render_sender -- [pairing-code] [--frames=300]
+//! cargo run -p qaros-examples --bin d3d11_render_sender -- [--frames=300]
 //! ```
 //!
-//! The C sample's flow: a session (rejoin with the persisted onboarding id, else onboard with
-//! the pairing code; with neither, unlike the C sample, join the QAROS Hub on this machine as a
-//! local app), the "D3D11 Tutorial Volume" app volume, a D3D11.1 device, one render
+//! The C sample's flow: a session (joining the QAROS Hub on this machine as a local app), the "D3D11 Tutorial Volume" app volume, a D3D11.1 device, one render
 //! sender with the device chained in `QarStreamParamsD3D11` (bind flags, the library acquiring
 //! and releasing each texture's keyed mutex), then frames in
 //! which every color view of the shared textures is cleared on the GPU to an animated color
@@ -45,7 +43,6 @@ fn main() {
 
 #[cfg(windows)]
 mod d3d11 {
-    use std::path::Path;
     use std::time::Duration;
 
     use qaros::d3d11::{D3D11Frame, D3D11StreamParams};
@@ -70,7 +67,6 @@ mod d3d11 {
     use windows::core::Interface as _;
 
     const DEFAULT_FRAME_COUNT: usize = 300;
-    const ID_FILE: &str = "d3d11_render_sender.onboarding-id.txt";
     const DISPLAY_NAME: &str = "D3D11 Renderer";
     /// The C sample polls for its render request every 50 ms; the peer list is polled likewise.
     const TARGET_POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -86,13 +82,7 @@ mod d3d11 {
 
         let library = load_library()?;
         let runtime = create_runtime(&library, None)?;
-        let session = join_session(
-            &library,
-            &runtime,
-            arguments.pairing_code.as_deref(),
-            Path::new(ID_FILE),
-            DISPLAY_NAME,
-        )?;
+        let session = join_session(&runtime, DISPLAY_NAME)?;
 
         let mut volume_config = AppVolumeConfig::new("d3d11-volume.examples.qaros");
         volume_config.display_name = Some("D3D11 Tutorial Volume".to_string());

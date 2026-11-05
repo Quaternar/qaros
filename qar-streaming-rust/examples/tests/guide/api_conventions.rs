@@ -2,43 +2,38 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use qaros::{
-    BlockingOptions, HubAddress, Library, OnboardMethod, Onboarded, OnboardingId, PeerId,
-    PeerPresentation, RenderSender, RenderSenderConfig, Runtime, Session, StatusCode,
+    BlockingOptions, Library, OnboardMethod, Onboarded, PeerId, PeerPresentation, RenderSender,
+    RenderSenderConfig, Runtime, Session, StatusCode,
 };
 
 fn handles_and_ids(
     library: &Library,
-    runtime: &Runtime,
     session: Session,
-    saved_id: OnboardingId,
     first_peer: PeerId,
     second_peer: PeerId,
 ) -> qaros::Result<()> {
     // ANCHOR: handles_and_ids
-    // Dropping the Session tears down the live session but KEEPS the identity:
+    // Dropping the Session tears down the live session; a local app joins again on its next start:
     drop(session);
-
-    // Erasing the persisted identity is a separate, explicit call on the runtime:
-    runtime.forget(saved_id)?;
 
     // IDs are Copy values that compare by their bytes; the library renders them as text:
     let same_peer = first_peer == second_peer;
-    let saved_text = library.uuid_to_string(&saved_id.0)?;
+    let peer_text = library.uuid_to_string(&first_peer.0)?;
     // ANCHOR_END: handles_and_ids
-    println!("{same_peer} {saved_text}");
+    println!("{same_peer} {peer_text}");
     Ok(())
 }
 
-fn results(
-    runtime: &Runtime,
-    saved_id: OnboardingId,
-    presentation: &PeerPresentation,
-) -> qaros::Result<Option<Session>> {
+fn results(runtime: &Runtime, presentation: &PeerPresentation) -> qaros::Result<Option<Session>> {
     // ANCHOR: results
-    let session = match runtime.rejoin(saved_id, presentation, &BlockingOptions::default()) {
-        Ok(session) => Some(session),
-        // Expected control flow, not an error: no persisted slot, so onboard instead.
-        Err(error) if error.has_code(StatusCode::ONBOARDING_SESSION_NOT_FOUND) => None,
+    let method = OnboardMethod::LocalApp {
+        approval_timeout: None,
+        app_tag: None,
+    };
+    let session = match runtime.onboard(&method, presentation, &BlockingOptions::default()) {
+        Ok(onboarded) => Some(onboarded.session),
+        // Expected control flow, not a bug: nobody answered the approval prompt in time.
+        Err(error) if error.has_code(StatusCode::ONBOARDING_APPROVAL_TIMEOUT) => None,
         // Anything else: the error names the C function, the status code and the message.
         Err(error) => return Err(error),
     };
@@ -46,19 +41,12 @@ fn results(
     Ok(session)
 }
 
-fn extension_chain(
-    runtime: &Runtime,
-    presentation: &PeerPresentation,
-    hub_port: u16,
-) -> qaros::Result<Onboarded> {
+fn extension_chain(runtime: &Runtime, presentation: &PeerPresentation) -> qaros::Result<Onboarded> {
     // ANCHOR: extension_chain
-    // The code and host extensions, chained and stamped by the binding:
-    let method = OnboardMethod::Code {
-        code: "ABCD-EFGH",
-        hub: Some(HubAddress {
-            hostname: "192.168.1.50",
-            port: hub_port, // shown with the hub's code
-        }),
+    // The local-app and app-tag extensions, chained and stamped by the binding:
+    let method = OnboardMethod::LocalApp {
+        approval_timeout: Some(Duration::from_secs(60)),
+        app_tag: Some("left.my-viewer.vendor"),
     };
     let onboarded = runtime.onboard(&method, presentation, &BlockingOptions::default())?;
     // ANCHOR_END: extension_chain

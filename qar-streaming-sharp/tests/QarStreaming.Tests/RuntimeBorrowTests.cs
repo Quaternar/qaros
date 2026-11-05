@@ -113,7 +113,9 @@ namespace Quaternar.Qaros.Tests
             var state = new RuntimeOnboardAsyncState(null, true);
             Assert.Throws<ObjectDisposedException>(() => state.HoldUntilCompletion(owner));
             state.CompleteOnboard(Result<OnboardSession>.Failure(Failed()));
+#pragma warning disable CS0618 // The deprecated forget still refuses a disposed runtime.
             Assert.Throws<ObjectDisposedException>(() => runtime.Forget(new ForgetOptions(OnboardingId.Default)));
+#pragma warning restore CS0618
         }
     }
 }

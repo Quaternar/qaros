@@ -17,9 +17,11 @@
  * later starts of the same executable join silently.
  *
  * This is how a source app on the Hub machine joins QAROS. There is nothing
- * to type and no onboarding id to store. An app on another machine pairs with
- * a code instead
- * (\ref qar_c_tutorial_onboarding "Code Pairing and Rejoin").
+ * to type and no onboarding id to store. A process the app starts joins as
+ * its companion
+ * (\ref qar_c_tutorial_co_process_onboarding "Co-Process Onboarding"), and an
+ * app on another PC joins through a member hub
+ * (\ref qar_c_tutorial_remote_app_onboarding "Remote App on Another PC").
  *
  * What you will learn:
  * - how QarOnboardLocalAppExt joins, and what the user sees during the
@@ -35,9 +37,9 @@
  * - Work through
  *   \ref qar_c_tutorial_dynamic_loading "Dynamic Loading"
  *   first: this program loads the runtime the same way.
- * - **Windows, with QAROS installed** on the machine the app runs on. When the
- *   Hub is not running, joining as a local app starts it, and the Hub keeps
- *   running after the app exits. Elsewhere the call fails with
+ * - **Windows or Linux, with QAROS installed** on the machine the app runs
+ *   on. When the Hub is not running, joining as a local app starts it, and the
+ *   Hub keeps running after the app exits. Elsewhere the call fails with
  *   `QAR_STATUS_NOT_IMPLEMENTED`.
  * - **Someone at the Hub machine** to click **Allow** on the first run. The
  *   prompt waits up to 120 seconds by default.
@@ -151,16 +153,15 @@
  * passes a QarCancelToken and cancels it when the user quits.
  *
  * A local app is **stateless**. The onboarding id comes back zero, and there
- * is nothing to save: every start calls \ref qar_runtime_onboard again, and
- * the Hub remembers the approval. \ref qar_runtime_rejoin and
- * \ref qar_runtime_forget do not apply.
+ * is nothing to save or erase: every start calls \ref qar_runtime_onboard
+ * again, and the Hub remembers the approval.
  *
  * \anchor local_app_tag_step
  * The app tag and the peer id:
  * - The Hub picks the peer id and remembers one per approval and app tag. The
  *   next start with the same tag gets the same peer id back, so viewers and
  *   your own bookkeeping see the same peer, not a new one. An app cannot
- *   choose the id (\ref QarOnboardPeerIdExt is refused here).
+ *   choose the id.
  * - While another live process holds the remembered id (a second instance
  *   with the same tag), the newcomer gets a one-off id that is not
  *   remembered. Give instances that run together different tags.
@@ -187,9 +188,8 @@
  * when the user asks; a Hub that is not authentic is never retried
  * (<a href="/docs/developer-guide/onboarding-and-sessions#status-codes-and-what-to-tell-the-user">Status codes and what to tell the user</a>).
  *
- * The sample programs that use a session join the same way when they are
- * given neither a stored id nor a code (`example_join_session` in
- * `common.h`).
+ * The sample programs that use a session join the same way, each with an
+ * app tag of its own (`example_join_session` in `common.h`).
  *
  * \section local_app_ownership Ownership and teardown in C
  * - **The session is yours.** On success \ref qar_runtime_onboard writes the

@@ -32,7 +32,7 @@ What you will learn:
 - **Joining.** The example joins the Hub as a local app
   ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)):
   click **Allow** in the QAROS approval prompt on the first run of the executable. Nothing is
-  stored; later runs join without a prompt.[^code]
+  stored; later runs join without a prompt.
 - **The latest stable Rust.**
 
 ## Run it
@@ -47,24 +47,26 @@ cargo run -p qaros-examples --bin gui_panel_operations
 To load a runtime other than the one the default lookup finds, add `--qaros-library=PATH` after
 the `--`, or set `QAROS_DLL`.
 
-Outside Windows the example does not try the local-app join, so the stub run passes a code: any
-code works except `WRONG` and
-`UNREACHABLE`, which the stub refuses on purpose. On macOS:
+Outside Windows, run it against the stub, which accepts the local-app join without a prompt. On
+macOS:
 
 ```sh
 cargo build -p qaros-stub
 mkdir -p target/stub-run && cd target/stub-run
 QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" \
-    cargo run -p qaros-examples --bin gui_panel_operations -- ANY-CODE
+    cargo run -p qaros-examples --bin gui_panel_operations
 ```
 
-The stub run stores `gui_panel_operations.onboarding-id.txt` in its folder, which a later run against QAROS from that folder would try to rejoin with: keep stub runs in a folder of their own ([On macOS, against the stub](/docs/developer-guide/tutorials/rust/#on-macos-against-the-stub)). It prints (the `Loading` lines name your own path):
+It prints (the `Loading` lines name your own path):
 
 ```text
 Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
 Loaded .../target/debug/libqaros_stub.dylib
 qar_runtime_create: SUCCESS
-qar_runtime_onboard: SUCCESS
+Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
+stub onboarding complete
+qar_runtime_onboard: SUCCESS (local app)
+Nothing to store: the next run joins as a local app again, without a prompt while this executable is unchanged.
 GUI panel id: D9:AF:F4:85:71:EE:15:15:16:24:07:A6:2E:F3:0D:42
 Update: position(0.20, 1.60, -1.00) size(1.20 x 0.70) state=Visible uri=''
 Update: position(0.20, 1.60, -1.00) size(1.00 x 0.60) state=Visible uri=''
@@ -96,37 +98,22 @@ and exit code 1.
 
 Everything a panel does goes through a session: the panel is shared session state, so every peer
 sees the same panel at the same place. The example uses the shared helper `join_session`: load
-the library, create a runtime, rejoin with the stored id, else onboard with the code
-([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)), else join
-as a local app ([Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding)).
+the library, create a runtime and join as a local app
+([Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding)).
 The [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering) tutorial shows the helper.
 
 ```rust
-let arguments = Arguments::parse();
 let library = load_library()?;
 let runtime = create_runtime(&library, None)?;
-let session = join_session(
-    &library,
-    &runtime,
-    arguments.pairing_code.as_deref(),
-    Path::new("gui_panel_operations.onboarding-id.txt"),
-    "GUI Panel Peer",
-)?;
+let session = join_session(&runtime, "GUI Panel Peer")?;
 ```
 
 What can go wrong:
 
-- `ONBOARDING_SESSION_NOT_FOUND` from the rejoin is normal: the stored id has no slot on this
-  machine. The helper goes on to the code, or to the local-app join.
-- `PAKE_ERROR` means the code was wrong or expired. Read the current code and run again.
-- `ONBOARDING_HUB_UNREACHABLE` is a real error: no Hub answered. With a code, the example finds
-  only your own Hub, on the Hub machine, since it passes no Hub address. For the local-app join
-  it is exit code 3: the join starts a Hub that is not running, so the Hub could not be started
-  or reached.
+- `ONBOARDING_HUB_UNREACHABLE` is exit code 3: the join starts a Hub that is not running, so the
+  Hub could not be started or reached.
 - A local-app join that is denied, or not answered within 120 s, ends with exit code 4 or 5, as
   in `local_app_onboarding`.
-- Not on Windows, without a stored id and without a code, the helper stops with "No persisted
-  onboarding id".
 
 ### 2. Get or create the panel
 
@@ -440,10 +427,8 @@ What it does not guarantee:
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `No persisted onboarding id in 'gui_panel_operations.onboarding-id.txt'` | Not on Windows, no code, and no id file in this folder | Pass the current pairing code, or run from the folder that holds the file |
-| Exit code 4 or 5 after `joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
-| `qar_runtime_onboard failed with QAR_STATUS_PAKE_ERROR` | The code was wrong or expired (codes live about 10 s) | Read the current code and run again |
-| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | No Hub answered; with a code, the example finds only your own Hub, on the Hub machine | Start QAROS and run again ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
+| Exit code 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE`, exit code 3 | The local-app join could not start or reach the Hub on this machine | Start QAROS and run again ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
 | `QAR_STATUS_GUI_PANEL_INVALID_ID` from a setter | The panel was closed, possibly by another peer | `get_or_create` again |
 | `get_or_create` fails for a name with accents or other non-ASCII text | Common names must be ASCII | Keep the name ASCII; put the text in `display_name` |
 | The program hangs in `cancel()` or at the end of a scope | A callback is waiting for a lock the cancelling thread holds | Release the lock before ending the subscription |
@@ -457,7 +442,7 @@ If you know [the C tutorial](/docs/developer-guide/tutorials/c/gui-panel-operati
 
 | C | Rust |
 | --- | --- |
-| `example_join_session` (rejoin, else code, else local app) | `qaros_examples::join_session` (rejoin, else code, else local app) |
+| `example_join_session` | `qaros_examples::join_session` (a local-app join) |
 | `QarGuiPanelInit`, `qar_gui_panel_init_default()` | `GuiPanelConfig::new(common_name)` |
 | `qar_gui_panels_get_or_create` | `GuiPanels::get_or_create` |
 | `qar_gui_panels_update_pose`, `_change_size`, `_set_state`, `_navigate_to_uri` | `set_pose`, `set_size`, `set_state`, `navigate_to_uri` |
@@ -482,10 +467,3 @@ them through `library.raw_api()` with the session's `as_raw()`, as the
 - [API Conventions](/docs/developer-guide/api-conventions): ownership, callbacks and results in
   every language.
 
-[^code]: The example also takes a Hub's pairing code as its argument; it passes no Hub address,
-    so the code finds only your own Hub, on the Hub machine (a Hub elsewhere needs its host and
-    port, `HubAddress`):
-    `cargo run -p qaros-examples --bin gui_panel_operations -- <PAIRING-CODE>`. It then
-    stores the onboarding id it gets in `gui_panel_operations.onboarding-id.txt` in the folder you
-    run `cargo` from, and rejoins with that id on every later run
-    ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)).

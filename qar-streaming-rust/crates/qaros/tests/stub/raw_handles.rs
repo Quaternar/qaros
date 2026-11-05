@@ -85,6 +85,7 @@ fn raw_peer_and_session_calls_reach_the_session_of_the_safe_api() {
     );
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn raw_runtime_sender_token_and_invite_calls_reach_the_safe_handles() {
     let fixture = Fixture::new();
@@ -147,13 +148,12 @@ fn raw_runtime_sender_token_and_invite_calls_reach_the_safe_handles() {
     let invite = local_session
         .request_onboarding_invite("companion.examples.qaros", &BlockingOptions::default())
         .expect("invite");
-    let mut expires = 0_i64;
+    let mut size = 0_usize;
     // SAFETY: a live invite's handle; valid out-pointer.
-    let result = unsafe {
-        (api.qar_impl_onboarding_invite_get_expires_unix)(invite.as_raw(), &raw mut expires)
-    };
+    let result =
+        unsafe { (api.qar_impl_onboarding_invite_serialized_size)(invite.as_raw(), &raw mut size) };
     assert!(succeeded(result));
-    assert_eq!(expires, invite.expires_unix().expect("expiry"));
+    assert_eq!(size, invite.serialize().expect("serialize").len());
     // SAFETY: a live invite's handle.
     assert!(unsafe { (api.qar_impl_onboarding_invite_handle_is_valid)(invite.as_raw()) });
 

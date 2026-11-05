@@ -447,20 +447,6 @@ macro_rules! qar_impl_function_list {
                 wire_data_size: usize,
                 out_invite: *mut *mut QarOnboardingInvite,
             ) -> QarResult;
-            pub fn qar_impl_onboarding_invite_get_code(
-                invite: *const QarOnboardingInvite,
-                out_buffer: *mut ::std::os::raw::c_char,
-                buffer_size: usize,
-                out_length: *mut usize,
-            ) -> QarResult;
-            pub fn qar_impl_onboarding_invite_get_expires_unix(
-                invite: *const QarOnboardingInvite,
-                out_expires_unix: *mut i64,
-            ) -> QarResult;
-            pub fn qar_impl_onboarding_invite_get_method(
-                invite: *const QarOnboardingInvite,
-                out_method: *mut QarOnboardingMethod,
-            ) -> QarResult;
             pub fn qar_impl_onboarding_invite_handle_destroy(invite: *mut QarOnboardingInvite);
             pub fn qar_impl_onboarding_invite_handle_is_valid(
                 invite: *const QarOnboardingInvite,

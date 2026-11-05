@@ -90,26 +90,10 @@ example_quiet_success(const char* label, QarResult result)
 	return qar_result_is_success(result);
 }
 
-/** \brief The pairing code: the first argument that does not start with
- *  "--", else NULL. */
-static const char*
-example_pairing_code_argument(int argc, char** argv)
-{
-	for(int i = 1; i < argc; ++i)
-	{
-		if(strncmp(argv[i], "--", 2) != 0)
-		{
-			return argv[i];
-		}
-	}
-	return NULL;
-}
-
-/** \brief Check the command line: at most one pairing code (an argument
- *  that does not start with "--"), and only flags that start with one of
- *  allowed_flags, such as "--frames=". Otherwise prints the usage to stderr
- *  and returns false, so "--frames 300" is refused instead of reading "300" as
- *  a pairing code. */
+/** \brief Check the command line: only flags that start with one of
+ *  allowed_flags, such as "--frames=". Any other argument, a positional one
+ *  included, prints the usage to stderr and returns false, so "--frames 300"
+ *  is refused instead of ignoring "300". */
 static bool
 example_arguments_are_known(
 	int argc,
@@ -119,15 +103,9 @@ example_arguments_are_known(
 	const char* usage
 )
 {
-	bool pairing_code_seen = false;
 	for(int i = 1; i < argc; ++i)
 	{
 		bool known = false;
-		if(strncmp(argv[i], "--", 2) != 0)
-		{
-			known = !pairing_code_seen;
-			pairing_code_seen = true;
-		}
 		for(size_t flag = 0; !known && flag < allowed_flag_count; ++flag)
 		{
 			known = strncmp(argv[i], allowed_flags[flag], strlen(allowed_flags[flag])) == 0;
@@ -366,11 +344,6 @@ example_is_waiting(QarResult result)
 }
 //! [example_is_waiting]
 
-/* Where a user finds the pairing code; printed whenever one is needed. */
-#define EXAMPLE_WHERE_THE_CODE_IS                                                                  \
-	"The Visualizer on the Hub machine shows the current code under Connection panel, "            \
-	"Hubs > Pair another Hub > Let another hub join us."
-
 //! [example_library_path]
 /** \brief The value of `--qaros-library=PATH` among the arguments, else NULL.
  *
@@ -534,237 +507,6 @@ example_create_runtime(const char* storage_folder_path, QarRuntime** out_runtime
 }
 //! [example_create_runtime]
 
-//! [example_onboarding_persistence]
-/** \brief Load a persisted onboarding id (UUID text) from a small state file.
- *  Returns false when the file does not exist yet (first run) or holds no
- *  readable id. */
-static bool
-load_onboarding_id(const char* path, QarOnboardingId* out_id)
-{
-	FILE* file = fopen(path, "r");
-	if(!file)
-	{
-		return false;
-	}
-	char text[64] = { 0 };
-	const bool read_ok = fgets(text, sizeof(text), file) != NULL;
-	fclose(file);
-	if(!read_ok)
-	{
-		return false;
-	}
-	text[strcspn(text, "\r\n")] = '\0';
-	QarResult parse_result = qar_uuid_from_string(text, out_id->data);
-	if(qar_result_is_error(parse_result))
-	{
-		/* Treated as "no id": the caller then asks for a code instead of failing. */
-		printf("Ignoring unreadable onboarding id in '%s'\n", path);
-		return false;
-	}
-	return true;
-}
-
-/** \brief Persist an onboarding id (UUID text) so the next run can rejoin.
- *  Returns false after printing why when the id is not saved. */
-static bool
-save_onboarding_id(const char* path, const QarOnboardingId* id)
-{
-	char text[64] = { 0 };
-	if(qar_result_is_error(qar_uuid_to_string(id->data, text, sizeof(text))))
-	{
-		printf("Failed to serialize onboarding id\n");
-		return false;
-	}
-	FILE* file = fopen(path, "w");
-	if(!file)
-	{
-		printf("Failed to persist onboarding id to '%s'\n", path);
-		return false;
-	}
-	/* A full disk or a lost network share shows up only here: an fprintf that
-	 * fails, or an fclose that cannot flush. */
-	const bool written = fprintf(file, "%s\n", text) >= 0;
-	const bool closed = fclose(file) == 0;
-	if(!written || !closed)
-	{
-		printf("Failed to persist onboarding id to '%s'\n", path);
-		return false;
-	}
-	return true;
-}
-//! [example_onboarding_persistence]
-
-//! [example_rejoin]
-/** What example_rejoin_with_stored_id found. */
-typedef enum ExampleRejoinOutcome
-{
-	/** The session is back; nothing else to do. */
-	EXAMPLE_REJOINED,
-	/** No readable id stored yet: onboard instead. */
-	EXAMPLE_REJOIN_NO_SAVED_ID,
-	/** An id is stored, but the runtime has no identity for it
-	 *  (QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND): onboard instead. */
-	EXAMPLE_REJOIN_IDENTITY_NOT_FOUND,
-	/** A real error (no Hub answered, ...): onboarding would not help. */
-	EXAMPLE_REJOIN_FAILED
-} ExampleRejoinOutcome;
-
-/** \brief Rejoin with the onboarding id stored in id_file_path. Shows no UI and
- *  needs no code. On EXAMPLE_REJOINED, *out_onboarding_id and *out_session are
- *  set. */
-static ExampleRejoinOutcome
-example_rejoin_with_stored_id(
-	QarRuntime* runtime,
-	const char* id_file_path,
-	const QarPeerPresentation* presentation,
-	QarOnboardingId* out_onboarding_id,
-	QarSession** out_session
-)
-{
-	QarOnboardingId saved_id = qar_onboarding_id_default();
-	if(!load_onboarding_id(id_file_path, &saved_id))
-	{
-		return EXAMPLE_REJOIN_NO_SAVED_ID;
-	}
-
-	QarRejoinInit rejoin_init = qar_rejoin_init_default();
-	rejoin_init.onboarding_id = saved_id;
-	rejoin_init.presentation = *presentation;
-
-	QarResult rejoin_result =
-		qar_runtime_rejoin(runtime, &rejoin_init, NULL, NULL, NULL, out_session);
-	log_result("qar_runtime_rejoin", rejoin_result);
-	if(qar_result_is_success(rejoin_result))
-	{
-		*out_onboarding_id = saved_id;
-		return EXAMPLE_REJOINED;
-	}
-	if(qar_result_has_code(rejoin_result, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
-	{
-		/* Normal flow: the id was forgotten, or this storage folder is new. */
-		printf(
-			"No identity stored for the id in '%s' in this runtime's storage folder: it was "
-			"forgotten, or the folder is new.\n",
-			id_file_path
-		);
-		return EXAMPLE_REJOIN_IDENTITY_NOT_FOUND;
-	}
-	return EXAMPLE_REJOIN_FAILED;
-}
-//! [example_rejoin]
-
-//! [example_onboard_with_code]
-/** \brief Onboard with a pairing code and persist the new onboarding id.
- *
- *  hub names the Hub to reach. With hub NULL, no QarOnboardHostExt is chained
- *  and the code finds a Hub of this user: first through the hub-endpoint.json
- *  file the Hub writes, then through a discovery beacon whose owner is this
- *  user. Returns false after printing why. */
-static bool
-example_onboard_with_code(
-	QarRuntime* runtime,
-	const char* pairing_code,
-	QarOnboardHostExt* hub, /* NULL: a Hub of this user */
-	const char* id_file_path,
-	const QarPeerPresentation* presentation,
-	QarOnboardingId* out_onboarding_id,
-	QarSession** out_session
-)
-{
-	QarOnboardInit onboard_init = qar_onboard_init_default();
-	QarOnboardCodeExt onboard_code = qar_onboard_code_ext_default();
-	onboard_init.presentation = *presentation;
-	onboard_code.code = pairing_code;
-	onboard_init.header.next = &onboard_code.header;
-	/* The Hub's address goes after the code extension in the chain. */
-	onboard_code.header.next = hub != NULL ? &hub->header : NULL;
-
-	QarOnboardingId new_id = qar_onboarding_id_default();
-	QarResult onboard_result =
-		qar_runtime_onboard(runtime, &onboard_init, NULL, NULL, NULL, &new_id, out_session);
-	log_result("qar_runtime_onboard", onboard_result);
-	if(qar_result_has_code(onboard_result, QAR_STATUS_PAKE_ERROR))
-	{
-		printf(
-			"Pairing code rejected or expired: a code works once, for about ten seconds. "
-			"Run again with the current code.\n" EXAMPLE_WHERE_THE_CODE_IS "\n"
-		);
-	}
-	if(qar_result_is_error(onboard_result))
-	{
-		return false;
-	}
-
-	/* The id is the ticket for every later rejoin and forget: save it at once. */
-	if(!save_onboarding_id(id_file_path, &new_id))
-	{
-		printf(
-			"This run continues, but the next run cannot rejoin: it will need a new "
-			"pairing code.\n"
-		);
-	}
-	*out_onboarding_id = new_id;
-	return true;
-}
-//! [example_onboard_with_code]
-
-//! [example_obtain_session]
-/** \brief The startup of an app that pairs with a code: rejoin with the
- *  persisted onboarding id, otherwise onboard with the pairing code (at hub,
- *  when given) and persist the new id.
- *
- *  Returns 0 on success; on success *out_session and *out_onboarding_id are
- *  set and the id is saved in id_file_path for the next run. */
-static int
-example_obtain_session(
-	QarRuntime* runtime,
-	const char* pairing_code, /* may be NULL when a persisted id exists */
-	QarOnboardHostExt* hub,	  /* NULL: a Hub of this user */
-	const char* id_file_path,
-	const char* display_name,
-	QarOnboardingId* out_onboarding_id,
-	QarSession** out_session
-)
-{
-	QarPeerPresentation presentation = qar_peer_presentation_default();
-	presentation.display_name = display_name;
-
-	const ExampleRejoinOutcome rejoin = example_rejoin_with_stored_id(
-		runtime, id_file_path, &presentation, out_onboarding_id, out_session
-	);
-	if(rejoin == EXAMPLE_REJOINED)
-	{
-		return 0;
-	}
-	if(rejoin == EXAMPLE_REJOIN_FAILED)
-	{
-		return 1;
-	}
-
-	if(pairing_code == NULL && rejoin == EXAMPLE_REJOIN_IDENTITY_NOT_FOUND)
-	{
-		printf(
-			"Pair again: pass a new pairing code as the first argument.\n" EXAMPLE_WHERE_THE_CODE_IS
-			"\n"
-		);
-		return 1;
-	}
-	if(pairing_code == NULL)
-	{
-		printf(
-			"No persisted onboarding id in '%s'. Pass the pairing code as the first "
-			"argument.\n" EXAMPLE_WHERE_THE_CODE_IS "\n",
-			id_file_path
-		);
-		return 1;
-	}
-	const bool onboarded = example_onboard_with_code(
-		runtime, pairing_code, hub, id_file_path, &presentation, out_onboarding_id, out_session
-	);
-	return onboarded ? 0 : 1;
-}
-//! [example_obtain_session]
-
 //! [example_local_app_result]
 /** \brief Progress callback that prints each message. The library calls it on
  *  its own thread while the blocking call waits; it returns before the call
@@ -796,7 +538,7 @@ example_local_app_exit_code(QarResult result)
 	{
 		fprintf(
 			stderr,
-			"Could not start or reach QAROS on this machine. Start QAROS from the Start menu, "
+			"Could not start or reach QAROS on this machine. Start QAROS, "
 			"then start this app again.\n"
 		);
 		return 3;
@@ -835,90 +577,10 @@ example_local_app_exit_code(QarResult result)
 }
 //! [example_local_app_result]
 
-//! [example_join_session]
+//! [example_join_local_app]
 /** How long the first run of an executable waits for someone to click Allow. */
 #define EXAMPLE_LOCAL_APP_APPROVAL_TIMEOUT_MS 120000u
 
-/** \brief The startup of the samples that use a session: rejoin with the
- *  persisted onboarding id, else onboard with the pairing code when one is
- *  given, else (Windows) join the Hub on this machine as a local app.
- *
- *  Returns 0 with *out_session set, or an exit code after printing why: 3 to 7
- *  for a refused local-app join (see example_local_app_exit_code), 1 for
- *  anything else. A local app stores nothing: its onboarding id is the zero
- *  id, so the next run joins as a local app again. */
-static int
-example_join_session(
-	QarRuntime* runtime,
-	const char* pairing_code, /* NULL: no code given */
-	const char* id_file_path,
-	const char* display_name,
-	QarSession** out_session
-)
-{
-	QarPeerPresentation presentation = qar_peer_presentation_default();
-	presentation.display_name = display_name;
-	QarOnboardingId onboarding_id = qar_onboarding_id_default();
-
-	switch(example_rejoin_with_stored_id(
-		runtime, id_file_path, &presentation, &onboarding_id, out_session
-	))
-	{
-	case EXAMPLE_REJOINED:
-		return 0;
-	case EXAMPLE_REJOIN_FAILED:
-		return 1;
-	case EXAMPLE_REJOIN_NO_SAVED_ID:
-	case EXAMPLE_REJOIN_IDENTITY_NOT_FOUND:
-		break;
-	}
-
-	if(pairing_code != NULL)
-	{
-		const bool onboarded = example_onboard_with_code(
-			runtime, pairing_code, NULL, id_file_path, &presentation, &onboarding_id, out_session
-		);
-		return onboarded ? 0 : 1;
-	}
-
-#ifdef _WIN32
-	printf(
-		"No session to rejoin and no pairing code: joining the QAROS Hub on this machine as a "
-		"local app. On the first run of this executable, click Allow in the QAROS approval "
-		"prompt (waiting up to %u s).\n",
-		EXAMPLE_LOCAL_APP_APPROVAL_TIMEOUT_MS / 1000u
-	);
-	QarOnboardInit onboard_init = qar_onboard_init_default();
-	QarOnboardLocalAppExt local_app = qar_onboard_local_app_ext_default();
-	onboard_init.presentation = presentation;
-	local_app.approval_timeout_ms = EXAMPLE_LOCAL_APP_APPROVAL_TIMEOUT_MS;
-	onboard_init.header.next = &local_app.header;
-
-	QarResult joined = qar_runtime_onboard(
-		runtime, &onboard_init, example_print_progress, NULL, NULL, &onboarding_id, out_session
-	);
-	const int exit_code = example_local_app_exit_code(joined);
-	if(exit_code == 0)
-	{
-		printf("qar_runtime_onboard: SUCCESS (local app)\n");
-		printf(
-			"A local app has no onboarding id to store (it is zero): the next run joins as a "
-			"local app again, without a prompt while this executable is unchanged.\n"
-		);
-	}
-	return exit_code;
-#else
-	printf(
-		"No persisted onboarding id in '%s'. Pass the pairing code as the first "
-		"argument.\n" EXAMPLE_WHERE_THE_CODE_IS "\n",
-		id_file_path
-	);
-	return 1;
-#endif
-}
-//! [example_join_session]
-
-//! [example_join_local_app]
 /** \brief Join the QAROS Hub on this machine as a local app with an app tag:
  *  no code, the user approves the app once in QAROS, and the tag keeps the
  *  peer id across restarts. Nothing is stored, so every start calls it again.
@@ -949,6 +611,35 @@ example_join_as_local_app(
 	return example_local_app_exit_code(joined);
 }
 //! [example_join_local_app]
+
+//! [example_join_session]
+/** \brief The startup of the samples that use a session: join the QAROS Hub
+ *  on this machine as a local app with the sample's app tag.
+ *
+ *  Returns 0 with *out_session set, or an exit code after printing why: 3 to 7
+ *  for a refused join (see example_local_app_exit_code), 1 for anything else.
+ *  A local app stores nothing, so every run joins this way again. */
+static int
+example_join_session(
+	QarRuntime* runtime, const char* display_name, const char* app_tag, QarSession** out_session
+)
+{
+	printf(
+		"Joining the QAROS Hub on this machine as a local app. On the first run of this "
+		"executable, click Allow in the QAROS approval prompt (waiting up to %u s).\n",
+		EXAMPLE_LOCAL_APP_APPROVAL_TIMEOUT_MS / 1000u
+	);
+	const int exit_code = example_join_as_local_app(runtime, display_name, app_tag, out_session);
+	if(exit_code == 0)
+	{
+		printf(
+			"qar_runtime_onboard: SUCCESS (local app). Nothing is stored: the next run joins "
+			"the same way, without a prompt while this executable is unchanged.\n"
+		);
+	}
+	return exit_code;
+}
+//! [example_join_session]
 
 //! [example_own_peer_id]
 /** \brief Read the peer id this session joined under. The hub picks it (for a

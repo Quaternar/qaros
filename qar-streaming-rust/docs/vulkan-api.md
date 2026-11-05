@@ -20,7 +20,7 @@ Adapter selection (always available, not behind the feature):
 | `GraphicsAdapter::matches(luid: Option<[u8; 8]>, uuid: [u8; 16])` | Compare with `VkPhysicalDeviceIDProperties` (`device_luid` if `device_luid_valid`, `device_uuid`) to pick the physical device. |
 | `Display for GraphicsAdapter` | Lowercase hex, the format `parse` reads. |
 | `Runtime::onboard_on_adapter(method, presentation, Option<GraphicsAdapter>, options)` | `onboard` with the adapter chained after the mode extension. |
-| `Runtime::rejoin_on_adapter(onboarding_id, presentation, Option<GraphicsAdapter>, options)` | `rejoin` with the adapter chained into `QarRejoinInit`. |
+| `Runtime::rejoin_on_adapter(onboarding_id, presentation, Option<GraphicsAdapter>, options)` | Deprecated: `rejoin` with the adapter chained into `QarRejoinInit`. Onboard on every start with `onboard_on_adapter` instead. |
 
 The Vulkan sender and its frame (feature `vulkan`, module `qaros::vulkan`):
 

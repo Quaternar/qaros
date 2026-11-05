@@ -37,8 +37,7 @@
  * - **Joining.** The program joins the Hub on this machine as a local app,
  *   as the CPU program does: click **Allow** in the QAROS approval prompt on
  *   the first run of the executable. Nothing is stored, and later runs join
- *   without a prompt. A pairing code works too; see
- *   \ref d3d11_rendering_code "With a pairing code" at the end of this page.
+ *   without a prompt.
  * - **This repository built** with CMake: `cmake --preset x64-windows`, then
  *   `cmake --build --preset x64-windows-debug --target d3d11_render_sender`.
  *   The program links `d3d11`, `dxgi` and `dxguid`.
@@ -59,9 +58,8 @@
  * Loaded <path>\qar-streaming-c.dll (the installed QAROS)
  * Runtime <version> (<flavor>, C API <version>)
  * qar_runtime_create: SUCCESS (code=0)
- * No session to rejoin and no pairing code: joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
- * qar_runtime_onboard: SUCCESS (local app)
- * A local app has no onboarding id to store (it is zero): the next run joins as a local app again, without a prompt while this executable is unchanged.
+ * Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
+ * qar_runtime_onboard: SUCCESS (local app). Nothing is stored: the next run joins the same way, without a prompt while this executable is unchanged.
  * Waiting for a target app in the peer list ...
  * Creating the D3D11 device on <adapter name>
  * qar_render_sender_create: SUCCESS (code=0)
@@ -82,8 +80,8 @@
  *
  * \subsection d3d11_rendering_start 1. Join, and create the app volume
  * The startup is the CPU program's: `example_join_session` from `common.h`
- * rejoins, onboards with a pairing code, or joins as a local app. Then the
- * app volume the stream is shown in:
+ * joins as a local app with the program's app tag. Then the app volume the
+ * stream is shown in:
  * \snippet d3d11_render_sender.c d3d11_volume
  *
  * \subsection d3d11_rendering_target 2. Find the target
@@ -215,7 +213,7 @@
  * \section d3d11_rendering_troubleshooting Troubleshooting
  * | What you see | Cause | What to do |
  * |---|---|---|
- * | exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
+ * | exit 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
  * | `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.`, exit 3 | the local-app join could neither start the Hub nor reach it | start QAROS from the Start menu and run again |
  * | stays at `Waiting for a target app in the peer list ...` | no running target app in the session | open the Visualizer or start a headset |
  * | `` The session's adapter (LUID ...) is not among this machine's DXGI adapters `` | the session names an adapter DXGI does not list | check the GPU driver; report it with the LUID |
@@ -231,18 +229,6 @@
  *   handle ownership and the teardown order.
  * - <a href="/docs/developer-guide/tutorials/rust/d3d11-rendering">D3D11 Rendering in Rust</a>:
  *   the same program on the Rust binding.
- *
- * \section d3d11_rendering_code With a pairing code
- * Like the CPU program, it also takes a pairing code as its first argument
- * that does not start with `--`. It passes no Hub address, so the code finds
- * a Hub of your own user, as \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
- * explains. An app on another machine also names the Hub with a
- * QarOnboardHostExt; that tutorial shows how.
- * \code{.bash}
- * .\build\x64-windows\qar-streaming-c\examples\Debug\d3d11_render_sender.exe <PAIRING-CODE> --frames=300
- * \endcode
- * It stores the onboarding id in `d3d11_render_sender.onboarding-id.txt` in
- * the working directory, and later runs rejoin with it.
  */
 // clang-format on
 
@@ -252,6 +238,10 @@
 #include <windows.h>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
+
+/* The app tag the Hub remembers this program's peer id by: printable ASCII,
+ * constant across versions. */
+#define APP_TAG "main.d3d11-render-sender.examples.quaternar"
 
 #define DEFAULT_FRAME_COUNT 300u
 #define TARGET_POLL_INTERVAL_MS 50u
@@ -610,7 +600,7 @@ main(int argc, char** argv)
 		   argv,
 		   known_flags,
 		   sizeof(known_flags) / sizeof(known_flags[0]),
-		   "[pairing-code] [--frames=N] [--qaros-library=PATH]"
+		   "[--frames=N] [--qaros-library=PATH]"
 	   ))
 	{
 		return 1;
@@ -622,7 +612,6 @@ main(int argc, char** argv)
 		return 1;
 	}
 	const char* library_path = example_library_path(argc, argv);
-	const char* pairing_code = example_pairing_code_argument(argc, argv);
 
 	int exit_code = example_load_library(library_path);
 	if(exit_code != 0)
@@ -636,9 +625,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 	QarSession* session = NULL;
-	exit_code = example_join_session(
-		runtime, pairing_code, "d3d11_render_sender.onboarding-id.txt", "D3D11 Renderer", &session
-	);
+	exit_code = example_join_session(runtime, "D3D11 Renderer", APP_TAG, &session);
 	if(exit_code != 0)
 	{
 		teardown(runtime, session);

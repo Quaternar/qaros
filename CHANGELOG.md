@@ -89,6 +89,24 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Choosing an Onboarding Mode* and *Onboarding and Sessions* show exactly three ways an
+  app joins: a local app on the QAROS PC, a companion process the local app starts (one invite per
+  app session, reused for every start of the companion, reaching only this user on this PC; the
+  companion's onboard retries while the app or the hub is away), and a remote app through a member
+  hub. An app QAROS starts is described as a local app. The onboarding-code, launch-invite,
+  planned-peer-id and slot re-enrollment sections are gone, the *App Launched by QAROS* C tutorial
+  is removed, and the code-pairing tutorials are no longer in the navigation.
+
+- **Docs:** the C examples and tutorials use only the local app, companion and member hub ways to
+  join; the onboarding-and-rejoin and launched-app examples are removed. The examples that open a
+  session join as a local app with an app tag of their own and take no pairing code; the
+  *Co-Process Onboarding* tutorial requests one invite per app session, hands the same bytes to
+  every start of the companion, and bounds the companion's one onboarding call with a cancel token.
+- **Docs:** the Rust examples, tutorials and guide tabs use only the local app, companion and
+  member hub ways to join; the Rust *Onboarding and Rejoin* tutorial is removed and its address
+  redirects to *Onboarding and Sessions*. *API Conventions*, *Troubleshooting* and *Peers* show
+  local-app onboarding instead of rejoin, forget and pairing codes.
+
 - **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
   Guide.
 

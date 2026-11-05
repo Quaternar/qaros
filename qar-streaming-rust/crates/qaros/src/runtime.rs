@@ -32,8 +32,8 @@ pub struct RuntimeConfig {
     pub storage_directory: Option<PathBuf>,
     /// Keep the identity in memory only (`QarRuntimeEphemeralStorageExt`), for a co-process
     /// that joins with an invite from its parent app: nothing is written under the storage
-    /// directory, the returned onboarding id is zero, and [`Runtime::rejoin`] and
-    /// [`Runtime::forget`] fail with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. A runtime
+    /// directory, and the deprecated [`Runtime::rejoin`] and [`Runtime::forget`] fail with
+    /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]. A runtime
     /// older than the extension skips it and stores the identity on disk: check
     /// [`crate::Library::runtime_info`] before relying on it.
     pub ephemeral_storage: bool,
@@ -55,7 +55,13 @@ pub struct PeerPresentation {
     pub device_identity: Option<DeviceIdentity>,
 }
 
-/// Where the hub runs, for onboarding with a code against a remote hub.
+/// Where the hub runs, for onboarding with a code against a remote hub (`QarOnboardHostExt`).
+#[deprecated(
+    note = "code onboarding is no longer a supported way to join, so it needs no hub address: \
+            join as a local app (`OnboardMethod::LocalApp`), a companion \
+            (`OnboardMethod::Invite`) or through a member hub \
+            (`OnboardExtensions::remote_app_grant`)"
+)]
 #[derive(Clone, Copy, Debug)]
 pub struct HubAddress<'a> {
     /// Plain host name or IP address, no URL.
@@ -65,7 +71,12 @@ pub struct HubAddress<'a> {
     pub port: u16,
 }
 
-/// The onboarding path, chained as exactly one mode extension.
+/// The onboarding path, chained as exactly one mode extension. An app joins in one of three ways:
+/// as a local app ([`OnboardMethod::LocalApp`]), as a companion of a local app
+/// ([`OnboardMethod::Invite`] with the app's [`crate::Session::request_onboarding_invite`]), or
+/// through a member hub ([`OnboardMethod::LocalApp`] with
+/// [`OnboardExtensions::remote_app_grant`]).
+#[allow(deprecated)] // the deprecated `Code` variant names the deprecated `HubAddress`
 #[derive(Clone, Copy, Debug)]
 pub enum OnboardMethod<'a> {
     /// The short code shown on the hub's onboarding screen (it lives about
@@ -74,6 +85,11 @@ pub enum OnboardMethod<'a> {
     /// root, then a discovery beacon whose owner is this user (up to 6 s), else
     /// [`crate::StatusCode::ONBOARDING_HUB_UNREACHABLE`]. Any other hub needs
     /// its host and port in `hub`.
+    #[deprecated(note = "code onboarding is no longer a supported way to join: use \
+                `OnboardMethod::LocalApp` (an app on the hub's PC), `OnboardMethod::Invite` with \
+                an invite from `Session::request_onboarding_invite` (a companion process), or \
+                `OnboardMethod::LocalApp` with `OnboardExtensions::remote_app_grant` (an app on \
+                a member hub's PC)")]
     Code {
         code: &'a str,
         hub: Option<HubAddress<'a>>,
@@ -92,8 +108,8 @@ pub enum OnboardMethod<'a> {
     /// before the call; pass `None` for the default. A refusal ends in one of the
     /// `ONBOARDING_APPROVAL_*`, `ONBOARDING_HUB_NOT_AUTHENTIC` or
     /// `ONBOARDING_APP_IDENTITY_MISMATCH` codes, see
-    /// [`crate::StatusCode::user_action`]. Stateless: the returned onboarding
-    /// id is the zero id, and rejoin and forget do not apply.
+    /// [`crate::StatusCode::user_action`]. Stateless: nothing to persist, every start onboards
+    /// again.
     ///
     /// `app_tag` (`QarOnboardLocalAppTagExt`) names this instance of the app: the hub remembers
     /// one peer id per approval and tag, so the next start with the same tag gets the same peer
@@ -112,8 +128,8 @@ pub enum OnboardMethod<'a> {
 }
 
 /// The optional extensions of [`Runtime::onboard_with`] and [`Runtime::start_onboard`], chained
-/// after the mode extension in this order: the remote-app grant, the adapter, the planned peer id.
-/// The re-enrolled onboarding id goes into the init itself.
+/// after the mode extension in this order: the remote-app grant, the adapter, the planned peer id
+/// (deprecated). The re-enrolled onboarding id (deprecated) goes into the init itself.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OnboardExtensions<'a> {
     /// Creates the session's GPU devices, and with them every render sender's frame images, on
@@ -128,6 +144,11 @@ pub struct OnboardExtensions<'a> {
     /// it. [`PeerId::ZERO`] and a local app ([`OnboardMethod::LocalApp`], whose peer id the hub
     /// assigns) are refused with [`Error::InvalidArgument`] before the call; the C API refuses
     /// both with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`].
+    #[deprecated(
+        note = "joining under a planned peer id is no longer supported: a local app's peer id \
+                comes from the hub, per approval and `app_tag`, and a companion's from its \
+                invite; leave it `None`"
+    )]
     pub peer_id: Option<PeerId>,
     /// Re-enrolls this persisted slot (`QarOnboardInit::onboarding_id`) instead of creating a new
     /// identity: the slot is reused when it survives and recreated under the same id after a
@@ -137,6 +158,10 @@ pub struct OnboardExtensions<'a> {
     /// [`RuntimeConfig::ephemeral_storage`] refuses it with
     /// [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`], and a slot with a live session with
     /// [`crate::StatusCode::ONBOARDING_SESSION_STILL_ACTIVE`].
+    #[deprecated(
+        note = "re-enrolling a persisted slot is no longer supported: join as a local app \
+                (`OnboardMethod::LocalApp`), which is stateless; leave it `None`"
+    )]
     pub onboarding_id: Option<OnboardingId>,
     /// Redeems a member hub's remote-app grant (`QarOnboardRemoteAppGrantExt`): the invitation
     /// the primary's app created with [`crate::MemberHubInvitationConfig::app_grant_tag`]. With
@@ -160,9 +185,13 @@ pub struct OnboardExtensions<'a> {
 /// The result of a successful onboarding or rejoin.
 #[derive(Debug)]
 pub struct Onboarded {
-    /// Persist this; it is the ticket for later rejoin and forget calls. Zero
-    /// for a local app ([`OnboardMethod::LocalApp`]) and on a runtime with
-    /// [`RuntimeConfig::ephemeral_storage`]: nothing to persist. A rejoin echoes its id.
+    /// The persisted slot's key, the ticket for the deprecated [`Runtime::rejoin`] and
+    /// [`Runtime::forget`]. Zero for a local app ([`OnboardMethod::LocalApp`]) and on a runtime
+    /// with [`RuntimeConfig::ephemeral_storage`]: nothing to persist. A rejoin echoes its id.
+    #[deprecated(
+        note = "onboarding ids only serve rejoin and forget, which are deprecated: a local app, \
+                a companion and a member hub's app store nothing and onboard on every start"
+    )]
     pub onboarding_id: OnboardingId,
     pub session: Session,
 }
@@ -270,6 +299,8 @@ unsafe impl Send for OnboardInitStorage {}
 unsafe impl Sync for OnboardInitStorage {}
 
 impl OnboardInitStorage {
+    // The deprecated code mode, planned peer id and re-enrolled slot still work.
+    #[allow(deprecated)]
     pub(crate) fn new(
         method: &OnboardMethod<'_>,
         presentation: &PeerPresentation,
@@ -357,6 +388,7 @@ impl OnboardInitStorage {
 }
 
 /// What the C API refuses with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, refused before the call.
+#[allow(deprecated)] // checks the deprecated planned peer id and re-enrolled slot too
 fn validate_extensions(
     method: &OnboardMethod<'_>,
     extensions: &OnboardExtensions<'_>,
@@ -479,12 +511,19 @@ impl Runtime {
     /// (`qar_runtime_rejoin`). [`crate::StatusCode::ONBOARDING_SESSION_NOT_FOUND`]
     /// means: onboard instead. The zero id (a local app's) is refused with
     /// [`Error::InvalidArgument`]. The peer id is the one persisted by the onboard.
+    #[deprecated(
+        note = "rejoining a persisted slot is no longer a supported way to join: onboard on \
+                every start, as a local app (`OnboardMethod::LocalApp`), a companion \
+                (`OnboardMethod::Invite`) or through a member hub \
+                (`OnboardExtensions::remote_app_grant`)"
+    )]
     pub fn rejoin(
         &self,
         onboarding_id: OnboardingId,
         presentation: &PeerPresentation,
         options: &BlockingOptions<'_>,
     ) -> Result<Session> {
+        #[allow(deprecated)]
         self.rejoin_on_adapter(onboarding_id, presentation, None, options)
     }
 
@@ -492,6 +531,12 @@ impl Runtime {
     /// them every render sender's frame images, on `adapter`
     /// (`QarGraphicsDeviceId` chained into `QarRejoinInit`). `None` lets the
     /// library pick.
+    #[deprecated(
+        note = "rejoining a persisted slot is no longer a supported way to join: onboard on \
+                every start with `Runtime::onboard_on_adapter`, as a local app (`OnboardMethod::LocalApp`), a companion \
+                (`OnboardMethod::Invite`) or through a member hub \
+                (`OnboardExtensions::remote_app_grant`)"
+    )]
     pub fn rejoin_on_adapter(
         &self,
         onboarding_id: OnboardingId,
@@ -578,6 +623,7 @@ impl Runtime {
         };
         check(api, "qar_runtime_onboard", result)?;
         let session = require_handle(session, "qar_runtime_onboard")?;
+        #[allow(deprecated)] // the deprecated field is still filled
         Ok(Onboarded {
             onboarding_id: OnboardingId::from_raw(onboarding_id),
             session: Session::from_handle(session, Rc::clone(&self.inner)),
@@ -631,6 +677,12 @@ impl Runtime {
     /// Starts [`Runtime::rejoin_on_adapter`] without blocking (`qar_runtime_rejoin_async`), as
     /// [`Runtime::start_onboard`] does; the [`Onboarded`] it delivers echoes `onboarding_id`. The
     /// zero id is refused with [`Error::InvalidArgument`] before the call.
+    #[deprecated(
+        note = "rejoining a persisted slot is no longer a supported way to join: onboard on \
+                every start with `Runtime::start_onboard`, as a local app (`OnboardMethod::LocalApp`), a companion \
+                (`OnboardMethod::Invite`) or through a member hub \
+                (`OnboardExtensions::remote_app_grant`)"
+    )]
     pub fn start_rejoin(
         &self,
         onboarding_id: OnboardingId,
@@ -697,6 +749,7 @@ impl Runtime {
                     return Err(error);
                 }
                 let session = require_handle(outcome.handle as *mut sys::QarSession, function)?;
+                #[allow(deprecated)] // the deprecated field is still filled
                 Ok(Onboarded {
                     onboarding_id: OnboardingId(outcome.id),
                     session: Session::from_handle(session, finish_runtime),
@@ -713,6 +766,11 @@ impl Runtime {
     /// instance id and session state. Works with no active session. Fails with
     /// [`crate::StatusCode::ONBOARDING_SESSION_STILL_ACTIVE`] while a session of that slot is
     /// alive, and [`crate::StatusCode::ONBOARDING_SESSION_NOT_FOUND`] without a slot.
+    #[deprecated(
+        note = "persisted slots are no longer a supported way to join, so there is nothing to \
+                forget: a local app, a companion and a member hub's app store nothing; dropping \
+                the `Session` ends it, and revoking the app's approval in QAROS removes it"
+    )]
     pub fn forget(&self, onboarding_id: OnboardingId) -> Result<()> {
         if onboarding_id.is_zero() {
             return Err(Error::InvalidArgument(

@@ -160,7 +160,6 @@ fn an_async_co_process_invite_is_minted_for_a_local_app_and_refused_otherwise() 
         .expect("start")
         .wait()
         .expect("invite");
-    assert!(invite.expires_unix().expect("expiry") > 0);
     assert!(reports.try_recv().is_ok(), "a progress report");
     drop(invite);
     let bad_tag = session

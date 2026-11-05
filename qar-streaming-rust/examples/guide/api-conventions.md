@@ -1,7 +1,7 @@
 ## Opaque handles and value IDs
 
 - **Handles** are owned values that release their C handle on drop: `Library`, `Runtime`, `Session`, `RenderSender`, `CancelToken`, `OnboardingInvite`. Each keeps its parent alive, so the C teardown order holds.
-- **Value IDs** are `Copy` newtypes over the 16 UUID bytes: `PeerId`, `SessionId`, `GuiPanelId`, `AppVolumeId`, `StreamId`, `OnboardingId`. They compare with `==`, and `library.uuid_to_string` renders one for persisting.
+- **Value IDs** are `Copy` newtypes over the 16 UUID bytes: `PeerId`, `SessionId`, `GuiPanelId`, `AppVolumeId`, `StreamId`. They compare with `==`, and `library.uuid_to_string` renders one as text.
 
 ```rust
 {{#include ../tests/guide/api_conventions.rs:handles_and_ids}}
@@ -19,7 +19,7 @@ Every fallible call returns **`qaros::Result`**. A C failure is `Error::Api`, wh
 
 ## Extensible init structs
 
-The safe API builds the init structs, stamps them with ports of the `qar_*_default()` helpers and chains the extensions. You pass Rust values: an enum for the onboarding mode, an `Option` for an optional extension such as the hub address. For raw calls through `library.raw_api()`, `qaros_sys::defaults` has the same helpers.
+The safe API builds the init structs, stamps them with ports of the `qar_*_default()` helpers and chains the extensions. You pass Rust values: an enum for the onboarding mode, an `Option` for an optional extension such as the app tag. For raw calls through `library.raw_api()`, `qaros_sys::defaults` has the same helpers.
 
 ```rust
 {{#include ../tests/guide/api_conventions.rs:extension_chain}}
@@ -27,8 +27,8 @@ The safe API builds the init structs, stamps them with ports of the `qar_*_defau
 
 ## Blocking / async pairs
 
-- **Blocking**: `Runtime::onboard`, `Runtime::rejoin` and `Session::create_render_sender` block until done. Their `BlockingOptions` take an optional progress channel, fed from a library thread while you wait, and an optional `CancelToken` (`library.create_cancel_token`, with or without a timeout), which the borrow keeps alive for the call. Its `cancel_handle()` cancels it from another thread.
-- **Async**: `Runtime::start_onboard` and `Runtime::start_rejoin` return a `PendingOnboard`, `Session::start_render_sender` a `PendingRenderSender`, at once; `poll()` hands over the outcome once the library called back (`PendingOnboard::wait` blocks for it). The library calls back exactly once, with `StatusCode::TIMEOUT` when the call is cancelled; dropping the pending value cancels it. `RenderSender::start_owned_frame` is the async begin-frame (`PendingFrame`).
+- **Blocking**: `Runtime::onboard` and `Session::create_render_sender` block until done. Their `BlockingOptions` take an optional progress channel, fed from a library thread while you wait, and an optional `CancelToken` (`library.create_cancel_token`, with or without a timeout), which the borrow keeps alive for the call. Its `cancel_handle()` cancels it from another thread.
+- **Async**: `Runtime::start_onboard` returns a `PendingOnboard`, `Session::start_render_sender` a `PendingRenderSender`, at once; `poll()` hands over the outcome once the library called back (`PendingOnboard::wait` blocks for it). The library calls back exactly once, with `StatusCode::TIMEOUT` when the call is cancelled; dropping the pending value cancels it. `RenderSender::start_owned_frame` is the async begin-frame (`PendingFrame`).
 
 ```rust
 {{#include ../tests/guide/api_conventions.rs:blocking_call}}

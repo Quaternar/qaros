@@ -49,10 +49,9 @@ How these relate in space (room -> volume -> content -> panels) is the subject o
 The User Guide keeps these details high-level. For integration work, the
 important concrete rules are:
 
-- **Peers** have stable IDs. A local app on the QAROS PC gets its peer ID back
-  on every start: the hub remembers it per approval and app tag, and the app
-  stores nothing. An app that paired with a code keeps the onboarding ID its
-  first onboard returned and rejoins with it. See
+- **Peers** have stable IDs. A local app, its companion processes and a remote
+  app through a member hub get their peer ID back on every start: the hub
+  remembers it per approval and app tag, and the app stores nothing. See
   [Choosing an Onboarding Mode](/docs/developer-guide/onboarding).
 - **App volumes** and **GUI panels** are identified by stable common names and
   are created idempotently by those names. See
