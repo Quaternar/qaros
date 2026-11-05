@@ -1928,8 +1928,16 @@ typedef struct QarRuntimeInfo
  *
  * - Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
  *   process the QAROS launcher started, may request one.
- * - Single use, valid for 60 s (set by the hub), redeemable only from the
- *   hub's PC.
+ * - On Windows the invite works for every start of the co-process while this
+ *   session lives: it names this app on this PC, not the hub, and onboarding
+ *   with it asks this app for a fresh one-time hub invite on each attempt. It
+ *   reaches nobody beyond this user on this PC, carries no pairing code and
+ *   does not expire on its own (qar_onboarding_invite_get_expires_unix gives
+ *   0). The co-process's onboarding tries again (250 ms doubling to 5 s) while
+ *   this app or the hub is away, and fails at once only for what no retry
+ *   changes (a forged invite, the approval denied, this session gone): bound
+ *   it with a cancel token. Elsewhere it is the hub's invite: single use,
+ *   valid for 60 s, redeemable only from the hub's PC.
  * - The co-process gets the short local certificate profile under this app's
  *   approval; its certificate renews only while the requesting session is
  *   still in the session, and revoking the approval revokes both.
@@ -2786,10 +2794,7 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @brief Deinitialize global library state and free process-wide resources.
  *
  * After this call, no other API should be used until the next
- * qar_library_init(). It also removes the crash hooks qar_library_init()
- * installed in the process, so the library can then be unloaded with
- * qar_library_unload() while the application keeps running. A crash handler
- * the application installed after qar_library_init() is left in place.
+ * qar_library_init().
  *
  * @return QarResult Success or error code.
  */

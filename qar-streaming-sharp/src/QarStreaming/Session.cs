@@ -167,8 +167,11 @@ namespace Quaternar.Qaros
         /// <remarks>
         /// <para>
         /// Only a session that joined by <see cref="OnboardOptions.UseLocalApp"/>, or a process the
-        /// QAROS launcher started, may ask; the hub refuses any other. The invite works once, for
-        /// 60 s (set by the hub), and only from the hub's PC. The co-process gets the short local
+        /// QAROS launcher started, may ask; the hub refuses any other. On Windows the invite works
+        /// for every start of the co-process while this session lives and only for this user on
+        /// this PC: onboarding with it asks this app for a fresh one-time hub invite on each attempt
+        /// and keeps trying while this app or the hub is away (bound it with a cancellation token).
+        /// Elsewhere it is the hub's invite, single use for 60 s. The co-process gets the short local
         /// certificate under this app's approval; its certificate renews only while this app's peer is
         /// still in the session, and revoking the approval revokes both.
         /// </para>
