@@ -2000,19 +2000,6 @@ pub type qar_progress_callback_t = ::std::option::Option<
         user_state: *mut ::std::os::raw::c_void,
     ),
 >;
-impl QarOnboardingMethod {
-    ///< code-based EC-JPAKE
-    pub const QAR_ONBOARDING_METHOD_PAKE: QarOnboardingMethod = QarOnboardingMethod(0);
-    ///< shared-password channel
-    pub const QAR_ONBOARDING_METHOD_PASSWORD: QarOnboardingMethod = QarOnboardingMethod(1);
-}
-#[repr(transparent)]
-/** @brief Which onboarding path a QarOnboardingInvite carries.
-
-Enum (not bools) so a future method extends the enum instead of breaking
-if-not-pake-then-password assumptions.*/
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct QarOnboardingMethod(pub ::std::os::raw::c_uint);
 /** @brief Presentation metadata advertised to other peers.
 
 Header'd so it can grow fields or chain extensions through its own header
@@ -2156,10 +2143,9 @@ QarOnboardHostExt.*/
 pub struct QarOnboardCodeExt {
     ///< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT
     pub header: QarStructureHeader,
-    /** Required; short code shown on the hub onboarding screen, or the code
-    text of any other invite the hub minted
-    (qar_onboarding_invite_get_code), such as the addressed code
-    (qar-code:...) an app is given by hand. Copied before the call returns.
+    /** Required; short code shown on the hub onboarding screen, or an
+    addressed code (qar-code:...) an app is given by hand. Copied before the
+    call returns.
     QAROS hands an app it launches a full invite instead: use
     qar_onboarding_invite_deserialize and QarOnboardInviteExt for that.*/
     pub code: *const ::std::os::raw::c_char,
@@ -2372,8 +2358,15 @@ as the same peer on every start while no other live process holds that id.
 
 - Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
   process the QAROS launcher started, may request one.
-- Single use, valid for 60 s (set by the hub), redeemable only from the
-  hub's PC.
+- The invite works for every start of the co-process while this session
+  lives: it names this app on this PC, not the hub, and onboarding with it
+  asks this app for a fresh one-time hub invite on each attempt. It reaches
+  nobody beyond this user on this PC and does not expire on its own. The
+  co-process's onboarding tries again (250 ms doubling to 5 s) while this
+  app or the hub is away, and fails at once only for what no retry changes
+  (a forged invite, the approval denied, this session gone): bound it with a
+  cancel token. A platform without a local endpoint for this app gets the
+  hub's invite instead: single use, valid for 60 s.
 - The co-process gets the short local certificate profile under this app's
   approval; its certificate renews only while the requesting session is
   still in the session, and revoking the approval revokes both.

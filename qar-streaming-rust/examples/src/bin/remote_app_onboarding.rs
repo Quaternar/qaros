@@ -107,7 +107,7 @@ mod remote_app {
         );
         // The options, and with them the sender, are gone: the printer ends.
         let _ = printer.join();
-        // A local app's onboarding id is zero: nothing to store.
+        // A local app stores nothing: the next start onboards again.
         Ok(onboarded?.session)
     }
 

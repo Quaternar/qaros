@@ -522,7 +522,9 @@ namespace Quaternar.Qaros.Tests
         [Fact]
         public void OnboardExtensionsAreChainedAfterTheMode()
         {
+#pragma warning disable CS0618 // The deprecated code mode is the one mode that chains a second structure.
             var options = new OnboardOptions().UseCode("1234").WithHost("hub", 19121).WithGraphicsDevice(GraphicsDeviceId.FromLuid(1));
+#pragma warning restore CS0618
             using (var chain = NativeStructureChain.From(options.Mode, options.Extension))
             {
                 var types = new System.Collections.Generic.List<StructureType>();

@@ -28,7 +28,8 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 | `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1808) | the executable was moved, copied, re-signed or modified since its approval, or its signature is invalid | revoke the old approval ([Approved local apps](/docs/operator-guide/source-applications#approved-local-apps)) and start the app again. An invalid signature can never be approved: re-sign or rebuild. |
 | `QAR_STATUS_ONBOARDING_FAILED` (1801), message names a runtime version or flavor | the app loaded a `qar-streaming-c.dll` other than the installed one | load the installed runtime with `qar_library_load(NULL)`; do not ship a copy |
 | asked again after every build | the app is not code-signed, so its approval is for one exact file | expected during development; sign release builds ([The trust record](/docs/developer-guide/onboarding-and-sessions#the-trust-record)) |
-| `QAR_STATUS_ONBOARDING_INVITE_REFUSED` (1812) from `qar_session_request_onboarding_invite` | the session did not join as a local app (`QarOnboardLocalAppExt`) and was not started by QAROS: a code-paired app, a device or a co-process | final, do not retry; request the invite from the session of the local app that starts the co-process ([Co-process](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts)) |
+| `QAR_STATUS_ONBOARDING_INVITE_REFUSED` (1812) from `qar_session_request_onboarding_invite` | the session did not join as a local app (`QarOnboardLocalAppExt`) and was not started by QAROS: a companion, a remote app or a device | final, do not retry; request the invite from the session of the local app that starts the companion ([Co-process](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts)) |
+| a companion's onboard does not return | it retries (250 ms, doubling to 5 s) while the app that minted its invite, or the hub, is away | keep that app's session alive while companions start, and bound the companion's onboard with a cancel token ([Co-process](/docs/developer-guide/onboarding-and-sessions#co-process-a-process-your-app-starts)) |
 | the app stopped receiving after a hub reset, or after its approval was revoked | the session reached `QAR_SESSION_LIFECYCLE_STATE_RE_PAIR_REQUIRED` (C# `SessionLifecycleState.RePairRequired`): the hub no longer admits the app, and nothing is retried | subscribe to the session lifecycle; on `RE_PAIR_REQUIRED` destroy the session, onboard again and recreate what the app owns ([When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes)) |
 | frames pause for a few seconds and other peers' objects vanish briefly after the operator starts a new session | the session moves into the new session in place, and senders renegotiate | nothing: the app's own objects are kept. React only where the app keyed something by the session id ([When the hub's session changes](/docs/developer-guide/onboarding-and-sessions#when-the-hubs-session-changes)) |
 
@@ -38,16 +39,15 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 |---|---|
 | the app renders on one GPU while the session uses another | create your graphics device on the session's adapter (`qar_session_get_graphics_device_id`), or chain the adapter you render on as `QarGraphicsDeviceId` ([Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)) |
 | `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from onboard with a `QarGraphicsDeviceId` | the adapter is not supported: only NVIDIA GPUs are |
-| the Vulkan cube picks the wrong GPU | the cube renders on its session's GPU: the target's GPU when QAROS started it (launch invite or `QAR_GPU_ADAPTER_ID`, read by the library), otherwise the library's pick. The cube itself reads no environment variable, prints the GPU it uses and stops when no Vulkan device matches. |
+| the Vulkan cube picks the wrong GPU | the cube renders on its session's GPU: the target's GPU when QAROS started it (`QAR_GPU_ADAPTER_ID`, read by the library), otherwise the library's pick. The cube itself reads no environment variable, prints the GPU it uses and stops when no Vulkan device matches. |
 
 ## Status codes that are part of normal flow
 
 | Status | Meaning | What to do |
 |---|---|---|
-| `QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND` | The onboarding ID has no persisted slot on this machine | Fall back to `qar_runtime_onboard` — this is the expected first-run path |
-| `QAR_STATUS_PAKE_ERROR` | Pairing code wrong or expired (codes live ~10 s) | Re-prompt the user for the current code and retry |
-| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | Code onboarding could not reach a Hub | Verify the Hub is running, host/port (remote Hubs need a `QarOnboardHostExt`), and firewall/multicast on the network |
-| `QAR_STATUS_ONBOARDING_SESSION_STILL_ACTIVE` | `forget` called while the session is active | Call `qar_session_handle_destroy` first, then `forget` |
+| `QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT` | Nobody answered the approval prompt in QAROS in time | Ask the user to allow the app in QAROS and start it again |
+| `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` | A local app could not start or reach QAROS on this machine | Start QAROS, then start the app again |
+| `QAR_STATUS_TIMEOUT` (companion) | The companion's cancel token ended its onboarding while the app or the hub was away | Start the companion again once the app runs; the same invite still works while the app's session lives |
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` | The receiver paused the stream, for example because its display is not visible | Keep the sender and skip the frame; it resumes when the receiver does. Recreating the sender only restarts the negotiation |
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` | The stream lost its peer and is reconnecting | Skip the frame and keep calling; a dead peer is noticed within ~2 s, a restarted one streams again within a few seconds |
 | `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | The sender's app volume does not resolve yet (or was closed), so there is no app content space to hand poses out in | Keep calling `begin_frame`; create the volume before the sender and recreate one you closed |
@@ -61,16 +61,18 @@ Every fallible call reports success or failure the same way — inspect it rathe
 <Lang value="c">
 
 ```c
-QarRejoinInit rejoin = qar_rejoin_init_default();
-rejoin.onboarding_id = onboarding_id;
-QarResult r = qar_runtime_rejoin(runtime, &rejoin, NULL, NULL, NULL, &session);
+QarOnboardInit init = qar_onboard_init_default();
+QarOnboardLocalAppExt local = qar_onboard_local_app_ext_default();
+init.header.next = &local.header;
+QarOnboardingId unused = qar_onboarding_id_default();
+QarResult r = qar_runtime_onboard(runtime, &init, NULL, NULL, NULL, &unused, &session);
 if (qar_result_is_success(r))
 {
     /* use session */
 }
-else if (qar_result_has_code(r, QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND))
+else if (qar_result_has_code(r, QAR_STATUS_ONBOARDING_APPROVAL_TIMEOUT))
 {
-    /* expected first-run: fall back to qar_runtime_onboard */
+    /* nobody answered the prompt in QAROS: ask the user to start the app again */
 }
 else
 {
@@ -82,13 +84,13 @@ else
 <Lang value="csharp">
 
 ```csharp
-Result<Session> result = runtime.Rejoin(new RejoinOptions(onboardingId));
+Result<OnboardSession> result = runtime.Onboard(new OnboardOptions().UseLocalApp());
 if (!result.IsSuccess)
 {
     ResultInfo info = result.Info;
-    if (info.StatusCode == StatusCode.OnboardingSessionNotFound)
+    if (info.StatusCode == StatusCode.OnboardingApprovalTimeout)
     {
-        // expected first-run: fall back to the binding's onboard flow
+        // nobody answered the prompt in QAROS: ask the user to start the app again
     }
     else
     {
@@ -97,7 +99,7 @@ if (!result.IsSuccess)
 }
 
 // Or, to turn any failure into a NativeCallException:
-using Session session = result.ValueOrThrow();
+using Session session = result.ValueOrThrow().Session;
 ```
 
 </Lang>
@@ -106,17 +108,20 @@ using Session session = result.ValueOrThrow();
 {/* Generated by cargo xtask guide from examples/guide/troubleshooting.md of the Rust binding. Edit that file, not this tab. */}
 
 ```rust
-match runtime.rejoin(
-    onboarding_id,
+match runtime.onboard(
+    &OnboardMethod::LocalApp {
+        approval_timeout: None,
+        app_tag: None,
+    },
     &PeerPresentation::default(),
     &BlockingOptions::default(),
 ) {
-    Ok(session) => {
+    Ok(onboarded) => {
         // use the session; dropping it releases the handle
-        drop(session);
+        drop(onboarded.session);
     }
-    Err(error) if error.has_code(StatusCode::ONBOARDING_SESSION_NOT_FOUND) => {
-        // expected first-run: fall back to runtime.onboard
+    Err(error) if error.has_code(StatusCode::ONBOARDING_APPROVAL_TIMEOUT) => {
+        // nobody answered the prompt in QAROS: ask the user to start the app again
     }
     Err(error) => {
         // Display prints the C function, the status code and its message

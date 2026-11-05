@@ -17,9 +17,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, Error, Eye, FrameViewSpec, GraphicsAdapter,
-    GuiPanelConfig, GuiPanelState, HubAddress, Library, LibraryConfig, OnboardMethod, OwnedFrame,
-    PeerId, PeerPresentation, Pose, RenderSenderConfig, RuntimeConfig, ShowParams, StatusCode,
-    Vec3, ViewKind,
+    GuiPanelConfig, GuiPanelState, Library, LibraryConfig, OnboardMethod, OwnedFrame, PeerId,
+    PeerPresentation, Pose, RenderSenderConfig, RuntimeConfig, ShowParams, StatusCode, Vec3,
+    ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -294,6 +294,7 @@ pub(crate) fn quiet() -> LibraryConfig {
     }
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 pub(crate) fn code(pairing_code: &str) -> OnboardMethod<'_> {
     OnboardMethod::Code {
         code: pairing_code,

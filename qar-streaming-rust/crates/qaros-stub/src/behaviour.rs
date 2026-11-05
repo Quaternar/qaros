@@ -2311,34 +2311,6 @@ impl StubApi for Stub {
         success()
     }
 
-    unsafe fn qar_impl_onboarding_invite_get_expires_unix(
-        invite: *const QarOnboardingInvite,
-        out_expires_unix: *mut i64,
-    ) -> QarResult {
-        // SAFETY: invite comes from this stub.
-        let Some(value) =
-            (unsafe { handle_value::<InviteValue, QarOnboardingInvite>(invite, INVITE) })
-        else {
-            return invalid("invite is not a live handle");
-        };
-        // SAFETY: out_expires_unix is writable.
-        unsafe { *out_expires_unix = value.expires_unix };
-        success()
-    }
-
-    unsafe fn qar_impl_onboarding_invite_get_method(
-        invite: *const QarOnboardingInvite,
-        out_method: *mut QarOnboardingMethod,
-    ) -> QarResult {
-        // SAFETY: invite comes from this stub.
-        if unsafe { handle_value::<InviteValue, QarOnboardingInvite>(invite, INVITE) }.is_none() {
-            return invalid("invite is not a live handle");
-        }
-        // SAFETY: out_method is writable.
-        unsafe { *out_method = QarOnboardingMethod::QAR_ONBOARDING_METHOD_PAKE };
-        success()
-    }
-
     unsafe fn qar_impl_runtime_create_member_hub_invitation(
         runtime: *mut QarRuntime,
         init: *const QarMemberHubInvitationInit,
@@ -2585,46 +2557,6 @@ impl StubApi for Stub {
             }
             Err(failure) => failure,
         }
-    }
-
-    unsafe fn qar_impl_onboarding_invite_get_code(
-        invite: *const QarOnboardingInvite,
-        out_buffer: *mut c_char,
-        buffer_size: usize,
-        out_length: *mut usize,
-    ) -> QarResult {
-        if !out_buffer.is_null() && buffer_size > 0 {
-            // SAFETY: the buffer holds at least one byte.
-            unsafe { *out_buffer = 0 };
-        }
-        // SAFETY: invite comes from this stub.
-        let Some(value) =
-            (unsafe { handle_value::<InviteValue, QarOnboardingInvite>(invite, INVITE) })
-        else {
-            return state::error(
-                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
-                "invite is not a live handle",
-            );
-        };
-        // Every stub invite is a PAKE invite; its code names the invite as the runtime's
-        // addressed codes do.
-        let code = format!("qar-code:stub-{}", value.expires_unix);
-        if !out_length.is_null() {
-            // SAFETY: out_length is writable.
-            unsafe { *out_length = code.len() };
-        }
-        if out_buffer.is_null() {
-            return success();
-        }
-        if buffer_size <= code.len() {
-            return invalid("buffer too small for the code");
-        }
-        // SAFETY: the buffer holds buffer_size > code.len() bytes.
-        unsafe {
-            ptr::copy_nonoverlapping(code.as_ptr().cast::<c_char>(), out_buffer, code.len());
-            *out_buffer.add(code.len()) = 0;
-        }
-        success()
     }
 
     unsafe fn qar_impl_onboarding_invite_handle_is_valid(

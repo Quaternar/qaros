@@ -55,7 +55,7 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 
 To test your own QAROS API app: switch to Developer mode (Settings, no password), add it as above with type **QAROS API app**, then launch its tile. Check **Running** for its status and the Hub's log folder for its stdout/stderr.
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps).
+A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Started by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros).
 
 ## Approved local apps
 

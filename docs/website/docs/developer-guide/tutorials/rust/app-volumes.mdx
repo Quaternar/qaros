@@ -30,7 +30,7 @@ What you will learn:
 - **Joining.** The example joins the Hub as a local app
   ([Local app](/docs/developer-guide/onboarding-and-sessions#local-app-on-the-qaros-pc-no-code)):
   click **Allow** in the QAROS approval prompt on the first run of the executable. Nothing is
-  stored; later runs join without a prompt.[^code]
+  stored; later runs join without a prompt.
 - **The latest stable Rust.**
 - [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels) explains subscriptions and the rule
   for ending them in more detail. This tutorial uses the same pattern.
@@ -44,23 +44,26 @@ From the binding's workspace folder, on Windows:
 cargo run -p qaros-examples --bin app_volume_management
 ```
 
-Outside Windows the example does not try the local-app join, so the stub run passes a code (any
-code but `WRONG` and `UNREACHABLE`). On macOS:
+Outside Windows, run it against the stub, which accepts the local-app join without a prompt. On
+macOS:
 
 ```sh
 cargo build -p qaros-stub
 mkdir -p target/stub-run && cd target/stub-run
 QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" \
-    cargo run -p qaros-examples --bin app_volume_management -- ANY-CODE
+    cargo run -p qaros-examples --bin app_volume_management
 ```
 
-The stub run stores `app_volume_management.onboarding-id.txt` in its folder, which a later run against QAROS from that folder would try to rejoin with: keep stub runs in a folder of their own ([On macOS, against the stub](/docs/developer-guide/tutorials/rust/#on-macos-against-the-stub)). It prints (the `Loading` lines name your own path):
+It prints (the `Loading` lines name your own path):
 
 ```text
 Loading qar-streaming-c from: .../target/stub-run/../debug/libqaros_stub.dylib
 Loaded .../target/debug/libqaros_stub.dylib
 qar_runtime_create: SUCCESS
-qar_runtime_onboard: SUCCESS
+Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
+stub onboarding complete
+qar_runtime_onboard: SUCCESS (local app)
+Nothing to store: the next run joins as a local app again, without a prompt while this executable is unchanged.
 App volume id: FD:CE:85:D8:13:37:95:A9:9C:BD:06:C2:47:74:A5:9D
 Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 1.00 lifetime=Active
 Update: center(0.00, 0.00, -1.00) size(1.00 x 1.00 x 1.00) app position(0.00, -0.25, 0.00) app scale 0.50 lifetime=Active
@@ -89,27 +92,16 @@ steps after the `Received` line are left out, and the program ends with
 
 A volume is shared session state: every peer sees the same box at the same place. The example
 gets its session with the shared helper `join_session`, as
-[GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels) does: rejoin, else the pairing code,
-else a local-app join.
+[GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels) does: a local-app join.
 
 ```rust
-let arguments = Arguments::parse();
 let library = load_library()?;
 let runtime = create_runtime(&library, None)?;
-let session = join_session(
-    &library,
-    &runtime,
-    arguments.pairing_code.as_deref(),
-    Path::new("app_volume_management.onboarding-id.txt"),
-    "App Volume Peer",
-)?;
+let session = join_session(&runtime, "App Volume Peer")?;
 ```
 
-`ONBOARDING_SESSION_NOT_FOUND` from the rejoin is normal (the helper goes on to the code or the
-local-app join). `PAKE_ERROR` means a wrong or expired code; `ONBOARDING_HUB_UNREACHABLE` means no
-Hub answered: with a code the example finds only your own Hub, on the Hub machine, and for the
-local-app join (exit code 3), which starts a Hub that is not running, the Hub could not be
-started or reached. A local-app join that is denied or not answered within 120 s ends with exit code 4
+`ONBOARDING_HUB_UNREACHABLE` (exit code 3) means the local-app join, which starts a Hub that is
+not running, could not start or reach it. A local-app join that is denied or not answered within 120 s ends with exit code 4
 or 5, as in `local_app_onboarding`.
 
 ### 2. Get or create the volume
@@ -372,9 +364,7 @@ not `Send`: keep `library`, `runtime`, `session` and `volumes` on one thread.
 
 | Symptom | Cause | What to do |
 | --- | --- | --- |
-| `No persisted onboarding id in 'app_volume_management.onboarding-id.txt'` | Not on Windows, no code, and no id file in this folder | Pass the current pairing code, or run from the folder that holds the file |
-| Exit code 4 or 5 after `joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
-| `QAR_STATUS_PAKE_ERROR` | The code was wrong or expired | Read the current code and run again |
+| Exit code 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
 | `QAR_STATUS_APP_VOLUME_INVALID_ID` from a setter or getter | The volume was closed, possibly by another peer | `get_or_create` again |
 | `QAR_STATUS_APP_VOLUME_INVALID_ID` when creating a render sender | `RenderSenderConfig::app_volume` is `None` | Create the volume first and pass its id |
 | `RENDERING_APP_VOLUME_UNRESOLVED` from `begin_frame` | The volume does not resolve yet where the stream is received, or it was closed | Keep calling; recreate a volume you closed ([Troubleshooting](/docs/developer-guide/troubleshooting)) |
@@ -413,10 +403,3 @@ safe API either.
   coordination between users.
 - [Coordinate Systems](/docs/developer-guide/coordinate-systems): every space in one place.
 
-[^code]: The example also takes a Hub's pairing code as its argument; it passes no Hub address,
-    so the code finds only your own Hub, on the Hub machine (a Hub elsewhere needs its host and
-    port, `HubAddress`):
-    `cargo run -p qaros-examples --bin app_volume_management -- <PAIRING-CODE>`. It then
-    stores the onboarding id it gets in `app_volume_management.onboarding-id.txt` in the folder you
-    run `cargo` from, and rejoins with that id on every later run
-    ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)).

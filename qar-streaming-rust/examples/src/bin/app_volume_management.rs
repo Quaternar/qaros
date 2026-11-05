@@ -2,20 +2,17 @@
 //! move the content inside it, read its latest transforms and list the session's volumes.
 //!
 //! ```text
-//! cargo run -p qaros-examples --bin app_volume_management -- [pairing-code]
+//! cargo run -p qaros-examples --bin app_volume_management
 //! ```
 //!
-//! Without a stored onboarding id or a pairing code it joins the QAROS on this PC as a local app
-//! (Windows; Allow once in QAROS), which the C sample, onboarding by code only, does not.
+//! It joins the QAROS on this PC as a local app (Allow once in QAROS; nothing is stored).
 
-use std::path::Path;
 use std::process::ExitCode;
 
 use qaros::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, Pose, Vec3};
 use qaros_examples::{
-    Arguments, ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS,
-    create_runtime, join_session, load_library, nearly_equal, report, same_pose,
-    updates_until_quiet,
+    ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS, create_runtime,
+    join_session, load_library, nearly_equal, report, same_pose, updates_until_quiet,
 };
 
 fn main() -> ExitCode {
@@ -55,16 +52,9 @@ fn print_volume_update(update: &AppVolumeInfo) {
 
 fn run() -> ExampleResult {
     // ANCHOR: session
-    let arguments = Arguments::parse();
     let library = load_library()?;
     let runtime = create_runtime(&library, None)?;
-    let session = join_session(
-        &library,
-        &runtime,
-        arguments.pairing_code.as_deref(),
-        Path::new("app_volume_management.onboarding-id.txt"),
-        "App Volume Peer",
-    )?;
+    let session = join_session(&runtime, "App Volume Peer")?;
     // ANCHOR_END: session
 
     // ANCHOR: create

@@ -5,15 +5,12 @@
 //! target from that frame's own eye poses and fields of view, with depth.
 //!
 //! ```text
-//! cargo run -p qaros-examples --bin cpu_rendering_visualizer -- [pairing-code] [--frames=300]
+//! cargo run -p qaros-examples --bin cpu_rendering_visualizer -- [--frames=300]
 //! ```
 //!
-//! It starts from a console. With a stored onboarding id it rejoins; with a pairing code it
-//! onboards and stores the id, as the C sample does; with neither, on Windows, it joins the QAROS
-//! on this PC as a local app (Allow once in QAROS, nothing stored), which the C sample, onboarding
-//! by code only, does not. It ends after `--frames` frames.
+//! It starts from a console and joins the QAROS on this PC as a local app (Allow once in QAROS,
+//! nothing stored). It ends after `--frames` frames.
 
-use std::path::Path;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
@@ -77,13 +74,7 @@ fn run() -> ExampleResult {
 
     let library = load_library()?;
     let runtime = create_runtime(&library, None)?;
-    let session = join_session(
-        &library,
-        &runtime,
-        arguments.pairing_code.as_deref(),
-        Path::new("cpu_rendering_visualizer.onboarding-id.txt"),
-        "CPU Renderer",
-    )?;
+    let session = join_session(&runtime, "CPU Renderer")?;
     // ANCHOR_END: session
 
     // ANCHOR: volume

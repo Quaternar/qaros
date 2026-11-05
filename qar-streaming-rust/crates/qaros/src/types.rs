@@ -98,8 +98,9 @@ define_id!(
     sys::QarStreamId
 );
 define_id!(
-    /// Key of a persisted identity slot. Persist it after onboarding; it is
-    /// the ticket for every later rejoin or forget.
+    /// Key of a persisted identity slot, the ticket for the deprecated
+    /// [`crate::Runtime::rejoin`] and [`crate::Runtime::forget`]. Local apps,
+    /// companions and member hubs' apps have none to persist.
     OnboardingId,
     sys::QarOnboardingId
 );
@@ -350,14 +351,6 @@ c_enum!(
         Warning = QAR_ACTION_SEVERITY_WARNING,
         Error = QAR_ACTION_SEVERITY_ERROR,
         Done = QAR_ACTION_SEVERITY_DONE,
-    }
-);
-
-c_enum!(
-    /// How an onboarding invite authenticates (`QarOnboardingMethod`).
-    OnboardingMethod: QarOnboardingMethod {
-        Pake = QAR_ONBOARDING_METHOD_PAKE,
-        Password = QAR_ONBOARDING_METHOD_PASSWORD,
     }
 );
 

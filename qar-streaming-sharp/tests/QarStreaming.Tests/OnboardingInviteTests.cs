@@ -89,8 +89,6 @@ namespace Quaternar.Qaros.Tests
         {
             using var invite = OnboardingInvite.Deserialize(InviteWire()).ValueOrThrow();
             Assert.True(invite.IsValid());
-            Assert.Equal(OnboardingMethod.Pake, invite.GetMethod().ValueOrThrow());
-            Assert.NotEmpty(invite.GetCode().ValueOrThrow());
             var first = invite.Serialize().ValueOrThrow();
             using var again = OnboardingInvite.Deserialize(first).ValueOrThrow();
             Assert.Equal(first, again.Serialize().ValueOrThrow());
@@ -140,8 +138,7 @@ namespace Quaternar.Qaros.Tests
             var options = new OnboardInvite(invite);
             invite.Dispose();
             Assert.Throws<ObjectDisposedException>(() => NativeStructureChain.From(options));
-            Assert.Throws<ObjectDisposedException>(() => invite.GetCode());
-            Assert.Throws<ObjectDisposedException>(() => invite.GetExpiresUnix());
+            Assert.Throws<ObjectDisposedException>(() => invite.Serialize());
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

@@ -21,7 +21,7 @@ The binding lives in `qar-streaming-rust/` in the QAROS repository, a Cargo work
 
 | Crate | What it is | You use it |
 | --- | --- | --- |
-| `qaros` | The safe API: library and runtime, onboarding and rejoin, peers, app volumes, GUI panels, the CPU, Vulkan and D3D11 render senders (Vulkan behind the `vulkan` feature, D3D11 behind the `d3d11` feature: Windows; on macOS only for the tests against `qaros-stub`). Handles release themselves on drop; errors are `qaros::Result`. | In your application |
+| `qaros` | The safe API: library and runtime, onboarding, peers, app volumes, GUI panels, the CPU, Vulkan and D3D11 render senders (Vulkan behind the `vulkan` feature, D3D11 behind the `d3d11` feature: Windows; on macOS only for the tests against `qaros-stub`). Handles release themselves on drop; errors are `qaros::Result`. | In your application |
 | `qaros-sys` | The raw bindings to every exported `qar_impl_*` function, the runtime lookup and loading, and ports of the `qar_*_default()` initializers. Reached from `qaros` through `library.raw_api()`, with the `as_raw()` handle of a safe value such as a `Session`, for what the safe API leaves out: hands, gestures, world anchors and the rest of the [coverage table](https://github.com/Quaternar/qaros/blob/main/qar-streaming-rust/README.md#coverage) in the binding's README. | When the safe API does not cover a call |
 | `qaros-examples` | The example programs these tutorials walk through, and their shared helpers (`examples/src/lib.rs`). | To learn, and to copy from |
 | `qaros-stub` | An in-memory stand-in for the runtime library. It exports the same symbols, keeps panels, volumes, peers and senders in memory, and records every call. | To run the tests and most examples without QAROS |
@@ -90,12 +90,7 @@ their C originals do.
 `app_volume_management` run on the Hub machine and join the Hub as a local app (on Windows): the
 first run of each executable asks you to click **Allow** in QAROS, and a local app stores nothing.
 Joining as a local app starts the Hub when it is not running; a running Hub is left as it is, and
-the Hub keeps running after the example exits. They also take an optional pairing code as their
-first argument: they then store the onboarding id they get as `<example>.onboarding-id.txt` in
-the folder you run them from and rejoin with it on later runs. They pass no Hub address, so the
-code finds only your own Hub, on the Hub machine; a Hub elsewhere needs its host and port
-(`HubAddress`, see [Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)). `onboarding_and_rejoin` is the example of that path: it onboards with a code on
-its first run and keeps its id in `onboarding_and_rejoin.primary-onboarding-id.txt`.
+the Hub keeps running after the example exits.
 
 ### On macOS, against the stub
 
@@ -107,13 +102,11 @@ the workspace from any folder inside it):
 cargo build -p qaros-stub
 mkdir -p target/stub-run && cd target/stub-run
 QAROS_DLL="$PWD/../debug/libqaros_stub.dylib" \
-    cargo run -p qaros-examples --bin gui_panel_operations -- ANY-CODE
+    cargo run -p qaros-examples --bin gui_panel_operations
 ```
 
-The stub accepts any pairing code except `WRONG` (a pairing error) and `UNREACHABLE` (no Hub).
-It runs the program's logic and shows nothing. Like a real run, a stub run stores its onboarding
-id in the folder it runs from, and a later run against QAROS from that folder would first try to
-rejoin with the stub's id; the folder of its own keeps them apart.
+The stub accepts the local-app join without a prompt. It runs the program's logic and shows
+nothing.
 
 `vulkan_cube` and `local_app_onboarding` take no library path: they find the stub through the
 dynamic linker's search (`DYLD_LIBRARY_PATH` on macOS, `LD_LIBRARY_PATH` on Linux), as their pages show ([Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering#run-it),
@@ -127,19 +120,17 @@ Read them in order the first time: each builds on the session the earlier ones e
 
 1. [Dynamic Loading](/docs/developer-guide/tutorials/rust/dynamic-loading): find, load and
    initialize the runtime library, and tear it down.
-2. [Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin): join a
-   Hub with a pairing code once, then rejoin with the stored onboarding id.
-3. [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding): join the
+2. [Local App Onboarding](/docs/developer-guide/tutorials/rust/local-app-onboarding): join the
    Hub from the Hub machine as a local app, after the user clicks Allow.
-4. [Remote App on Another PC](/docs/developer-guide/tutorials/rust/remote-app-onboarding): grant
+3. [Remote App on Another PC](/docs/developer-guide/tutorials/rust/remote-app-onboarding): grant
    one app on another PC through a member-hub invitation, and join it there with no prompt.
-5. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
+4. [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): find the target apps in
    the peer list and stream frames rendered on the CPU to each.
-6. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
+5. [D3D11 Rendering](/docs/developer-guide/tutorials/rust/d3d11-rendering): stream frames
    drawn with Direct3D 11 into the sender's shared textures.
-7. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
+6. [Vulkan Rendering](/docs/developer-guide/tutorials/rust/vulkan-rendering): stream a stereo
    cube rendered with Vulkan into every running target app.
-8. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
+7. [GUI Panels](/docs/developer-guide/tutorials/rust/gui-panels): place a shared web panel in the
    room, follow its updates and end a subscription safely.
-9. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
+8. [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes): create the box your content
    lives in, move the content inside it, and handle an unresolved volume when rendering.

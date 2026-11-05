@@ -35,9 +35,8 @@
  * - **Joining.** The program joins the Hub on this machine as a local app.
  *   The first run of the executable opens the QAROS approval prompt; click
  *   **Allow** once. Later runs of the same executable join without a prompt.
- *   A local app has no onboarding id, so nothing is stored. Joining as a
- *   local app starts the Hub when it is not running. A pairing code works too;
- *   see \ref cpu_rendering_code "With a pairing code" at the end of this page.
+ *   Nothing is stored. Joining as a local app starts the Hub when it is not
+ *   running.
  * - **This repository built** with CMake: `cmake --preset x64-windows`, then
  *   `cmake --build --preset x64-windows-debug --target cpu_rendering_visualizer`.
  *
@@ -49,9 +48,9 @@
  * `--frames=N` stops the program after N shown frames, counted over all
  * targets; without it, the program stops after 300. `--qaros-library=PATH`
  * loads one library file instead of the installed runtime. Flags take their
- * value after `=`: `--frames 300` is refused. Any other argument, or a second
- * pairing code, prints the usage and exits with 1. An executable that
- * changes after a rebuild asks for **Allow** again.
+ * value after `=`: `--frames 300` is refused. Any other argument prints the
+ * usage and exits with 1. An executable that changes after a rebuild asks for
+ * **Allow** again.
  *
  * Expected output, without the library's own log lines and the approval
  * progress messages:
@@ -60,9 +59,8 @@
  * Loaded <path>\qar-streaming-c.dll (the installed QAROS)
  * Runtime <version> (<flavor>, C API <version>)
  * qar_runtime_create: SUCCESS (code=0)
- * No session to rejoin and no pairing code: joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
- * qar_runtime_onboard: SUCCESS (local app)
- * A local app has no onboarding id to store (it is zero): the next run joins as a local app again, without a prompt while this executable is unchanged.
+ * Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to 120 s).
+ * qar_runtime_onboard: SUCCESS (local app). Nothing is stored: the next run joins the same way, without a prompt while this executable is unchanged.
  * Looking for target apps in the peer list (open a visualizer or start a headset) ...
  * Rendering for <target name> (peer <peer id>)
  * Submitted 300 frames.
@@ -75,7 +73,7 @@
  * | Code | Meaning |
  * |---|---|
  * | 0 | the frames were shown |
- * | 1 | an unknown argument, a bad `--frames` value, `qar_library_init` or `qar_runtime_create` failed, a failed rejoin or code onboarding, or a failure after joining |
+ * | 1 | an unknown argument, a bad `--frames` value, `qar_library_init` or `qar_runtime_create` failed, or a failure after joining |
  * | 2 | no runtime loaded |
  * | 3 | the local-app join could not start or reach the Hub |
  * | 4 | the approval was denied |
@@ -108,15 +106,16 @@
  * joins with the helpers in `common.h`:
  * \snippet cpu_rendering_visualizer.c cpu_startup
  *
- * `example_join_session` tries three ways in order:
- * rejoin with a stored onboarding id, onboard with a pairing code when you
- * passed one, else join the Hub on this machine as a local app:
+ * `example_join_session` joins the Hub on this machine as a local app with
+ * the program's app tag:
  * \snippet common.h example_join_session
  *
+ * The join itself, an onboard with \ref QarOnboardLocalAppExt and
+ * \ref QarOnboardLocalAppTagExt:
+ * \snippet common.h example_join_local_app
+ *
  * \ref qar_c_tutorial_local_app_onboarding "Local App Onboarding"
- * explains the local-app join and its exit codes, 3 to 7.
- * \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
- * explains the rejoin and the code.
+ * explains the local-app join, its app tag and its exit codes, 3 to 7.
  *
  * \subsection cpu_rendering_volume 3. Create the app volume
  * A render sender needs an app volume. The mixer composites the stream inside
@@ -296,7 +295,7 @@
  * \section cpu_rendering_troubleshooting Troubleshooting
  * | What you see | Cause | What to do |
  * |---|---|---|
- * | exit 4 or 5 after `joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
+ * | exit 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | the approval prompt was denied, closed or not answered within 120 s | run again and click **Allow** |
  * | `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.`, exit 3 | the local-app join could neither start the Hub nor reach it | start QAROS from the Start menu and run again |
  * | `No QAROS runtime loaded.`, exit 2 | no runtime found | install QAROS, fix or unset `QAR_INSTANCE`, or pass `--qaros-library=PATH` |
  * | stays at `Looking for target apps ...` | no running target app in the session | open the Visualizer or start a headset |
@@ -311,19 +310,6 @@
  *   layouts, layout changes, hand tracking.
  * - <a href="/docs/developer-guide/tutorials/rust/cpu-rendering">CPU Rendering in Rust</a>:
  *   the same program on the Rust binding.
- *
- * \section cpu_rendering_code With a pairing code
- * The program also takes a pairing code, as its first argument that does not
- * start with `--`. It passes no Hub address, so the code finds a Hub of your
- * own user, as \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin"
- * explains. An app on another machine also names the Hub with a
- * QarOnboardHostExt; that tutorial shows how.
- * \code{.bash}
- * .\build\x64-windows\qar-streaming-c\examples\Debug\cpu_rendering_visualizer.exe <PAIRING-CODE> --frames=300
- * \endcode
- * It stores the onboarding id it gets back in
- * `cpu_rendering_visualizer.onboarding-id.txt` in the working directory, and
- * later runs rejoin with it.
  */
 // clang-format on
 
@@ -333,6 +319,10 @@
 #include <windows.h>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
+
+/* The app tag the Hub remembers this program's peer id by: printable ASCII,
+ * constant across versions. */
+#define APP_TAG "main.cpu-rendering-visualizer.examples.quaternar"
 
 #define DEFAULT_FRAME_COUNT 300u
 /* Near and far planes in app units, the units of the poses a sender bound to an
@@ -1332,7 +1322,7 @@ main(int argc, char** argv)
 		   argv,
 		   known_flags,
 		   sizeof(known_flags) / sizeof(known_flags[0]),
-		   "[pairing-code] [--frames=N] [--qaros-library=PATH]"
+		   "[--frames=N] [--qaros-library=PATH]"
 	   ))
 	{
 		return 1;
@@ -1344,7 +1334,6 @@ main(int argc, char** argv)
 		return 1;
 	}
 	const char* library_path = example_library_path(argc, argv);
-	const char* pairing_code = example_pairing_code_argument(argc, argv);
 
 	int exit_code = example_load_library(library_path);
 	if(exit_code != 0)
@@ -1358,13 +1347,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 	QarSession* session = NULL;
-	exit_code = example_join_session(
-		runtime,
-		pairing_code,
-		"cpu_rendering_visualizer.onboarding-id.txt",
-		"CPU Renderer",
-		&session
-	);
+	exit_code = example_join_session(runtime, "CPU Renderer", APP_TAG, &session);
 	if(exit_code != 0)
 	{
 		teardown(runtime, session);

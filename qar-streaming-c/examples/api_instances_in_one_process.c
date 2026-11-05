@@ -23,7 +23,7 @@
  * as a local app (\ref qar_c_tutorial_local_app_onboarding). The runtime
  * library notices that the process already holds a session with that hub and
  * tag and hands out a new handle to it. One approval, one enrollment, one
- * peer. Windows only, like local enrollment.
+ * peer. Windows and Linux, like local enrollment.
  *
  * A process you start is not covered: it is another executable, so it joins
  * with a co-process invite (\ref qar_c_tutorial_co_process_onboarding).

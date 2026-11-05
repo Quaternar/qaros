@@ -781,12 +781,14 @@ namespace Quaternar.Qaros.Interop
             ProgressCallback = new ProgressCallback(OnProgress);
         }
 
+#pragma warning disable CS0618 // The deprecated rejoin, kept working.
         public RejoinInitNative CreateNative(RejoinOptions options)
         {
             _chain = NativeStructureChain.From(options.Extension);
             _presentationChain = NativeStructureChain.From(options.Presentation == null ? null : options.Presentation.Extension);
             return NativeInit.Rejoin(options, _scope, _chain.Head, _presentationChain.Head);
         }
+#pragma warning restore CS0618
 
         public OnboardInitNative CreateNative(OnboardOptions options)
         {

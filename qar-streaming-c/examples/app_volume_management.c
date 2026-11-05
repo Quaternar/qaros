@@ -36,8 +36,7 @@
  * - **Joining.** The program joins the Hub as a local app: click **Allow** in
  *   the QAROS approval prompt on the first run of the executable. Nothing is
  *   stored, and later runs join without a prompt while the executable is
- *   unchanged. To join with a pairing code instead, see
- *   \ref app_volume_code.
+ *   unchanged.
  * - **The examples built**, with the repository's CMake presets (MSVC).
  * - The \ref qar_c_tutorial_gui_panels tutorial explains subscriptions and
  *   the rule for ending them in more detail. This tutorial uses the same
@@ -114,15 +113,13 @@
  *
  * A volume is shared session state: every peer sees the same box at the same
  * place. The program gets its session with the helpers of `common.h`, as
- * \ref qar_c_tutorial_gui_panels does: rejoin with a stored onboarding id,
- * else onboard with a pairing code when you gave one, else join the Hub on
- * this machine as a local app.
+ * \ref qar_c_tutorial_gui_panels does: it joins the Hub on this machine as a
+ * local app with its own app tag.
  *
  * \snippet app_volume_management.c app_startup
  *
- * The \ref qar_c_tutorial_onboarding tutorial explains the rejoin and the
- * pairing code; the \ref qar_c_tutorial_local_app_onboarding tutorial
- * explains the local-app join and its approval prompt.
+ * The \ref qar_c_tutorial_local_app_onboarding tutorial explains the
+ * local-app join, its approval prompt and its app tag.
  *
  * \subsection app_volume_create 2. Get or create the volume
  *
@@ -344,7 +341,7 @@
  * | Symptom | Cause | What to do |
  * | --- | --- | --- |
  * | `Could not start or reach QAROS on this machine. Start QAROS from the Start menu, then start this app again.`, exit code 3 | The local-app join could neither start the Hub nor reach it | Start QAROS from the Start menu and run again |
- * | Exit code 4 or 5 after `joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
+ * | Exit code 4 or 5 after `Joining the QAROS Hub on this machine as a local app` | The approval prompt was denied, closed or not answered within 120 s | Run again and click **Allow** |
  * | The box already has another app's content or values on the first run of your own app | A volume with that common name already exists in the session, and get-or-create returned it | Expected: volumes persist. Pick a common name scoped to your app |
  * | `ERROR (code=325)` from a call or getter: `QAR_STATUS_APP_VOLUME_INVALID_ID` | The volume was closed, possibly by another peer | qar_app_volumes_get_or_create() again |
  * | `Latest:` values differ from what you set | A user or another peer moved or scaled the volume | Expected: apply the latest values, not your own copy |
@@ -364,23 +361,6 @@
  *   space in one place.
  * - The same program in Rust:
  *   [App Volumes](/docs/developer-guide/tutorials/rust/app-volumes).
- *
- * \section app_volume_code With a pairing code
- *
- * Instead of the local-app join, you can pass a Hub's pairing code as the first
- * argument. The program passes no Hub address, so the code finds a Hub of your
- * own user, as the \ref qar_c_tutorial_onboarding tutorial explains. An app on
- * another machine also names the Hub with a QarOnboardHostExt; that tutorial
- * shows how.
- *
- * \code{.ps1}
- * .\build\x64-windows\qar-streaming-c\examples\Debug\app_volume_management.exe <PAIRING-CODE>
- * \endcode
- *
- * It then stores the onboarding id it gets in
- * `app_volume_management.onboarding-id.txt` in the current folder and rejoins
- * with that id on every later run. The \ref qar_c_tutorial_onboarding tutorial
- * explains where the code comes from and how long it lives.
  */
 // clang-format on
 
@@ -389,6 +369,10 @@
 #include <math.h>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
+
+/* The app tag the Hub remembers this program's peer id by: printable ASCII,
+ * constant across versions. */
+#define APP_TAG "main.app-volume-management.examples.quaternar"
 
 static bool
 same_volume_id(const QarAppVolumeId* first, const QarAppVolumeId* second)
@@ -1063,13 +1047,12 @@ main(int argc, char** argv)
 		   argv,
 		   known_flags,
 		   sizeof(known_flags) / sizeof(known_flags[0]),
-		   "[pairing-code] [--qaros-library=PATH]"
+		   "[--qaros-library=PATH]"
 	   ))
 	{
 		return 1;
 	}
 	const char* library_path = example_library_path(argc, argv);
-	const char* pairing_code = example_pairing_code_argument(argc, argv);
 
 	int exit_code = example_load_library(library_path);
 	if(exit_code != 0)
@@ -1083,13 +1066,7 @@ main(int argc, char** argv)
 		return 1;
 	}
 	QarSession* session = NULL;
-	exit_code = example_join_session(
-		runtime,
-		pairing_code,
-		"app_volume_management.onboarding-id.txt",
-		"App Volume Peer",
-		&session
-	);
+	exit_code = example_join_session(runtime, "App Volume Peer", APP_TAG, &session);
 	if(exit_code == 0)
 	{
 		exit_code = run_volume_steps(session);

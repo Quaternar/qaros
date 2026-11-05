@@ -299,7 +299,7 @@ main(int argc, char** argv)
 	QarSessionId seen_id;
 	memset(&seen_id, 0, sizeof(seen_id));
 	int exit_code = 0;
-	int rejoins = 0;
+	int joins_again = 0;
 	if(!start_session(runtime, &mailbox, &session, &token, &seen_id))
 	{
 		exit_code = 5;
@@ -352,7 +352,7 @@ main(int argc, char** argv)
 			printf("The hub no longer admits this app. Joining again ...\n");
 			stop_session(session, token, &mailbox);
 			session = NULL;
-			if(++rejoins > 3)
+			if(++joins_again > 3)
 			{
 				printf("Still refused after 3 joins; giving up.\n");
 				exit_code = 6;

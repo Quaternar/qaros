@@ -73,11 +73,11 @@ namespace Quaternar.Qaros.Tests
         [Fact]
         public void TheDefaultTagChainsNoTagExtension()
         {
-            using (var chain = NativeStructureChain.From(new OnboardLocalApp(), new OnboardPeerId(PeerId.Parse(Guid.NewGuid().ToString()))))
+            using (var chain = NativeStructureChain.From(new OnboardLocalApp(), GraphicsDeviceId.FromLuid(1)))
             {
                 var local = Marshal.PtrToStructure<OnboardLocalAppExtNative>(chain.Head);
                 Assert.Equal(StructureType.RuntimeOnboardLocalAppExt, local.Header.Type);
-                Assert.Equal(StructureType.RuntimeOnboardPeerIdExt, Marshal.PtrToStructure<StructureHeaderNative>(local.Header.Next).Type);
+                Assert.Equal(StructureType.SessionGraphicsDeviceId, Marshal.PtrToStructure<StructureHeaderNative>(local.Header.Next).Type);
             }
         }
 
@@ -85,7 +85,7 @@ namespace Quaternar.Qaros.Tests
         public void ATagChainsItsExtensionRightAfterTheLocalAppAndKeepsWhatFollows()
         {
             var local = new OnboardLocalApp { Tag = "left.sharp-tests", ApprovalTimeout = TimeSpan.FromSeconds(3) };
-            using (var chain = NativeStructureChain.From(local, new OnboardPeerId(PeerId.Parse(Guid.NewGuid().ToString()))))
+            using (var chain = NativeStructureChain.From(local, GraphicsDeviceId.FromLuid(1)))
             {
                 var native = Marshal.PtrToStructure<OnboardLocalAppExtNative>(chain.Head);
                 Assert.Equal(StructureType.RuntimeOnboardLocalAppExt, native.Header.Type);
@@ -93,9 +93,9 @@ namespace Quaternar.Qaros.Tests
                 var tag = Marshal.PtrToStructure<OnboardLocalAppTagExtNative>(native.Header.Next);
                 Assert.Equal(StructureType.RuntimeOnboardLocalAppTagExt, tag.Header.Type);
                 Assert.Equal("left.sharp-tests", NativeString.DecodeNullTerminated(tag.AppTag));
-                var after = Marshal.PtrToStructure<OnboardPeerIdExtNative>(tag.Header.Next);
-                Assert.Equal(StructureType.RuntimeOnboardPeerIdExt, after.Header.Type);
-                Assert.Equal(IntPtr.Zero, after.Header.Next);
+                var after = Marshal.PtrToStructure<StructureHeaderNative>(tag.Header.Next);
+                Assert.Equal(StructureType.SessionGraphicsDeviceId, after.Type);
+                Assert.Equal(IntPtr.Zero, after.Next);
             }
         }
 

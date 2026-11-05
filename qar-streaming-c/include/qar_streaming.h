@@ -1665,18 +1665,6 @@ typedef void (*qar_progress_callback_t)(
 );
 
 /**
- * @brief Which onboarding path a QarOnboardingInvite carries.
- *
- * Enum (not bools) so a future method extends the enum instead of breaking
- * if-not-pake-then-password assumptions.
- */
-typedef enum QarOnboardingMethod
-{
-	QAR_ONBOARDING_METHOD_PAKE = 0,	   /**< code-based EC-JPAKE */
-	QAR_ONBOARDING_METHOD_PASSWORD = 1 /**< shared-password channel */
-} QarOnboardingMethod;
-
-/**
  * @brief Presentation metadata advertised to other peers.
  *
  * Header'd so it can grow fields or chain extensions through its own header
@@ -1723,6 +1711,11 @@ typedef struct QarPeerDeviceIdentity
 
 /**
  * @brief Continue / rejoin the last persisted session (situation: continue).
+ *
+ * @deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+ * PC), as a co-process with QarOnboardInviteExt and the invite of
+ * qar_session_request_onboarding_invite, or through a member hub. Kept
+ * working for applications that already use it.
  */
 typedef struct QarRejoinInit
 {
@@ -1755,6 +1748,11 @@ typedef struct QarOnboardInit
  * @brief Extension: onboard with the short code shown on the hub onboarding
  * screen.
  *
+ * @deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+ * PC), as a co-process with QarOnboardInviteExt and the invite of
+ * qar_session_request_onboarding_invite, or through a member hub. Kept
+ * working for applications that already use it.
+ *
  * Without QarOnboardHostExt it finds this user's hub: first through the
  * hub-endpoint.json file the hub writes to the QAROS data root, then through
  * a discovery beacon whose owner is this user, listening up to 6 s. When
@@ -1766,10 +1764,9 @@ typedef struct QarOnboardCodeExt
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
-	/// Required; short code shown on the hub onboarding screen, or the code
-	/// text of any other invite the hub minted
-	/// (qar_onboarding_invite_get_code), such as the addressed code
-	/// (qar-code:...) an app is given by hand. Copied before the call returns.
+	/// Required; short code shown on the hub onboarding screen, or an
+	/// addressed code (qar-code:...) an app is given by hand. Copied before the
+	/// call returns.
 	/// QAROS hands an app it launches a full invite instead: use
 	/// qar_onboarding_invite_deserialize and QarOnboardInviteExt for that.
 	const char* code;
@@ -1778,6 +1775,8 @@ typedef struct QarOnboardCodeExt
 /**
  * @brief Extension: override the hub discovery endpoint for
  * qar_runtime_onboard when QarOnboardCodeExt is chained.
+ *
+ * @deprecated Code onboarding is deprecated (see QarOnboardCodeExt).
  *
  * Chain into QarOnboardInit.header.next; absent -> this user's hub (see
  * QarOnboardCodeExt).
@@ -1808,6 +1807,10 @@ typedef struct QarOnboardInviteExt
 
 /**
  * @brief Extension: join the session under a peer id chosen by the caller.
+ *
+ * @deprecated A local app gets its peer id from the hub, remembered per app
+ * tag (QarOnboardLocalAppTagExt), and a co-process from its invite. Kept
+ * working for applications that already use it.
  *
  * Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
  * QarOnboardInviteExt, for a process whose peer id was planned and announced
@@ -1928,8 +1931,15 @@ typedef struct QarRuntimeInfo
  *
  * - Only a session joined by local enrollment (QarOnboardLocalAppExt), or a
  *   process the QAROS launcher started, may request one.
- * - Single use, valid for 60 s (set by the hub), redeemable only from the
- *   hub's PC.
+ * - The invite works for every start of the co-process while this session
+ *   lives: it names this app on this PC, not the hub, and onboarding with it
+ *   asks this app for a fresh one-time hub invite on each attempt. It reaches
+ *   nobody beyond this user on this PC and does not expire on its own. The
+ *   co-process's onboarding tries again (250 ms doubling to 5 s) while this
+ *   app or the hub is away, and fails at once only for what no retry changes
+ *   (a forged invite, the approval denied, this session gone): bound it with a
+ *   cancel token. A platform without a local endpoint for this app gets the
+ *   hub's invite instead: single use, valid for 60 s.
  * - The co-process gets the short local certificate profile under this app's
  *   approval; its certificate renews only while the requesting session is
  *   still in the session, and revoking the approval revokes both.
@@ -2004,7 +2014,10 @@ typedef void (*qar_target_app_kill_result_callback_t)(
 	QarResult status, const QarPeerId* peer_id, void* user_state
 );
 
-/** @brief Teardown — erase a persisted identity slot. */
+/** @brief Teardown — erase a persisted identity slot.
+ *
+ * @deprecated Only the deprecated code onboarding persists a slot; local apps
+ * and co-processes persist nothing. */
 typedef struct QarForgetInit
 {
 	QarStructureHeader header; /**< QAR_STRUCTURE_TYPE_RUNTIME_FORGET_INIT */
@@ -2786,10 +2799,7 @@ static inline QarResult qar_library_init(const QarLibraryInit* init);
  * @brief Deinitialize global library state and free process-wide resources.
  *
  * After this call, no other API should be used until the next
- * qar_library_init(). It also removes the crash hooks qar_library_init()
- * installed in the process, so the library can then be unloaded with
- * qar_library_unload() while the application keeps running. A crash handler
- * the application installed after qar_library_init() is left in place.
+ * qar_library_init().
  *
  * @return QarResult Success or error code.
  */
@@ -3086,6 +3096,11 @@ static inline QarForgetInit qar_forget_init_default(void);
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero.
  * @retval QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND no persisted slot for the
  *   id — fall back to qar_runtime_onboard.
+ *
+ * @deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+ * PC), as a co-process with QarOnboardInviteExt and the invite of
+ * qar_session_request_onboarding_invite, or through a member hub. Kept
+ * working for applications that already use it.
  */
 static inline QarResult qar_runtime_rejoin(
 	QarRuntime* runtime,
@@ -3104,6 +3119,7 @@ static inline QarResult qar_runtime_rejoin(
  * @ref qar_c_async_calls "Async calls").
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero (the
  *   callback does not fire in this case).
+ * @deprecated See qar_runtime_rejoin.
  */
 static inline QarResult qar_runtime_rejoin_async(
 	QarRuntime* runtime,
@@ -3227,6 +3243,8 @@ static inline QarResult qar_session_request_onboarding_invite_async(
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED init->onboarding_id is zero.
  * @retval QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND no persisted slot for the
  *   id.
+ * @deprecated Only the deprecated code onboarding persists a slot; local apps
+ * and co-processes persist nothing.
  */
 static inline QarResult
 qar_runtime_forget(QarRuntime* runtime, const QarForgetInit* init);
@@ -3265,44 +3283,10 @@ static inline QarResult qar_onboarding_invite_serialize(
 	size_t* out_bytes_written
 );
 
-/** @brief Which onboarding path the invite carries. */
-static inline QarResult qar_onboarding_invite_get_method(
-	const QarOnboardingInvite* invite, QarOnboardingMethod* out_method
-);
-
-/** @brief Expiry (unix seconds) so GUIs can warn before handing out a stale
- * blob. */
-static inline QarResult qar_onboarding_invite_get_expires_unix(
-	const QarOnboardingInvite* invite, int64_t* out_expires_unix
-);
-
 /** @brief Check if an onboarding invite handle is valid. */
 static inline bool
 qar_onboarding_invite_handle_is_valid(const QarOnboardingInvite* invite);
 
-/**
- * @brief The code text of a pairing-code invite, to pass as
- * QarOnboardCodeExt.code.
- *
- * The text names its own invitation, so it works for any invite the hub
- * minted, not only the one its onboarding screen shows. It is a secret:
- * never log it.
- *
- * @param invite Required; a PAKE invite (qar_onboarding_invite_get_method).
- * @param out_buffer Receives the NUL-terminated text. May be NULL to query
- *   the length only.
- * @param buffer_size Size of out_buffer in bytes.
- * @param out_length Optional; receives the text length without the NUL.
- * @return Success, or the failure.
- * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED the invite is not a pairing-code
- *   invite, or out_buffer is too small (out_length still tells the length).
- */
-static inline QarResult qar_onboarding_invite_get_code(
-	const QarOnboardingInvite* invite,
-	char* out_buffer,
-	size_t buffer_size,
-	size_t* out_length
-);
 /** @brief Destroy an onboarding invite handle. */
 static inline void
 qar_onboarding_invite_handle_destroy(QarOnboardingInvite* invite);
@@ -7580,7 +7564,7 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 
 
 #define QAR_ONBOARDING_FUNCTION_LIST(X)                                        \
-	X(ACTIVE,                                                                  \
+	X(DEPRECATED,                                                              \
 	  QarResult,                                                               \
 	  runtime_rejoin,                                                          \
 	  (QarRuntime * runtime,                                                   \
@@ -7590,7 +7574,7 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	   QarCancelToken* cancel,                                                 \
 	   QarSession** out_session),                                              \
 	  (runtime, init, on_progress, progress_state, cancel, out_session))       \
-	X(ACTIVE,                                                                  \
+	X(DEPRECATED,                                                              \
 	  QarResult,                                                               \
 	  runtime_rejoin_async,                                                    \
 	  (QarRuntime * runtime,                                                   \
@@ -7647,7 +7631,7 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	   void* user_state,                                                       \
 	   QarCancelToken* cancel),                                                \
 	  (session, init, result_callback, update_callback, user_state, cancel))   \
-	X(ACTIVE,                                                                  \
+	X(DEPRECATED,                                                              \
 	  QarResult,                                                               \
 	  runtime_forget,                                                          \
 	  (QarRuntime * runtime, const QarForgetInit* init),                       \
@@ -7673,16 +7657,6 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	   size_t* out_bytes_written),                                             \
 	  (invite, out_buffer, buffer_size, out_bytes_written))                    \
 	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  onboarding_invite_get_method,                                            \
-	  (const QarOnboardingInvite* invite, QarOnboardingMethod* out_method),    \
-	  (invite, out_method))                                                    \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  onboarding_invite_get_expires_unix,                                      \
-	  (const QarOnboardingInvite* invite, int64_t* out_expires_unix),          \
-	  (invite, out_expires_unix))                                              \
-	X(ACTIVE,                                                                  \
 	  bool,                                                                    \
 	  onboarding_invite_handle_is_valid,                                       \
 	  (const QarOnboardingInvite* invite),                                     \
@@ -7692,14 +7666,6 @@ QAR_GUI_PANELS_FUNCTION_LIST(QAR_GUI_PANELS_DECLARE_WRAPPER)
 	  onboarding_invite_handle_destroy,                                        \
 	  (QarOnboardingInvite * invite),                                          \
 	  (invite))                                                                \
-	X(ACTIVE,                                                                  \
-	  QarResult,                                                               \
-	  onboarding_invite_get_code,                                              \
-	  (const QarOnboardingInvite* invite,                                      \
-	   char* out_buffer,                                                       \
-	   size_t buffer_size,                                                     \
-	   size_t* out_length),                                                    \
-	  (invite, out_buffer, buffer_size, out_length))                           \
 	X(ACTIVE,                                                                  \
 	  QarResult,                                                               \
 	  runtime_create_member_hub_invitation,                                    \

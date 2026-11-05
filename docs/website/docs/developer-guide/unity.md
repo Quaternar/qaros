@@ -102,20 +102,20 @@ The app joins the Hub's session once; every target is streamed to through that s
 general flow is in [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions); in
 Unity it is driven by **Onboarding** on `QarMultiUserStreamingBehaviour`.
 
-- **LocalApp** (the default) joins the Hub on this PC with no code. The first time, QAROS asks the
-  user to allow the app (the Unity Editor once for every project opened in it); later starts join
-  silently. Nothing is saved.
-- **Code** onboards with a Hub's pairing code, for a Hub on another machine. The onboarding ID is
-  saved in `PlayerPrefs` and rejoins silently later; `ForgetOnboarding()` erases it.
+The app joins the Hub on this PC as a local app, with no code. The first time, QAROS asks the
+user to allow the app (the Unity Editor once for every project opened in it); later starts join
+silently. Nothing is saved, so every start joins the same way.
+
+- An app QAROS launched joins the same way.
+- On a PC whose Hub joined another PC's Hub as a member, the app joins its own PC's Hub the same
+  way and lands in the primary's session.
+- To shut the app out, revoke its approval in QAROS.
 
 | Setting | Use |
 |---|---|
-| **Mode** | `LocalApp` or `Code`. A **Hub Host** always uses `Code`. |
-| **Code** | The pairing code (Code mode). Used only when the saved onboarding ID cannot rejoin. |
-| **Hub Host**, **Hub Port** | Onboard with a Hub on another machine. A remote Hub needs its port too: Hubs have no fixed onboarding port. |
-| **Approval Timeout Seconds** | LocalApp: how long to wait for the user to allow the app. 0 uses the Hub's default (120 s). |
+| **Approval Timeout Seconds** | How long to wait for the user to allow the app. 0 uses the Hub's default (120 s). |
 | **Use Unity Graphics Adapter** | Creates the session's GPU devices on the adapter Unity renders with (NVIDIA only), so frames need no copy between GPUs. `QAR_GPU_ADAPTER_ID` in the environment overrides it (see [Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)). |
-| **Onboarding Id Key**, **Planned Peer Id**, **Timeout Seconds** | Code mode details: where the ID is saved, joining under a planned peer ID, how long to wait. |
+| **Timeout Seconds** | How long to wait for the session after the approval. |
 
 `Join()` blocks until the Hub answers. When it fails, `LastJoinError` says why and the target list
 offers to join again.
@@ -146,7 +146,6 @@ when it is gone.
 | `StreamToAllTargets` | Stream to every reachable target, or only the picked ones |
 | `SetTargetSelected(PeerId, bool)`, `IsStreamedTo(target)` | Picks a target; whether it is streamed to |
 | `Leave()` | Stops streaming to every target and stops listing them |
-| `ForgetOnboarding()` | Leaves, ends the session and erases the saved onboarding ID (Code mode) |
 
 ### App volume
 

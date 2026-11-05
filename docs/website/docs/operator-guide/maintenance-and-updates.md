@@ -16,6 +16,8 @@ QAROS ships as several artifacts (see [Installation](/docs/operator-guide/instal
 - **Device players.** Install the new player from `devices\` of the installation on each device: `adb install -r` the APK on Meta Quest and METALENSE 2, on HoloLens 2 show the install code again in the Visualizer ([HoloLens 2](/docs/operator-guide/player-installation-to-device/hololens-2#install-from-the-visualizer)), or redeploy the package through the Device Portal. Keep Hub and players on the same release.
 - **Applications on the C API.** A runtime update reaches every application that loads it, which is why the compatibility promise below matters.
 
+On a PC that cannot reach the browser's certificate update hosts, website panels use the certificate data built into QAROS, so update QAROS regularly there ([Outbound hosts for browser certificate updates](/docs/operator-guide/networking-and-federation#outbound-hosts-for-browser-certificate-updates)).
+
 ## Updating to encrypted storage
 
 From this release every secret QAROS keeps (the Hub's CA keys, device and app identities, approved local apps, the licence) is encrypted in `secure-store` under the data root, protected by a key of the signed-in Windows user that lives in the PC's TPM (or in Windows DPAPI where no TPM is usable). See [Security Deep Dive: What is stored where](./security-deep-dive.md#what-is-stored-where).

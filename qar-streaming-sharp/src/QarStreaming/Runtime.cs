@@ -6,15 +6,21 @@ using Quaternar.Qaros.Interop;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// Hosts the identity slots a process onboards with and produces its sessions. Create it after
-    /// <see cref="Library.Init"/>; every <see cref="Session"/> comes from <see cref="Onboard"/> or
-    /// <see cref="Rejoin"/> on it.
+    /// Produces a process's sessions. Create it after <see cref="Library.Init"/>; every
+    /// <see cref="Session"/> comes from <see cref="Onboard"/> on it.
     /// </summary>
     /// <remarks>
-    /// The canonical startup: try <see cref="Rejoin"/> with the persisted
-    /// <see cref="OnboardingId"/>; on <see cref="StatusCode.OnboardingSessionNotFound"/> run
-    /// <see cref="Onboard"/> and persist the id it returns. Dispose sessions before the runtime,
-    /// and the runtime before <see cref="Library.Destroy"/>.
+    /// <para>
+    /// The canonical startup: <see cref="Onboard"/> on every start, nothing persisted. An app on
+    /// the hub's PC (also one QAROS launched) uses <see cref="OnboardOptions.UseLocalApp"/>; its
+    /// companion process uses <see cref="OnboardOptions.UseInvite"/> on a runtime created with
+    /// <see cref="RuntimeOptions.EphemeralStorage"/>; on a member hub's PC an app first runs
+    /// <see cref="JoinHubAsMember"/>, then onboards as a local app redeeming
+    /// <see cref="OnboardLocalApp.RemoteAppGrant"/>.
+    /// </para>
+    /// <para>
+    /// Dispose sessions before the runtime, and the runtime before <see cref="Library.Destroy"/>.
+    /// </para>
     /// </remarks>
     public sealed class Runtime : IDisposable
     {
@@ -50,9 +56,10 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Restores the session last persisted for <see cref="RejoinOptions.OnboardingId"/>. Pops no
-        /// UI, so call it optimistically on every start. Blocks until the restore validated or
-        /// failed.
+        /// Deprecated: restores the session last persisted for
+        /// <see cref="RejoinOptions.OnboardingId"/>. Blocks until the restore validated or failed.
+        /// Onboard with <see cref="OnboardOptions.UseLocalApp"/> or
+        /// <see cref="OnboardOptions.UseInvite"/> on every start instead.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -75,6 +82,7 @@ namespace Quaternar.Qaros
         /// <param name="options">The onboarding id to restore, and optional presentation and GPU.</param>
         /// <param name="progress">Optional progress reports.</param>
         /// <param name="cancellationToken">Cancels the restore; the call then returns a failure.</param>
+        [Obsolete(DeprecatedOnboarding.Rejoin)]
         public Result<Session> Rejoin(RejoinOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (options == null)
@@ -104,9 +112,10 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Async <see cref="Rejoin"/>: returns at once, and the task completes on a library thread
-        /// with the same results.
+        /// Deprecated async <see cref="Rejoin"/>: returns at once, and the task completes on a
+        /// library thread with the same results.
         /// </summary>
+        [Obsolete(DeprecatedOnboarding.Rejoin)]
         public Task<Result<Session>> RejoinAsync(RejoinOptions options, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (options == null)
@@ -122,6 +131,7 @@ namespace Quaternar.Qaros
             return RejoinAsync(options, state, cancelHandle.Value);
         }
 
+        [Obsolete(DeprecatedOnboarding.Rejoin)]
         private Task<Result<Session>> RejoinAsync(RejoinOptions options, RuntimeOnboardAsyncState state, IntPtr cancelHandle)
         {
             try
@@ -149,31 +159,27 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Runs full onboarding with the mode chosen by <see cref="OnboardOptions.UseCode"/> or
-        /// <see cref="OnboardOptions.UseInvite"/>, and blocks until it succeeded or failed. Persist
-        /// the returned <see cref="OnboardSession.OnboardingId"/>: it is the ticket for every later
-        /// <see cref="Rejoin"/> and <see cref="Forget"/>.
+        /// Joins the session with the mode chosen by <see cref="OnboardOptions.UseLocalApp"/> or
+        /// <see cref="OnboardOptions.UseInvite"/>, and blocks until it succeeded or failed. Call it
+        /// on every start: neither mode persists anything to come back to.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// With <see cref="OnboardOptions.OnboardingId"/> unset a new identity slot is created; set
-        /// to an id an earlier onboard returned, that slot is re-enrolled.
-        /// </para>
-        /// <para>
-        /// Expected failures: <see cref="StatusCode.PakeError"/> means the code was wrong or
-        /// expired, or the invite was rejected or expired: re-prompt for a code or mint a fresh
-        /// invite. <see cref="StatusCode.OnboardingHubUnreachable"/> means no hub answered: check
-        /// that it runs and pass its host and port with <see cref="OnboardOptions.WithHost"/>.
-        /// <see cref="StatusCode.ArgumentNotSupported"/> means a zero
-        /// <see cref="OnboardOptions.WithPeerId"/> id, a host port of 0, an
+        /// Expected failures: <see cref="StatusCode.OnboardingApprovalDenied"/> means the user
+        /// denied the app in the QAROS hub, or another executable already redeemed the
+        /// <see cref="OnboardLocalApp.RemoteAppGrant"/>; <see cref="StatusCode.OnboardingApprovalTimeout"/>
+        /// means nobody answered the approval prompt. <see cref="StatusCode.OnboardingHubUnreachable"/>
+        /// means no hub answered: check that it runs. An invite onboarding retries by itself and
+        /// fails only for what no retry changes: a forged invite, the approval denied, or the app
+        /// session that minted the invite gone. <see cref="StatusCode.ArgumentNotSupported"/> means an
         /// <see cref="OnboardLocalApp.Tag"/> the runtime refuses, an invalid
         /// <see cref="OnboardLocalApp.RemoteAppGrant"/>, or a GPU the session cannot create its
-        /// devices on. <see cref="StatusCode.OnboardingApprovalDenied"/> with a remote-app grant
-        /// means another executable already redeemed it.
+        /// devices on.
         /// </para>
         /// <para>
-        /// With <see cref="RuntimeOptions.EphemeralStorage"/> nothing is persisted and the returned
-        /// id is <see cref="OnboardingId.Default"/>; so it is for <see cref="OnboardOptions.UseLocalApp"/>.
+        /// The returned <see cref="OnboardSession.OnboardingId"/> serves only the deprecated slot
+        /// paths; with <see cref="RuntimeOptions.EphemeralStorage"/> it is
+        /// <see cref="OnboardingId.Default"/>.
         /// </para>
         /// <para>
         /// <paramref name="progress"/> is reported from a library thread while this call blocks.
@@ -269,9 +275,9 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Erases everything stored for an identity slot: certificate, persisted peer id and session
-        /// state. Afterwards only a full <see cref="Onboard"/> gets back in. Needs no session, so it
-        /// also serves a "forget this hub" action while disconnected.
+        /// Deprecated: erases everything stored for an identity slot: certificate, persisted peer id
+        /// and session state. A local-app or invite onboarding persists nothing to forget; revoke a
+        /// local app's approval in the QAROS hub instead.
         /// </summary>
         /// <remarks>
         /// Fails with <see cref="StatusCode.OnboardingSessionStillActive"/> while a session of the
@@ -280,6 +286,7 @@ namespace Quaternar.Qaros
         /// <see cref="RuntimeOptions.EphemeralStorage"/> has no slots and fails with
         /// <see cref="StatusCode.ArgumentNotSupported"/>.
         /// </remarks>
+        [Obsolete(DeprecatedOnboarding.Forget)]
         public Result<Unit> Forget(ForgetOptions options)
         {
             if (options == null)
@@ -385,7 +392,7 @@ namespace Quaternar.Qaros
         /// <remarks>
         /// Safe while another thread is inside a call on the runtime: new calls are refused at once
         /// (<see cref="ObjectDisposedException"/>), the calls that wait on the hub
-        /// (<see cref="Onboard"/>, <see cref="Rejoin"/>, their async forms,
+        /// (<see cref="Onboard"/>, the deprecated <see cref="Rejoin"/>, their async forms,
         /// <see cref="JoinHubAsMember"/>, <see cref="CreateMemberHubInvitation"/>) are cancelled and
         /// fail, and Dispose waits until every running call returned and every async call's
         /// completion fired. Only then is the runtime released, on the calling thread, so a

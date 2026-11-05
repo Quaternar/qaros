@@ -1,9 +1,10 @@
 use std::sync::mpsc;
+use std::time::Duration;
 
 use qaros::{
-    BlockingOptions, CancelToken, GraphicsAdapter, HubAddress, Library, OnboardExtensions,
-    OnboardMethod, OnboardingId, PeerPresentation, Progress, Runtime, RuntimeConfig, Session,
-    SessionId, SessionLifecycle, SessionLifecycleState, StatusCode, Subscription,
+    BlockingOptions, CancelToken, GraphicsAdapter, Library, OnboardExtensions, OnboardMethod,
+    PeerPresentation, Progress, Runtime, RuntimeConfig, Session, SessionId, SessionLifecycle,
+    SessionLifecycleState, Subscription,
 };
 
 fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> {
@@ -32,7 +33,7 @@ fn local_app(runtime: &Runtime, cancel: &CancelToken) -> qaros::Result<Session> 
     );
     let _ = printer.join(); // the channel closes when the call returns
 
-    // A local app's onboarding id is the zero id: nothing to persist.
+    // Nothing to persist: every start onboards as a local app again.
     let session = joined?.session;
     // ANCHOR_END: local_app
     Ok(session)
@@ -56,65 +57,22 @@ fn local_app_with_tag(runtime: &Runtime) -> qaros::Result<Session> {
     Ok(onboarded.session)
 }
 
-// ANCHOR: obtain_session
-fn obtain_session(
-    runtime: &Runtime,
-    saved_id: &mut OnboardingId,  // loaded from your app's settings
-    code_from_user: Option<&str>, // None until you prompted the user
-    hub_host: &str,               // the hub PC's host name or IP
-    hub_port: u16,                // shown with the hub's code
-) -> qaros::Result<Option<Session>> {
-    let who = PeerPresentation {
-        display_name: Some("My CAD Tool".to_string()),
-        app_version: Some("2.4.0".to_string()),
-        ..PeerPresentation::default()
-    };
-
-    if !saved_id.is_zero() {
-        match runtime.rejoin(*saved_id, &who, &BlockingOptions::default()) {
-            Ok(session) => return Ok(Some(session)), // silent reconnect: the normal path
-            Err(error) if error.has_code(StatusCode::ONBOARDING_SESSION_NOT_FOUND) => {
-                // no persisted slot -> fall through to onboarding
-            }
-            Err(error) => return Err(error), // real error (hub unreachable, ...)
-        }
-    }
-
-    let Some(code) = code_from_user else {
-        return Ok(None); // prompt the user for the code shown by the hub, then call again
-    };
-    let method = OnboardMethod::Code {
-        code,
-        hub: Some(HubAddress {
-            hostname: hub_host,
-            port: hub_port,
-        }),
-    };
-    match runtime.onboard(&method, &who, &BlockingOptions::default()) {
-        Ok(onboarded) => {
-            *saved_id = onboarded.onboarding_id; // persist it before returning
-            Ok(Some(onboarded.session))
-        }
-        // Wrong or expired code: re-prompt the user and call again.
-        Err(error) if error.has_code(StatusCode::PAKE_ERROR) => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-// ANCHOR_END: obtain_session
+fn start_companion(_invite: &[u8]) {}
 
 fn co_process(library: &Library, session: &Session, blob: &[u8]) -> qaros::Result<Session> {
     // ANCHOR: co_process
-    // In your app (joined as a local app):
+    // In your app (joined as a local app), once per session:
     let invite = session.request_onboarding_invite(
         "companion.terraexplorer.skyline",
         &BlockingOptions::default(),
     )?;
     let mut wire_bytes = invite.serialize()?;
     drop(invite);
-    // write `wire_bytes` to the co-process's stdin, then clear it
+    start_companion(&wire_bytes); // over its stdin; again on every later start of the companion
+    // when the session ends:
     wire_bytes.fill(0);
 
-    // In the co-process:
+    // In the companion:
     let runtime = library.create_runtime(&RuntimeConfig {
         ephemeral_storage: true, // identity in memory only
         ..RuntimeConfig::default()
@@ -124,12 +82,17 @@ fn co_process(library: &Library, session: &Session, blob: &[u8]) -> qaros::Resul
         display_name: Some("TerraExplorer companion".to_string()),
         ..PeerPresentation::default()
     };
+    // Retries while the app or the hub is away (250 ms, doubling to 5 s): the token bounds it.
+    let cancel = library.create_cancel_token(Some(Duration::from_secs(120)))?;
     let onboarded = runtime.onboard(
         &OnboardMethod::Invite(&received),
         &who,
-        &BlockingOptions::default(),
+        &BlockingOptions {
+            progress: None,
+            cancel: Some(&cancel),
+        },
     )?;
-    // onboarded.onboarding_id stays zero; the invite is destroyed when it drops
+    // the invite is destroyed when it drops
     // ANCHOR_END: co_process
     Ok(onboarded.session)
 }
@@ -167,32 +130,6 @@ fn session_adapter(session: &Session) -> qaros::Result<()> {
     Ok(())
 }
 
-fn onboard_from_stdin_line(
-    library: &Library,
-    runtime: &Runtime,
-    line: &str,
-    who: &PeerPresentation,
-) -> qaros::Result<Session> {
-    // ANCHOR: launch_invite
-    let onboarded = if line.starts_with('{') {
-        let invite = library.deserialize_invite(line.as_bytes())?;
-        runtime.onboard(
-            &OnboardMethod::Invite(&invite),
-            who,
-            &BlockingOptions::default(),
-        )?
-        // the invite is destroyed when it drops
-    } else {
-        let method = OnboardMethod::Code {
-            code: line,
-            hub: None,
-        };
-        runtime.onboard(&method, who, &BlockingOptions::default())?
-    };
-    // ANCHOR_END: launch_invite
-    Ok(onboarded.session)
-}
-
 /// What the app does with the lifecycle states on its own thread.
 fn get_or_create_owned_objects(_session: &Session) {}
 
@@ -218,15 +155,6 @@ fn follow_lifecycle(session: &Session) -> qaros::Result<Subscription> {
     }
     // ANCHOR_END: session_lifecycle
     Ok(lifecycle)
-}
-
-fn teardown(runtime: &Runtime, session: Session, saved_id: OnboardingId) -> qaros::Result<()> {
-    // ANCHOR: teardown
-    drop(session); // qar_session_handle_destroy
-    // only for an explicit un-pair:
-    runtime.forget(saved_id)?;
-    // ANCHOR_END: teardown
-    Ok(())
 }
 
 fn send_over_your_channel(_bytes: &[u8]) {}
@@ -268,29 +196,6 @@ fn remote_app_grant(library: &Library, runtime: &Runtime, received: &[u8]) -> qa
     Ok(())
 }
 
-fn re_enroll(
-    runtime: &Runtime,
-    saved_id: OnboardingId,
-    pairing_code: &str,
-) -> qaros::Result<Session> {
-    // ANCHOR: re_enroll
-    let onboarded = runtime.onboard_with(
-        &OnboardMethod::Code {
-            code: pairing_code,
-            hub: None,
-        },
-        &PeerPresentation::default(),
-        &OnboardExtensions {
-            onboarding_id: Some(saved_id), // the slot to re-enroll
-            ..OnboardExtensions::default()
-        },
-        &BlockingOptions::default(),
-    )?;
-    assert_eq!(onboarded.onboarding_id, saved_id);
-    // ANCHOR_END: re_enroll
-    Ok(onboarded.session)
-}
-
 fn request_repaint() {}
 
 fn onboard_without_blocking(runtime: &Runtime) -> qaros::Result<()> {
@@ -313,7 +218,7 @@ fn onboard_without_blocking(runtime: &Runtime) -> qaros::Result<()> {
         println!("{}", report.message);
     }
     if let Some(outcome) = pending.poll() {
-        let onboarded = outcome?; // persist onboarded.onboarding_id unless it is zero
+        let onboarded = outcome?; // nothing to persist: the next start onboards again
         drop(onboarded);
     }
     // Dropping `pending` cancels the call; the runtime destroys a session it still delivers.

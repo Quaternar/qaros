@@ -221,11 +221,11 @@ GameObject PrefabFor(PeerSpec peer) =>
 
 ## Describing your own device
 
-An application is always a **source** (`QAR_PEER_ROLE_SOURCE`): it describes its device, never its role. By default QAROS publishes it as a desktop PC (`DesktopWindows` / `DesktopLinux`). To say more, chain a `QarPeerDeviceIdentity` on `QarPeerPresentation::header.next` when you onboard or rejoin:
+An application is always a **source** (`QAR_PEER_ROLE_SOURCE`): it describes its device, never its role. By default QAROS publishes it as a desktop PC (`DesktopWindows` / `DesktopLinux`). To say more, chain a `QarPeerDeviceIdentity` on `QarPeerPresentation::header.next` when you onboard:
 
 - `category` must be `QAR_DEVICE_CATEGORY_DESKTOP_PC`, `QAR_DEVICE_CATEGORY_SERVER` or `QAR_DEVICE_CATEGORY_CAMERA`. Anything else fails with `QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED` and changes nothing.
 - `device_id` is required. `device_family` and `device_name` are optional. An id the Hub's device catalog does not know is fine: the visualizer shows it by family or category, with your name.
-- Nothing is kept for you between starts: chain it on every onboard, and on `QarRejoinInit` when a code-paired app rejoins.
+- Nothing is kept for you between starts: chain it on every onboard.
 
 ### A source app that is a camera
 

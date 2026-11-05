@@ -36,7 +36,7 @@ description: Short definitions of every QAROS term used in this documentation.
 
 **Peer** — a session participant (a device or an application) with a certificate-backed identity and presentation metadata.
 
-**Rejoin** — silently re-entering the session using a persisted identity; the normal path on every start after the first for an app that paired with a code. A local app on the Hub's PC onboards again instead and stores nothing.
+**Rejoin** — silently re-entering the session using a persisted identity; used by a device paired with a code. Apps (a local app, its companions, a remote app through a member hub) onboard again on every start instead and store nothing.
 
 **Room space** — the shared coordinate frame of the physical room (meters, OpenXR conventions); where volumes and panels are placed.
 

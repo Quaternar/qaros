@@ -8,13 +8,12 @@ namespace Quaternar.Qaros
 {
     /// <summary>
     /// An active session, the entry point to peers, GUI panels, app volumes and senders. Only
-    /// <see cref="Runtime.Onboard"/> and <see cref="Runtime.Rejoin"/> produce one, and there is no
-    /// getter for a "current" session: keep the instance.
+    /// <see cref="Runtime.Onboard"/> (and the deprecated <see cref="Runtime.Rejoin"/>) produce one,
+    /// and there is no getter for a "current" session: keep the instance.
     /// </summary>
     /// <remarks>
-    /// The caller owns the session. <see cref="Dispose"/> tears the session down but keeps the
-    /// persisted identity, so the next start can <see cref="Runtime.Rejoin"/> silently; erasing the
-    /// identity is <see cref="Runtime.Forget"/>. Disposing ends every subscription of the session
+    /// The caller owns the session. <see cref="Dispose"/> tears the session down; the next start
+    /// onboards again. Disposing ends every subscription of the session
     /// and waits for a handler running on another thread, and for the session calls other threads
     /// are making (see <see cref="Dispose"/>): never dispose it from a QAROS callback or event
     /// handler, nor while holding a lock a handler or such a call takes.
@@ -167,8 +166,11 @@ namespace Quaternar.Qaros
         /// <remarks>
         /// <para>
         /// Only a session that joined by <see cref="OnboardOptions.UseLocalApp"/>, or a process the
-        /// QAROS launcher started, may ask; the hub refuses any other. The invite works once, for
-        /// 60 s (set by the hub), and only from the hub's PC. The co-process gets the short local
+        /// QAROS launcher started, may ask; the hub refuses any other. The invite works for every
+        /// start of the co-process while this session lives and only for this user on this PC (a
+        /// named pipe on Windows, a Unix socket on Linux): onboarding with it asks this app for a
+        /// fresh one-time hub invite on each attempt and keeps trying while this app or the hub is
+        /// away (bound it with a cancellation token). The co-process gets the short local
         /// certificate under this app's approval; its certificate renews only while this app's peer is
         /// still in the session, and revoking the approval revokes both.
         /// </para>
@@ -178,7 +180,8 @@ namespace Quaternar.Qaros
         /// <see cref="OnboardingInvite.Serialize()"/>; the co-process creates its runtime with
         /// <see cref="RuntimeOptions.EphemeralStorage"/>, so it writes nothing to disk, and onboards
         /// with <see cref="OnboardingInvite.Deserialize"/> and <see cref="OnboardOptions.UseInvite"/>.
-        /// A restarted co-process needs a fresh invite: mint one when it is needed.
+        /// Request it once per app session and hand the same bytes to every start of the
+        /// co-process.
         /// </para>
         /// <para>
         /// There is no invite for another PC or for a new device: pairing codes and unbound
@@ -420,8 +423,8 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Tears the session down but keeps its persisted identity for a later
-        /// <see cref="Runtime.Rejoin"/>. Waits for the calls and subscription handlers running on
+        /// Tears the session down (a persisted slot of the deprecated slot paths stays for a later
+        /// <see cref="Runtime.Rejoin"/>). Waits for the calls and subscription handlers running on
         /// other threads; do not call it from a callback of the session.
         /// </summary>
         /// <remarks>

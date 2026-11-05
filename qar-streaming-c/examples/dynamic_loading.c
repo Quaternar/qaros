@@ -172,8 +172,8 @@
  * \section dynamic_loading_next Next
  * - \ref qar_c_tutorial_local_app_onboarding "Local App Onboarding":
  *   how an app on the Hub machine joins, with nothing to type.
- * - \ref qar_c_tutorial_onboarding "Code Pairing and Rejoin":
- *   how an app joins with a pairing code and rejoins later.
+ * - \ref qar_c_tutorial_co_process_onboarding "Co-Process Onboarding":
+ *   how a process your app starts joins under the app's approval.
  * - <a href="/docs/developer-guide/authoring-a-binding#the-default-lookup">The default lookup</a>,
  *   the rules every QAROS binding follows.
  * - <a href="/docs/developer-guide/tutorials/rust/dynamic-loading">Dynamic Loading in Rust</a>:
