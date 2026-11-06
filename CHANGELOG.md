@@ -273,6 +273,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
+  Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
+  enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
 

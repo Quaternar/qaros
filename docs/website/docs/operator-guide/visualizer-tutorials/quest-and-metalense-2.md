@@ -107,8 +107,8 @@ The last step, **Anchor: look at the anchoring QR code**, places the scene. This
 origin marker, not the connection QR code used for pairing.
 
 1. Click **Show anchoring QR code** (or use a printed code).
-2. Put the device on. Until it is anchored it shows *Anchor your headset: look at the anchoring QR
-   code*. Look at the code until the message goes.
+2. Put the device on. Until it is anchored it shows *Look at the anchoring QR code*. Look at the
+   code until the message goes.
 3. The step completes by itself and shows the room the device took (`anchored · room N`).
 
 Several devices, rooms and printing the code:

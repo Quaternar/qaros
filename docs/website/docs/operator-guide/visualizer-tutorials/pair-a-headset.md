@@ -55,9 +55,8 @@ Use this when the headset can neither be plugged in nor scan the QR code. The he
 are on the same network.
 
 1. Start QAROS Player on the headset. While it is connected to no hub (not paired yet, or its hub
-   is away), it shows the connection prompt: *Connect: scan the connection QR code in the QAROS
-   Visualizer, or enter this address and code there:* with its address, an 8-digit code
-   (`1234-5678`) and a countdown.
+   is away), it shows the connection prompt: *Scan the connection QR code or enter in QAROS:* with
+   its address, an 8-digit code (`1234-5678`) and a countdown.
 2. In the Visualizer open **Session** › **Devices** › **Invite device** and pick **By code**. The
    headsets showing a code on this network are listed by name and model with their address
    (*Looking for headsets on this network...* until one answers).
@@ -102,7 +101,7 @@ the Android XR emulator: installing apps is the same on all of them. Its steps:
    [Pair with a QR code](#pair-with-a-qr-code-no-usb-needed)), or type the code it shows
    ([Pair by the code the headset shows](#pair-by-the-code-the-headset-shows)).
 6. **Anchor: look at the anchoring QR code**: click **Show anchoring QR code** and look at it with
-   the headset until *Anchor your headset: look at the anchoring QR code* goes. The step completes
+   the headset until *Look at the anchoring QR code* goes. The step completes
    by itself and shows the room
    ([Scene Origin](./scene-origin-and-rooms.md#4-anchor-each-device)).
 
