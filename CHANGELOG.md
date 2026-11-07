@@ -20,7 +20,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
   connected to a hub, an Android headset shows the connection prompt with its address and an
-  8-digit code that changes every 60 s; type both (or pick the headset from those found on the
+  6-digit code (`123 456`) that changes every 30 s; type both (or pick the headset from those found on the
   network) into **Invite device** › **By code** and click **Pair**. *Connecting to the Hub*,
   *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the player installation
   pages and *Security Deep Dive* name this way too.

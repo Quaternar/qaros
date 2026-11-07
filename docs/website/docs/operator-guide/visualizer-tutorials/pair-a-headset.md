@@ -56,7 +56,7 @@ are on the same network.
 
 1. Start QAROS Player on the headset. While it is connected to no hub (not paired yet, or its hub
    is away), it shows the connection prompt: *Scan the connection QR code or enter in QAROS:* with
-   its address, an 8-digit code (`1234-5678`) and a countdown.
+   its address, a 6-digit code (`123 456`) and a countdown.
 2. In the Visualizer open **Session** › **Devices** › **Invite device** and pick **By code**. The
    headsets showing a code on this network are listed by name and model with their address
    (*Looking for headsets on this network...* until one answers).
@@ -66,7 +66,8 @@ are on the same network.
    prompt on the headset hides.
 5. When the headset joins, the card shows *Headset paired* and the headset is listed as a device.
 
-- The code changes every 60 s and after every pairing attempt: type the one shown now.
+- The code changes every 30 s and after every pairing attempt: type the one shown now. The
+  space is only there for reading; type the digits with or without it.
 - A code of the wrong shape (a hub join code, a typo) is refused before anything is sent.
 - The code never crosses the network: the Visualizer hands it to the Hub and only asks the headset
   to call back.
@@ -142,7 +143,8 @@ Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install Q
 | Its stored identity no longer works (data restored from another install, refused by the Hub) | Waits for a new code: pair it again |
 | Uninstalled | Its identity is gone with the app: pair it again after reinstalling |
 
-- Every code is single use and lives 60 s, for **Pair headset** and for a QR code alike.
+- Every code is single use and lives 60 s, for **Pair headset** and for a QR code alike; the
+  code a headset shows for **By code** lives 30 s.
   **Pair again** always makes a new one. A headset that took a pushed code has 90 s to join.
 - **Pair headset** sends the code over the USB cable, never over the network. If the Visualizer
   cannot reach the player over USB it reports the failure and sends nothing; use a QR code then.
@@ -163,7 +165,7 @@ Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install Q
 | *the headset already has a session identity…* | It is paired already; scan a QR code on the headset to pair it to this Hub again |
 | *Not paired: the headset did not join (code expired or onboarding failed) — pair again* | The headset took the code but never appeared: check it can reach the Hub over the network, then click **Pair again** |
 | **Pair headset** disabled | No headset on USB; **Show QR code** and **By code** still work |
-| *this is no code a headset shows; check it for a typo.* (**By code**) | The typed code has the wrong shape; type the 8 digits the headset shows |
+| *this is no code a headset shows; check it for a typo.* (**By code**) | The typed code has the wrong shape; type the 6 digits the headset shows |
 | *Not paired: ...* after **Pair** in **By code** | The code was wrong or expired. The headset shows a new code at once: type that one |
 
 ## Set the name the headset shows
