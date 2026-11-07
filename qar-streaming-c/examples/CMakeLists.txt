@@ -1,15 +1,13 @@
 if(BUILD_CORE_EXAMPLES)
   set(QAR_DYNAMIC_EXAMPLES
       dynamic_loading
-      onboarding_and_rejoin
       app_volume_management
       gui_panel_operations
       cpu_rendering_visualizer
       local_app_onboarding
       api_instances_in_one_process
       co_process_onboarding
-      remote_app_onboarding
-      launched_app_onboarding)
+      remote_app_onboarding)
 
   foreach(sample ${QAR_DYNAMIC_EXAMPLES})
     add_executable(${sample} ${sample}.c)
@@ -18,7 +16,7 @@ if(BUILD_CORE_EXAMPLES)
   endforeach()
 
   if(WIN32)
-    # Local enrollment, which this example joins with, is Windows only.
+    # These examples use Win32 threading and timing, and D3D11.
     add_executable(session_lifecycle session_lifecycle.c)
     target_compile_features(session_lifecycle PRIVATE c_std_11)
     target_link_libraries(session_lifecycle PRIVATE qar-streaming-c-headers)

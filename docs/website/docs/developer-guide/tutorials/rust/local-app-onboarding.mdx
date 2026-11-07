@@ -10,7 +10,7 @@ description: Join QAROS from Rust as a local app on the Hub machine, with nothin
 
 The smallest source app that joins QAROS on the Hub machine. It loads the installed runtime, asks the Hub to let it in, and exits with a code that says what happened. The first time, QAROS asks the user to allow the app; later starts of the same executable join silently.
 
-This is how a source app on the Hub machine joins QAROS.[^code] There is nothing to type and no onboarding id to store.
+This is how a source app on the Hub machine joins QAROS, and every other example here joins the same way. There is nothing to type and nothing to store.
 
 What you will learn:
 
@@ -175,7 +175,7 @@ The example passes no cancel token, so it can only wait. An application passes a
 
 `app_tag` names this instance of the app ([App tags](/docs/developer-guide/onboarding-and-sessions#app-tags-telling-instances-apart)). The Hub picks the peer id and remembers one per approval and tag, so the next start with the same tag gets the same peer id back, and the example prints it. While another live process holds that id (a second instance with the same tag), the newcomer gets a one-off id: give instances that run together different tags. The tag is an identity key: printable ASCII, no space at either end, never starting with `member/`, constant across versions of the app; anything else fails with `StatusCode::ARGUMENT_NOT_SUPPORTED`. `None` is the default tag, remembered the same way.
 
-A local app is **stateless**. `Onboarded::onboarding_id` is the zero id, and there is nothing to save: every start calls onboard again, and the Hub remembers the approval. `Runtime::rejoin` and `Runtime::forget` refuse the zero id with `Error::InvalidArgument`.
+A local app is **stateless**: there is nothing to save. Every start calls onboard again, and the Hub remembers the approval.
 
 ### 5. Tell the user what happened
 
@@ -308,4 +308,3 @@ The C tutorial is [Local App Onboarding](/docs/developer-guide/tutorials/c/local
 - [Rendering Streams](/docs/developer-guide/rendering-streams): send frames to the devices once you have a session.
 - [CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering): join the same way, then stream frames to the target apps.
 
-[^code]: `cpu_rendering_visualizer`, `d3d11_render_sender`, `gui_panel_operations` and `app_volume_management` also accept a pairing code as their first argument, as their C originals do, and `onboarding_and_rejoin` always pairs with one ([Onboarding and Rejoin](/docs/developer-guide/tutorials/rust/onboarding-and-rejoin)). This example and `vulkan_cube` join as a local app only.

@@ -1,5 +1,5 @@
-## Rejoin, else onboard
+## Checking an onboarding result
 
 ```rust
-{{#include ../tests/guide/troubleshooting.rs:rejoin_or_onboard}}
+{{#include ../tests/guide/troubleshooting.rs:onboard_local_app}}
 ```

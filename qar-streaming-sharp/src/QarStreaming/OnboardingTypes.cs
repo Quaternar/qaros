@@ -4,13 +4,31 @@ using Quaternar.Qaros.Interop;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// The key of an identity slot, minted by the first <see cref="Runtime.Onboard"/>. It is the one
-    /// thing an application persists: hand it back to <see cref="Runtime.Rejoin"/> on every start
-    /// and to <see cref="Runtime.Forget"/> to unpair.
+    /// Messages of the deprecated onboarding paths. Every supported way to join persists nothing:
+    /// a local app (<see cref="OnboardOptions.UseLocalApp"/>), a companion process
+    /// (<see cref="OnboardOptions.UseInvite"/> with an invite from
+    /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>)
+    /// and an app on a member hub's PC (<see cref="Runtime.JoinHubAsMember"/>, then a local-app
+    /// onboard redeeming <see cref="OnboardLocalApp.RemoteAppGrant"/>).
+    /// </summary>
+    internal static class DeprecatedOnboarding
+    {
+        internal const string Code = "Code onboarding is deprecated: use OnboardOptions.UseLocalApp for an app on the hub's PC, or OnboardOptions.UseInvite with an invite from Session.RequestOnboardingInvite for a companion process.";
+        internal const string PeerId = "A planned peer id is deprecated: use OnboardOptions.UseLocalApp (the hub picks the peer id) or OnboardOptions.UseInvite (the invite's app tag keeps the peer id).";
+        internal const string Rejoin = "Persisted identity slots are deprecated: onboard on every start with OnboardOptions.UseLocalApp, or OnboardOptions.UseInvite for a companion process.";
+        internal const string Forget = "Persisted identity slots are deprecated: OnboardOptions.UseLocalApp and OnboardOptions.UseInvite persist nothing to forget; revoke a local app's approval in the QAROS hub.";
+        internal const string OnboardingId = "Re-enrolling a persisted identity slot is deprecated: leave OnboardingId unset and onboard with OnboardOptions.UseLocalApp or OnboardOptions.UseInvite.";
+    }
+
+    /// <summary>
+    /// The key of a persisted identity slot. Only the deprecated slot paths
+    /// (<see cref="Runtime.Rejoin"/>, <see cref="Runtime.Forget"/>,
+    /// <see cref="OnboardOptions.OnboardingId"/>) use it: a local-app or invite onboarding persists
+    /// nothing, so ignore the id it returns.
     /// </summary>
     /// <remarks>
-    /// Store it as text: <see cref="ToString"/> writes the UUID string <see cref="Parse"/> reads.
-    /// Equality is by byte content.
+    /// <see cref="ToString"/> writes the UUID string <see cref="Parse"/> reads. Equality is by
+    /// byte content.
     /// </remarks>
     public readonly struct OnboardingId : IEquatable<OnboardingId>
     {
@@ -78,7 +96,7 @@ namespace Quaternar.Qaros
 
     /// <summary>
     /// The device an application describes itself as (C <c>QarPeerDeviceIdentity</c>). Pass it at
-    /// onboard or rejoin with <see cref="PeerPresentationOptions.WithDeviceIdentity"/>, or later
+    /// onboard with <see cref="PeerPresentationOptions.WithDeviceIdentity"/>, or later
     /// with <see cref="PeerControl.UpdateDeviceIdentity"/>.
     /// </summary>
     /// <remarks>
@@ -106,7 +124,8 @@ namespace Quaternar.Qaros
         public string? DeviceName { get; set; }
     }
 
-    /// <summary>Options of <see cref="Runtime.Rejoin"/>.</summary>
+    /// <summary>Options of the deprecated <see cref="Runtime.Rejoin"/>.</summary>
+    [Obsolete(DeprecatedOnboarding.Rejoin)]
     public sealed class RejoinOptions
     {
         public RejoinOptions(OnboardingId onboardingId)
@@ -142,18 +161,23 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Options of <see cref="Runtime.Onboard"/>. Choose exactly one mode: <see cref="UseLocalApp"/>,
-    /// <see cref="UseCode"/> or <see cref="UseInvite"/>; the last call wins.
+    /// Options of <see cref="Runtime.Onboard"/>. Choose exactly one mode; the last call wins:
+    /// <see cref="UseLocalApp"/> for an app on the hub's PC (also an app QAROS launched, and an
+    /// app on a member hub's PC after <see cref="Runtime.JoinHubAsMember"/>), or
+    /// <see cref="UseInvite"/> for a companion process of such an app.
     /// </summary>
     public sealed class OnboardOptions
     {
         /// <summary>
-        /// Unset to create a new identity slot; an id an earlier onboard returned re-enrolls that
-        /// slot.
+        /// Deprecated: an id an earlier onboard returned re-enrolls that persisted slot. Leave it
+        /// unset.
         /// </summary>
+        [Obsolete(DeprecatedOnboarding.OnboardingId)]
         public OnboardingId? OnboardingId { get; set; }
         public PeerPresentationOptions? Presentation { get; set; }
+#pragma warning disable CS0618 // The historical default mode (an empty code) stays until code onboarding is removed.
         internal Structure Mode { get; private set; } = new OnboardCode(string.Empty);
+#pragma warning restore CS0618
 
         public OnboardOptions WithPresentation(PeerPresentationOptions presentation)
         {
@@ -162,14 +186,16 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Onboards with a pairing code: the short code on the hub's onboarding screen, or the text
-        /// of any code the hub minted (<see cref="OnboardingInvite.GetCode()"/>). Without
+        /// Onboards with a pairing code: the short code on the hub's onboarding screen, or an
+        /// addressed code (<c>qar-code:...</c>) given by hand. Without
         /// <see cref="WithHost"/> it finds this user's hub on this PC by itself.
         /// </summary>
         /// <remarks>
-        /// The code is a secret: do not log it or pass it on a command line. Replaces an earlier
-        /// mode, including a <see cref="WithHost"/> made before this call.
+        /// Deprecated: use <see cref="UseLocalApp"/>, or <see cref="UseInvite"/> for a companion
+        /// process. The code is a secret: do not log it or pass it on a command line. Replaces an
+        /// earlier mode, including a <see cref="WithHost"/> made before this call.
         /// </remarks>
+        [Obsolete(DeprecatedOnboarding.Code)]
         public OnboardOptions UseCode(string code)
         {
             Mode = new OnboardCode(code ?? throw new ArgumentNullException(nameof(code)));
@@ -177,16 +203,24 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Onboards from a full invite: a co-process invite the parent app obtained with
+        /// Onboards a companion process (co-process) of an app: the app calls
         /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>
-        /// (pair it with <see cref="RuntimeOptions.EphemeralStorage"/>), or the launch invite QAROS writes as the
-        /// first stdin line of an API app it starts where local enrollment is not available (not
-        /// Windows; <see cref="OnboardingInvite.Deserialize"/>).
+        /// once per app session and hands the <see cref="OnboardingInvite.Serialize()"/> bytes to
+        /// the companion, which turns them back with <see cref="OnboardingInvite.Deserialize"/> and
+        /// onboards with them on a runtime created with <see cref="RuntimeOptions.EphemeralStorage"/>.
         /// No discovery, no code.
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// The invite stays valid while the app's session lives, so a restarted companion
+        /// onboards with the same bytes. One onboard call retries by itself (250 ms doubling to 5 s) while
+        /// the app or the hub is away, until it joins, is cancelled, or fails for good (a forged
+        /// invite, a denied approval, the app's session gone): bound it with a cancellation token.
+        /// </para>
+        /// <para>
         /// The invite is borrowed: the caller keeps ownership and must not dispose it before the
         /// onboard call has completed. Replaces an earlier mode.
+        /// </para>
         /// </remarks>
         public OnboardOptions UseInvite(OnboardingInvite invite)
         {
@@ -209,8 +243,10 @@ namespace Quaternar.Qaros
         /// Code onboarding against the hub at <paramref name="hostname"/>:<paramref name="port"/>.
         /// The port is required: hubs claim their onboarding port from a range, so there is no
         /// default. Without WithHost, code onboarding finds this user's hub on its own.
+        /// Deprecated with <see cref="UseCode"/>.
         /// </summary>
         /// <exception cref="InvalidOperationException">The mode is an invite (<see cref="UseInvite"/>).</exception>
+        [Obsolete(DeprecatedOnboarding.Code)]
         public OnboardOptions WithHost(string hostname, ushort port)
         {
             if (!(Mode is OnboardCode))
@@ -219,15 +255,16 @@ namespace Quaternar.Qaros
             return this;
         }
 
-        /// <summary>Optional extensions chained after the mode: <see cref="OnboardPeerId"/>, <see cref="GraphicsDeviceId"/>.</summary>
+        /// <summary>Optional extensions chained after the mode, such as <see cref="GraphicsDeviceId"/>.</summary>
         internal Structure? Extension { get; private set; }
 
         /// <summary>
-        /// Join the session under <paramref name="peerId"/> instead of a fresh id;
-        /// it is persisted with the slot and kept by every later rejoin. For a
-        /// process whose peer id was planned by someone else. Not with
-        /// <see cref="UseLocalApp"/>: the hub picks a local app's peer id.
+        /// Deprecated: join the session under <paramref name="peerId"/> instead of a fresh id;
+        /// it is persisted with the slot and kept by every later rejoin. Not with
+        /// <see cref="UseLocalApp"/>: the hub picks a local app's peer id, and a companion
+        /// joining with <see cref="UseInvite"/> keeps the peer id bound to its app tag.
         /// </summary>
+        [Obsolete(DeprecatedOnboarding.PeerId)]
         public OnboardOptions WithPeerId(PeerId peerId)
         {
             return WithExtension(new OnboardPeerId(peerId));
@@ -247,8 +284,9 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Onboarding mode extension behind <see cref="OnboardOptions.UseCode"/>; prefer that method.
+    /// Onboarding mode extension behind the deprecated <see cref="OnboardOptions.UseCode"/>.
     /// </summary>
+    [Obsolete(DeprecatedOnboarding.Code)]
     public sealed class OnboardCode : Structure
     {
         public OnboardCode(string code)
@@ -261,9 +299,9 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// The hub to code-onboard against, behind <see cref="OnboardOptions.WithHost"/>; prefer that
-    /// method.
+    /// The hub to code-onboard against, behind the deprecated <see cref="OnboardOptions.WithHost"/>.
     /// </summary>
+    [Obsolete(DeprecatedOnboarding.Code)]
     public sealed class OnboardHost : Structure
     {
         public OnboardHost(string hostname, ushort port)
@@ -338,6 +376,8 @@ namespace Quaternar.Qaros
         }
     }
 
+    /// <summary>Options of the deprecated <see cref="Runtime.Forget"/>.</summary>
+    [Obsolete(DeprecatedOnboarding.Forget)]
     public sealed class ForgetOptions
     {
         public ForgetOptions(OnboardingId onboardingId)
@@ -370,8 +410,9 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// What <see cref="Runtime.Onboard"/> produces. Persist <see cref="OnboardingId"/> before
-    /// anything else; the caller owns and disposes <see cref="Session"/>.
+    /// What <see cref="Runtime.Onboard"/> produces. The caller owns and disposes
+    /// <see cref="Session"/>. <see cref="OnboardingId"/> matters only to the deprecated slot paths:
+    /// a local-app or invite onboarding persists nothing.
     /// </summary>
     public readonly struct OnboardSession
     {

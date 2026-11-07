@@ -4,14 +4,14 @@ using Quaternar.Qaros.Interop;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// A one-time onboarding invite minted by the hub: everything another instance needs to
-    /// onboard with <see cref="OnboardOptions.UseInvite"/>, or a code to hand out by
-    /// <see cref="GetCode()"/>.
+    /// An onboarding invite: everything a companion process needs to onboard with
+    /// <see cref="OnboardOptions.UseInvite"/>. The app requests it once per session
+    /// (<see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>);
+    /// on Windows it works for every start of the companion while the app's session lives.
     /// </summary>
     /// <remarks>
-    /// The caller owns every instance and disposes it; an onboard only borrows it. Invites expire
-    /// (<see cref="GetExpiresUnix"/>) and work once: mint them when needed and do not stockpile
-    /// them. They carry a secret, so never log their bytes or code.
+    /// The caller owns every instance and disposes it; an onboard only borrows it. Invites carry a
+    /// secret, so never log their bytes.
     /// </remarks>
     public sealed class OnboardingInvite : IDisposable
     {
@@ -39,54 +39,6 @@ namespace Quaternar.Qaros
         {
             using (var scope = new NativeMemoryScope())
                 return NativeMethods.qar_impl_onboarding_invite_handle_is_valid(BorrowHandle(scope));
-        }
-
-        public Result<OnboardingMethod> GetMethod()
-        {
-            using (var scope = new NativeMemoryScope())
-            {
-                OnboardingMethod method;
-                var info = Results.ToInfo(NativeMethods.qar_impl_onboarding_invite_get_method(BorrowHandle(scope), out method));
-                return info.IsSuccess ? Result<OnboardingMethod>.Success(info, method) : Result<OnboardingMethod>.Failure(info);
-            }
-        }
-
-        /// <summary>Expiry in Unix seconds, so a UI can warn before handing out a stale invite.</summary>
-        public Result<long> GetExpiresUnix()
-        {
-            using (var scope = new NativeMemoryScope())
-            {
-                long expiresUnix;
-                var info = Results.ToInfo(NativeMethods.qar_impl_onboarding_invite_get_expires_unix(BorrowHandle(scope), out expiresUnix));
-                return info.IsSuccess ? Result<long>.Success(info, expiresUnix) : Result<long>.Failure(info);
-            }
-        }
-
-        /// <summary>
-        /// The code text to onboard with (OnboardCode). It names its own invitation, so it works for any
-        /// code the hub minted. It is a secret: never log it.
-        /// </summary>
-        /// <remarks>
-        /// Only a <see cref="OnboardingMethod.Pake"/> invite has one; any other fails with
-        /// <see cref="StatusCode.ArgumentNotSupported"/>.
-        /// </remarks>
-        public Result<string> GetCode()
-        {
-            using (var scope = new NativeMemoryScope())
-                return GetCode(BorrowHandle(scope));
-        }
-
-        private static Result<string> GetCode(IntPtr handle)
-        {
-            UIntPtr length;
-            var sizeInfo = Results.ToInfo(NativeMethods.qar_impl_onboarding_invite_get_code(handle, null, UIntPtr.Zero, out length));
-            if (!sizeInfo.IsSuccess)
-                return Result<string>.Failure(sizeInfo);
-            var buffer = new byte[NativeConvert.ToInt32(length) + 1];
-            var info = Results.ToInfo(NativeMethods.qar_impl_onboarding_invite_get_code(handle, buffer, (UIntPtr)buffer.Length, out length));
-            if (!info.IsSuccess)
-                return Result<string>.Failure(info);
-            return Result<string>.Success(info, System.Text.Encoding.UTF8.GetString(buffer, 0, NativeConvert.ToInt32(length)));
         }
 
         /// <summary>
@@ -119,9 +71,7 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Parses invite bytes from <see cref="Serialize()"/>, or the launch invite QAROS writes as
-        /// the first stdin line of an API app it starts where local enrollment is not available
-        /// (not Windows): pass that JSON line's UTF-8 bytes unchanged.
+        /// Parses invite bytes from <see cref="Serialize()"/>, unchanged.
         /// Bytes that are not an invite fail with <see cref="StatusCode.PakeError"/>.
         /// </summary>
         public static Result<OnboardingInvite> Deserialize(byte[] inviteData)

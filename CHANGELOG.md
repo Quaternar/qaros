@@ -40,6 +40,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   with the stream states each loop handles, what each renders for a slow, paused or departed
   viewer, and which to choose.
 
+- **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website
+  panels uses for certificate data updates (`update.googleapis.com` and `*.gvt1.com`, TCP 443),
+  why to allow them, and what happens on an offline PC; *Maintenance and Updates* links to it.
+
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
@@ -137,7 +141,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
   *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
-  *Troubleshooting*, the glossary and the Developer Guide's onboarding and troubleshooting pages say
+  *Troubleshooting* and the glossary say
   that a code is made only when a card or dialog that shows it opens, appears at once, lives 60 s
   and is replaced a few seconds before it expires while it stays open. The launcher configuration
   reference says `codeRotationSec` only sets the shortest lifetime of a code minted without one of
@@ -154,6 +158,24 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
   in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
+
+- **Docs:** *Choosing an Onboarding Mode* and *Onboarding and Sessions* show exactly three ways an
+  app joins: a local app on the QAROS PC, a companion process the local app starts (one invite per
+  app session, reused for every start of the companion, reaching only this user on this PC; the
+  companion's onboard retries while the app or the hub is away), and a remote app through a member
+  hub. An app QAROS starts is described as a local app. The onboarding-code, launch-invite,
+  planned-peer-id and slot re-enrollment sections are gone, the *App Launched by QAROS* C tutorial
+  is removed, and the code-pairing tutorials are no longer in the navigation.
+
+- **Docs:** the C examples and tutorials use only the local app, companion and member hub ways to
+  join; the onboarding-and-rejoin and launched-app examples are removed. The examples that open a
+  session join as a local app with an app tag of their own and take no pairing code; the
+  *Co-Process Onboarding* tutorial requests one invite per app session, hands the same bytes to
+  every start of the companion, and bounds the companion's one onboarding call with a cancel token.
+- **Docs:** the Rust examples, tutorials and guide tabs use only the local app, companion and
+  member hub ways to join; the Rust *Onboarding and Rejoin* tutorial is removed and its address
+  redirects to *Onboarding and Sessions*. *API Conventions*, *Troubleshooting* and *Peers* show
+  local-app onboarding instead of rejoin, forget and pairing codes.
 
 - **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
   Guide.

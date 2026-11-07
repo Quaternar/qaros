@@ -2,20 +2,17 @@
 //! minimize and navigate it, list panels, end the subscription and close the panel.
 //!
 //! ```text
-//! cargo run -p qaros-examples --bin gui_panel_operations -- [pairing-code]
+//! cargo run -p qaros-examples --bin gui_panel_operations
 //! ```
 //!
-//! Without a stored onboarding id or a pairing code it joins the QAROS on this PC as a local app
-//! (Windows; Allow once in QAROS), which the C sample, onboarding by code only, does not.
+//! It joins the QAROS on this PC as a local app (Allow once in QAROS; nothing is stored).
 
-use std::path::Path;
 use std::process::ExitCode;
 
 use qaros::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanelState, Pose, Vec3};
 use qaros_examples::{
-    Arguments, ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS,
-    create_runtime, join_session, load_library, nearly_equal, report, same_pose,
-    updates_until_quiet,
+    ExampleResult, FIRST_UPDATE_TIMEOUT, SAME_FACTOR, SAME_LENGTH_METERS, create_runtime,
+    join_session, load_library, nearly_equal, report, same_pose, updates_until_quiet,
 };
 
 fn main() -> ExitCode {
@@ -41,16 +38,9 @@ fn same_panel_update(first: &GuiPanelInfo, second: &GuiPanelInfo) -> bool {
 
 fn run() -> ExampleResult {
     // ANCHOR: session
-    let arguments = Arguments::parse();
     let library = load_library()?;
     let runtime = create_runtime(&library, None)?;
-    let session = join_session(
-        &library,
-        &runtime,
-        arguments.pairing_code.as_deref(),
-        Path::new("gui_panel_operations.onboarding-id.txt"),
-        "GUI Panel Peer",
-    )?;
+    let session = join_session(&runtime, "GUI Panel Peer")?;
     // ANCHOR_END: session
 
     // ANCHOR: create

@@ -113,7 +113,7 @@ namespace Quaternar.Qaros.Tests
             using var scope = _fixture.CreateSessionScope();
             var target = scope.StartRenderTarget();
             var visualizerPeerId = target.PeerId;
-            using var device = D3D11TestDevice.Create(scope.Session.GetGraphicsDeviceId().ValueOrThrow());
+            using var device = D3D11TestDevice.Create(SessionAdapter(scope.Session));
             using var sender = CreateSender(scope.Session, CreateD3D11Options(visualizerPeerId, device, scope.CreateAppVolume()));
             var initialLayout = sender.GetLayout().ValueOrThrow();
             Assert.NotEmpty(initialLayout.Views);
@@ -147,7 +147,7 @@ namespace Quaternar.Qaros.Tests
             Assert.True(OperatingSystem.IsWindows(), "Vulkan render sender tests require Windows.");
             using var scope = _fixture.CreateSessionScope();
             var target = scope.StartRenderTarget();
-            using var device = VulkanTestDevice.Create(scope.Session.GetGraphicsDeviceId().ValueOrThrow(), VulkanTestDevice.ExternalMemoryWin32, VulkanTestDevice.ExternalSemaphoreWin32);
+            using var device = VulkanTestDevice.Create(SessionAdapter(scope.Session), VulkanTestDevice.ExternalMemoryWin32, VulkanTestDevice.ExternalSemaphoreWin32);
             using var sender = CreateSender(scope.Session, CreateVulkanOptions(target.PeerId, device, scope.CreateAppVolume()));
             using var frame = await BeginFrameEventuallyAsync(sender);
             var vulkanFrame = sender.GetVulkanFrame().ValueOrThrow();
@@ -175,7 +175,7 @@ namespace Quaternar.Qaros.Tests
         {
             Assert.True(OperatingSystem.IsWindows(), "Vulkan render sender tests require Windows.");
             using var scope = _fixture.CreateSessionScope();
-            using var device = VulkanTestDevice.Create(scope.Session.GetGraphicsDeviceId().ValueOrThrow());
+            using var device = VulkanTestDevice.Create(SessionAdapter(scope.Session));
             // Every render sender is placed in an app volume; without one it is refused first.
             var options = CreateVulkanOptions(default(PeerId), device, scope.CreateAppVolume());
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -214,6 +214,15 @@ namespace Quaternar.Qaros.Tests
                     D3D11Context = device.Context.NativePointer
                 }
             };
+        }
+
+        /// <summary>
+        /// The GPU the session's devices run on, where an application creates its own device; null
+        /// when the session reports none, and the test devices then take the default one.
+        /// </summary>
+        private static GraphicsDeviceId? SessionAdapter(Session session)
+        {
+            return session.GetGraphicsDeviceId().ValueOrThrow();
         }
 
         private static RenderSenderOptions CreateVulkanOptions(PeerId peerId, VulkanTestDevice device, AppVolumeId appVolume)

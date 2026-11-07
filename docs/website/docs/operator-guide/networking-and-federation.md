@@ -19,6 +19,22 @@ A QAROS Hub and its devices are built to share a LAN. This page covers the ports
 
 The installer registers these firewall rules ([Installation](/docs/operator-guide/installation#what-the-installer-does)).
 
+### Outbound hosts for browser certificate updates
+
+Website panels shown by the mixer and the Hub Display's web app sources run an embedded Chromium browser. Chromium checks every HTTPS site against trusted root certificates (the Chrome Root Store), the Certificate Transparency log list, key pins and a certificate revocation list (CRLSet). Each QAROS build ships the versions current when it was built; Chromium's component updater downloads newer ones in the background and applies them while running, with no restart.
+
+| Traffic | Protocol / port | Notes |
+|---|---|---|
+| Certificate data updates | Outbound HTTPS (TCP **443**) to **`update.googleapis.com`** and **`*.gvt1.com`** | From the PC running the Hub. Recommended, not required. |
+
+Why allow it:
+
+- Without updates the lists are only as new as the QAROS build. A site whose certificate chains to a root added later, or that depends on a newer Certificate Transparency log, can fail to load in a panel with a certificate error.
+- Certificates revoked after the build (for example after a key compromise) keep being accepted.
+- Updated data is stored once in the Hub's data folder and used by every QAROS process on that PC.
+
+**Offline or air-gapped PCs.** If the hosts are unreachable, the update fails quietly: the browser keeps using the lists built into QAROS, and the Hub log notes that the built-in root store is in use. Panels still work, but the caveats above grow as the build ages, so keep QAROS updated ([Maintenance & Updates](/docs/operator-guide/maintenance-and-updates)).
+
 ## Deployment models
 
 **LAN (default).** The Hub and every device sit on the same local network. Discovery multicast reaches the devices, session streams stay local, and latency and bandwidth are whatever your LAN provides. This is the intended and simplest model.

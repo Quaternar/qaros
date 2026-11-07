@@ -37,13 +37,14 @@
 //! // names) matches these bindings.
 //! let library = unsafe { Library::load_default(&LibraryConfig::default())? };
 //! let runtime = library.create_runtime(&RuntimeConfig::default())?;
+//! // An app on the hub's PC joins as a local app: the first start waits for Allow in QAROS.
 //! let onboarded = runtime.onboard(
-//!     &OnboardMethod::Code { code: "ABCD-EFGH", hub: None },
+//!     &OnboardMethod::LocalApp { approval_timeout: None, app_tag: None },
 //!     &PeerPresentation::default(),
 //!     &BlockingOptions::default(),
 //! )?;
-//! let onboarding_text = library.uuid_to_string(&onboarded.onboarding_id.0)?;
-//! # let _ = onboarding_text;
+//! let peers = onboarded.session.peers()?;
+//! # let _ = peers;
 //! # Ok(()) }
 //! ```
 
@@ -92,16 +93,16 @@ pub use render::{
     RenderLoop, RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize,
     VideoFrameLayout, VideoFrameView, ViewPose,
 };
+#[allow(deprecated)] // kept exported while deprecated
+pub use runtime::HubAddress;
 pub use runtime::{
-    HubAddress, OnboardExtensions, OnboardMethod, Onboarded, PeerPresentation, Runtime,
-    RuntimeConfig,
+    OnboardExtensions, OnboardMethod, Onboarded, PeerPresentation, Runtime, RuntimeConfig,
 };
 pub use session::{Session, Subscription};
 pub use types::{
     ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout, GuiPanelId,
-    GuiPanelState, LogSeverity, OnboardingId, OnboardingMethod, PeerId, PixelFormat, Pose, Quat,
-    SessionChangeCause, SessionId, SessionLifecycle, SessionLifecycleState, StreamId, Vec3,
-    ViewKind,
+    GuiPanelState, LogSeverity, OnboardingId, PeerId, PixelFormat, Pose, Quat, SessionChangeCause,
+    SessionId, SessionLifecycle, SessionLifecycleState, StreamId, Vec3, ViewKind,
 };
 pub use volumes::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, AppVolumes};
 

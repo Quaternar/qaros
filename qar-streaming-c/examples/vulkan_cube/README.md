@@ -68,7 +68,7 @@ One render loop on the main thread serves every viewer. Each pass renders a fram
 
 ## GPU
 
-The app joins first, then creates its Vulkan device on the session's GPU (`qar_session_get_graphics_device_id`): the GPU of the target named in the launch invite when QAROS started the app, else the one the library picked. A session GPU that matches no supported Vulkan device stops the app with an error. The console names the GPU it renders on. The app reads no environment variable.
+The app joins first, then creates its Vulkan device on the session's GPU (`qar_session_get_graphics_device_id`): the GPU of the target QAROS started the app for, else the one the library picked. A session GPU that matches no supported Vulkan device stops the app with an error. The console names the GPU it renders on. The app reads no environment variable.
 
 ## Started by QAROS
 

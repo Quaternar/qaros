@@ -15,8 +15,8 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use qaros::{
-    BlockingOptions, Library, LibraryConfig, OnboardMethod, OnboardingId, PeerInfo,
-    PeerPresentation, Pose, Progress, Runtime, RuntimeConfig, Session, StatusCode,
+    BlockingOptions, Library, LibraryConfig, OnboardMethod, PeerInfo, PeerPresentation, Pose,
+    Progress, Runtime, RuntimeConfig, Session, StatusCode,
 };
 
 pub type ExampleResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -26,11 +26,10 @@ pub type ExampleResult<T = ()> = Result<T, Box<dyn Error>>;
 /// list puts one argument per line, so both spellings occur).
 const FLAGS_WITH_VALUE: [&str; 2] = ["--qaros-library", "--frames"];
 
-/// Command-line arguments shared by the examples: an optional pairing code
-/// (first run only) and flags starting with `--`.
+/// Command-line arguments shared by the examples: flags starting with `--`. Other arguments are
+/// ignored.
 #[derive(Debug, Default)]
 pub struct Arguments {
-    pub pairing_code: Option<String>,
     pub flags: Vec<String>,
 }
 
@@ -48,8 +47,6 @@ impl Arguments {
                 arguments.flags.push(format!("{argument}={value}"));
             } else if argument.starts_with("--") {
                 arguments.flags.push(argument);
-            } else if arguments.pairing_code.is_none() {
-                arguments.pairing_code = Some(argument);
             }
         }
         arguments
@@ -166,147 +163,16 @@ pub fn create_runtime(
     Ok(runtime)
 }
 
-// ANCHOR: onboarding_id_file
-/// The onboarding id a previous run stored in `id_file`, if it holds a readable one.
-pub fn load_onboarding_id(library: &Library, id_file: &Path) -> Option<OnboardingId> {
-    let text = std::fs::read_to_string(id_file).ok()?;
-    match library.uuid_from_string(text.trim()) {
-        Ok(bytes) => Some(OnboardingId(bytes)),
-        Err(error) => {
-            println!(
-                "Ignoring unreadable onboarding id in '{}': {error}",
-                id_file.display()
-            );
-            None
-        }
-    }
-}
-
-pub fn save_onboarding_id(
-    library: &Library,
-    id_file: &Path,
-    onboarding_id: OnboardingId,
-) -> ExampleResult {
-    let text = library.uuid_to_string(&onboarding_id.0)?;
-    std::fs::write(id_file, format!("{text}\n"))?;
-    Ok(())
-}
-// ANCHOR_END: onboarding_id_file
-
-// ANCHOR: obtain_session
-/// The canonical startup of an app that onboards with a pairing code: rejoin with the persisted
-/// onboarding id, otherwise onboard with the code shown on the hub and persist the new id.
-pub fn obtain_session(
-    library: &Library,
-    runtime: &Runtime,
-    pairing_code: Option<&str>,
-    id_file: &Path,
-    display_name: &str,
-) -> ExampleResult<(OnboardingId, Session)> {
-    let presentation = presentation(display_name);
-    if let Some(rejoined) = rejoin_with_stored_id(library, runtime, id_file, &presentation)? {
-        return Ok(rejoined);
-    }
-    let Some(pairing_code) = pairing_code else {
-        return Err(missing_pairing_code(id_file));
-    };
-    onboard_with_code(library, runtime, pairing_code, id_file, &presentation)
-}
-
-fn presentation(display_name: &str) -> PeerPresentation {
-    PeerPresentation {
+// ANCHOR: join_session
+/// The startup of the CPU, D3D11, GUI panel and app volume examples: join the QAROS Hub on this
+/// machine as a local app. Nothing is stored: every run joins the same way, and the Hub remembers
+/// the approval.
+pub fn join_session(runtime: &Runtime, display_name: &str) -> ExampleResult<Session> {
+    let presentation = PeerPresentation {
         display_name: Some(display_name.to_string()),
         ..PeerPresentation::default()
-    }
-}
-
-/// `None` when `id_file` holds no id, or the hub has no session for it any more.
-fn rejoin_with_stored_id(
-    library: &Library,
-    runtime: &Runtime,
-    id_file: &Path,
-    presentation: &PeerPresentation,
-) -> ExampleResult<Option<(OnboardingId, Session)>> {
-    let Some(saved_id) = load_onboarding_id(library, id_file) else {
-        return Ok(None);
     };
-    match runtime.rejoin(saved_id, presentation, &BlockingOptions::default()) {
-        Ok(session) => {
-            println!("qar_runtime_rejoin: SUCCESS");
-            Ok(Some((saved_id, session)))
-        }
-        Err(error) if error.has_code(StatusCode::ONBOARDING_SESSION_NOT_FOUND) => {
-            println!("qar_runtime_rejoin: {error}; onboarding instead");
-            Ok(None)
-        }
-        Err(error) => Err(error.into()),
-    }
-}
-
-fn onboard_with_code(
-    library: &Library,
-    runtime: &Runtime,
-    pairing_code: &str,
-    id_file: &Path,
-    presentation: &PeerPresentation,
-) -> ExampleResult<(OnboardingId, Session)> {
-    let onboarded = runtime
-        .onboard(
-            &OnboardMethod::Code {
-                code: pairing_code,
-                hub: None,
-            },
-            presentation,
-            &BlockingOptions::default(),
-        )
-        .map_err(|error| -> Box<dyn Error> {
-            if error.has_code(StatusCode::PAKE_ERROR) {
-                format!("{error}\nPairing code rejected or expired: read the current code off the hub screen and retry.")
-                    .into()
-            } else {
-                error.into()
-            }
-        })?;
-    println!("qar_runtime_onboard: SUCCESS");
-    save_onboarding_id(library, id_file, onboarded.onboarding_id)?;
-    Ok((onboarded.onboarding_id, onboarded.session))
-}
-
-fn missing_pairing_code(id_file: &Path) -> Box<dyn Error> {
-    format!(
-        "No persisted onboarding id in '{}'. Pass the pairing code shown on the hub's onboarding screen.",
-        id_file.display()
-    )
-    .into()
-}
-// ANCHOR_END: obtain_session
-
-// ANCHOR: join_session
-/// The startup of the CPU, D3D11, GUI panel and app volume examples: rejoin with the persisted
-/// onboarding id, else onboard with the pairing code when one is passed (as `obtain_session`),
-/// else, on Windows, join the Hub on this machine as a local app. Their C originals onboard by code
-/// only.
-pub fn join_session(
-    library: &Library,
-    runtime: &Runtime,
-    pairing_code: Option<&str>,
-    id_file: &Path,
-    display_name: &str,
-) -> ExampleResult<Session> {
-    let presentation = presentation(display_name);
-    if let Some((_, session)) = rejoin_with_stored_id(library, runtime, id_file, &presentation)? {
-        return Ok(session);
-    }
-    if let Some(pairing_code) = pairing_code {
-        let (_, session) =
-            onboard_with_code(library, runtime, pairing_code, id_file, &presentation)?;
-        return Ok(session);
-    }
-    if cfg!(windows) {
-        join_as_local_app(runtime, &presentation)
-    } else {
-        Err(missing_pairing_code(id_file))
-    }
+    join_as_local_app(runtime, &presentation)
 }
 // ANCHOR_END: join_session
 
@@ -315,11 +181,10 @@ pub fn join_session(
 const LOCAL_APP_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Joins this machine's Hub with `OnboardMethod::LocalApp`, as `local_app_onboarding` does. The
-/// join is stateless: its onboarding id is the zero id, so nothing is stored and every run joins
-/// this way again.
+/// join is stateless: nothing is stored, and every run joins this way again.
 fn join_as_local_app(runtime: &Runtime, presentation: &PeerPresentation) -> ExampleResult<Session> {
     println!(
-        "No session to rejoin and no pairing code: joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to {} s).",
+        "Joining the QAROS Hub on this machine as a local app. On the first run of this executable, click Allow in the QAROS approval prompt (waiting up to {} s).",
         LOCAL_APP_APPROVAL_TIMEOUT.as_secs()
     );
     let (progress, progress_reports) = std::sync::mpsc::channel::<Progress>();
@@ -347,7 +212,7 @@ fn join_as_local_app(runtime: &Runtime, presentation: &PeerPresentation) -> Exam
     let onboarded = joined.map_err(explain_local_app_refusal)?;
     println!("qar_runtime_onboard: SUCCESS (local app)");
     println!(
-        "A local app has no onboarding id to store (it is zero): the next run joins as a local app again, without a prompt while this executable is unchanged."
+        "Nothing to store: the next run joins as a local app again, without a prompt while this executable is unchanged."
     );
     Ok(onboarded.session)
 }
@@ -550,37 +415,36 @@ mod tests {
     #[test]
     fn library_path_with_equals_sign() {
         let arguments = parsed(&[
-            "--forget",
+            "--verbose",
             r"--qaros-library=D:\package\bin\qar-streaming-c.dll",
         ]);
         assert_eq!(
             arguments.flag_value("--qaros-library"),
             Some(r"D:\package\bin\qar-streaming-c.dll")
         );
-        assert!(arguments.has_flag("--forget"));
-        assert_eq!(arguments.pairing_code, None);
+        assert!(arguments.has_flag("--verbose"));
     }
 
     #[test]
-    fn library_path_as_the_next_argument_is_not_a_pairing_code() {
+    fn library_path_as_the_next_argument_is_not_a_flag() {
         let arguments = parsed(&[
             "--qaros-library",
             r"D:\package\bin\qar-streaming-c.dll",
-            "--forget",
+            "--verbose",
         ]);
         assert_eq!(
             arguments.flag_value("--qaros-library"),
             Some(r"D:\package\bin\qar-streaming-c.dll")
         );
-        assert!(arguments.has_flag("--forget"));
-        assert_eq!(arguments.pairing_code, None);
+        assert!(arguments.has_flag("--verbose"));
+        assert_eq!(arguments.flags.len(), 2);
     }
 
     #[test]
-    fn frames_as_the_next_argument_and_a_typed_code() {
+    fn frames_as_the_next_argument_and_a_stray_argument() {
         let arguments = parsed(&["123456", "--frames", "60"]);
         assert_eq!(arguments.flag_value("--frames"), Some("60"));
-        assert_eq!(arguments.pairing_code.as_deref(), Some("123456"));
+        assert_eq!(arguments.flags, ["--frames=60"]);
     }
 
     #[test]

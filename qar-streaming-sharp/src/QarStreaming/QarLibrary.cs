@@ -10,8 +10,8 @@ namespace Quaternar.Qaros
 {
     /// <summary>
     /// Process-wide library state. <see cref="Init"/> comes first, before any other call of this
-    /// API; then <see cref="Runtime.Create"/>, then <see cref="Runtime.Onboard"/> or
-    /// <see cref="Runtime.Rejoin"/> for a <see cref="Session"/>.
+    /// API; then <see cref="Runtime.Create"/>, then <see cref="Runtime.Onboard"/> for a
+    /// <see cref="Session"/>.
     /// </summary>
     public static class Library
     {

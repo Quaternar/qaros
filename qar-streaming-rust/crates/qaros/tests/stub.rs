@@ -11,10 +11,9 @@ use std::time::{Duration, Instant};
 
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
-    GraphicsAdapter, GuiPanelConfig, GuiPanelState, HubAddress, Library, OnboardExtensions,
-    OnboardMethod, OnboardingMethod, OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose,
-    RenderLoop, RuntimeConfig, SessionChangeCause, SessionLifecycleState, ShowParams, StatusCode,
-    Vec3, ViewKind,
+    GraphicsAdapter, GuiPanelConfig, GuiPanelState, Library, OnboardExtensions, OnboardMethod,
+    OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose, RenderLoop, RuntimeConfig,
+    SessionChangeCause, SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -316,6 +315,7 @@ fn an_owned_frame_outlives_its_sender_value_and_blocks_a_second_frame() {
     assert_eq!(fixture.control.live_handle_count(), 0);
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn errors_carry_function_status_code_and_library_message() {
     let fixture = Fixture::new();
@@ -384,6 +384,7 @@ fn errors_carry_function_status_code_and_library_message() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn onboarding_id_persists_for_rejoin_until_forget() {
     let fixture = Fixture::new();
@@ -586,6 +587,7 @@ fn gui_panels_and_app_volumes_round_trip() {
     assert_eq!(fixture.control.live_handle_count(), 0);
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
     let fixture = Fixture::new();
@@ -607,12 +609,6 @@ fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {
     assert_eq!(
         fixture.control.entries_starting_with("invite app_tag="),
         vec!["invite app_tag=companion.examples.qaros".to_string()]
-    );
-    assert!(invite.expires_unix().expect("expiry") > 0);
-    assert_eq!(invite.method().expect("method"), OnboardingMethod::Pake);
-    assert!(
-        invite.code().expect("code").starts_with("qar-code:"),
-        "a pairing-code invite has its code text"
     );
     let wire_bytes = invite.serialize().expect("serialize");
     drop(invite);
@@ -727,6 +723,7 @@ fn a_co_process_invite_needs_a_valid_app_tag() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_runtime_with_ephemeral_storage_refuses_rejoin_and_forget() {
     let fixture = Fixture::new();
@@ -794,6 +791,7 @@ fn a_local_app_tag_is_chained_after_the_mode_and_validated() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_planned_peer_id_is_chained_after_the_adapter_and_refused_where_the_hub_assigns_it() {
     let fixture = Fixture::new();
@@ -1123,6 +1121,7 @@ fn a_peer_that_leaves_closes_only_its_own_stream() {
     assert_eq!(fixture.control.live_handle_count(), 0);
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn the_adapter_is_chained_into_onboard_and_rejoin() {
     let fixture = Fixture::new();
@@ -1135,7 +1134,7 @@ fn the_adapter_is_chained_into_onboard_and_rejoin() {
         .onboard_on_adapter(
             &OnboardMethod::Code {
                 code: "ABCD-EFGH",
-                hub: Some(HubAddress {
+                hub: Some(qaros::HubAddress {
                     hostname: "hub.example.com",
                     port: 0,
                 }),
@@ -1183,6 +1182,7 @@ fn runtime_info_reports_the_loaded_library() {
     );
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_local_app_onboards_without_a_code_and_gets_the_zero_id() {
     let fixture = Fixture::new();
@@ -1238,6 +1238,7 @@ fn a_local_app_onboards_without_a_code_and_gets_the_zero_id() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn the_zero_id_of_a_local_app_is_refused_before_any_rejoin_reaches_the_library() {
     let fixture = Fixture::new();

@@ -1790,9 +1790,9 @@ mod tests {
             .expect("runtime");
         let session = runtime
             .onboard(
-                &OnboardMethod::Code {
-                    code: "ANY-CODE",
-                    hub: None,
+                &OnboardMethod::LocalApp {
+                    approval_timeout: None,
+                    app_tag: None,
                 },
                 &PeerPresentation::default(),
                 &BlockingOptions::default(),

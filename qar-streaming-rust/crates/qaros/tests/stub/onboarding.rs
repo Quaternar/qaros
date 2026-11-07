@@ -29,6 +29,7 @@ fn start_code_onboard(runtime: &Runtime, timeout: Option<Duration>) -> PendingOn
         .expect("start")
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn an_async_onboard_delivers_its_session_and_progress_and_an_async_rejoin_echoes_the_id() {
     let fixture = Fixture::new();
@@ -239,6 +240,7 @@ fn an_async_start_that_fails_never_calls_back() {
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
+#[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_slot_is_re_enrolled_under_its_own_id() {
     let fixture = Fixture::new();
@@ -338,6 +340,7 @@ mod device_identity {
         }
     }
 
+    #[allow(deprecated)] // exercises the deprecated onboarding paths
     #[test]
     fn a_declared_device_is_chained_on_the_presentation_and_updated_on_the_session() {
         let fixture = Fixture::new();

@@ -139,6 +139,7 @@ namespace Quaternar.Qaros.Interop
             };
         }
 
+#pragma warning disable CS0618 // Marshals the deprecated rejoin and slot re-enrollment, kept working.
         internal static RejoinInitNative Rejoin(RejoinOptions options, NativeMemoryScope scope, IntPtr next, IntPtr presentationNext)
         {
             return new RejoinInitNative
@@ -158,6 +159,7 @@ namespace Quaternar.Qaros.Interop
                 Presentation = PeerPresentation(options.Presentation ?? new PeerPresentationOptions(), scope, presentationNext)
             };
         }
+#pragma warning restore CS0618
 
         internal static RequestInviteInitNative RequestInvite(RequestOnboardingInviteOptions options, NativeMemoryScope scope, IntPtr next)
         {
@@ -168,6 +170,7 @@ namespace Quaternar.Qaros.Interop
             };
         }
 
+#pragma warning disable CS0618 // Marshals the deprecated forget, kept working.
         internal static ForgetInitNative Forget(ForgetOptions options, IntPtr next)
         {
             return new ForgetInitNative
@@ -176,6 +179,7 @@ namespace Quaternar.Qaros.Interop
                 OnboardingId = options.OnboardingId.ToNative()
             };
         }
+#pragma warning restore CS0618
 
         internal static RenderSenderInitNative RenderSender(RenderSenderOptions options, NativeMemoryScope scope)
         {

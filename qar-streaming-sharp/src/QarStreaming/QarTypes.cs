@@ -456,18 +456,6 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Which onboarding path an onboarding invite carries. More may be added, so do not treat
-    /// "not <see cref="Pake"/>" as <see cref="Password"/>.
-    /// </summary>
-    public enum OnboardingMethod
-    {
-        /// <summary>Code-based EC-JPAKE.</summary>
-        Pake = 0,
-        /// <summary>Shared-password channel.</summary>
-        Password = 1
-    }
-
-    /// <summary>
     /// Native structure type tag of a <see cref="Structure"/>. Each extension class sets its own
     /// in its constructor.
     /// </summary>
@@ -919,12 +907,13 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Extension: join the session under a caller-chosen peer id instead of a
-    /// freshly minted one. Chain on <see cref="OnboardOptions"/> with
+    /// Deprecated extension: join the session under a caller-chosen peer id
+    /// instead of a freshly minted one, behind the deprecated
     /// <see cref="OnboardOptions.WithPeerId(PeerId)"/>. The id is persisted with
     /// the slot, so a later rejoin keeps it. A zero id is rejected with
     /// <see cref="StatusCode.ArgumentNotSupported"/>.
     /// </summary>
+    [Obsolete(DeprecatedOnboarding.PeerId)]
     public sealed class OnboardPeerId : Structure
     {
         public OnboardPeerId(PeerId peerId)
@@ -1054,7 +1043,7 @@ namespace Quaternar.Qaros
     /// <summary>
     /// Extension: selects the graphics adapter the session's Vulkan and D3D11
     /// devices, and with them every render sender's frame textures, are created
-    /// on. Chain on <see cref="OnboardOptions"/> or <see cref="RejoinOptions"/>;
+    /// on. Chain on <see cref="OnboardOptions"/>;
     /// absent, the library picks one. Windows accepts a LUID, other platforms a
     /// UUID. The C API currently supports NVIDIA adapters only.
     /// </summary>
@@ -1341,18 +1330,19 @@ namespace Quaternar.Qaros
         /// <summary>
         /// Keep the identity this runtime onboards with in memory only (C
         /// <c>QarRuntimeEphemeralStorageExt</c>), for a process that must leave nothing on disk:
-        /// typically a co-process joining with an invite from
-        /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>.
-        /// Defaults to false.
+        /// a companion process joining with an invite from
+        /// <see cref="Session.RequestOnboardingInvite(string, IProgress{ActionProgress}?, System.Threading.CancellationToken)"/>
+        /// sets it. Defaults to false.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <see cref="Runtime.Onboard"/> writes nothing under the storage folder and returns
         /// <see cref="OnboardingId.Default"/>; certificate renewal works as usual. The identity is
-        /// gone with the runtime, so a restarted process onboards again with a fresh invite.
-        /// <see cref="Runtime.Rejoin"/> and <see cref="Runtime.Forget"/> fail with
-        /// <see cref="StatusCode.ArgumentNotSupported"/>: there is no persisted slot.
-        /// <see cref="OnboardOptions.UseLocalApp"/> is stateless already and unaffected.
+        /// gone with the runtime, so a restarted companion onboards again, with the same invite
+        /// while the app's session lives. The deprecated <see cref="Runtime.Rejoin"/> and
+        /// <see cref="Runtime.Forget"/> fail with <see cref="StatusCode.ArgumentNotSupported"/>:
+        /// there is no persisted slot. <see cref="OnboardOptions.UseLocalApp"/> is stateless
+        /// already and unaffected.
         /// </para>
         /// <para>
         /// A runtime older than this option ignores it and stores the identity on disk; check

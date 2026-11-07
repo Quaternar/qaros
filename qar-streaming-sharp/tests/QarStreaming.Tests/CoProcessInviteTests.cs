@@ -82,8 +82,10 @@ namespace Quaternar.Qaros.Tests
                 Assert.Empty(coProcessStorage.Files());
                 // Nothing persisted, so there is nothing to rejoin or forget.
                 var slot = OnboardingId.Parse(Guid.NewGuid().ToString());
+#pragma warning disable CS0618 // The deprecated slot paths stay refused on an ephemeral runtime.
                 Assert.Equal(StatusCode.ArgumentNotSupported, coProcessRuntime.Rejoin(new RejoinOptions(slot)).Info.StatusCode);
                 Assert.Equal(StatusCode.ArgumentNotSupported, coProcessRuntime.Forget(new ForgetOptions(slot)).Info.StatusCode);
+#pragma warning restore CS0618
             }
             finally
             {
@@ -135,8 +137,10 @@ namespace Quaternar.Qaros.Tests
             using var storage = new TempFolder();
             using var runtime = Runtime.Create(new RuntimeOptions { StorageFolderPath = storage.Path, EphemeralStorage = true }).ValueOrThrow();
             var slot = OnboardingId.Parse(Guid.NewGuid().ToString());
+#pragma warning disable CS0618 // The deprecated slot paths stay refused on an ephemeral runtime.
             Assert.Equal(StatusCode.ArgumentNotSupported, runtime.Rejoin(new RejoinOptions(slot)).Info.StatusCode);
             Assert.Equal(StatusCode.ArgumentNotSupported, runtime.Forget(new ForgetOptions(slot)).Info.StatusCode);
+#pragma warning restore CS0618
             Assert.Empty(storage.Files());
         }
 

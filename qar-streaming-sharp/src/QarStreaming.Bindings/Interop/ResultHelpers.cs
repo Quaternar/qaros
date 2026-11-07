@@ -862,6 +862,7 @@ namespace Quaternar.Qaros.Interop
                     };
                     NativeCopy.CopyToFixed(overrides.ViewOverrides ?? Array.Empty<RenderFrameViewOverride>(), native.ViewOverrides, NativeConstants.MaxFrameViews, v => v.ToNative());
                     return scope.AllocStruct(native);
+#pragma warning disable CS0618 // The deprecated code onboarding and planned peer id, kept working.
                 case OnboardCode onboardCode:
                     return scope.AllocStruct(new OnboardCodeExtNative
                     {
@@ -875,18 +876,19 @@ namespace Quaternar.Qaros.Interop
                         Hostname = scope.AllocUtf8(onboardHost.Hostname),
                         Port = onboardHost.Port
                     });
+                case OnboardPeerId onboardPeerId:
+                    return scope.AllocStruct(new OnboardPeerIdExtNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardPeerIdExt),
+                        PeerId = onboardPeerId.PeerId.ToNative()
+                    });
+#pragma warning restore CS0618
                 case OnboardInvite onboardInvite:
                     // The scope holds a reference on the invite until the native onboard is done.
                     return scope.AllocStruct(new OnboardInviteExtNative
                     {
                         Header = NativeDefaults.Header(StructureType.RuntimeOnboardInviteExt),
                         Invite = onboardInvite.Invite == null ? IntPtr.Zero : onboardInvite.Invite.BorrowHandle(scope)
-                    });
-                case OnboardPeerId onboardPeerId:
-                    return scope.AllocStruct(new OnboardPeerIdExtNative
-                    {
-                        Header = NativeDefaults.Header(StructureType.RuntimeOnboardPeerIdExt),
-                        PeerId = onboardPeerId.PeerId.ToNative()
                     });
                 case OnboardLocalApp onboardLocalApp:
                     return scope.AllocStruct(new OnboardLocalAppExtNative
