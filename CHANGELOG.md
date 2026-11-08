@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *qaros:// Links* in the Developer Guide: the links that open the Pair Headset QR code,
+  the Room Origin marker or the setup of one device type in QAROS, their exact grammar and rules,
+  and how to open one from C, C# and Rust.
+
 - **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
   connected to a hub, an Android headset shows the connection prompt with its address and an
   6-digit code (`123 456`) that changes every 30 s; type both (or pick the headset from those found on the
