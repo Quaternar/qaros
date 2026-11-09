@@ -153,6 +153,15 @@ namespace Quaternar.Qaros
             return WithExtension(graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice)));
         }
 
+        /// <summary>
+        /// Create the session without a graphics device; see <see cref="GraphicsDeviceDisabled"/>.
+        /// Not together with <see cref="WithGraphicsDevice"/>.
+        /// </summary>
+        public RejoinOptions WithoutGraphicsDevice()
+        {
+            return WithExtension(new GraphicsDeviceDisabled());
+        }
+
         public RejoinOptions WithExtension(Structure extension)
         {
             Extension = StructureChainBuilder.Append(Extension, extension);
@@ -274,6 +283,18 @@ namespace Quaternar.Qaros
         public OnboardOptions WithGraphicsDevice(GraphicsDeviceId graphicsDevice)
         {
             return WithExtension(graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice)));
+        }
+
+        /// <summary>
+        /// Create the session without a graphics device, for an application that never streams
+        /// media (a companion that only drives app volumes, GUI panels or peers): it starts faster,
+        /// and its media streaming calls fail with
+        /// <see cref="StatusCode.GraphicsDeviceNotInitialized"/>. See
+        /// <see cref="GraphicsDeviceDisabled"/>. Not together with <see cref="WithGraphicsDevice"/>.
+        /// </summary>
+        public OnboardOptions WithoutGraphicsDevice()
+        {
+            return WithExtension(new GraphicsDeviceDisabled());
         }
 
         public OnboardOptions WithExtension(Structure extension)

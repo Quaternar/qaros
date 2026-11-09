@@ -77,6 +77,7 @@ namespace Quaternar.Qaros.Tests
             { typeof(ForgetInitNative), 32 },
             { typeof(LuidNative), 8 },
             { typeof(GraphicsDeviceIdNative), 48 },
+            { typeof(GraphicsDeviceDisabledExtNative), 16 },
             { typeof(SessionLifecycleInfoNative), 72 },
             { typeof(GuiPanelInitNative), 88 },
             { typeof(GuiPanelStreamIdExtNative), 32 },
@@ -269,6 +270,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(806, (int)StatusCode.RenderingProducerDepthFormatNotSupported);
             Assert.Equal(807, (int)StatusCode.RenderingProducerExternalDeviceNotSupported);
             Assert.Equal(609, (int)StatusCode.MediaStreamingDeviceOnAnotherAdapter);
+            Assert.Equal(610, (int)StatusCode.GraphicsDeviceNotInitialized);
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
             Assert.Equal(327, (int)StatusCode.AppVolumeGestureModeUnknown);
             Assert.Equal(1803, (int)StatusCode.OnboardingSessionStillActive);
@@ -331,6 +333,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x2007, (int)StructureType.SessionInviteTargetAppInit);
             Assert.Equal(0x2009, (int)StructureType.PeerDeviceIdentity);
             Assert.Equal(0x200B, (int)StructureType.SessionLifecycleInfo);
+            Assert.Equal(0x200C, (int)StructureType.SessionGraphicsDeviceDisabledExt);
             Assert.Equal(0x4002, (int)StructureType.StreamVulkanParamsExt);
             Assert.Equal(0x4003, (int)StructureType.StreamOpenGlEglParamsExt);
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);

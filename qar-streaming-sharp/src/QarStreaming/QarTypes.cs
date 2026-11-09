@@ -485,6 +485,7 @@ namespace Quaternar.Qaros
         PeerPresentation = 0x2006,
         PeerDeviceIdentity = 0x2009,
         SessionLifecycleInfo = 0x200B,
+        SessionGraphicsDeviceDisabledExt = 0x200C,
         SessionInviteTargetAppInit = 0x2007,
         // 0x2008 (the removed request-onboarding-codes init) is never reused.
         RenderingStreamSenderInit = 0x3000,
@@ -1101,6 +1102,23 @@ namespace Quaternar.Qaros
                 Luid = new LuidNative { LowPart = unchecked((uint)Luid), HighPart = (int)(Luid >> 32) },
                 Uuid = uuid
             };
+        }
+    }
+
+    /// <summary>
+    /// Extension: creates the session without a graphics device, for an application that never
+    /// streams media (a companion that only drives app volumes, GUI panels or peers). The session
+    /// starts faster: no Vulkan or D3D11 device, no adapter enumeration, no transfer plugins.
+    /// Chain it with <see cref="OnboardOptions.WithoutGraphicsDevice"/>. On such a session every
+    /// media streaming call and <see cref="Session.GetGraphicsDeviceId"/> fail with
+    /// <see cref="StatusCode.GraphicsDeviceNotInitialized"/>. Chaining it together with a
+    /// <see cref="GraphicsDeviceId"/> fails with <see cref="StatusCode.ArgumentNotSupported"/>.
+    /// </summary>
+    public sealed class GraphicsDeviceDisabled : Structure
+    {
+        public GraphicsDeviceDisabled()
+            : base(StructureType.SessionGraphicsDeviceDisabledExt)
+        {
         }
     }
 

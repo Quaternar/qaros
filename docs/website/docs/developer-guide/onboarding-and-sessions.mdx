@@ -102,7 +102,7 @@ let session = joined?.session;
 
 - **Every start calls onboard.** Nothing is written to disk and the onboarding id stays zero; `qar_runtime_rejoin` and `qar_runtime_forget` do not apply.
 - **Load the installed runtime** (`qar_library_load(NULL)`). The hub refuses a runtime of another version or flavor, such as a private copy shipped with your app (`QAR_STATUS_ONBOARDING_FAILED`, with the reason in the message).
-- **The only mode extension.** Any other mode extension next to it fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. A `QarOnboardLocalAppTagExt` ([app tags](#app-tags-telling-instances-apart)) and a `QarGraphicsDeviceId` ([Choosing the GPU](#choosing-the-gpu)) may be chained.
+- **The only mode extension.** Any other mode extension next to it fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. A `QarOnboardLocalAppTagExt` ([app tags](#app-tags-telling-instances-apart)) and a `QarGraphicsDeviceId` ([Choosing the GPU](#choosing-the-gpu)) or a `QarGraphicsDeviceDisabledExt` ([A session without a graphics device](#a-session-without-a-graphics-device)) may be chained.
 - **Credentials live in memory only.** Each start gets a fresh key and a 30-minute certificate; the runtime renews it in the background.
 - **The peer id survives a restart.** The hub remembers it per approval and [app tag](#app-tags-telling-instances-apart) and picks it; your app cannot choose it.
 - Pass a `QarCancelToken` and cancel it when your user quits: the call can wait minutes for the approval.
@@ -178,7 +178,7 @@ A process that uses QAROS from more than one place (native code and a C# plug-in
 - An onboard while another one with the same tag is still waiting for its approval waits for it, at most the approval timeout plus 2 minutes, then fails with `QAR_STATUS_TIMEOUT`. If that first enrollment fails, the waiting onboard enrolls on its own.
 - A session whose renewal the hub refused (for example after the operator revoked the app) stays shared until its last handle is released. Release every handle, then onboard again.
 - No invite is involved and nothing is written to disk.
-- The first onboard's presentation and `QarGraphicsDeviceId` win; a sharing onboard applies neither, reports one INFO progress message and returns the zero onboarding id.
+- The first onboard's presentation and `QarGraphicsDeviceId` (or `QarGraphicsDeviceDisabledExt`) win; a sharing onboard applies neither, reports one INFO progress message and returns the zero onboarding id.
 - Compiled tutorial: [Several API Instances in One Process](/docs/developer-guide/tutorials/c/api-instances-in-one-process).
 
 ### The approval prompt
@@ -591,6 +591,19 @@ if let Some(gpu) = session.graphics_adapter()? {
 
 </Lang>
 </CodeTabs>
+
+### A session without a graphics device
+
+A process that never streams media — a companion that only drives app volumes, GUI panels or peers — chains a `QarGraphicsDeviceDisabledExt` after the mode extension (in C#, `OnboardOptions.WithoutGraphicsDevice()`; also on a rejoin). Its session creates no Vulkan or D3D11 device, enumerates no adapter and loads no transfer plugin, so it is ready sooner. Onboarding, peers, app volumes, GUI panels and storage work as usual.
+
+- Every media streaming call on it — `qar_render_sender_create` and its async form, `qar_render_sender_subscribe_requests`, `qar_video_sender_create` — and `qar_session_get_graphics_device_id` fail with `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` (610). Nothing is created.
+- Chained together with a `QarGraphicsDeviceId`, the onboard fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+- A shared local-app session keeps the choice of the onboard that created it.
+
+```c
+QarGraphicsDeviceDisabledExt no_gpu = qar_graphics_device_disabled_ext_default();
+invite_ext.header.next = &no_gpu.header; /* after the mode extension */
+```
 
 ## Onboarding without blocking
 

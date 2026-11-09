@@ -51,6 +51,12 @@ namespace Quaternar.Qaros
         /// </summary>
         MediaStreamingDeviceOnAnotherAdapter = 609,
         /// <summary>
+        /// The session was created without a graphics device
+        /// (<see cref="OnboardOptions.WithoutGraphicsDevice"/>), so it streams no media and
+        /// reports no adapter. Nothing was created. Onboard without the option to stream.
+        /// </summary>
+        GraphicsDeviceNotInitialized = 610,
+        /// <summary>
         /// No head pose has arrived from the viewer yet, so there is no pose to render with.
         /// Recoverable: <see cref="RenderSender.NextRenderPose"/> succeeds once the viewer's first
         /// pose is in.

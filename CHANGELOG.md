@@ -18,6 +18,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Onboarding and Sessions* has a section *A session without a graphics device*: how a
+  companion that never streams chains `QarGraphicsDeviceDisabledExt` (C#
+  `WithoutGraphicsDevice()`), what still works and the status media calls return.
+  *Troubleshooting* lists `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
+
 - **Docs:** *qaros:// Links* in the Developer Guide: the links that open the Pair Headset QR code,
   the Room Origin marker or the setup of one device type in QAROS, their exact grammar and rules,
   and how to open one from C, C# and Rust.
