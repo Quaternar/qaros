@@ -10,7 +10,7 @@ use qaros::{
 const VIEW_COUNT: usize = 2;
 
 fn render_views(_textures: &mut qaros::CpuFrame<'_>, _views: &[ViewPose]) {}
-fn render_into_own_target(_target: &mut Vec<u8>, _views: &[ViewPose]) {}
+fn render_into_own_target(_target: &mut [u8], _views: &[ViewPose]) {}
 fn copy_into_frame(_textures: &mut qaros::CpuFrame<'_>, _target: &[u8]) {}
 
 fn create_senders(session: &Session, viewer: PeerId) -> qaros::Result<()> {
