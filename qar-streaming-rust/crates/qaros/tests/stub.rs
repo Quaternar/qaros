@@ -608,7 +608,10 @@ fn a_gui_panel_display_name_is_changed_and_a_refused_one_is_never_shortened() {
     too_long.display_name = Some("a".repeat(65));
     let refused = panels.get_or_create(&too_long).expect_err("65 characters");
     assert!(refused.has_code(StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID));
-    assert!(panels.list().expect("list").is_empty());
+    assert_eq!(
+        panels.list().expect("list"),
+        Vec::<qaros::GuiPanelInfo>::new()
+    );
 
     let mut config = GuiPanelConfig::new("named.tests.qaros");
     // 64 four-byte characters: the limit counts characters, not bytes.
