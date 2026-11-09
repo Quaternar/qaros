@@ -485,6 +485,7 @@ namespace Quaternar.Qaros
         GuiPanelInit = 0x5001,
         GuiPanelStreamIdExt = 0x5002,
         GuiPanelUrlExt = 0x5003,
+        GuiPanelServedContentExt = 0x5004,
         AppVolumeInit = 0x5501,
         AppVolumeGestureMappingRule = 0x5502,
         AppVolumeGestureConfiguration = 0x5503,
@@ -510,7 +511,9 @@ namespace Quaternar.Qaros
     {
         WebsiteUri = 0,
         /// <summary>The video of a <see cref="PrimarylessVideoSender"/> owned by the same session.</summary>
-        StreamId = 1
+        StreamId = 1,
+        /// <summary>A page of a content bundle its owner serves over the session; see <see cref="PanelContentControl"/>.</summary>
+        Served = 2
     }
 
     /// <summary>
@@ -1492,6 +1495,12 @@ namespace Quaternar.Qaros
         /// <see cref="ContentUri"/>.
         /// </summary>
         public StreamId? ContentStreamId { get; set; }
+        /// <summary>
+        /// A page of a content bundle this session published (<see cref="PanelContentControl"/>).
+        /// Excludes <see cref="ContentUri"/> and <see cref="ContentStreamId"/>. Only the bundle's
+        /// publisher may put it on a panel.
+        /// </summary>
+        public GuiPanelServedContent? ServedContent { get; set; }
         /// <summary>
         /// Peers the panel is shown to. Empty, the default, means visible to every peer. A panel
         /// meant only for some peers is created with them here rather than narrowed afterwards.

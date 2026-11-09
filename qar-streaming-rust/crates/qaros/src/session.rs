@@ -13,6 +13,7 @@ use crate::cancel::CancelTokenInner;
 use crate::error::{Result, check};
 use crate::invite::OnboardingInvite;
 use crate::library::{Library, require_handle};
+use crate::panel_content::PanelContent;
 use crate::panels::GuiPanels;
 use crate::peers::{PeerInfo, read_peer_info};
 use crate::pending::{self, AbandonedCall, CallSpec, Destroy, Keep, PendingCall, RawOutcome};
@@ -529,6 +530,11 @@ impl Session {
     /// The session's GUI panel operations.
     pub fn gui_panels(&self) -> GuiPanels<'_> {
         GuiPanels::new(&self.inner)
+    }
+
+    /// Web pages this session serves to served GUI panels, and their messages.
+    pub fn panel_content(&self) -> PanelContent<'_> {
+        PanelContent::new(&self.inner)
     }
 
     /// Replaces the device this application describes itself as

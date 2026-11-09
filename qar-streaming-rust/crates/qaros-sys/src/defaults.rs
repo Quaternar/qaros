@@ -628,6 +628,18 @@ pub fn qar_gui_panel_url_ext_default() -> QarGuiPanelUrlExt {
     }
 }
 
+/// No bundle and no entry: the caller sets both before chaining it.
+pub fn qar_gui_panel_served_content_ext_default() -> QarGuiPanelServedContentExt {
+    QarGuiPanelServedContentExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT),
+        bundle: QarPanelContentBundleId {
+            publisher: QarPeerId { data: [0; 16] },
+            name: [0; QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize + 1],
+        },
+        entry: ptr::null(),
+    }
+}
+
 /// No peers: the caller sets `allowed_peers` and `allowed_peer_count`.
 pub fn qar_app_volume_gesture_allowed_peers_ext_default() -> QarAppVolumeGestureAllowedPeersExt {
     QarAppVolumeGestureAllowedPeersExt {

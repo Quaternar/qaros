@@ -588,6 +588,109 @@ fn gui_panels_and_app_volumes_round_trip() {
 }
 
 #[test]
+fn a_served_panel_shows_its_publishers_bundle_and_only_the_publisher_changes_it() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let content = session.panel_content();
+    let index = qaros::PanelContentFile {
+        path: "index.html".to_owned(),
+        mime_type: None,
+        data: b"<p>served</p>".to_vec(),
+    };
+
+    let refused = content
+        .publish_files("bad/name", std::slice::from_ref(&index))
+        .expect_err("bad name");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_BUNDLE_REFUSED));
+    let traversal = qaros::PanelContentFile {
+        path: "../index.html".to_owned(),
+        ..index.clone()
+    };
+    let refused = content
+        .publish_files("ui", &[traversal])
+        .expect_err("traversal");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_PATH_REFUSED));
+    let too_long = content
+        .remove(&qaros::PanelContentBundleId {
+            publisher: PeerId::ZERO,
+            name: "n".repeat(qaros::PANEL_CONTENT_BUNDLE_NAME_MAX + 1),
+        })
+        .expect_err("name too long");
+    assert!(matches!(too_long, Error::InvalidArgument { .. }));
+
+    let bundle = content
+        .publish_files("ui", std::slice::from_ref(&index))
+        .expect("publish");
+    assert_eq!(bundle.name, "ui");
+    assert!(!bundle.publisher.is_zero());
+
+    let panels = session.gui_panels();
+    let mut config = GuiPanelConfig::new("served.tests.qaros");
+    config.display_name = Some("Inspector".to_owned());
+    config.served = Some(qaros::GuiPanelServedContent {
+        bundle: bundle.clone(),
+        entry: "index.html".to_owned(),
+    });
+    let panel = panels.get_or_create(&config).expect("served panel");
+    let listed = panels.list().expect("list");
+    assert_eq!(listed[0].content_type, qaros::GuiPanelContentType::Served);
+    assert_eq!(listed[0].served, config.served);
+    assert_eq!(listed[0].content_uri, "");
+
+    let foreign = qaros::PanelContentBundleId {
+        publisher: PeerId([7; 16]),
+        name: "ui".to_owned(),
+    };
+    let refused = panels
+        .set_served_content(
+            panel,
+            &qaros::GuiPanelServedContent {
+                bundle: foreign.clone(),
+                entry: "index.html".to_owned(),
+            },
+        )
+        .expect_err("foreign bundle");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_NOT_PUBLISHER));
+    let settings = qaros::GuiPanelServedContent {
+        bundle: bundle.clone(),
+        entry: "settings.html".to_owned(),
+    };
+    panels
+        .set_served_content(panel, &settings)
+        .expect("change entry");
+    assert_eq!(panels.list().expect("list")[0].served, Some(settings));
+
+    let subscription = content
+        .subscribe_messages(&bundle, |_message| {})
+        .expect("subscribe");
+    content
+        .post_message(&bundle, r#"{"t":"state"}"#, Some(panel), None)
+        .expect("post");
+    let refused = content
+        .post_message(&foreign, "1", None, None)
+        .expect_err("foreign post");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_NOT_PUBLISHER));
+    subscription.cancel().expect("cancel");
+
+    content.remove(&bundle).expect("remove");
+    let gone = content.remove(&bundle).expect_err("removed twice");
+    assert!(gone.has_code(StatusCode::PANEL_CONTENT_NOT_FOUND));
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
 fn a_gui_panel_display_name_is_changed_and_a_refused_one_is_never_shortened() {
     let fixture = Fixture::new();
     let library = load_stub();

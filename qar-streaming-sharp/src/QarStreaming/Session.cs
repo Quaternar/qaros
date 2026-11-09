@@ -27,6 +27,7 @@ namespace Quaternar.Qaros
             _context = new SessionNativeContext(handle);
             Peers = new PeerControl(_context);
             GuiPanels = new GuiPanelControl(_context);
+            PanelContent = new PanelContentControl(_context);
             AppVolumes = new AppVolumeControl(_context);
             RenderSenders = new RenderSenderControl(_context);
             PrimarylessVideoSenders = new PrimarylessVideoSenderControl(_context);
@@ -34,6 +35,8 @@ namespace Quaternar.Qaros
 
         public PeerControl Peers { get; }
         public GuiPanelControl GuiPanels { get; }
+        /// <summary>Web pages this session serves to served GUI panels, and their messages.</summary>
+        public PanelContentControl PanelContent { get; }
         public AppVolumeControl AppVolumes { get; }
         public RenderSenderControl RenderSenders { get; }
 

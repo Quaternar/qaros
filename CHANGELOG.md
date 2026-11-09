@@ -18,6 +18,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *GUI Panels* has a section on served panels: publishing a folder or files as a content
+  bundle, putting a page of it on a panel, the page's `qaros.panel.send` / `onMessage`, the
+  messages your app receives and posts, and the rules and limits, with C, C# and Rust code.
 - **Docs:** *GUI Panels* states the display-name rules (at most 64 characters, one line, no
   bidirectional formatting characters) and how to rename a panel.
 - **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website

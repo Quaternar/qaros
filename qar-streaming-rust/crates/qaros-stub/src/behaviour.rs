@@ -14,9 +14,9 @@ use crate::Stub;
 use crate::exports::{StubApi, StubReturn};
 use crate::frame_stamp::{self, ViewArea};
 use crate::state::{
-    self, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubPanel, StubSubscription,
-    StubVolume, SubscriptionKind, destroy_handle, handle_value, new_handle, note, success,
-    write_c_string,
+    self, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubBundle, StubPanel,
+    StubServedContent, StubSubscription, StubVolume, SubscriptionKind, destroy_handle,
+    handle_value, new_handle, note, success, write_c_string,
 };
 
 const RUNTIME: &str = "runtime";
@@ -3840,6 +3840,21 @@ impl StubApi for Stub {
         if let Some(refused) = refuse_panel_display_name(&display_name) {
             return refused;
         }
+        // SAFETY: header.next is null or a chain of stamped extensions.
+        let served = match unsafe { served_extension(init.header.next.cast_const().cast()) } {
+            Ok(served) => served,
+            Err(refused) => return refused,
+        };
+        if let Some(served) = &served {
+            // SAFETY: session checked above.
+            let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+            if me != Some(served.publisher) {
+                return state::error(
+                    QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+                    "the bundle was published by another session",
+                );
+            }
+        }
         let panel_id = derive_id(&common_name);
         let mut guard = state::lock();
         if !guard.panels.iter().any(|panel| panel.id == panel_id) {
@@ -3850,6 +3865,7 @@ impl StubApi for Stub {
                 size: init.size,
                 state: QarGuiPanelState::QAR_GUI_PANEL_STATE_VISIBLE,
                 content_uri: String::new(),
+                served,
                 visible_to,
             });
         }
@@ -4065,6 +4081,257 @@ impl StubApi for Stub {
                 write_c_string(&panel.content_uri, out_uri, buffer_size);
             })
         }
+    }
+
+    unsafe fn qar_impl_gui_panel_get_content_type(
+        handle: *mut QarGuiPanel,
+        out_type: *mut QarGuiPanelContentType,
+    ) -> QarResult {
+        // SAFETY: forwarded.
+        unsafe {
+            with_panel(handle, |panel| {
+                *out_type = if panel.served.is_some() {
+                    QarGuiPanelContentType::QAR_GUI_PANEL_CONTENT_TYPE_SERVED
+                } else {
+                    QarGuiPanelContentType::QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI
+                };
+            })
+        }
+    }
+
+    unsafe fn qar_impl_gui_panel_get_content_served(
+        handle: *mut QarGuiPanel,
+        out_bundle: *mut QarPanelContentBundleId,
+        entry: *mut c_char,
+        entry_capacity: usize,
+        entry_size: *mut usize,
+    ) -> QarResult {
+        if out_bundle.is_null() {
+            return invalid("out_bundle is NULL");
+        }
+        // SAFETY: handle comes from this stub.
+        let Some(panel) = (unsafe { handle_value::<StubPanel, QarGuiPanel>(handle, GUI_PANEL) })
+        else {
+            return invalid("GUI panel is not a live handle");
+        };
+        let Some(served) = panel.served.clone() else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED,
+                "the panel does not show served content",
+            );
+        };
+        // SAFETY: out_bundle is writable.
+        unsafe { *out_bundle = raw_bundle(served.publisher, &served.name) };
+        if !entry_size.is_null() {
+            // SAFETY: entry_size is writable.
+            unsafe { *entry_size = served.entry.len() };
+        }
+        if entry.is_null() {
+            return success();
+        }
+        if entry_capacity <= served.entry.len() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+                "the entry buffer is too small",
+            );
+        }
+        // SAFETY: entry holds entry_capacity bytes.
+        unsafe { write_c_string(&served.entry, entry, entry_capacity) };
+        success()
+    }
+
+    unsafe fn qar_impl_gui_panels_set_served_content(
+        session: *mut QarSession,
+        id: *const QarGuiPanelId,
+        bundle: *const QarPanelContentBundleId,
+        entry: *const c_char,
+    ) -> QarResult {
+        if bundle.is_null() || entry.is_null() {
+            return invalid("bundle or entry is NULL");
+        }
+        // SAFETY: bundle is readable; entry is a C string.
+        let (bundle, entry) = unsafe { (bundle_value(&*bundle), text_or_empty(entry)) };
+        if let Some(refused) = refuse_entry(&entry) {
+            return refused;
+        }
+        // SAFETY: session comes from this stub.
+        let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+        if me != Some(bundle.publisher) {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+                "the bundle was published by another session",
+            );
+        }
+        if id.is_null() {
+            return invalid("panel id is NULL");
+        }
+        // SAFETY: id is readable.
+        let panel_id = unsafe { (*id).data };
+        let is_served = state::lock()
+            .panels
+            .iter()
+            .any(|panel| panel.id == panel_id && panel.served.is_some());
+        if !is_served {
+            return state::error(
+                QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED,
+                "the panel does not show served content",
+            );
+        }
+        let served = StubServedContent {
+            publisher: bundle.publisher,
+            name: bundle.name,
+            entry,
+        };
+        // SAFETY: forwarded.
+        unsafe { update_panel(session, id, |panel| panel.served = Some(served)) }
+    }
+
+    unsafe fn qar_impl_panel_content_publish_files(
+        session: *mut QarSession,
+        name: *const c_char,
+        files: *const QarPanelContentFile,
+        count: usize,
+        out_bundle: *mut QarPanelContentBundleId,
+    ) -> QarResult {
+        if name.is_null() || out_bundle.is_null() || (files.is_null() && count > 0) {
+            return invalid("name, files or out_bundle is NULL");
+        }
+        // SAFETY: session comes from this stub.
+        let Some(me) = (unsafe { session_value(session) }).map(|value| value.my_peer) else {
+            return invalid("session is not a live handle");
+        };
+        // SAFETY: name is a C string.
+        let name = unsafe { text_or_empty(name) };
+        if let Some(refused) = refuse_bundle_name(&name) {
+            return refused;
+        }
+        if count == 0 {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED,
+                "a bundle holds no file",
+            );
+        }
+        // SAFETY: files holds count entries.
+        let files = unsafe { std::slice::from_raw_parts(files, count) };
+        for file in files {
+            // SAFETY: path is a C string or NULL.
+            let path = unsafe { text_or_empty(file.path) };
+            if let Some(refused) = refuse_entry(&path) {
+                return refused;
+            }
+        }
+        // SAFETY: out_bundle is writable.
+        unsafe { *out_bundle = raw_bundle(me, &name) };
+        let mut guard = state::lock();
+        let bundle = StubBundle {
+            publisher: me,
+            name,
+        };
+        if !guard.bundles.contains(&bundle) {
+            guard.bundles.push(bundle);
+        }
+        drop(guard);
+        success()
+    }
+
+    unsafe fn qar_impl_panel_content_publish_directory(
+        session: *mut QarSession,
+        name: *const c_char,
+        root_utf8: *const c_char,
+        out_bundle: *mut QarPanelContentBundleId,
+    ) -> QarResult {
+        if name.is_null() || root_utf8.is_null() || out_bundle.is_null() {
+            return invalid("name, root or out_bundle is NULL");
+        }
+        // SAFETY: root is a C string.
+        let root = PathBuf::from(unsafe { text_or_empty(root_utf8) });
+        if !root.is_dir() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_FOUND,
+                "the folder does not exist",
+            );
+        }
+        let index = QarPanelContentFile {
+            path: c"index.html".as_ptr(),
+            mime_type: std::ptr::null(),
+            data: std::ptr::null(),
+            size: 0,
+        };
+        // SAFETY: forwarded; the stub publishes the folder as one placeholder file.
+        unsafe {
+            Self::qar_impl_panel_content_publish_files(
+                session,
+                name,
+                &raw const index,
+                1,
+                out_bundle,
+            )
+        }
+    }
+
+    unsafe fn qar_impl_panel_content_remove(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+    ) -> QarResult {
+        // SAFETY: forwarded.
+        let bundle = match unsafe { own_bundle(session, bundle) } {
+            Ok(bundle) => bundle,
+            Err(refused) => return refused,
+        };
+        state::lock().bundles.retain(|known| *known != bundle);
+        success()
+    }
+
+    unsafe fn qar_impl_panel_content_subscribe_messages(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+        callback: qar_panel_content_message_callback_t,
+        user_state: *mut c_void,
+        token: *mut QarCancelToken,
+    ) -> QarResult {
+        if token.is_null() || callback.is_none() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "a callback and a cancel token are required",
+            );
+        }
+        // SAFETY: forwarded.
+        if let Err(refused) = unsafe { own_bundle(session, bundle) } {
+            return refused;
+        }
+        register_subscription(
+            session,
+            SubscriptionKind::PanelContentMessages,
+            state::callback_address(callback),
+            user_state,
+            token,
+            None,
+        )
+    }
+
+    unsafe fn qar_impl_panel_content_post_message(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+        _panel: *const QarGuiPanelId,
+        _user: *const QarPeerId,
+        json: *const c_char,
+    ) -> QarResult {
+        if json.is_null() {
+            return invalid("json is NULL");
+        }
+        // SAFETY: forwarded.
+        if let Err(refused) = unsafe { own_bundle(session, bundle) } {
+            return refused;
+        }
+        // SAFETY: json is a C string.
+        let json = unsafe { text_or_empty(json) };
+        if json.trim().is_empty() || json.len() > 64 * 1024 {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED,
+                "a panel message must be one JSON value of at most 64 KiB",
+            );
+        }
+        success()
     }
 
     unsafe fn qar_impl_gui_panel_get_state(
@@ -4971,6 +5238,121 @@ unsafe fn update_panel(
     drop(guard);
     fire_panel_updates(session as usize, panel_id);
     success()
+}
+
+/// The header's bundle-name rules: 1 to 64 bytes of `A-Z a-z 0-9 . _ -`, not starting with `.`.
+fn refuse_bundle_name(name: &str) -> Option<QarResult> {
+    let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
+    let refused = name.is_empty()
+        || name.len() > QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize
+        || name.starts_with('.')
+        || !name.chars().all(allowed);
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED,
+            "bundle name refused",
+        )
+    })
+}
+
+/// The header's path rules, the part the stub checks: relative, no empty, `.` or `..`
+/// segment, no backslash, `:` or `%`.
+fn refuse_entry(path: &str) -> Option<QarResult> {
+    let refused = path.is_empty()
+        || path.contains(['\\', ':', '%'])
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..");
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_PATH_REFUSED,
+            "bundle path refused",
+        )
+    })
+}
+
+fn raw_bundle(publisher: [u8; 16], name: &str) -> QarPanelContentBundleId {
+    let mut raw = QarPanelContentBundleId {
+        publisher: QarPeerId { data: publisher },
+        name: [0; QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize + 1],
+    };
+    for (slot, byte) in raw.name.iter_mut().zip(name.bytes()) {
+        *slot = c_char::from_ne_bytes([byte]);
+    }
+    raw
+}
+
+fn bundle_value(raw: &QarPanelContentBundleId) -> StubBundle {
+    let bytes: Vec<u8> = raw
+        .name
+        .iter()
+        .map(|byte| u8::from_ne_bytes(byte.to_ne_bytes()))
+        .take_while(|byte| *byte != 0)
+        .collect();
+    StubBundle {
+        publisher: raw.publisher.data,
+        name: String::from_utf8_lossy(&bytes).into_owned(),
+    }
+}
+
+/// # Safety
+///
+/// `session` must come from this stub; `bundle` must be null or readable.
+unsafe fn own_bundle(
+    session: *mut QarSession,
+    bundle: *const QarPanelContentBundleId,
+) -> Result<StubBundle, QarResult> {
+    if bundle.is_null() {
+        return Err(invalid("bundle is NULL"));
+    }
+    // SAFETY: bundle is readable.
+    let bundle = bundle_value(unsafe { &*bundle });
+    // SAFETY: session comes from this stub.
+    let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+    if me != Some(bundle.publisher) {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+            "the bundle was published by another session",
+        ));
+    }
+    if !state::lock().bundles.contains(&bundle) {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_FOUND,
+            "this session publishes no bundle of that name",
+        ));
+    }
+    Ok(bundle)
+}
+
+/// The served-content extension of a panel init chain, if any.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped extension structures.
+unsafe fn served_extension(
+    mut next: *const QarStructureHeader,
+) -> Result<Option<StubServedContent>, QarResult> {
+    while !next.is_null() {
+        // SAFETY: every extension starts with QarStructureHeader.
+        let header = unsafe { &*next };
+        if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT {
+            // SAFETY: the type says what the structure is.
+            let extension = unsafe { &*next.cast::<QarGuiPanelServedContentExt>() };
+            // SAFETY: entry is a C string or NULL.
+            let entry = unsafe { text_or_empty(extension.entry) };
+            if let Some(refused) = refuse_entry(&entry) {
+                return Err(refused);
+            }
+            let bundle = bundle_value(&extension.bundle);
+            return Ok(Some(StubServedContent {
+                publisher: bundle.publisher,
+                name: bundle.name,
+                entry,
+            }));
+        }
+        next = header.next.cast_const().cast();
+    }
+    Ok(None)
 }
 
 /// The header's display-name rules: at most 64 code points, no control (C0, DEL, C1) or

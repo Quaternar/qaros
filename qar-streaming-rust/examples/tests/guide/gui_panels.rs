@@ -1,6 +1,7 @@
 use qaros::qaros_sys::{QarGuiPanelId, QarPeerId};
 use qaros::{
-    GuiPanelConfig, GuiPanelId, GuiPanelSize, GuiPanelState, Library, PeerId, Pose, Session, Vec3,
+    GuiPanelConfig, GuiPanelId, GuiPanelServedContent, GuiPanelSize, GuiPanelState, Library,
+    PeerId, Pose, Session, Subscription, Vec3,
 };
 
 fn get_or_create(session: &Session) -> qaros::Result<GuiPanelId> {
@@ -64,4 +65,29 @@ fn update_visible_to(library: &Library, session: &Session, panel_id: GuiPanelId,
     // SAFETY: plain value argument.
     unsafe { (api.qar_impl_result_log_if_error)(result) };
     // ANCHOR_END: update_visible_to
+}
+
+fn serve_content(session: &Session) -> qaros::Result<(GuiPanelId, Subscription)> {
+    // ANCHOR: serve_content
+    let content = session.panel_content();
+    // A folder holding inspector/index.html and its scripts, styles and images.
+    let bundle = content.publish_directory("ui", std::path::Path::new("C:/MyApp/panels"))?;
+
+    let config = GuiPanelConfig {
+        display_name: Some("Inspector".to_string()),
+        served: Some(GuiPanelServedContent {
+            bundle: bundle.clone(),
+            entry: "inspector/index.html".to_string(),
+        }),
+        ..GuiPanelConfig::new("inspector.myapp.example.com")
+    };
+    let panel_id = session.gui_panels().get_or_create(&config)?;
+
+    // Messages from every panel showing the bundle, stamped with panel and user.
+    let messages = content.subscribe_messages(&bundle, |message| {
+        log::info!("{} from {}: {}", message.panel, message.user, message.json);
+    })?;
+    content.post_message(&bundle, r#"{"t":"state"}"#, Some(panel_id), None)?;
+    // ANCHOR_END: serve_content
+    Ok((panel_id, messages))
 }

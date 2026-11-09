@@ -378,6 +378,29 @@ typedef enum QarStatusCode
 	 * U+202E, U+2066 to U+2069). The panel keeps its previous name; the
 	 * result's message names the rule. */
 	QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID = 306,
+	/** A content bundle name was refused: empty, longer than 64 bytes,
+	 * starting with '.', or holding a character other than A-Z, a-z, 0-9,
+	 * '.', '_' and '-'. */
+	QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED = 340,
+	/** A path in a content bundle was refused: not relative, holding an
+	 * empty, '.' or '..' segment, a backslash, ':', '%', NUL or another
+	 * character outside A-Z a-z 0-9 . _ - ~ + @ ( ) ! , and '/', longer than
+	 * 512 bytes, or a link when publishing a folder. */
+	QAR_STATUS_PANEL_CONTENT_PATH_REFUSED = 341,
+	/** A bundle file's extension is not on the served list, or its declared
+	 * MIME type is not the one its extension maps to. */
+	QAR_STATUS_PANEL_CONTENT_MIME_REFUSED = 342,
+	/** A bundle file is larger than 16 MiB, the bundle larger than 64 MiB, or
+	 * it holds no file or more than 1024. */
+	QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED = 343,
+	/** A bundle was assigned to a panel, removed or messaged by a session that
+	 * did not publish it. Only the publisher may. */
+	QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER = 344,
+	/** This session publishes no bundle of that name, or the folder to publish
+	 * does not exist. */
+	QAR_STATUS_PANEL_CONTENT_NOT_FOUND = 345,
+	/** A panel message is not one JSON value or is larger than 64 KiB. */
+	QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED = 346,
 	QAR_STATUS_APP_VOLUME_INVALID_ID = 325,
 	/** A gesture configuration was refused because a rule in it could never
 	 * work, such as an enabled two-hand rotate that moves the app with no
@@ -1177,7 +1200,10 @@ typedef enum QarGuiPanelState
 typedef enum QarGuiPanelContentType
 {
 	QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI = 0,
-	QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID = 1
+	QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID = 1,
+	/** Web content its owner serves over the session from a content bundle;
+	 * see QarGuiPanelServedContentExt. */
+	QAR_GUI_PANEL_CONTENT_TYPE_SERVED = 2
 } QarGuiPanelContentType;
 
 /** @brief What a contact on a GUI panel was recognised as. */
@@ -1455,6 +1481,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_GUI_PANEL_INIT = 0x5001,
 	QAR_STRUCTURE_TYPE_GUI_PANEL_STREAM_ID_EXT = 0x5002,
 	QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT = 0x5003,
+	QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT = 0x5004,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_INIT = 0x5501,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_MAPPING_RULE = 0x5502,
 	QAR_STRUCTURE_TYPE_APP_VOLUME_GESTURE_CONFIGURATION = 0x5503,
@@ -2349,6 +2376,78 @@ typedef struct QarGuiPanelUrlExt
 	QarStructureHeader header;
 	const char* url;
 } QarGuiPanelUrlExt;
+
+/** @brief Longest content bundle name, in bytes, without the terminating NUL.
+ */
+#define QAR_PANEL_CONTENT_BUNDLE_NAME_MAX 64
+
+/**
+ * @brief Names one content bundle: the peer that published it and serves its
+ * files, and its name, unique per publisher.
+ *
+ * A bundle is a named, versioned set of files a session publishes once with
+ * qar_panel_content_publish_files() or qar_panel_content_publish_directory()
+ * and serves to every mixer showing it on a served GUI panel. The publisher is
+ * the content's owner: it alone may put the bundle on a panel, receives the
+ * panels' messages and posts to them.
+ */
+typedef struct QarPanelContentBundleId
+{
+	QarPeerId publisher;
+	/// NUL-terminated ASCII: A-Z, a-z, 0-9, '.', '_' and '-', not starting with
+	/// '.', at most QAR_PANEL_CONTENT_BUNDLE_NAME_MAX bytes.
+	char name[QAR_PANEL_CONTENT_BUNDLE_NAME_MAX + 1];
+} QarPanelContentBundleId;
+
+/**
+ * @brief Extension that creates a GUI panel showing a page of a content bundle.
+ *
+ * Chain this structure from QarGuiPanelInit::header.next. Only the bundle's
+ * publisher may assign it: a bundle another session published fails with
+ * QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER. The entry is copied during the call.
+ */
+typedef struct QarGuiPanelServedContentExt
+{
+	QarStructureHeader header;
+	QarPanelContentBundleId bundle;
+	/// Path of the page inside the bundle, e.g. "inspector/index.html".
+	const char* entry;
+} QarGuiPanelServedContentExt;
+
+/**
+ * @brief One file handed to qar_panel_content_publish_files().
+ *
+ * Every pointer is read during the call only; the bytes are copied.
+ */
+typedef struct QarPanelContentFile
+{
+	/// Relative, '/'-separated path inside the bundle.
+	const char* path;
+	/// NULL or empty: taken from the path's extension. Otherwise it must be
+	/// the type that extension is served as.
+	const char* mime_type;
+	const uint8_t* data;
+	size_t size;
+} QarPanelContentFile;
+
+/**
+ * @brief A message a served panel sent to its content owner.
+ *
+ * Valid only while the callback that received it runs; copy what you keep.
+ */
+typedef struct QarPanelContentMessage
+{
+	/// The panel that sent it, stamped by the mixer showing it.
+	QarGuiPanelId panel;
+	/// The user (the mixer's target peer) whose panel sent it.
+	QarPeerId user;
+	/// Counts up per sending mixer and panel, from 1.
+	uint64_t sequence;
+	/// One JSON value, NUL-terminated UTF-8.
+	const char* json;
+	/// Bytes in json, without the terminating NUL.
+	size_t json_size;
+} QarPanelContentMessage;
 
 // Volume initialization parameters
 typedef struct QarAppVolumeInit
@@ -4495,11 +4594,13 @@ static inline QarResult qar_video_sender_show_frame(QarVideoSender* sender);
 // Forward declarations
 /** @brief Get the panel identified by init->common_name, creating it (via
  * init) if it does not exist yet.
- * QarGuiPanelInit supports QarGuiPanelUrlExt for browser content and
- * QarGuiPanelStreamIdExt for logical-stream content. Chain exactly one through
- * QarGuiPanelInit::header.next. With neither extension, the panel starts with
- * the default website content. Stream receiver resolution is taken from the
- * session-owned sender identified by QarGuiPanelStreamIdExt::stream_id.
+ * QarGuiPanelInit supports QarGuiPanelServedContentExt for a page this
+ * session serves (see @ref qar_c_panel_content), QarGuiPanelUrlExt for browser
+ * content and QarGuiPanelStreamIdExt for logical-stream content. Chain exactly
+ * one through QarGuiPanelInit::header.next. With neither extension, the panel
+ * starts with the default website content. Stream receiver resolution is taken
+ * from the session-owned sender identified by
+ * QarGuiPanelStreamIdExt::stream_id.
  *
  * The id derives from the common name, so every call with one name answers
  * the same panel. When it already exists and is not closed, init is ignored
@@ -4927,7 +5028,203 @@ static inline QarResult qar_gui_panel_get_visible_to_peers(
 	size_t* out_peers_written
 );
 
+/**
+ * @brief Read a served panel's content: the bundle it shows and its entry page.
+ *
+ * @param handle Panel handle from an update callback or a query.
+ * @param out_bundle Receives the bundle; must not be NULL.
+ * @param entry Receives the NUL-terminated entry path; may be NULL to ask
+ *        only for its size.
+ * @param entry_capacity Bytes available in @p entry, the NUL included.
+ * @param entry_size Receives the entry's length without the NUL; may be NULL.
+ *        513 bytes always hold an entry.
+ * @return Success; QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED for a panel that
+ *         is not a served panel; QAR_STATUS_ARGUMENT_NOT_SUPPORTED when
+ *         @p entry is too small (the size is still written).
+ */
+static inline QarResult qar_gui_panel_get_content_served(
+	QarGuiPanel* handle,
+	QarPanelContentBundleId* out_bundle,
+	char* entry,
+	size_t entry_capacity,
+	size_t* entry_size
+);
+
+/**
+ * @brief Show another page, or another bundle of this session, on a served
+ * panel.
+ *
+ * Only the bundle's publisher may assign it; assigning a bundle moves the
+ * panel content's ownership to its publisher. A website or stream panel stays
+ * what it was created as.
+ *
+ * @param session Session that published @p bundle; must not be NULL.
+ * @param id Served panel to change; must not be NULL.
+ * @param bundle Bundle this session published; must not be NULL.
+ * @param entry Path of the page inside the bundle; copied, must not be NULL.
+ * @return Success; QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER for a bundle another
+ *         session published; QAR_STATUS_PANEL_CONTENT_PATH_REFUSED or
+ *         QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED for a bad entry or name;
+ *         QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED for a panel that is not a
+ *         served panel.
+ */
+static inline QarResult qar_gui_panels_set_served_content(
+	QarSession* session,
+	const QarGuiPanelId* id,
+	const QarPanelContentBundleId* bundle,
+	const char* entry
+);
+
 /** @} */ /* end of qar_c_gui */
+
+// ============================================================================
+// PANEL CONTENT API
+// ============================================================================
+
+/**
+ * @defgroup qar_c_panel_content Panel Content
+ * @brief Serve web pages to GUI panels from this session, and exchange JSON
+ * messages with them.
+ *
+ * A served GUI panel shows a page of a content bundle: a named, versioned set
+ * of files this session publishes once. Every user's mixer loads the page in
+ * its own browser, fetching the files over the session from this session, so
+ * each user has their own page state, scroll and focus. The page and this
+ * session exchange JSON messages: `qaros.panel.send(msg)` and
+ * `qaros.panel.onMessage(cb)` in the page,
+ * qar_panel_content_subscribe_messages() and qar_panel_content_post_message()
+ * here.
+ *
+ * - Publishing copies every byte at publish time. Nothing on disk is read
+ *   while serving, so a request can only reach a file the bundle lists; an
+ *   edit needs another publication, which bumps the bundle's version and makes
+ *   every mixer reload the panels showing it.
+ * - The publisher owns the content: only it may put the bundle on a panel
+ *   (QarGuiPanelServedContentExt, qar_gui_panels_set_served_content()),
+ *   receives the panels' messages and posts to them. Anyone allowed may still
+ *   move, resize, hide or close the panel.
+ * - The pages are served under their own web origin per publishing session,
+ *   with a strict content security policy: scripts and styles from the bundle
+ *   only, no network access.
+ * - Limits: 16 MiB per file, 64 MiB and 1024 files per bundle, 64 KiB per
+ *   message.
+ * @{
+ */
+
+/**
+ * @brief Called once per message a panel showing the bundle sent.
+ *
+ * Runs on a library thread; @p message is valid only during the call.
+ */
+typedef void (*qar_panel_content_message_callback_t)(
+	const QarPanelContentMessage* message, void* user_state
+);
+
+/**
+ * @brief Publish every regular file under a folder as bundle @p name.
+ *
+ * Replaces an earlier publication of the same name and bumps its version.
+ * A link inside the folder is refused, as is every file
+ * qar_panel_content_publish_files() would refuse. File types come from their
+ * extensions (html, js, mjs, css, json, svg, png, jpg, gif, webp, ico, woff,
+ * woff2, ttf, otf, txt, wasm, glb, gltf, bin, mp3, ogg, wav, mp4, webm, xml,
+ * map).
+ *
+ * @param session Session that serves the bundle; must not be NULL.
+ * @param name Bundle name (see QarPanelContentBundleId::name); must not be
+ * NULL.
+ * @param root_utf8 Folder to publish, UTF-8; must not be NULL.
+ * @param out_bundle Receives the bundle id; must not be NULL.
+ * @return Success, or one of the QAR_STATUS_PANEL_CONTENT_* refusals; nothing
+ *         is published when the call fails.
+ */
+static inline QarResult qar_panel_content_publish_directory(
+	QarSession* session,
+	const char* name,
+	const char* root_utf8,
+	QarPanelContentBundleId* out_bundle
+);
+
+/**
+ * @brief Publish @p count files as bundle @p name.
+ *
+ * Replaces an earlier publication of the same name and bumps its version.
+ *
+ * @param session Session that serves the bundle; must not be NULL.
+ * @param name Bundle name (see QarPanelContentBundleId::name); must not be
+ * NULL.
+ * @param files Files to publish, copied during the call; must not be NULL.
+ * @param count Number of files, 1 to 1024.
+ * @param out_bundle Receives the bundle id; must not be NULL.
+ * @return Success; QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED for a bad name;
+ *         QAR_STATUS_PANEL_CONTENT_PATH_REFUSED for a bad or duplicate path;
+ *         QAR_STATUS_PANEL_CONTENT_MIME_REFUSED for a type that is not served;
+ *         QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED for a limit exceeded. Nothing
+ *         is published when the call fails.
+ */
+static inline QarResult qar_panel_content_publish_files(
+	QarSession* session,
+	const char* name,
+	const QarPanelContentFile* files,
+	size_t count,
+	QarPanelContentBundleId* out_bundle
+);
+
+/**
+ * @brief Stop serving a bundle. Panels showing it stay and show nothing.
+ *
+ * @param session Session that published @p bundle; must not be NULL.
+ * @param bundle Bundle to remove; must not be NULL.
+ * @return Success, QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER, or
+ *         QAR_STATUS_PANEL_CONTENT_NOT_FOUND.
+ */
+static inline QarResult qar_panel_content_remove(
+	QarSession* session, const QarPanelContentBundleId* bundle
+);
+
+/**
+ * @brief Receive the messages of every panel showing a bundle this session
+ * published, each stamped with its panel and user.
+ *
+ * @param session Session that published @p bundle; must not be NULL.
+ * @param bundle Bundle whose messages to receive; must not be NULL.
+ * @param callback Called once per message; must not be NULL.
+ * @param user_state Passed to @p callback.
+ * @param token Required. Cancel it to stop the subscription; it also ends when
+ *        the bundle is removed or the session closes.
+ * @return Success, QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER, or
+ *         QAR_STATUS_PANEL_CONTENT_NOT_FOUND.
+ */
+static inline QarResult qar_panel_content_subscribe_messages(
+	QarSession* session,
+	const QarPanelContentBundleId* bundle,
+	qar_panel_content_message_callback_t callback,
+	void* user_state,
+	QarCancelToken* token
+);
+
+/**
+ * @brief Post one JSON value to the panels showing a bundle this session
+ * published.
+ *
+ * @param session Session that published @p bundle; must not be NULL.
+ * @param bundle Bundle whose panels receive it; must not be NULL.
+ * @param panel One panel, or NULL for every panel showing the bundle.
+ * @param user One user, or NULL for every user.
+ * @param json One JSON value, at most 64 KiB, copied; must not be NULL.
+ * @return Success, QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED,
+ *         QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER, or
+ *         QAR_STATUS_PANEL_CONTENT_NOT_FOUND.
+ */
+static inline QarResult qar_panel_content_post_message(
+	QarSession* session,
+	const QarPanelContentBundleId* bundle,
+	const QarGuiPanelId* panel,
+	const QarPeerId* user,
+	const char* json
+);
+
+/** @} */ /* end of qar_c_panel_content */
 
 // ============================================================================
 // APP VOLUMES API
@@ -5678,6 +5975,10 @@ static inline QarAppVolumeGestureAllowedPeersExt
 qar_app_volume_gesture_allowed_peers_ext_default(void);
 /** @brief Default URL-content extension for QarGuiPanelInit. */
 static inline QarGuiPanelUrlExt qar_gui_panel_url_ext_default(void);
+/** @brief Default served-content extension for QarGuiPanelInit: no bundle, no
+ * entry. Set both before chaining it. */
+static inline QarGuiPanelServedContentExt
+qar_gui_panel_served_content_ext_default(void);
 /** @brief Default init for QarAppVolumeInit. */
 static inline QarAppVolumeInit qar_app_volume_init_default(void);
 #ifdef QAR_ENABLE_D3D11
@@ -7254,6 +7555,17 @@ qar_gui_panel_url_ext_default(void)
 	return extension;
 }
 
+static inline QarGuiPanelServedContentExt
+qar_gui_panel_served_content_ext_default(void)
+{
+	QarGuiPanelServedContentExt extension = {
+		{ QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT, NULL }, // header
+		{ { { 0 } }, { 0 } },									   // bundle
+		NULL													   // entry
+	};
+	return extension;
+}
+
 static inline QarAppVolumeInit
 qar_app_volume_init_default(void)
 {
@@ -7363,6 +7675,11 @@ qar_stream_params_vulkan_default(void)
 
 typedef void (*qar_gui_panel_update_callback_t)(
 	QarGuiPanel* handle, void* user_state
+);
+
+/// Documented on the public declaration in <qar_streaming_c/v0/api.h>.
+typedef void (*qar_panel_content_message_callback_t)(
+	const QarPanelContentMessage* message, void* user_state
 );
 
 /// Documented on the public declaration in <qar_streaming_c/v0/api.h>.
@@ -7586,7 +7903,64 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
 	  (QarSession * session,                                                   \
 	   const QarGuiPanelId* id,                                                \
 	   const char* display_name),                                              \
-	  (session, id, display_name))
+	  (session, id, display_name))                                             \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  panel_content_publish_directory,                                         \
+	  (QarSession * session,                                                   \
+	   const char* name,                                                       \
+	   const char* root_utf8,                                                  \
+	   QarPanelContentBundleId* out_bundle),                                   \
+	  (session, name, root_utf8, out_bundle))                                  \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  panel_content_publish_files,                                             \
+	  (QarSession * session,                                                   \
+	   const char* name,                                                       \
+	   const QarPanelContentFile* files,                                       \
+	   size_t count,                                                           \
+	   QarPanelContentBundleId* out_bundle),                                   \
+	  (session, name, files, count, out_bundle))                               \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  panel_content_remove,                                                    \
+	  (QarSession * session, const QarPanelContentBundleId* bundle),           \
+	  (session, bundle))                                                       \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  panel_content_subscribe_messages,                                        \
+	  (QarSession * session,                                                   \
+	   const QarPanelContentBundleId* bundle,                                  \
+	   qar_panel_content_message_callback_t callback,                          \
+	   void* user_state,                                                       \
+	   QarCancelToken* token),                                                 \
+	  (session, bundle, callback, user_state, token))                          \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  panel_content_post_message,                                              \
+	  (QarSession * session,                                                   \
+	   const QarPanelContentBundleId* bundle,                                  \
+	   const QarGuiPanelId* panel,                                             \
+	   const QarPeerId* user,                                                  \
+	   const char* json),                                                      \
+	  (session, bundle, panel, user, json))                                    \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_set_served_content,                                           \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   const QarPanelContentBundleId* bundle,                                  \
+	   const char* entry),                                                     \
+	  (session, id, bundle, entry))                                            \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panel_get_content_served,                                            \
+	  (QarGuiPanel * handle,                                                   \
+	   QarPanelContentBundleId * out_bundle,                                   \
+	   char* entry,                                                            \
+	   size_t entry_capacity,                                                  \
+	   size_t* entry_size),                                                    \
+	  (handle, out_bundle, entry, entry_capacity, entry_size))
 
 QAR_DECLARE_MODULE_COMMON(
 	GUI_PANELS, GuiPanels, gui_panels, QAR_GUI_PANELS_FUNCTION_LIST

@@ -14,6 +14,7 @@ pub const QAR_POSITION_TRACKED_BIT: u32 = 8;
 pub const QAR_HAND_JOINT_COUNT: u32 = 26;
 pub const QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES: u32 = 16;
 pub const QAR_MAX_APP_TAG_LENGTH: u32 = 256;
+pub const QAR_PANEL_CONTENT_BUNDLE_NAME_MAX: u32 = 64;
 pub type DWORD = ::std::os::raw::c_ulong;
 pub type LONG = ::std::os::raw::c_long;
 #[repr(C)]
@@ -256,11 +257,30 @@ impl QarStatusCode {
     U+202E, U+2066 to U+2069). The panel keeps its previous name; the
     result's message names the rule.*/
     pub const QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID: QarStatusCode = QarStatusCode(306);
-    /** A GUI panel display name was refused: more than 64 Unicode code
-    points, not valid UTF-8, or holding a control character (C0, DEL, C1)
-    or a bidirectional formatting character (U+200E, U+200F, U+202A to
-    U+202E, U+2066 to U+2069). The panel keeps its previous name; the
-    result's message names the rule.*/
+    /** A content bundle name was refused: empty, longer than 64 bytes,
+    starting with '.', or holding a character other than A-Z, a-z, 0-9,
+    '.', '_' and '-'.*/
+    pub const QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED: QarStatusCode = QarStatusCode(340);
+    /** A path in a content bundle was refused: not relative, holding an
+    empty, '.' or '..' segment, a backslash, ':', '%', NUL or another
+    character outside A-Z a-z 0-9 . _ - ~ + @ ( ) ! , and '/', longer than
+    512 bytes, or a link when publishing a folder.*/
+    pub const QAR_STATUS_PANEL_CONTENT_PATH_REFUSED: QarStatusCode = QarStatusCode(341);
+    /** A bundle file's extension is not on the served list, or its declared
+    MIME type is not the one its extension maps to.*/
+    pub const QAR_STATUS_PANEL_CONTENT_MIME_REFUSED: QarStatusCode = QarStatusCode(342);
+    /** A bundle file is larger than 16 MiB, the bundle larger than 64 MiB, or
+    it holds no file or more than 1024.*/
+    pub const QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED: QarStatusCode = QarStatusCode(343);
+    /** A bundle was assigned to a panel, removed or messaged by a session that
+    did not publish it. Only the publisher may.*/
+    pub const QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER: QarStatusCode = QarStatusCode(344);
+    /** This session publishes no bundle of that name, or the folder to publish
+    does not exist.*/
+    pub const QAR_STATUS_PANEL_CONTENT_NOT_FOUND: QarStatusCode = QarStatusCode(345);
+    /// A panel message is not one JSON value or is larger than 64 KiB.
+    pub const QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED: QarStatusCode = QarStatusCode(346);
+    /// A panel message is not one JSON value or is larger than 64 KiB.
     pub const QAR_STATUS_APP_VOLUME_INVALID_ID: QarStatusCode = QarStatusCode(325);
     /** A gesture configuration was refused because a rule in it could never
     work, such as an enabled two-hand rotate that moves the app with no
@@ -1341,6 +1361,9 @@ impl QarGuiPanelContentType {
         QarGuiPanelContentType(0);
     pub const QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID: QarGuiPanelContentType =
         QarGuiPanelContentType(1);
+    /** Web content its owner serves over the session from a content bundle;
+    see QarGuiPanelServedContentExt.*/
+    pub const QAR_GUI_PANEL_CONTENT_TYPE_SERVED: QarGuiPanelContentType = QarGuiPanelContentType(2);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1701,6 +1724,10 @@ impl QarStructureType {
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
     types. Retired rather than reused: the layout behind it changed.*/
     pub const QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT: QarStructureType = QarStructureType(20483);
+    /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
+    types. Retired rather than reused: the layout behind it changed.*/
+    pub const QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT: QarStructureType =
+        QarStructureType(20484);
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
     types. Retired rather than reused: the layout behind it changed.*/
     pub const QAR_STRUCTURE_TYPE_APP_VOLUME_INIT: QarStructureType = QarStructureType(21761);
@@ -2105,7 +2132,12 @@ const _: () = {
     ["Offset of field: QarPeerDeviceIdentity::device_name"]
         [::std::mem::offset_of!(QarPeerDeviceIdentity, device_name) - 40usize];
 };
-/// @brief Continue / rejoin the last persisted session (situation: continue).
+/** @brief Continue / rejoin the last persisted session (situation: continue).
+
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRejoinInit {
@@ -2159,6 +2191,11 @@ const _: () = {
 /** @brief Extension: onboard with the short code shown on the hub onboarding
 screen.
 
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.
+
 Without QarOnboardHostExt it finds this user's hub: first through the
 hub-endpoint.json file the hub writes to the QAROS data root, then through
 a discovery beacon whose owner is this user, listening up to 6 s. When
@@ -2188,6 +2225,8 @@ const _: () = {
 };
 /** @brief Extension: override the hub discovery endpoint for
 qar_runtime_onboard when QarOnboardCodeExt is chained.
+
+@deprecated Code onboarding is deprecated (see QarOnboardCodeExt).
 
 Chain into QarOnboardInit.header.next; absent -> this user's hub (see
 QarOnboardCodeExt).*/
@@ -2236,6 +2275,10 @@ const _: () = {
         [::std::mem::offset_of!(QarOnboardInviteExt, invite) - 16usize];
 };
 /** @brief Extension: join the session under a peer id chosen by the caller.
+
+@deprecated A local app gets its peer id from the hub, remembered per app
+tag (QarOnboardLocalAppTagExt), and a co-process from its invite. Kept
+working for applications that already use it.
 
 Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
 QarOnboardInviteExt, for a process whose peer id was planned and announced
@@ -2487,7 +2530,10 @@ pub type qar_target_app_kill_result_callback_t = ::std::option::Option<
         user_state: *mut ::std::os::raw::c_void,
     ),
 >;
-/// @brief Teardown — erase a persisted identity slot.
+/** @brief Teardown — erase a persisted identity slot.
+
+@deprecated Only the deprecated code onboarding persists a slot; local apps
+and co-processes persist nothing.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarForgetInit {
@@ -2928,6 +2974,118 @@ const _: () = {
     ["Offset of field: QarGuiPanelUrlExt::url"]
         [::std::mem::offset_of!(QarGuiPanelUrlExt, url) - 16usize];
 };
+/** @brief Names one content bundle: the peer that published it and serves its
+files, and its name, unique per publisher.
+
+A bundle is a named, versioned set of files a session publishes once with
+qar_panel_content_publish_files() or qar_panel_content_publish_directory()
+and serves to every mixer showing it on a served GUI panel. The publisher is
+the content's owner: it alone may put the bundle on a panel, receives the
+panels' messages and posts to them.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentBundleId {
+    pub publisher: QarPeerId,
+    /** NUL-terminated ASCII: A-Z, a-z, 0-9, '.', '_' and '-', not starting with
+    '.', at most QAR_PANEL_CONTENT_BUNDLE_NAME_MAX bytes.*/
+    pub name: [::std::os::raw::c_char; 65usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentBundleId"][::std::mem::size_of::<QarPanelContentBundleId>() - 81usize];
+    ["Alignment of QarPanelContentBundleId"]
+        [::std::mem::align_of::<QarPanelContentBundleId>() - 1usize];
+    ["Offset of field: QarPanelContentBundleId::publisher"]
+        [::std::mem::offset_of!(QarPanelContentBundleId, publisher) - 0usize];
+    ["Offset of field: QarPanelContentBundleId::name"]
+        [::std::mem::offset_of!(QarPanelContentBundleId, name) - 16usize];
+};
+/** @brief Extension that creates a GUI panel showing a page of a content bundle.
+
+Chain this structure from QarGuiPanelInit::header.next. Only the bundle's
+publisher may assign it: a bundle another session published fails with
+QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER. The entry is copied during the call.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarGuiPanelServedContentExt {
+    pub header: QarStructureHeader,
+    pub bundle: QarPanelContentBundleId,
+    /// Path of the page inside the bundle, e.g. "inspector/index.html".
+    pub entry: *const ::std::os::raw::c_char,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarGuiPanelServedContentExt"]
+        [::std::mem::size_of::<QarGuiPanelServedContentExt>() - 112usize];
+    ["Alignment of QarGuiPanelServedContentExt"]
+        [::std::mem::align_of::<QarGuiPanelServedContentExt>() - 8usize];
+    ["Offset of field: QarGuiPanelServedContentExt::header"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, header) - 0usize];
+    ["Offset of field: QarGuiPanelServedContentExt::bundle"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, bundle) - 16usize];
+    ["Offset of field: QarGuiPanelServedContentExt::entry"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, entry) - 104usize];
+};
+/** @brief One file handed to qar_panel_content_publish_files().
+
+Every pointer is read during the call only; the bytes are copied.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentFile {
+    /// Relative, '/'-separated path inside the bundle.
+    pub path: *const ::std::os::raw::c_char,
+    /** NULL or empty: taken from the path's extension. Otherwise it must be
+    the type that extension is served as.*/
+    pub mime_type: *const ::std::os::raw::c_char,
+    pub data: *const u8,
+    pub size: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentFile"][::std::mem::size_of::<QarPanelContentFile>() - 32usize];
+    ["Alignment of QarPanelContentFile"][::std::mem::align_of::<QarPanelContentFile>() - 8usize];
+    ["Offset of field: QarPanelContentFile::path"]
+        [::std::mem::offset_of!(QarPanelContentFile, path) - 0usize];
+    ["Offset of field: QarPanelContentFile::mime_type"]
+        [::std::mem::offset_of!(QarPanelContentFile, mime_type) - 8usize];
+    ["Offset of field: QarPanelContentFile::data"]
+        [::std::mem::offset_of!(QarPanelContentFile, data) - 16usize];
+    ["Offset of field: QarPanelContentFile::size"]
+        [::std::mem::offset_of!(QarPanelContentFile, size) - 24usize];
+};
+/** @brief A message a served panel sent to its content owner.
+
+Valid only while the callback that received it runs; copy what you keep.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentMessage {
+    /// The panel that sent it, stamped by the mixer showing it.
+    pub panel: QarGuiPanelId,
+    /// The user (the mixer's target peer) whose panel sent it.
+    pub user: QarPeerId,
+    /// Counts up per sending mixer and panel, from 1.
+    pub sequence: u64,
+    /// One JSON value, NUL-terminated UTF-8.
+    pub json: *const ::std::os::raw::c_char,
+    /// Bytes in json, without the terminating NUL.
+    pub json_size: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentMessage"][::std::mem::size_of::<QarPanelContentMessage>() - 56usize];
+    ["Alignment of QarPanelContentMessage"]
+        [::std::mem::align_of::<QarPanelContentMessage>() - 8usize];
+    ["Offset of field: QarPanelContentMessage::panel"]
+        [::std::mem::offset_of!(QarPanelContentMessage, panel) - 0usize];
+    ["Offset of field: QarPanelContentMessage::user"]
+        [::std::mem::offset_of!(QarPanelContentMessage, user) - 16usize];
+    ["Offset of field: QarPanelContentMessage::sequence"]
+        [::std::mem::offset_of!(QarPanelContentMessage, sequence) - 32usize];
+    ["Offset of field: QarPanelContentMessage::json"]
+        [::std::mem::offset_of!(QarPanelContentMessage, json) - 40usize];
+    ["Offset of field: QarPanelContentMessage::json_size"]
+        [::std::mem::offset_of!(QarPanelContentMessage, json_size) - 48usize];
+};
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarAppVolumeInit {
@@ -3362,6 +3520,15 @@ accessor, which is an additive change, instead of growing a struct, which
 would break every compiled consumer.*/
 pub type qar_gui_panel_gesture_event_callback_t = ::std::option::Option<
     unsafe extern "C" fn(gesture: *mut QarGuiPanelGesture, user_state: *mut ::std::os::raw::c_void),
+>;
+/** @brief Called once per message a panel showing the bundle sent.
+
+Runs on a library thread; @p message is valid only during the call.*/
+pub type qar_panel_content_message_callback_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        message: *const QarPanelContentMessage,
+        user_state: *mut ::std::os::raw::c_void,
+    ),
 >;
 pub type qar_app_volume_update_callback_t = ::std::option::Option<
     unsafe extern "C" fn(handle: *mut QarAppVolume, user_state: *mut ::std::os::raw::c_void),

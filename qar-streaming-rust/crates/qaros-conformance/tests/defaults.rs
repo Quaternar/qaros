@@ -86,6 +86,7 @@ conformance!(
     QarRenderSenderInit => qar_render_sender_init_default,
     QarGuiPanelStreamIdExt => qar_gui_panel_stream_id_ext_default,
     QarGuiPanelUrlExt => qar_gui_panel_url_ext_default,
+    QarGuiPanelServedContentExt => qar_gui_panel_served_content_ext_default,
     QarAppVolumeGestureAllowedPeersExt => qar_app_volume_gesture_allowed_peers_ext_default,
     QarVideoSenderInit => qar_video_sender_init_default,
     QarGuiPanelInit => qar_gui_panel_init_default,

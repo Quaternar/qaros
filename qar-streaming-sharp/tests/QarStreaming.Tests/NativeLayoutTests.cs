@@ -80,6 +80,10 @@ namespace Quaternar.Qaros.Tests
             { typeof(GuiPanelInitNative), 88 },
             { typeof(GuiPanelStreamIdExtNative), 32 },
             { typeof(GuiPanelUrlExtNative), 24 },
+            { typeof(PanelContentBundleIdNative), 81 },
+            { typeof(GuiPanelServedContentExtNative), 112 },
+            { typeof(PanelContentFileNative), 32 },
+            { typeof(PanelContentMessageNative), 56 },
             { typeof(AppVolumeInitNative), 248 },
             { typeof(RenderSenderInitNative), 168 },
             { typeof(StreamParamsD3D11Native), 48 },
@@ -304,7 +308,15 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(3604, (int)StatusCode.MemberInvitationPrimaryNotAllowed);
             Assert.Equal(3605, (int)StatusCode.MemberInvitationPolicyNotProtected);
             Assert.False(Enum.IsDefined(typeof(StatusCode), 601));
-            Assert.Equal(60, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(306, (int)StatusCode.GuiPanelDisplayNameInvalid);
+            Assert.Equal(340, (int)StatusCode.PanelContentBundleRefused);
+            Assert.Equal(341, (int)StatusCode.PanelContentPathRefused);
+            Assert.Equal(342, (int)StatusCode.PanelContentMimeRefused);
+            Assert.Equal(343, (int)StatusCode.PanelContentSizeRefused);
+            Assert.Equal(344, (int)StatusCode.PanelContentNotPublisher);
+            Assert.Equal(345, (int)StatusCode.PanelContentNotFound);
+            Assert.Equal(346, (int)StatusCode.PanelContentMessageRefused);
+            Assert.Equal(68, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]
@@ -333,6 +345,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x4004, (int)StructureType.StreamOpenGlWglParamsExt);
             Assert.Equal(0x4005, (int)StructureType.StreamOpenGlGlxParamsExt);
             Assert.Equal(0x5504, (int)StructureType.AppVolumeGestureAllowedPeersExt);
+            Assert.Equal(0x5004, (int)StructureType.GuiPanelServedContentExt);
         }
 
         [Fact]
@@ -461,7 +474,6 @@ namespace Quaternar.Qaros.Tests
                 var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
                 Assert.Equal(ColorAlphaMode.Unspecified, options.AlphaMode);
                 Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
-
                 options.AlphaMode = ColorAlphaMode.Premultiplied;
                 var native = NativeInit.RenderSender(options, scope);
                 Assert.NotEqual(IntPtr.Zero, native.Header.Next);
@@ -488,7 +500,6 @@ namespace Quaternar.Qaros.Tests
                 var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
                 Assert.Equal(ColorEncoding.Srgb, options.ColorEncoding);
                 Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
-
                 options.ColorEncoding = ColorEncoding.Linear;
                 var native = NativeInit.RenderSender(options, scope);
                 Assert.NotEqual(IntPtr.Zero, native.Header.Next);
