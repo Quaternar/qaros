@@ -23,6 +23,8 @@ Panels are identified by a stable **common name**; `get_or_create` returns the e
 Set both the stable ASCII common name (`common_name` / `CommonName`) and a non-empty user-facing label (`display_name` / `DisplayName`) when creating or reopening a panel. The common name supplies identity; it is not a fallback label. C# option constructors leave `DisplayName` null, so set it explicitly in the initializer even though the property is nullable. An already open object may ignore creation options, which can hide an omitted label until a clean install or reopen.
 :::
 
+The display name is shown above the panel, so it must fit one line: UTF-8 with emoji, at most **64 characters** (Unicode code points, not bytes), no line breaks or other control characters, and no bidirectional formatting characters (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069). A name that breaks a rule fails the call with `QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID`; it is never shortened. Rename a panel later with `qar_gui_panels_change_display_name` (Rust: `GuiPanels::set_display_name`).
+
 <CodeTabs>
 <Lang value="c">
 

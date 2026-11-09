@@ -47,6 +47,9 @@ pub struct GuiPanelConfig {
     /// Stable identity, for example `status.myapp.example.com`; the panel id
     /// derives from it.
     pub common_name: String,
+    /// Label shown above the panel: UTF-8, emoji included, at most 64 Unicode code points
+    /// (not bytes), no control or bidirectional formatting characters. A refused name fails
+    /// [`GuiPanels::get_or_create`] with `GUI_PANEL_DISPLAY_NAME_INVALID`; `None` shows none.
     pub display_name: Option<String>,
     /// Pose of panel space in room space. Its origin is the midpoint of the
     /// panel's top edge, and the surface hangs below it (x in ±width/2, y in
@@ -190,6 +193,25 @@ impl<'session> GuiPanels<'session> {
             )
         };
         check(api, "qar_gui_panels_navigate_to_uri", result)
+    }
+
+    /// Replaces the label shown above the panel, any content type
+    /// (`qar_gui_panels_change_display_name`). The rules of [`GuiPanelConfig::display_name`]
+    /// apply: a refused name is `GUI_PANEL_DISPLAY_NAME_INVALID`, never shortened, and the
+    /// panel keeps its previous name. An empty string shows no name.
+    pub fn set_display_name(&self, panel: GuiPanelId, display_name: &str) -> Result<()> {
+        let api = self.session.api();
+        let panel_id = panel.to_raw();
+        let display_name = strings::to_c_string(display_name, "display name")?;
+        // SAFETY: live session; arguments live for the call.
+        let result = unsafe {
+            (api.qar_impl_gui_panels_change_display_name)(
+                self.session.handle.as_ptr(),
+                &raw const panel_id,
+                display_name.as_ptr(),
+            )
+        };
+        check(api, "qar_gui_panels_change_display_name", result)
     }
 
     /// Closes and removes the panel (`qar_gui_panels_close_panel`).

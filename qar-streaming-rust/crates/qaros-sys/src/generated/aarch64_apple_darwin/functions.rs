@@ -352,6 +352,11 @@ macro_rules! qar_impl_function_list {
             pub fn qar_impl_gui_panel_handle_destroy(handle: *mut QarGuiPanel);
             pub fn qar_impl_gui_panel_handle_is_valid(handle: *mut QarGuiPanel) -> bool;
             pub fn qar_impl_gui_panel_id_unique() -> QarGuiPanelId;
+            pub fn qar_impl_gui_panels_change_display_name(
+                session: *mut QarSession,
+                id: *const QarGuiPanelId,
+                display_name: *const ::std::os::raw::c_char,
+            ) -> QarResult;
             pub fn qar_impl_gui_panels_change_size(
                 session: *mut QarSession,
                 id: *const QarGuiPanelId,

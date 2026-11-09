@@ -372,6 +372,12 @@ typedef enum QarStatusCode
 	QAR_STATUS_LOGIC_ERROR = 7,
 	QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED = 304,
 	QAR_STATUS_GUI_PANEL_INVALID_ID = 305,
+	/** A GUI panel display name was refused: more than 64 Unicode code
+	 * points, not valid UTF-8, or holding a control character (C0, DEL, C1)
+	 * or a bidirectional formatting character (U+200E, U+200F, U+202A to
+	 * U+202E, U+2066 to U+2069). The panel keeps its previous name; the
+	 * result's message names the rule. */
+	QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID = 306,
 	QAR_STATUS_APP_VOLUME_INVALID_ID = 325,
 	/** A gesture configuration was refused because a rule in it could never
 	 * work, such as an enabled two-hand rotate that moves the app with no
@@ -2303,7 +2309,10 @@ typedef struct QarGuiPanelInit
 	/// to derive the panel's id. Must not be NULL or empty, and must be
 	/// ASCII.
 	const char* common_name;
-	/// UTF-8 label shown to users; any characters, emoji included.
+	/// UTF-8 label shown above the panel; emoji included. At most 64 Unicode
+	/// code points, no control or bidirectional formatting characters,
+	/// otherwise gui_panels_get_or_create() fails with
+	/// QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID. NULL or empty shows no name.
 	const char* display_name;
 	QarPose pose;
 	QarGuiPanelSize size;
@@ -4499,6 +4508,9 @@ static inline QarResult qar_video_sender_show_frame(QarVideoSender* sender);
  * session created. Call it again for every common name the app owns on a new
  * session id and after a re-pair, see
  * @ref qar_c_session_lifecycle "Session lifecycle".
+ *
+ * Fails with QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID when
+ * init->display_name is refused, see QarGuiPanelInit::display_name.
  */
 static inline QarResult qar_gui_panels_get_or_create(
 	QarSession* session,
@@ -4532,6 +4544,25 @@ qar_gui_panels_close_panel(QarSession* session, const QarGuiPanelId* id);
  */
 static inline QarResult qar_gui_panels_navigate_to_uri(
 	QarSession* session, const QarGuiPanelId* id, const char* uri
+);
+
+/**
+ * @brief Replace the label shown above a panel, any content type.
+ *
+ * The name is UTF-8, emoji included, at most 64 Unicode code points (not
+ * bytes), with no control characters (C0, DEL, C1) and no bidirectional
+ * formatting characters (U+200E, U+200F, U+202A to U+202E, U+2066 to
+ * U+2069). A refused name is never shortened or cleaned: the call fails and
+ * the panel keeps its previous name. An empty string shows no name.
+ *
+ * @param session Session that owns the panel; must not be NULL.
+ * @param id Panel to rename; must not be NULL.
+ * @param display_name New name, copied during the call; must not be NULL.
+ * @return Success, QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID for a refused
+ *         name, or the panel error (e.g. QAR_STATUS_GUI_PANEL_INVALID_ID).
+ */
+static inline QarResult qar_gui_panels_change_display_name(
+	QarSession* session, const QarGuiPanelId* id, const char* display_name
 );
 
 /**
@@ -4845,6 +4876,13 @@ static inline void qar_gui_panel_handle_destroy(QarGuiPanel* handle);
 static inline QarResult
 qar_gui_panel_get_id(QarGuiPanel* handle, QarGuiPanelId* out_id);
 
+/**
+ * @brief Copy the panel's display name into @p out_buffer.
+ *
+ * Always null-terminated. A name longer than the buffer is cut at the last
+ * whole character, so the result is valid UTF-8; 257 bytes always hold a
+ * whole name. Empty when the panel has no name.
+ */
 static inline QarResult qar_gui_panel_get_display_name(
 	QarGuiPanel* handle, char* out_buffer, size_t buffer_size
 );
@@ -7541,7 +7579,14 @@ typedef void (*qar_gui_panel_gesture_event_callback_t)(
 	  QarResult,                                                               \
 	  gui_panel_gesture_get_tap_count,                                         \
 	  (QarGuiPanelGesture * gesture, uint8_t* out_tap_count),                  \
-	  (gesture, out_tap_count))
+	  (gesture, out_tap_count))                                                \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  gui_panels_change_display_name,                                          \
+	  (QarSession * session,                                                   \
+	   const QarGuiPanelId* id,                                                \
+	   const char* display_name),                                              \
+	  (session, id, display_name))
 
 QAR_DECLARE_MODULE_COMMON(
 	GUI_PANELS, GuiPanels, gui_panels, QAR_GUI_PANELS_FUNCTION_LIST

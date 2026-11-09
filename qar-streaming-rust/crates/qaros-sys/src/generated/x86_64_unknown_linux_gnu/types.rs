@@ -214,6 +214,17 @@ impl QarStatusCode {
     pub const QAR_STATUS_LOGIC_ERROR: QarStatusCode = QarStatusCode(7);
     pub const QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED: QarStatusCode = QarStatusCode(304);
     pub const QAR_STATUS_GUI_PANEL_INVALID_ID: QarStatusCode = QarStatusCode(305);
+    /** A GUI panel display name was refused: more than 64 Unicode code
+    points, not valid UTF-8, or holding a control character (C0, DEL, C1)
+    or a bidirectional formatting character (U+200E, U+200F, U+202A to
+    U+202E, U+2066 to U+2069). The panel keeps its previous name; the
+    result's message names the rule.*/
+    pub const QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID: QarStatusCode = QarStatusCode(306);
+    /** A GUI panel display name was refused: more than 64 Unicode code
+    points, not valid UTF-8, or holding a control character (C0, DEL, C1)
+    or a bidirectional formatting character (U+200E, U+200F, U+202A to
+    U+202E, U+2066 to U+2069). The panel keeps its previous name; the
+    result's message names the rule.*/
     pub const QAR_STATUS_APP_VOLUME_INVALID_ID: QarStatusCode = QarStatusCode(325);
     /** A gesture configuration was refused because a rule in it could never
     work, such as an enabled two-hand rotate that moves the app with no
@@ -2742,7 +2753,10 @@ pub struct QarGuiPanelInit {
     to derive the panel's id. Must not be NULL or empty, and must be
     ASCII.*/
     pub common_name: *const ::std::os::raw::c_char,
-    /// UTF-8 label shown to users; any characters, emoji included.
+    /** UTF-8 label shown above the panel; emoji included. At most 64 Unicode
+    code points, no control or bidirectional formatting characters,
+    otherwise gui_panels_get_or_create() fails with
+    QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID. NULL or empty shows no name.*/
     pub display_name: *const ::std::os::raw::c_char,
     pub pose: QarPose,
     pub size: QarGuiPanelSize,

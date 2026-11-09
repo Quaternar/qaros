@@ -18,6 +18,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *GUI Panels* states the display-name rules (at most 64 characters, one line, no
+  bidirectional formatting characters) and how to rename a panel.
 - **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website
   panels uses for certificate data updates (`update.googleapis.com` and `*.gvt1.com`, TCP 443),
   why to allow them, and what happens on an offline PC; *Maintenance and Updates* links to it.

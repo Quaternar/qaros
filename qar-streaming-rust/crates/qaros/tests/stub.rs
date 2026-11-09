@@ -587,6 +587,79 @@ fn gui_panels_and_app_volumes_round_trip() {
     assert_eq!(fixture.control.live_handle_count(), 0);
 }
 
+#[test]
+fn a_gui_panel_display_name_is_changed_and_a_refused_one_is_never_shortened() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let panels = session.gui_panels();
+
+    let mut too_long = GuiPanelConfig::new("too-long.tests.qaros");
+    too_long.display_name = Some("a".repeat(65));
+    let refused = panels.get_or_create(&too_long).expect_err("65 characters");
+    assert!(refused.has_code(StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID));
+    assert!(panels.list().expect("list").is_empty());
+
+    let mut config = GuiPanelConfig::new("named.tests.qaros");
+    // 64 four-byte characters: the limit counts characters, not bytes.
+    let longest = "\u{1F3AC}".repeat(64);
+    config.display_name = Some(longest.clone());
+    let panel = panels.get_or_create(&config).expect("64 characters");
+    assert_eq!(panels.list().expect("list")[0].display_name, longest);
+
+    let (forward, updates) = qaros::channel();
+    let subscription = panels.subscribe_panel(panel, forward).expect("subscribe");
+    panels.set_display_name(panel, "Inspector").expect("rename");
+    assert_eq!(
+        updates.try_recv().expect("update").display_name,
+        "Inspector"
+    );
+
+    for bad in ["two\nlines", "\u{202E}gnp.exe", &"a".repeat(65)] {
+        let refused = panels
+            .set_display_name(panel, bad)
+            .expect_err("refused name");
+        assert!(refused.has_code(StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID));
+    }
+    assert_eq!(panels.list().expect("list")[0].display_name, "Inspector");
+
+    let interior_nul = panels
+        .set_display_name(panel, "a\0b")
+        .expect_err("interior NUL");
+    assert!(matches!(interior_nul, Error::InvalidArgument { .. }));
+
+    fixture
+        .control
+        .fail_next("gui_panels_change_display_name", 7);
+    let injected = panels
+        .set_display_name(panel, "Renamed")
+        .expect_err("injected");
+    assert_eq!(
+        injected.to_string(),
+        "qar_gui_panels_change_display_name failed with QAR_STATUS_LOGIC_ERROR (7): injected \
+         failure"
+    );
+
+    let missing = panels
+        .set_display_name(qaros::GuiPanelId([3; 16]), "Name")
+        .expect_err("unknown panel");
+    assert!(missing.has_code(StatusCode::GUI_PANEL_INVALID_ID));
+
+    subscription.cancel().expect("cancel");
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
 #[allow(deprecated)] // exercises the deprecated onboarding paths
 #[test]
 fn a_co_process_onboards_from_a_serialized_invite_with_ephemeral_storage() {

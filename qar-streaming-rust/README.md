@@ -213,7 +213,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |
-| GUI panels | `GuiPanels`: get or create, pose, size, state, navigate, close, list (with the peers a panel is visible to), updates | `qar_gui_panels_update_visible_to`, `qar_gui_panel_get_content_type` | yes |
+| GUI panels | `GuiPanels`: get or create, pose, size, state, navigate, display name, close, list (with the peers a panel is visible to), updates | `qar_gui_panels_update_visible_to`, `qar_gui_panel_get_content_type` | yes |
 | GUI panel streams | | `qar_gui_panels_set_stream`, `qar_gui_panel_get_content_stream_id` | yes |
 | App volumes | `AppVolumes`: get or create, close, rename, pose, size, app pose and scale, latest values, list, updates | the peers using a volume | yes |
 | World anchors | | change, clear and read an app volume's world anchor | yes |

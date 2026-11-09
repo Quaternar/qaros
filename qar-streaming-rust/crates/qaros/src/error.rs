@@ -72,6 +72,11 @@ impl StatusCode {
 
     pub const GUI_PANEL_CHANGE_NOT_PERMITTED: Self =
         Self(QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED);
+    /// A GUI panel display name was refused: more than 64 Unicode code points, not valid
+    /// UTF-8, or holding a control or bidirectional formatting character. The panel keeps its
+    /// previous name.
+    pub const GUI_PANEL_DISPLAY_NAME_INVALID: Self =
+        Self(QarStatusCode::QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID);
     pub const APP_VOLUME_GESTURE_CONFIGURATION_INVALID: Self =
         Self(QarStatusCode::QAR_STATUS_APP_VOLUME_GESTURE_CONFIGURATION_INVALID);
     pub const APP_VOLUME_GESTURE_MODE_UNKNOWN: Self =
@@ -197,6 +202,7 @@ impl StatusCode {
             }
             Self::ONBOARDING_INVITE_REFUSED => "ONBOARDING_INVITE_REFUSED",
             Self::GUI_PANEL_CHANGE_NOT_PERMITTED => "GUI_PANEL_CHANGE_NOT_PERMITTED",
+            Self::GUI_PANEL_DISPLAY_NAME_INVALID => "GUI_PANEL_DISPLAY_NAME_INVALID",
             Self::APP_VOLUME_GESTURE_CONFIGURATION_INVALID => {
                 "APP_VOLUME_GESTURE_CONFIGURATION_INVALID"
             }

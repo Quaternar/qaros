@@ -3837,6 +3837,9 @@ impl StubApi for Stub {
                 peer_array(init.visible_to_peers, init.visible_to_peer_count),
             )
         };
+        if let Some(refused) = refuse_panel_display_name(&display_name) {
+            return refused;
+        }
         let panel_id = derive_id(&common_name);
         let mut guard = state::lock();
         if !guard.panels.iter().any(|panel| panel.id == panel_id) {
@@ -3896,6 +3899,23 @@ impl StubApi for Stub {
         let uri = unsafe { text_or_empty(uri) };
         // SAFETY: forwarded.
         unsafe { update_panel(session, id, |panel| panel.content_uri.clone_from(&uri)) }
+    }
+
+    unsafe fn qar_impl_gui_panels_change_display_name(
+        session: *mut QarSession,
+        id: *const QarGuiPanelId,
+        display_name: *const c_char,
+    ) -> QarResult {
+        if display_name.is_null() {
+            return invalid("display_name is NULL");
+        }
+        // SAFETY: display_name is a C string.
+        let display_name = unsafe { text_or_empty(display_name) };
+        if let Some(refused) = refuse_panel_display_name(&display_name) {
+            return refused;
+        }
+        // SAFETY: forwarded.
+        unsafe { update_panel(session, id, |panel| panel.display_name = display_name) }
     }
 
     unsafe fn qar_impl_gui_panels_close_panel(
@@ -4951,6 +4971,22 @@ unsafe fn update_panel(
     drop(guard);
     fire_panel_updates(session as usize, panel_id);
     success()
+}
+
+/// The header's display-name rules: at most 64 code points, no control (C0, DEL, C1) or
+/// bidirectional formatting characters. `text_or_empty` already replaced invalid UTF-8, so the
+/// stub cannot refuse that case.
+fn refuse_panel_display_name(display_name: &str) -> Option<QarResult> {
+    const MAX_CODE_POINTS: usize = 64;
+    let is_bidi = |c: char| matches!(c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}');
+    let refused = display_name.chars().count() > MAX_CODE_POINTS
+        || display_name.chars().any(|c| c.is_control() || is_bidi(c));
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID,
+            "display name refused",
+        )
+    })
 }
 
 /// # Safety
