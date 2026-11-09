@@ -245,7 +245,7 @@ An operator can add your executable as a **QAROS API app** in [Source Applicatio
 - Prompt for nothing: nobody is at the console. On an approval timeout, exit with an error.
 - Treat the end of stdin as a stop and cancel a pending onboard then.
 - Create your own app volume and choose your targets ([Rendering Streams](/docs/developer-guide/rendering-streams#finding-rendering-targets)); QAROS does neither for an API app.
-- An app that exits within 10 s of starting is restarted with backoff (2 s, doubling up to 60 s). The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) runs the same whether a user or QAROS starts it.
+- An app that exits is not started again: closing its window ends it in QAROS. Only when the operator turns on **Restart when it exits** for it is it restarted, and one that exits within 10 s of starting is then restarted with backoff (2 s, doubling up to 60 s). The [`vulkan_cube` example](https://github.com/Quaternar/qaros/tree/main/qar-streaming-c/examples/vulkan_cube) runs the same whether a user or QAROS starts it.
 
 ## Co-process: a process your app starts
 

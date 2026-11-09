@@ -225,6 +225,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Onboarding and Sessions*, "Launched by QAROS": an API app QAROS starts is no longer
+  restarted when it exits unless the operator turned on **Restart when it exits** for it.
+
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
 
