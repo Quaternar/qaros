@@ -69,7 +69,9 @@
  *    argument of nearly every other call, and qar_session_handle_destroy() ends
  *    it. Persist the onboarding id the onboard call returns; it is the ticket
  *    for every later rejoin. Chain a QarGraphicsDeviceId to choose the GPU, or
- *    leave it out and let QAROS select one.
+ *    leave it out and let QAROS select one. An application that never streams
+ *    chains QarGraphicsDeviceDisabledExt instead, skips step 4 and creates
+ *    no render sender.
  * 4. qar_session_get_graphics_device_id() - create your own graphics device on
  *    that adapter, so the frames you render need no cross-GPU copy.
  * 5. Get the target `QarPeerId`s to render for, in one of two ways:
@@ -397,6 +399,11 @@ typedef enum QarStatusCode
 	 * session's. Nothing was created. Create the device on the adapter
 	 * qar_session_get_graphics_device_id() reports. */
 	QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER = 609,
+	/** The session was created with QarGraphicsDeviceDisabledExt, so it has
+	 * no graphics device: it streams no media and reports no graphics adapter.
+	 * Nothing was created. Final for this session; onboard or rejoin without
+	 * the extension to stream. */
+	QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED = 610,
 	/** No head pose has arrived from the viewer yet, so there is no pose to
 	 * render with. Recoverable: qar_render_sender_next_render_pose() succeeds
 	 * once the viewer's first pose is in. */
@@ -1456,6 +1463,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
 	QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO = 0x200B,
+	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT = 0x200C,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -2241,6 +2249,31 @@ typedef struct QarGraphicsDeviceId
 	QarLuid luid;
 	uint8_t uuid[16];
 } QarGraphicsDeviceId;
+
+/**
+ * @brief Creates the session without a graphics device.
+ *
+ * Chain this extension from QarOnboardInit or QarRejoinInit for an application
+ * that never streams media, such as a companion process that only drives app
+ * volumes, GUI panels or peers. The session then starts faster: it creates no
+ * Vulkan or D3D11 device, enumerates no graphics adapter and loads no transfer
+ * plugin. Onboarding, joining, peers, app volumes, GUI panels and storage work
+ * as usual.
+ *
+ * On such a session every media streaming call (qar_render_sender_create(),
+ * qar_render_sender_create_async(), qar_render_sender_subscribe_requests(),
+ * qar_video_sender_create()) and qar_session_get_graphics_device_id() return
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
+ *
+ * Chaining it together with QarGraphicsDeviceId is refused with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED. A local-app session shared by several
+ * onboards of one process keeps the choice of the onboard that created it.
+ * Initialize with qar_graphics_device_disabled_ext_default().
+ */
+typedef struct QarGraphicsDeviceDisabledExt
+{
+	QarStructureHeader header;
+} QarGraphicsDeviceDisabledExt;
 
 // --- Session lifecycle -------------------------------------------------------
 
@@ -3138,7 +3171,9 @@ static inline QarForgetInit qar_forget_init_default(void);
  * returns before the call does.
  *
  * Chain QarGraphicsDeviceId on init->header.next to create the session's GPU
- * devices on that adapter. The peer id is the one persisted by the onboard.
+ * devices on that adapter, or QarGraphicsDeviceDisabledExt to create the
+ * session without a graphics device (not both). The peer id is the one
+ * persisted by the onboard.
  *
  * @param runtime Runtime the identity slot belongs to.
  * @param init Rejoin parameters (fully copied before the call returns).
@@ -3204,10 +3239,15 @@ static inline QarResult qar_runtime_rejoin_async(
  *   Without it, the session uses the GPU QAROS selected for an application it
  *   launched (carried in the launch invite), else one the library picks. Read
  *   the adapter in use with qar_session_get_graphics_device_id().
+ * - QarGraphicsDeviceDisabledExt: create the session without a graphics
+ *   device, for an application that never streams media. It starts faster;
+ *   its media streaming calls return
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
  *
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED QarOnboardPeerIdExt carries a zero
- *   peer id, or QarGraphicsDeviceId (or the launch invite's GPU) names an
- *   adapter the session cannot create its GPU devices on.
+ *   peer id, QarGraphicsDeviceId (or the launch invite's GPU) names an
+ *   adapter the session cannot create its GPU devices on, or both
+ *   QarGraphicsDeviceId and QarGraphicsDeviceDisabledExt are chained.
  * @param out_onboarding_id Required; receives the generated (or re-enrolled)
  *   id. Persist it — it is the ticket for every later rejoin / forget.
  * @param out_session Receives the onboarded session handle on success.
@@ -3610,8 +3650,9 @@ static inline QarResult qar_session_find_render_target(
  *   is left untouched so it can be chained as it is. Left unchanged when no
  *   adapter is known.
  * @param out_present Receives whether the session knows its adapter.
- * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
- *   output.
+ * @return Success, QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ *   output, or QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED for a session
+ *   created with QarGraphicsDeviceDisabledExt (out_present is false).
  */
 static inline QarResult qar_session_get_graphics_device_id(
 	const QarSession* session,
@@ -4212,7 +4253,9 @@ static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
  * @param user_state Application state passed unchanged to the callback.
  * @param token Required cancellation token owning the subscription;
  * cancelling or destroying it, or destroying the session, ends it.
- * @return Success when subscribed, or a subscription setup error.
+ * @return Success when subscribed, QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED
+ *   on a session created with QarGraphicsDeviceDisabledExt, or a subscription
+ *   setup error.
  */
 static inline QarResult qar_render_sender_subscribe_requests(
 	QarSession* session,
@@ -4256,6 +4299,8 @@ static inline QarResult qar_render_request_get_stream_id(
  *         device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on
  *         another GPU than the session's: create it on the adapter
  *         qar_session_get_graphics_device_id() reports.
+ *         QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED when the session was
+ *         created with QarGraphicsDeviceDisabledExt; nothing is created.
  */
 static inline QarResult qar_render_sender_create(
 	QarSession* session,
@@ -4268,7 +4313,9 @@ typedef void (*qar_render_sender_create_callback_t)(
 );
 /** @brief Async variant of qar_render_sender_create. The callback fires
  * exactly once, see @ref qar_c_async_calls "Async calls"; `out_stream` is
- * the app's only on success. */
+ * the app's only on success. On a session created with
+ * QarGraphicsDeviceDisabledExt it returns
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED and never calls the callback. */
 static inline QarResult qar_render_sender_create_async(
 	QarSession* session,
 	QarRenderSenderInit* init,
@@ -4555,7 +4602,9 @@ static inline void qar_video_sender_handle_destroy(QarVideoSender* handle);
  * Fails with QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER when the
  * device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on another GPU
  * than the session's: create it on the adapter
- * qar_session_get_graphics_device_id() reports.
+ * qar_session_get_graphics_device_id() reports. Fails with
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED on a session created with
+ * QarGraphicsDeviceDisabledExt.
  */
 static inline QarResult qar_video_sender_create(
 	QarSession* session,
@@ -5764,6 +5813,10 @@ qar_runtime_ephemeral_storage_ext_default(void);
 /** @brief Default QarGraphicsDeviceId: the platform's id type (LUID on
  * Windows, UUID elsewhere), chained on QarOnboardInit or QarRejoinInit. */
 static inline QarGraphicsDeviceId qar_graphics_device_id_default(void);
+/** @brief Default QarGraphicsDeviceDisabledExt, chained on QarOnboardInit or
+ * QarRejoinInit to create the session without a graphics device. */
+static inline QarGraphicsDeviceDisabledExt
+qar_graphics_device_disabled_ext_default(void);
 /** @brief A QarSessionLifecycleInfo with its structure type set, for
  * qar_session_get_lifecycle_state(). */
 static inline QarSessionLifecycleInfo qar_session_lifecycle_info_default(void);
@@ -7265,6 +7318,15 @@ qar_graphics_device_id_default(void)
 	device.id_type = QAR_GPU_DEVICE_ID_TYPE_UUID;
 #endif
 	return device;
+}
+
+static inline QarGraphicsDeviceDisabledExt
+qar_graphics_device_disabled_ext_default(void)
+{
+	QarGraphicsDeviceDisabledExt ext = {};
+	ext.header.type = QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT;
+	ext.header.next = NULL;
+	return ext;
 }
 
 static inline QarSessionLifecycleInfo
