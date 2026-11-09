@@ -92,6 +92,7 @@ conformance!(
     QarAppVolumeInit => qar_app_volume_init_default,
     QarRenderFrameShow => qar_render_frame_show_default,
     QarGraphicsDeviceId => qar_graphics_device_id_default,
+    QarGraphicsDeviceDisabledExt => qar_graphics_device_disabled_ext_default,
     QarSessionLifecycleInfo => qar_session_lifecycle_info_default,
     QarStreamParamsVulkan => qar_stream_params_vulkan_default,
     QarSyncFrameVulkan => qar_sync_frame_vulkan_default,

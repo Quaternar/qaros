@@ -594,7 +594,7 @@ if let Some(gpu) = session.graphics_adapter()? {
 
 ### A session without a graphics device
 
-A process that never streams media — a companion that only drives app volumes, GUI panels or peers — chains a `QarGraphicsDeviceDisabledExt` after the mode extension (in C#, `OnboardOptions.WithoutGraphicsDevice()`; also on a rejoin). Its session creates no Vulkan or D3D11 device, enumerates no adapter and loads no transfer plugin, so it is ready sooner. Onboarding, peers, app volumes, GUI panels and storage work as usual.
+A process that never streams media — a companion that only drives app volumes, GUI panels or peers — chains a `QarGraphicsDeviceDisabledExt` after the mode extension (in C#, `OnboardOptions.WithoutGraphicsDevice()`, also on a rejoin; in Rust, `OnboardExtensions::without_graphics_device`). Its session creates no Vulkan or D3D11 device, enumerates no adapter and loads no transfer plugin, so it is ready sooner. Onboarding, peers, app volumes, GUI panels and storage work as usual.
 
 - Every media streaming call on it — `qar_render_sender_create` and its async form, `qar_render_sender_subscribe_requests`, `qar_video_sender_create` — and `qar_session_get_graphics_device_id` fail with `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` (610). Nothing is created.
 - Chained together with a `QarGraphicsDeviceId`, the onboard fails with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.

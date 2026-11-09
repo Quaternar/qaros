@@ -60,6 +60,9 @@ struct SessionValue {
     /// mints co-process invites for. (The runtime's hub also mints them for a process its
     /// launcher started, which the stub cannot tell from another invite.)
     local_app: bool,
+    /// Created with `QarGraphicsDeviceDisabledExt`: media streaming calls and
+    /// `qar_session_get_graphics_device_id` return `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
+    graphics_device_disabled: bool,
     /// This application's own presence, role and device: the desktop default, or what it
     /// declared at onboard, rejoin or `qar_peer_update_device_identity`.
     device: PeerIdentityValue,
@@ -878,6 +881,7 @@ unsafe fn create_session(
     onboarding_id: [u8; 16],
     presentation: &QarPeerPresentation,
     local_app: bool,
+    graphics_device_disabled: bool,
 ) -> *mut QarSession {
     // SAFETY: presentation strings are valid C strings or NULL.
     let (display_name, app_version, custom_info) = unsafe {
@@ -896,6 +900,7 @@ unsafe fn create_session(
             app_version,
             custom_info,
             local_app,
+            graphics_device_disabled,
             // SAFETY: the presentation's chain was checked by check_presentation.
             device: unsafe { declared_device(presentation) },
         },
@@ -969,6 +974,8 @@ struct OnboardPlan {
     /// A local app, or a runtime with ephemeral storage: nothing persisted, the zero id.
     stateless: bool,
     local_app: bool,
+    /// `QarGraphicsDeviceDisabledExt` was chained.
+    graphics_device_disabled: bool,
     /// The slot to re-enroll (`QarOnboardInit::onboarding_id`); `None` for a new identity.
     requested_id: Option<[u8; 16]>,
 }
@@ -1004,6 +1011,13 @@ unsafe fn check_onboard(
     // SAFETY: the chain was validated, so it holds a mode extension first.
     let mode = unsafe { (*init.header.next.cast_const().cast::<QarStructureHeader>()).type_ };
     let local_app = mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT;
+    // SAFETY: the chain was validated.
+    let graphics_device_disabled = unsafe {
+        chain_holds(
+            init.header.next.cast_const().cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        )
+    };
     // SAFETY: runtime comes from this stub.
     let ephemeral = unsafe { runtime_is_ephemeral(runtime) };
     let requested_id = (init.onboarding_id.data != [0; 16]).then_some(init.onboarding_id.data);
@@ -1029,6 +1043,7 @@ unsafe fn check_onboard(
         storage,
         stateless: local_app || ephemeral,
         local_app,
+        graphics_device_disabled,
         requested_id,
     })
 }
@@ -1045,7 +1060,15 @@ unsafe fn finish_onboard(
 ) -> Result<([u8; 16], *mut QarSession), QarResult> {
     if plan.stateless {
         // SAFETY: forwarded to the caller.
-        let session = unsafe { create_session(runtime, [0; 16], presentation, plan.local_app) };
+        let session = unsafe {
+            create_session(
+                runtime,
+                [0; 16],
+                presentation,
+                plan.local_app,
+                plan.graphics_device_disabled,
+            )
+        };
         return Ok(([0; 16], session));
     }
     let onboarding_id = plan.requested_id.unwrap_or_else(fresh_identity);
@@ -1064,8 +1087,73 @@ unsafe fn finish_onboard(
         ));
     }
     // SAFETY: forwarded to the caller.
-    let session = unsafe { create_session(runtime, onboarding_id, presentation, false) };
+    let session = unsafe {
+        create_session(
+            runtime,
+            onboarding_id,
+            presentation,
+            false,
+            plan.graphics_device_disabled,
+        )
+    };
     Ok((onboarding_id, session))
+}
+
+/// Whether a chain holds an extension of `extension_type`.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped structures.
+unsafe fn chain_holds(
+    mut next: *const QarStructureHeader,
+    extension_type: QarStructureType,
+) -> bool {
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        if header.type_ == extension_type {
+            return true;
+        }
+        next = header.next.cast_const().cast();
+    }
+    false
+}
+
+/// Whether a checked `QarRejoinInit` chains `QarGraphicsDeviceDisabledExt`.
+///
+/// # Safety
+///
+/// `init` passed [`check_rejoin`].
+unsafe fn rejoin_disables_graphics(init: *const QarRejoinInit) -> bool {
+    // SAFETY: forwarded to the caller.
+    unsafe {
+        chain_holds(
+            (*init).header.next.cast_const().cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        )
+    }
+}
+
+/// `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` when `session` was created without a graphics
+/// device, as the runtime returns from every media streaming call there.
+///
+/// # Safety
+///
+/// `session` must be null or a handle from this stub.
+unsafe fn refuse_without_graphics_device(
+    session: *const QarSession,
+    function: &str,
+) -> Result<(), QarResult> {
+    // SAFETY: forwarded to the caller.
+    let disabled =
+        unsafe { session_value(session) }.is_some_and(|session| session.graphics_device_disabled);
+    if disabled {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED,
+            format!("{function}: the session was created without a graphics device"),
+        ));
+    }
+    Ok(())
 }
 
 /// The synchronous checks of `qar_runtime_rejoin`.
@@ -1633,6 +1721,8 @@ unsafe fn create_sender_value(
     if unsafe { session_value(session) }.is_none() {
         return Err(invalid("session is not a live handle"));
     }
+    // SAFETY: session comes from this stub.
+    unsafe { refuse_without_graphics_device(session, "qar_render_sender_create") }?;
     // SAFETY: header checked.
     let init = unsafe { &*init };
     if init.peer_id.data == [0; 16] {
@@ -2040,6 +2130,7 @@ impl StubApi for Stub {
                 (*init).onboarding_id.data,
                 &(*init).presentation,
                 false,
+                rejoin_disables_graphics(init),
             );
         };
         success()
@@ -2076,11 +2167,23 @@ impl StubApi for Stub {
                 let runtime = runtime_address as *mut QarRuntime;
                 let init = init_address as *const QarRejoinInit;
                 // SAFETY: the caller keeps init alive until the result callback has run.
-                let (onboarding_id, presentation) =
-                    unsafe { ((*init).onboarding_id.data, &(*init).presentation) };
+                let (onboarding_id, presentation, graphics_device_disabled) = unsafe {
+                    (
+                        (*init).onboarding_id.data,
+                        &(*init).presentation,
+                        rejoin_disables_graphics(init),
+                    )
+                };
                 // SAFETY: the runtime's destroy waits for this call, so it is live.
-                let session =
-                    unsafe { create_session(runtime, onboarding_id, presentation, false) };
+                let session = unsafe {
+                    create_session(
+                        runtime,
+                        onboarding_id,
+                        presentation,
+                        false,
+                        graphics_device_disabled,
+                    )
+                };
                 Ok((onboarding_id, session as usize))
             },
         )
@@ -2702,6 +2805,12 @@ impl StubApi for Stub {
         if out_device_id.is_null() || out_present.is_null() {
             return invalid("out parameters must not be NULL");
         }
+        // SAFETY: session comes from this stub.
+        if let Err(failure) =
+            unsafe { refuse_without_graphics_device(session, "qar_session_get_graphics_device_id") }
+        {
+            return failure;
+        }
         let reported = state::lock().reported_adapter;
         let Some(reported) = reported else {
             // SAFETY: out_present is writable.
@@ -2931,6 +3040,12 @@ impl StubApi for Stub {
         user_state: *mut c_void,
         token: *mut QarCancelToken,
     ) -> QarResult {
+        // SAFETY: session comes from this stub.
+        if let Err(failure) = unsafe {
+            refuse_without_graphics_device(session, "qar_render_sender_subscribe_requests")
+        } {
+            return failure;
+        }
         let registered = register_subscription(
             session,
             SubscriptionKind::RenderRequests,
@@ -3029,6 +3144,12 @@ impl StubApi for Stub {
         // SAFETY: session comes from this stub.
         if unsafe { session_value(session) }.is_none() {
             return invalid("session is not a live handle");
+        }
+        // SAFETY: session comes from this stub.
+        if let Err(failure) =
+            unsafe { refuse_without_graphics_device(session, "qar_render_sender_create_async") }
+        {
+            return failure;
         }
         // SAFETY: init checked non-null; the caller keeps it alive until the callback.
         let target_peer = unsafe { (*init).peer_id.data };
@@ -4515,8 +4636,9 @@ enum OptionalExtensions {
     Rejoin,
 }
 
-/// Walks the rest of a chain: the adapter (`QarGraphicsDeviceId`, logged), a
-/// planned peer id after a code or invite, the hub address after a code, and
+/// Walks the rest of a chain: the adapter (`QarGraphicsDeviceId`, logged) or
+/// no graphics device (`QarGraphicsDeviceDisabledExt`, logged; both together are
+/// `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`), a planned peer id after a code or invite, the hub address after a code, and
 /// the app tag and remote-app grant after the local-app mode. Any of these with
 /// another onboarding mode is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as in the
 /// runtime; anything else is an error.
@@ -4528,6 +4650,8 @@ unsafe fn validate_optional_extensions(
     mut next: *const QarStructureHeader,
     allowed: OptionalExtensions,
 ) -> Result<(), QarResult> {
+    let mut seen_adapter = false;
+    let mut seen_graphics_disabled = false;
     while !next.is_null() {
         // SAFETY: forwarded to the caller.
         let header = unsafe { &*next };
@@ -4593,7 +4717,21 @@ unsafe fn validate_optional_extensions(
         }
         let is_adapter =
             extension_type == QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID;
+        let is_graphics_disabled = extension_type
+            == QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT;
+        seen_adapter |= is_adapter;
+        seen_graphics_disabled |= is_graphics_disabled;
+        if seen_adapter && seen_graphics_disabled {
+            return Err(state::error(
+                QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+                "QarGraphicsDeviceDisabledExt cannot be chained together with QarGraphicsDeviceId",
+            ));
+        }
+        if is_graphics_disabled {
+            note("no graphics device".to_string());
+        }
         let accepted = is_adapter
+            || is_graphics_disabled
             || (extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT
                 && allowed == OptionalExtensions::AfterCodeMode)
             || (extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT

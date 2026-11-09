@@ -209,7 +209,9 @@ impl Session {
     /// sender's frame textures, live on (`qar_session_get_graphics_device_id`):
     /// the one chained at onboard or rejoin, else the one QAROS or the library
     /// selected. Create the renderer's device on it. `None` when the session
-    /// knows no adapter.
+    /// knows no adapter. A session created
+    /// [without a graphics device](crate::OnboardExtensions::without_graphics_device) fails
+    /// with [`crate::StatusCode::GRAPHICS_DEVICE_NOT_INITIALIZED`].
     pub fn graphics_adapter(&self) -> Result<Option<GraphicsAdapter>> {
         let api = self.inner.api();
         let mut device_id = defaults::qar_graphics_device_id_default();

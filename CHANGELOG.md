@@ -20,7 +20,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** *Onboarding and Sessions* has a section *A session without a graphics device*: how a
   companion that never streams chains `QarGraphicsDeviceDisabledExt` (C#
-  `WithoutGraphicsDevice()`), what still works and the status media calls return.
+  `WithoutGraphicsDevice()`, Rust `OnboardExtensions::without_graphics_device`), what still works and the status media calls return.
   *Troubleshooting* lists `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
 
 - **Docs:** *qaros:// Links* in the Developer Guide: the links that open the Pair Headset QR code,

@@ -28,6 +28,8 @@ mod async_create;
 #[cfg(qaros_d3d11)]
 #[path = "stub/d3d11_path.rs"]
 mod d3d11_path;
+#[path = "stub/graphics_device.rs"]
+mod graphics_device;
 #[path = "stub/onboarding.rs"]
 mod onboarding;
 #[path = "stub/raw_handles.rs"]

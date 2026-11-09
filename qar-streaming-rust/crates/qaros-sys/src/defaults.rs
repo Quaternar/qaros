@@ -725,6 +725,14 @@ pub fn qar_graphics_device_id_default() -> QarGraphicsDeviceId {
     }
 }
 
+pub fn qar_graphics_device_disabled_ext_default() -> QarGraphicsDeviceDisabledExt {
+    QarGraphicsDeviceDisabledExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        ),
+    }
+}
+
 /// Null `VkPhysicalDevice` and `VkDevice`.
 pub fn qar_stream_params_vulkan_default() -> QarStreamParamsVulkan {
     QarStreamParamsVulkan {

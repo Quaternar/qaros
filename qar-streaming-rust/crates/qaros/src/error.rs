@@ -92,6 +92,13 @@ impl StatusCode {
     /// device on the adapter [`crate::Session::graphics_adapter`] reports.
     pub const MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER: Self =
         Self(QarStatusCode::QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER);
+    /// The session was created without a graphics device
+    /// ([`crate::OnboardExtensions::without_graphics_device`]): it streams no media and reports
+    /// no adapter, so a render sender's creation, its render requests, a video sender and
+    /// [`crate::Session::graphics_adapter`] fail with this code. Nothing was created. Final for
+    /// the session; onboard without the extension to stream.
+    pub const GRAPHICS_DEVICE_NOT_INITIALIZED: Self =
+        Self(QarStatusCode::QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED);
     pub const HUB_TARGET_APP_DEVICE_NOT_INVITABLE: Self =
         Self(QarStatusCode::QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE);
     /// A declared device category other than desktop PC, server or camera.
@@ -220,6 +227,7 @@ impl StatusCode {
             Self::MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER => {
                 "MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER"
             }
+            Self::GRAPHICS_DEVICE_NOT_INITIALIZED => "GRAPHICS_DEVICE_NOT_INITIALIZED",
             Self::HUB_TARGET_APP_DEVICE_NOT_INVITABLE => "HUB_TARGET_APP_DEVICE_NOT_INVITABLE",
             Self::PEER_DEVICE_CATEGORY_NOT_ALLOWED => "PEER_DEVICE_CATEGORY_NOT_ALLOWED",
             Self::HUB_LIFECYCLE_OPERATION_RUNNING => "HUB_LIFECYCLE_OPERATION_RUNNING",

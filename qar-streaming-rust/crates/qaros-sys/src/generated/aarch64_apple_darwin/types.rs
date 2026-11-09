@@ -282,6 +282,11 @@ impl QarStatusCode {
     qar_session_get_graphics_device_id() reports.*/
     pub const QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER: QarStatusCode =
         QarStatusCode(609);
+    /** The session was created with QarGraphicsDeviceDisabledExt, so it has
+    no graphics device: it streams no media and reports no graphics adapter.
+    Nothing was created. Final for this session; onboard or rejoin without
+    the extension to stream.*/
+    pub const QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED: QarStatusCode = QarStatusCode(610);
     /** No head pose has arrived from the viewer yet, so there is no pose to
     render with. Recoverable: qar_render_sender_next_render_pose() succeeds
     once the viewer's first pose is in.*/
@@ -1659,6 +1664,8 @@ impl QarStructureType {
     pub const QAR_STRUCTURE_TYPE_PEER_PRESENTATION: QarStructureType = QarStructureType(8198);
     pub const QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY: QarStructureType = QarStructureType(8201);
     pub const QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO: QarStructureType = QarStructureType(8203);
+    pub const QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT: QarStructureType =
+        QarStructureType(8204);
     pub const QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT: QarStructureType =
         QarStructureType(12288);
     pub const QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME: QarStructureType = QarStructureType(12289);
@@ -2104,7 +2111,12 @@ const _: () = {
     ["Offset of field: QarPeerDeviceIdentity::device_name"]
         [::std::mem::offset_of!(QarPeerDeviceIdentity, device_name) - 40usize];
 };
-/// @brief Continue / rejoin the last persisted session (situation: continue).
+/** @brief Continue / rejoin the last persisted session (situation: continue).
+
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRejoinInit {
@@ -2158,6 +2170,11 @@ const _: () = {
 /** @brief Extension: onboard with the short code shown on the hub onboarding
 screen.
 
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.
+
 Without QarOnboardHostExt it finds this user's hub: first through the
 hub-endpoint.json file the hub writes to the QAROS data root, then through
 a discovery beacon whose owner is this user, listening up to 6 s. When
@@ -2187,6 +2204,8 @@ const _: () = {
 };
 /** @brief Extension: override the hub discovery endpoint for
 qar_runtime_onboard when QarOnboardCodeExt is chained.
+
+@deprecated Code onboarding is deprecated (see QarOnboardCodeExt).
 
 Chain into QarOnboardInit.header.next; absent -> this user's hub (see
 QarOnboardCodeExt).*/
@@ -2235,6 +2254,10 @@ const _: () = {
         [::std::mem::offset_of!(QarOnboardInviteExt, invite) - 16usize];
 };
 /** @brief Extension: join the session under a peer id chosen by the caller.
+
+@deprecated A local app gets its peer id from the hub, remembered per app
+tag (QarOnboardLocalAppTagExt), and a co-process from its invite. Kept
+working for applications that already use it.
 
 Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
 QarOnboardInviteExt, for a process whose peer id was planned and announced
@@ -2427,14 +2450,16 @@ const _: () = {
 
 `connection_string` names the device kind and its address:
   - `"hololens:<host>"` — HoloLens
-  - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
-    served by the Android streamer; it reports its exact model itself
-  - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
   - `"<host>"` with no scheme — alias of `"hololens:<host>"`
 `<host>` is a hostname or an IP address; the two are interchangeable.
 
-Only these device kinds can be invited. Anything else — a visualizer, a
-desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+Only a HoloLens can be invited. An Android headset (`"headset:<host>"`,
+`"quest:<host>"`, `"android:<host>"`: Meta Quest, METALENSE, Android XR) is
+never invited: it pairs itself once (Pair headset in the QAROS Visualizer, or
+a QR code) and then joins the session on its own. Its invite is refused with
+QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE. Anything else — a
+visualizer, a desktop peer — is rejected with
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
 
 The invite is served only by the hub running on this machine, and is always a
 one-time invite: the hub remembers the device so it is visible in the
@@ -2486,7 +2511,10 @@ pub type qar_target_app_kill_result_callback_t = ::std::option::Option<
         user_state: *mut ::std::os::raw::c_void,
     ),
 >;
-/// @brief Teardown — erase a persisted identity slot.
+/** @brief Teardown — erase a persisted identity slot.
+
+@deprecated Only the deprecated code onboarding persists a slot; local apps
+and co-processes persist nothing.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarForgetInit {
@@ -2758,6 +2786,38 @@ const _: () = {
         [::std::mem::offset_of!(QarGraphicsDeviceId, luid) - 20usize];
     ["Offset of field: QarGraphicsDeviceId::uuid"]
         [::std::mem::offset_of!(QarGraphicsDeviceId, uuid) - 28usize];
+};
+/** @brief Creates the session without a graphics device.
+
+Chain this extension from QarOnboardInit or QarRejoinInit for an application
+that never streams media, such as a companion process that only drives app
+volumes, GUI panels or peers. The session then starts faster: it creates no
+Vulkan or D3D11 device, enumerates no graphics adapter and loads no transfer
+plugin. Onboarding, joining, peers, app volumes, GUI panels and storage work
+as usual.
+
+On such a session every media streaming call (qar_render_sender_create(),
+qar_render_sender_create_async(), qar_render_sender_subscribe_requests(),
+qar_video_sender_create()) and qar_session_get_graphics_device_id() return
+QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
+
+Chaining it together with QarGraphicsDeviceId is refused with
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED. A local-app session shared by several
+onboards of one process keeps the choice of the onboard that created it.
+Initialize with qar_graphics_device_disabled_ext_default().*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarGraphicsDeviceDisabledExt {
+    pub header: QarStructureHeader,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarGraphicsDeviceDisabledExt"]
+        [::std::mem::size_of::<QarGraphicsDeviceDisabledExt>() - 16usize];
+    ["Alignment of QarGraphicsDeviceDisabledExt"]
+        [::std::mem::align_of::<QarGraphicsDeviceDisabledExt>() - 8usize];
+    ["Offset of field: QarGraphicsDeviceDisabledExt::header"]
+        [::std::mem::offset_of!(QarGraphicsDeviceDisabledExt, header) - 0usize];
 };
 impl QarSessionLifecycleState {
     /// In the hub's current session; traffic flows.
@@ -3220,6 +3280,10 @@ const _: () = {
     ["Offset of field: QarStreamParamsD3D11::acquire_keyed_mutex_sync"]
         [::std::mem::offset_of!(QarStreamParamsD3D11, acquire_keyed_mutex_sync) - 40usize];
 };
+/** The application's own Vulkan device for a sender or receiver. It must be on
+the session's GPU, the adapter qar_session_get_graphics_device_id() reports;
+a device on another GPU is refused with
+QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarStreamParamsVulkan {
