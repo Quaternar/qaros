@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
     GraphicsAdapter, GuiPanelConfig, GuiPanelState, Library, OnboardExtensions, OnboardMethod,
-    OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, SessionChangeCause,
-    SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
+    OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose, RenderLoop, RuntimeConfig,
+    SessionChangeCause, SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -28,6 +28,8 @@ mod async_create;
 #[cfg(qaros_d3d11)]
 #[path = "stub/d3d11_path.rs"]
 mod d3d11_path;
+#[path = "stub/graphics_device.rs"]
+mod graphics_device;
 #[path = "stub/onboarding.rs"]
 mod onboarding;
 #[path = "stub/raw_handles.rs"]
@@ -1675,6 +1677,110 @@ fn the_colour_declarations_are_chained_only_when_set() {
             "render sender colour alpha_mode=3 color_encoding=none".to_string(),
         ]
     );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn the_render_loop_is_chained_only_when_free_running() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    drop(request_driven);
+    config.render_loop = RenderLoop::FreeRunning;
+    config.color_encoding = ColorEncoding::Linear;
+    let free_running = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender beside a colour declaration");
+    drop(free_running);
+
+    assert_eq!(
+        fixture
+            .control
+            .entries_starting_with("render sender render_loop="),
+        vec!["render sender render_loop=1".to_string()]
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn the_next_render_pose_is_the_pose_the_next_frame_opens_with() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    let refused = request_driven.next_render_pose(2);
+    assert!(
+        refused
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{refused:?}"
+    );
+    drop(request_driven);
+
+    config.render_loop = RenderLoop::FreeRunning;
+    let mut sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender");
+    let too_many = sender.next_render_pose(config.views.len() + 1);
+    assert!(
+        too_many
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{too_many:?}"
+    );
+    let poses = sender.next_render_pose(2).expect("next render pose");
+    assert_eq!(poses.len(), 2);
+    let frame = sender
+        .begin_owned_frame(&BlockingOptions::default())
+        .expect("frame");
+    for (index, pose) in poses.iter().enumerate() {
+        assert_eq!(frame.view(index).expect("view"), *pose);
+    }
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_free_running_sender_is_ready_again_once_its_frame_is_shown() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    let refused = request_driven.is_ready_for_next_frame();
+    assert!(
+        refused
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{refused:?}"
+    );
+    drop(request_driven);
+
+    config.render_loop = RenderLoop::FreeRunning;
+    let mut sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender");
+    assert!(sender.is_ready_for_next_frame().expect("ready"));
+    sender.next_render_pose(2).expect("next render pose");
+    let frame = sender
+        .begin_owned_frame(&BlockingOptions::default())
+        .expect("frame");
+    frame
+        .show(&ShowParams {
+            near: 0.1,
+            far: 10.0,
+            depth_scale: 1.0,
+        })
+        .expect("show");
+    assert!(sender.is_ready_for_next_frame().expect("ready"));
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 

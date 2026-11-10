@@ -680,6 +680,10 @@ macro_rules! qar_impl_function_list {
                 stream: *mut QarRenderSender,
                 out_frame: *mut *mut QarVideoFrameVulkan,
             ) -> QarResult;
+            pub fn qar_impl_render_sender_is_ready_for_next_frame(
+                stream: *mut QarRenderSender,
+                out_ready: *mut bool,
+            ) -> QarResult;
             pub fn qar_impl_render_sender_last_hands(
                 stream: *mut QarRenderSender,
                 out_hands: *mut QarDeviceHandsWithJoints,
@@ -687,6 +691,12 @@ macro_rules! qar_impl_function_list {
             pub fn qar_impl_render_sender_layout(
                 stream: *mut QarRenderSender,
                 out_layout: *mut QarVideoFrameLayout,
+            ) -> QarResult;
+            pub fn qar_impl_render_sender_next_render_pose(
+                stream: *mut QarRenderSender,
+                view_count: usize,
+                out_view_poses: *mut QarPose,
+                out_view_fovs: *mut QarFov,
             ) -> QarResult;
             pub fn qar_impl_render_sender_show_frame(
                 stream: *mut QarRenderSender,

@@ -95,8 +95,8 @@ pub use pending_sender::PendingRenderSender;
 pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
-    RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,
-    VideoFrameView, ViewPose,
+    RenderLoop, RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize,
+    VideoFrameLayout, VideoFrameView, ViewPose,
 };
 #[allow(deprecated)] // kept exported while deprecated
 pub use runtime::HubAddress;

@@ -634,6 +634,12 @@ namespace Quaternar.Qaros.Interop
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_render_sender_try_begin_frame(IntPtr stream, out IntPtr outFrameInfo, [MarshalAs(UnmanagedType.I1)] out bool outReady);
 
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_render_sender_next_render_pose(IntPtr stream, UIntPtr viewCount, [Out] PoseNative[] outViewPoses, [Out] FovNative[] outViewFovs);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_render_sender_is_ready_for_next_frame(IntPtr stream, [MarshalAs(UnmanagedType.I1)] out bool outReady);
+
         // Exported only when the library is built with QAR_ENABLE_OPENGL.
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_render_sender_frame_opengl(IntPtr stream, ref VideoFrameOpenGlNative outFrame);

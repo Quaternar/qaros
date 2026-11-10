@@ -6,6 +6,8 @@ description: Short definitions of every QAROS term used in this documentation.
 
 # Glossary
 
+**Anchoring QR code** — the room's scene origin marker a headset looks at to place the shared scene; not the connection QR code.
+
 **App content space** — an application's own coordinate system as rendered inside its app volume, positioned by `app_pose` and scaled by `app_scale`.
 
 **App scale** — room-meters per app-meter; `0.5` shows content at half size, `10` at ten times life size.
@@ -15,6 +17,8 @@ description: Short definitions of every QAROS term used in this documentation.
 **CA (Certificate Authority)** — the Hub's private certificate issuer; every onboarded peer holds a certificate signed by its Hub's CA.
 
 **Common name** — the stable string identity of an app volume or GUI panel (e.g. `cad-review.hub1.example.com`); asking for the same name always returns the same object.
+
+**Connection QR code** — the one-time QR code (**Show QR code**, **By QR code**) an Android headset scans to pair with the Hub; not the anchoring QR code.
 
 **Discovery** — the Hub's unauthenticated LAN beacon (UDP multicast) that lets devices find it without configuration.
 
@@ -32,7 +36,7 @@ description: Short definitions of every QAROS term used in this documentation.
 
 **Onboarding ID** — the opaque identifier of a persisted identity slot; the only thing an application must store to rejoin later.
 
-**Pairing code** — the short-lived (10 s), single-use, 8-character code shown by the Hub and entered on the device.
+**Pairing code** — the short-lived (60 s), single-use, 8-character code the Visualizer shows when you open it, entered on the device.
 
 **Peer** — a session participant (a device or an application) with a certificate-backed identity and presentation metadata.
 

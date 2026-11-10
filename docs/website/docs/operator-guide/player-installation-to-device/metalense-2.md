@@ -17,9 +17,15 @@ The QAROS Visualizer installs the player over USB from its **Devices** tab, and 
 
 ### Wi-Fi on the glasses
 
-Under **Wi-Fi on the device**, type or pick the network name (names saved on this PC are offered, the network this PC is on first), choose the security type, type the password and click **Join**. The password is typed every time; the Visualizer never stores or logs it, and does not read saved Wi-Fi keys from Windows.
+Under **Wi-Fi on the device**, type or pick the network name (names saved on this PC are offered, the network this PC is on first), choose the security type, type the password and click **Join**. Use a 5 GHz network only: 2.4 GHz is too slow and unstable for streaming, and a network seen only on 2.4 GHz is marked **2.4 GHz**. The password is typed every time; the Visualizer never stores or logs it, and does not read saved Wi-Fi keys from Windows.
 
-When the glasses report the network, the card shows **On** *network* · *address*. Click **Invite at this address →** to open **Connection › Devices › Add device** with the address and device kind filled in.
+When the glasses report the network, the card shows **On** *network* · *address*.
+
+### Pair the glasses
+
+Start the player, then in the step **Pair the glasses**, click **Pair headset** to send it a one-time invite over the USB cable, or **Show QR code** for the player to scan; **Invite device** › **By code** takes the address and code the glasses show instead. The glasses then join the session by themselves ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)). Android headsets are not invited by IP address.
+
+The last step, **Anchor: look at the anchoring QR code**, places the scene: click **Show anchoring QR code** and look at it through the glasses; the step completes by itself ([Scene Origin](/docs/operator-guide/visualizer-tutorials/scene-origin-and-rooms#4-anchor-each-device)).
 
 If the card says **Set Wi-Fi on the glasses**, the glasses do not accept a network over USB (this needs Android 11 or newer); set Wi-Fi on the glasses themselves. Enterprise (802.1X) networks are not supported.
 

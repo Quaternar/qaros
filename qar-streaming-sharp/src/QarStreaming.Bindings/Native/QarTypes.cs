@@ -628,6 +628,13 @@ namespace Quaternar.Qaros.Interop
         public byte[] Uuid;
     }
 
+    /// <summary>C <c>QarGraphicsDeviceDisabledExt</c>: the header alone.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct GraphicsDeviceDisabledExtNative
+    {
+        public StructureHeaderNative Header;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct SessionLifecycleInfoNative
     {
@@ -837,6 +844,13 @@ namespace Quaternar.Qaros.Interop
     {
         public StructureHeaderNative Header;
         public ColorEncoding ColorEncoding;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RenderSenderRenderLoopExtNative
+    {
+        public StructureHeaderNative Header;
+        public RenderLoop RenderLoop;
     }
 
     [StructLayout(LayoutKind.Sequential)]

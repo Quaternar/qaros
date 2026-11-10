@@ -69,7 +69,9 @@
  *    argument of nearly every other call, and qar_session_handle_destroy() ends
  *    it. Persist the onboarding id the onboard call returns; it is the ticket
  *    for every later rejoin. Chain a QarGraphicsDeviceId to choose the GPU, or
- *    leave it out and let QAROS select one.
+ *    leave it out and let QAROS select one. An application that never streams
+ *    chains QarGraphicsDeviceDisabledExt instead, skips step 4 and creates
+ *    no render sender.
  * 4. qar_session_get_graphics_device_id() - create your own graphics device on
  *    that adapter, so the frames you render need no cross-GPU copy.
  * 5. Get the target `QarPeerId`s to render for, in one of two ways:
@@ -421,6 +423,20 @@ typedef enum QarStatusCode
 	QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED = 605,
 	QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED = 606,
 	QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED = 607,
+	/** The application's own graphics device (QarStreamParamsVulkan, or the
+	 * D3D11 device in QarStreamParamsD3D11) is on another GPU than the
+	 * session's. Nothing was created. Create the device on the adapter
+	 * qar_session_get_graphics_device_id() reports. */
+	QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER = 609,
+	/** The session was created with QarGraphicsDeviceDisabledExt, so it has
+	 * no graphics device: it streams no media and reports no graphics adapter.
+	 * Nothing was created. Final for this session; onboard or rejoin without
+	 * the extension to stream. */
+	QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED = 610,
+	/** No head pose has arrived from the viewer yet, so there is no pose to
+	 * render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+	 * once the viewer's first pose is in. */
+	QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA = 801,
 	QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME = 803,
 	QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED = 804,
 	/** The render sender's app volume does not resolve - it is not known to
@@ -938,6 +954,21 @@ typedef enum QarColorEncoding
 	/// band slightly; QAR_PIXEL_FORMAT_R16G16B16A16 keeps them.
 	QAR_COLOR_ENCODING_LINEAR = 1,
 } QarColorEncoding;
+
+/// When a render sender's application renders its frames.
+typedef enum QarRenderLoop
+{
+	/// The application renders a frame when the receiver asks: begin-frame
+	/// waits for the receiver's render request and renders for the display time
+	/// it names. The default.
+	QAR_RENDER_LOOP_REQUEST_DRIVEN = 0,
+	/// The application renders from a loop of its own, at its own rate:
+	/// begin-frame waits only for the receiver to have a destination ready, and
+	/// the view poses are predicted from the newest head pose for when the
+	/// frame will be shown. The receiver keeps a destination ready instead of
+	/// timing one.
+	QAR_RENDER_LOOP_FREE_RUNNING = 1,
+} QarRenderLoop;
 
 // ============================================================================
 // VIDEO STREAM LAYOUT TYPES
@@ -1464,6 +1495,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_PEER_PRESENTATION = 0x2006,
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
 	QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO = 0x200B,
+	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT = 0x200C,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -1471,6 +1503,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_VIDEO_SENDER_INIT = 0x3005,
 	QAR_STRUCTURE_TYPE_RENDER_SENDER_ALPHA_MODE_EXT = 0x3006,
 	QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT = 0x3007,
+	QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT = 0x3008,
 	QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT = 0x4000,
 	/// 0x4001 was QarStreamParamsOpenGl, one struct for all three context
 	/// types. Retired rather than reused: the layout behind it changed.
@@ -2000,14 +2033,16 @@ typedef struct QarRequestInviteInit
  *
  * `connection_string` names the device kind and its address:
  *   - `"hololens:<host>"` — HoloLens
- *   - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
- *     served by the Android streamer; it reports its exact model itself
- *   - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
  *   - `"<host>"` with no scheme — alias of `"hololens:<host>"`
  * `<host>` is a hostname or an IP address; the two are interchangeable.
  *
- * Only these device kinds can be invited. Anything else — a visualizer, a
- * desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+ * Only a HoloLens can be invited. An Android headset (`"headset:<host>"`,
+ * `"quest:<host>"`, `"android:<host>"`: Meta Quest, METALENSE, Android XR) is
+ * never invited: it pairs itself once (Pair headset in the QAROS Visualizer, or
+ * a QR code) and then joins the session on its own. Its invite is refused with
+ * QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE. Anything else — a
+ * visualizer, a desktop peer — is rejected with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
  *
  * The invite is served only by the hub running on this machine, and is always a
  * one-time invite: the hub remembers the device so it is visible in the
@@ -2247,6 +2282,31 @@ typedef struct QarGraphicsDeviceId
 	QarLuid luid;
 	uint8_t uuid[16];
 } QarGraphicsDeviceId;
+
+/**
+ * @brief Creates the session without a graphics device.
+ *
+ * Chain this extension from QarOnboardInit or QarRejoinInit for an application
+ * that never streams media, such as a companion process that only drives app
+ * volumes, GUI panels or peers. The session then starts faster: it creates no
+ * Vulkan or D3D11 device, enumerates no graphics adapter and loads no transfer
+ * plugin. Onboarding, joining, peers, app volumes, GUI panels and storage work
+ * as usual.
+ *
+ * On such a session every media streaming call (qar_render_sender_create(),
+ * qar_render_sender_create_async(), qar_render_sender_subscribe_requests(),
+ * qar_video_sender_create()) and qar_session_get_graphics_device_id() return
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
+ *
+ * Chaining it together with QarGraphicsDeviceId is refused with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED. A local-app session shared by several
+ * onboards of one process keeps the choice of the onboard that created it.
+ * Initialize with qar_graphics_device_disabled_ext_default().
+ */
+typedef struct QarGraphicsDeviceDisabledExt
+{
+	QarStructureHeader header;
+} QarGraphicsDeviceDisabledExt;
 
 // --- Session lifecycle -------------------------------------------------------
 
@@ -2611,6 +2671,27 @@ typedef struct QarRenderSenderColorEncodingExt
 	QarColorEncoding color_encoding;
 } QarRenderSenderColorEncodingExt;
 
+/**
+ * @brief Declares when a render sender's application renders.
+ *
+ * Chain it on QarRenderSenderInit::header.next, in any position beside the
+ * graphics extension and the other render sender extensions. Without it the
+ * sender is QAR_RENDER_LOOP_REQUEST_DRIVEN. Declare
+ * QAR_RENDER_LOOP_FREE_RUNNING when the application renders from a loop of its
+ * own and polls qar_render_sender_try_begin_frame(): begin-frame then never
+ * waits for a render request, and each frame's pose is predicted from the
+ * newest head pose for when the frame will be shown.
+ */
+typedef struct QarRenderSenderRenderLoopExt
+{
+	/// QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT. Set with
+	/// qar_render_sender_render_loop_ext_default().
+	QarStructureHeader header;
+	/// The declared loop. A value this library does not know is rejected with
+	/// QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+	QarRenderLoop render_loop;
+} QarRenderSenderRenderLoopExt;
+
 #ifdef QAR_ENABLE_D3D11
 typedef struct QarStreamParamsD3D11
 {
@@ -2760,6 +2841,12 @@ typedef struct QarStreamParamsOpenGlGlx
 #endif
 
 #ifdef QAR_ENABLE_VULKAN
+/**
+ * The application's own Vulkan device for a sender or receiver. It must be on
+ * the session's GPU, the adapter qar_session_get_graphics_device_id() reports;
+ * a device on another GPU is refused with
+ * QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER.
+ */
 typedef struct QarStreamParamsVulkan
 {
 	QarStructureHeader header;
@@ -3192,7 +3279,9 @@ static inline QarForgetInit qar_forget_init_default(void);
  * returns before the call does.
  *
  * Chain QarGraphicsDeviceId on init->header.next to create the session's GPU
- * devices on that adapter. The peer id is the one persisted by the onboard.
+ * devices on that adapter, or QarGraphicsDeviceDisabledExt to create the
+ * session without a graphics device (not both). The peer id is the one
+ * persisted by the onboard.
  *
  * @param runtime Runtime the identity slot belongs to.
  * @param init Rejoin parameters (fully copied before the call returns).
@@ -3258,10 +3347,15 @@ static inline QarResult qar_runtime_rejoin_async(
  *   Without it, the session uses the GPU QAROS selected for an application it
  *   launched (carried in the launch invite), else one the library picks. Read
  *   the adapter in use with qar_session_get_graphics_device_id().
+ * - QarGraphicsDeviceDisabledExt: create the session without a graphics
+ *   device, for an application that never streams media. It starts faster;
+ *   its media streaming calls return
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
  *
  * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED QarOnboardPeerIdExt carries a zero
- *   peer id, or QarGraphicsDeviceId (or the launch invite's GPU) names an
- *   adapter the session cannot create its GPU devices on.
+ *   peer id, QarGraphicsDeviceId (or the launch invite's GPU) names an
+ *   adapter the session cannot create its GPU devices on, or both
+ *   QarGraphicsDeviceId and QarGraphicsDeviceDisabledExt are chained.
  * @param out_onboarding_id Required; receives the generated (or re-enrolled)
  *   id. Persist it — it is the ticket for every later rejoin / forget.
  * @param out_session Receives the onboarded session handle on success.
@@ -3664,8 +3758,9 @@ static inline QarResult qar_session_find_render_target(
  *   is left untouched so it can be chained as it is. Left unchanged when no
  *   adapter is known.
  * @param out_present Receives whether the session knows its adapter.
- * @return Success, or QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
- *   output.
+ * @return Success, QAR_STATUS_LOGIC_ERROR for an invalid handle or a null
+ *   output, or QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED for a session
+ *   created with QarGraphicsDeviceDisabledExt (out_present is false).
  */
 static inline QarResult qar_session_get_graphics_device_id(
 	const QarSession* session,
@@ -3788,8 +3883,14 @@ static inline QarResult qar_session_subscribe_lifecycle(
  * @ingroup qar_c_api
  *
  * Starting and stopping the target app for one AR device. A *target app* is the
- * process a hub runs on this machine to drive a HoloLens or an Android headset;
- * the hub owns its whole lifecycle, and these calls ask the hub to act.
+ * process a hub runs on this machine to drive a HoloLens; the hub owns its
+ * whole lifecycle, and these calls ask the hub to act.
+ *
+ * Android headsets (Meta Quest, METALENSE, Android XR) are never invited. A
+ * headset pairs itself once (Pair headset in the QAROS Visualizer, or a QR
+ * code) and from then on joins the session on its own; the hub serves it
+ * without an invite. Inviting one with `"headset:"`, `"quest:"` or
+ * `"android:"` returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE.
  *
  * Two rules hold for every call in this group.
  *
@@ -3823,13 +3924,12 @@ static inline QarResult qar_session_subscribe_lifecycle(
  *   or names no host (a `visualizer:` connection, which only
  *   qar_session_find_render_target resolves) - rebuild it with a
  *   qar_target_app_connection_string_* helper.
- * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the hub has no
- *   target app it can launch for the device family the connection string
- *   names; which devices can be invited is the hub's decision.
+ * @retval QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE the connection
+ *   string names an Android headset (`"headset:"`, `"quest:"`, `"android:"`),
+ *   which pairs itself and is never invited - refused before the hub is asked;
+ *   or the hub has no target app it can launch for the device family it names.
  *
- * A device is invited as a HoloLens (`"hololens:<host>"`) or a Headset
- * (`"headset:<host>"`; `"quest:"` and `"android:"` are aliases of it).
- * The headset reports its exact model itself once it runs.
+ * Only a HoloLens is invited (`"hololens:<host>"`, or a bare `"<host>"`).
  */
 static inline QarResult qar_session_invite_target_app(
 	QarSession* session,
@@ -3843,10 +3943,11 @@ static inline QarResult qar_session_invite_target_app(
 /**
  * @brief Ask this machine's hub to start the target app for one AR device.
  *
- * Non-blocking form of qar_session_invite_target_app. A device is invited as a
- * HoloLens (`"hololens:<host>"`) or a Headset (`"headset:<host>"`;
- * `"quest:"` and `"android:"` are aliases of it) - see
- * QarSessionInviteTargetAppInit.
+ * Non-blocking form of qar_session_invite_target_app. Only a HoloLens is
+ * invited (`"hololens:<host>"`) - see QarSessionInviteTargetAppInit. An Android
+ * headset connection string (`"headset:"`, `"quest:"`, `"android:"`) returns
+ * QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE from this call and the result
+ * callback never fires.
  * @param session Active session handle.
  * @param init Invite parameters; see QarSessionInviteTargetAppInit.
  * @param result_callback Fires exactly once with the outcome, see
@@ -3917,9 +4018,11 @@ static inline QarResult qar_target_app_connection_string_hololens(
 );
 
 /**
- * @brief Build the connection string for a headset target app, spelled
- * `"quest:<host>"`, an alias of `"headset:<host>"`. The device is
- * invited as a Headset and reports its exact model itself.
+ * @brief Build the connection string for a headset, spelled
+ * `"quest:<host>"`, an alias of `"headset:<host>"`. Use it with
+ * qar_session_find_render_target to find a joined headset; an invite with it
+ * returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE (headsets pair
+ * themselves).
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -3929,9 +4032,11 @@ static inline QarResult qar_target_app_connection_string_quest(
 );
 
 /**
- * @brief Build the connection string for a headset target app, spelled
- * `"android:<host>"`, an alias of `"headset:<host>"`. The device is
- * invited as a Headset and reports its exact model itself.
+ * @brief Build the connection string for a headset, spelled
+ * `"android:<host>"`, an alias of `"headset:<host>"`. Use it with
+ * qar_session_find_render_target to find a joined headset; an invite with it
+ * returns QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE (headsets pair
+ * themselves).
  * @param host Device hostname or IP address. Must not be NULL or empty.
  * @param buffer Output buffer for the NUL-terminated connection string.
  * @param buffer_size Size of buffer in bytes.
@@ -4256,7 +4361,9 @@ static inline void qar_render_stream_handle_destroy(QarRenderSender* handle);
  * @param user_state Application state passed unchanged to the callback.
  * @param token Required cancellation token owning the subscription;
  * cancelling or destroying it, or destroying the session, ends it.
- * @return Success when subscribed, or a subscription setup error.
+ * @return Success when subscribed, QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED
+ *   on a session created with QarGraphicsDeviceDisabledExt, or a subscription
+ *   setup error.
  */
 static inline QarResult qar_render_sender_subscribe_requests(
 	QarSession* session,
@@ -4296,7 +4403,12 @@ static inline QarResult qar_render_request_get_stream_id(
  * @param cancel Optional cancellation token for creation.
  * @param out_stream Receives the created stream sender handle.
  * @return QarResult QAR_STATUS_APP_VOLUME_INVALID_ID when no app volume id is
- *         given.
+ *         given. QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER when the
+ *         device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on
+ *         another GPU than the session's: create it on the adapter
+ *         qar_session_get_graphics_device_id() reports.
+ *         QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED when the session was
+ *         created with QarGraphicsDeviceDisabledExt; nothing is created.
  */
 static inline QarResult qar_render_sender_create(
 	QarSession* session,
@@ -4309,7 +4421,9 @@ typedef void (*qar_render_sender_create_callback_t)(
 );
 /** @brief Async variant of qar_render_sender_create. The callback fires
  * exactly once, see @ref qar_c_async_calls "Async calls"; `out_stream` is
- * the app's only on success. */
+ * the app's only on success. On a session created with
+ * QarGraphicsDeviceDisabledExt it returns
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED and never calls the callback. */
 static inline QarResult qar_render_sender_create_async(
 	QarSession* session,
 	QarRenderSenderInit* init,
@@ -4425,6 +4539,12 @@ static inline QarResult qar_render_sender_begin_frame(
  * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
  * not resolve. While the receiver has paused the stream the wait does not
  * complete: @p out_ready stays false and the call succeeds until it resumes.
+ *
+ * A loop that polls once per frame calls it once more right after
+ * qar_render_sender_show_frame(): the next wait then runs while the loop is
+ * idle, and the next frame's call finds it ready. Started only by the next
+ * frame's call, the wait completes a frame later, and the loop serves the
+ * stream every other frame.
  */
 static inline QarResult qar_render_sender_try_begin_frame(
 	QarRenderSender* stream,
@@ -4499,6 +4619,62 @@ static inline QarResult qar_render_frame_info_get_view_pose(
 static inline QarResult qar_render_frame_info_get_view_fov(
 	QarRenderFrameInfo* handle, size_t view_index, QarFov* out_fov
 );
+/**
+ * @brief For a sender declared QAR_RENDER_LOOP_FREE_RUNNING: the poses and
+ *        fields of view to render the next frame with, taken before
+ *        begin-frame.
+ *
+ * Predicted now from the newest head pose for when the frame is shown, in the
+ * same app content space as the frame info's poses. The next begin-frame opens
+ * its frame with exactly these poses, so an application renders into its own
+ * target first, then begins the frame, copies into the sender's textures and
+ * shows it: while it renders, the receiver hands the frame's destination back.
+ * A second call before that begin-frame replaces the poses. Views are in the
+ * frame's view order, as qar_render_frame_info_get_view_pose() indexes them.
+ *
+ * @param stream A render sender created with QarRenderSenderRenderLoopExt set
+ *        to QAR_RENDER_LOOP_FREE_RUNNING.
+ * @param view_count How many views to write, at most the sender's views.
+ * @param out_view_poses Receives view_count poses.
+ * @param out_view_fovs Receives view_count fields of view, in radians.
+ * @return QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA before the first
+ *         head pose arrived,
+ * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
+ * not resolve, QAR_STATUS_LOGIC_ERROR for a request-driven sender or too many
+ * views.
+ */
+static inline QarResult qar_render_sender_next_render_pose(
+	QarRenderSender* stream,
+	size_t view_count,
+	QarPose* out_view_poses,
+	QarFov* out_view_fovs
+);
+/**
+ * @brief For a sender declared QAR_RENDER_LOOP_FREE_RUNNING: whether a frame
+ *        rendered now can be sent without waiting. Never blocks.
+ *
+ * @p out_ready is true once the receiver has handed back the destination of
+ * the previous frame: the destination is then reserved for the next frame, and
+ * the next qar_render_sender_begin_frame() returns without waiting for it. It
+ * stays reserved until that begin-frame. @p out_ready is false while the
+ * destination is still out, and while the stream is paused, reconnecting or has
+ * no receiver yet; none of these is an error.
+ *
+ * A loop serving several senders calls this for each first, then takes
+ * qar_render_sender_next_render_pose(), renders, begins, copies and shows
+ * only for the senders that are ready. A slower receiver or a reconnecting
+ * stream then holds back no other sender.
+ *
+ * @param stream A render sender created with QarRenderSenderRenderLoopExt set
+ *        to QAR_RENDER_LOOP_FREE_RUNNING.
+ * @param out_ready Receives whether the next frame can be sent without waiting.
+ * @return QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED once the stream
+ *         closed, QAR_STATUS_LOGIC_ERROR for a request-driven sender or while a
+ *         begin-frame of this sender is waiting or its frame is not shown yet.
+ */
+static inline QarResult qar_render_sender_is_ready_for_next_frame(
+	QarRenderSender* stream, bool* out_ready
+);
 
 /** @} */ /* end of qar_c_render_sender */
 
@@ -4530,6 +4706,13 @@ static inline void qar_video_sender_handle_destroy(QarVideoSender* handle);
  * QarVideoSenderInit::graphics_api and attach the matching stream-parameter
  * extension when external graphics objects are required. Call
  * qar_video_sender_stream_id() to publish the generated identity.
+ *
+ * Fails with QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER when the
+ * device in QarStreamParamsVulkan or QarStreamParamsD3D11 is on another GPU
+ * than the session's: create it on the adapter
+ * qar_session_get_graphics_device_id() reports. Fails with
+ * QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED on a session created with
+ * QarGraphicsDeviceDisabledExt.
  */
 static inline QarResult qar_video_sender_create(
 	QarSession* session,
@@ -5949,6 +6132,11 @@ qar_render_sender_alpha_mode_ext_default(void);
  * QarRenderSenderInit::header.next. */
 static inline QarRenderSenderColorEncodingExt
 qar_render_sender_color_encoding_ext_default(void);
+/** @brief A QarRenderSenderRenderLoopExt with its header set and
+ * QAR_RENDER_LOOP_REQUEST_DRIVEN; set render_loop and chain it on
+ * QarRenderSenderInit::header.next. */
+static inline QarRenderSenderRenderLoopExt
+qar_render_sender_render_loop_ext_default(void);
 /** @brief Default init for QarLibraryInit. */
 static inline QarLibraryInit qar_library_init_default(void);
 /** @brief Default init for QarRuntimeInit. */
@@ -5960,6 +6148,10 @@ qar_runtime_ephemeral_storage_ext_default(void);
 /** @brief Default QarGraphicsDeviceId: the platform's id type (LUID on
  * Windows, UUID elsewhere), chained on QarOnboardInit or QarRejoinInit. */
 static inline QarGraphicsDeviceId qar_graphics_device_id_default(void);
+/** @brief Default QarGraphicsDeviceDisabledExt, chained on QarOnboardInit or
+ * QarRejoinInit to create the session without a graphics device. */
+static inline QarGraphicsDeviceDisabledExt
+qar_graphics_device_disabled_ext_default(void);
 /** @brief A QarSessionLifecycleInfo with its structure type set, for
  * qar_session_get_lifecycle_state(). */
 static inline QarSessionLifecycleInfo qar_session_lifecycle_info_default(void);
@@ -7467,6 +7659,15 @@ qar_graphics_device_id_default(void)
 	return device;
 }
 
+static inline QarGraphicsDeviceDisabledExt
+qar_graphics_device_disabled_ext_default(void)
+{
+	QarGraphicsDeviceDisabledExt ext = {};
+	ext.header.type = QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT;
+	ext.header.next = NULL;
+	return ext;
+}
+
 static inline QarSessionLifecycleInfo
 qar_session_lifecycle_info_default(void)
 {
@@ -7516,6 +7717,16 @@ qar_render_sender_color_encoding_ext_default(void)
 	QarRenderSenderColorEncodingExt extension = {
 		{ QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT, NULL }, // header
 		QAR_COLOR_ENCODING_SRGB // color_encoding
+	};
+	return extension;
+}
+
+static inline QarRenderSenderRenderLoopExt
+qar_render_sender_render_loop_ext_default(void)
+{
+	QarRenderSenderRenderLoopExt extension = {
+		{ QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT, NULL }, // header
+		QAR_RENDER_LOOP_REQUEST_DRIVEN // render_loop
 	};
 	return extension;
 }
@@ -8457,7 +8668,20 @@ typedef void (*qar_render_sender_begin_frame_callback_t)(
 	  QarResult,                                                               \
 	  render_frame_info_get_view_fov,                                          \
 	  (QarRenderFrameInfo * handle, size_t view_index, QarFov* out_fov),       \
-	  (handle, view_index, out_fov))
+	  (handle, view_index, out_fov))                                           \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_next_render_pose,                                          \
+	  (QarRenderSender * stream,                                               \
+	   size_t view_count,                                                      \
+	   QarPose* out_view_poses,                                                \
+	   QarFov* out_view_fovs),                                                 \
+	  (stream, view_count, out_view_poses, out_view_fovs))                     \
+	X(ACTIVE,                                                                  \
+	  QarResult,                                                               \
+	  render_sender_is_ready_for_next_frame,                                   \
+	  (QarRenderSender * stream, bool* out_ready),                             \
+	  (stream, out_ready))
 
 #ifdef QAR_ENABLE_D3D11
 #define QAR_RENDER_STREAM_SENDER_FUNCTION_LIST_D3D11(X)                        \

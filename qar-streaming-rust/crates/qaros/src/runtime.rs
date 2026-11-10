@@ -128,14 +128,26 @@ pub enum OnboardMethod<'a> {
 }
 
 /// The optional extensions of [`Runtime::onboard_with`] and [`Runtime::start_onboard`], chained
-/// after the mode extension in this order: the remote-app grant, the adapter, the planned peer id
-/// (deprecated). The re-enrolled onboarding id (deprecated) goes into the init itself.
+/// after the mode extension in this order: the remote-app grant, the adapter or no graphics
+/// device, the planned peer id (deprecated). The re-enrolled onboarding id (deprecated) goes into the init itself.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OnboardExtensions<'a> {
     /// Creates the session's GPU devices, and with them every render sender's frame images, on
     /// this adapter (`QarGraphicsDeviceId`). `None`: the GPU QAROS selected for an app it
     /// launched (carried in the launch invite), else one the library picks.
     pub adapter: Option<GraphicsAdapter>,
+    /// Creates the session without a graphics device (`QarGraphicsDeviceDisabledExt`), for an
+    /// application that never streams media, such as a companion that only drives app volumes,
+    /// GUI panels or peers. The session starts faster: no Vulkan or D3D11 device, no adapter
+    /// enumeration, no transfer plugins. Onboarding, peers, app volumes, GUI panels and rooms
+    /// work as usual; creating a render sender, subscribing to render requests, creating a video
+    /// sender and [`crate::Session::graphics_adapter`] fail with
+    /// [`crate::StatusCode::GRAPHICS_DEVICE_NOT_INITIALIZED`]. Together with
+    /// [`OnboardExtensions::adapter`] it is refused with [`Error::InvalidArgument`] before the
+    /// call (the C API refuses it with [`crate::StatusCode::ARGUMENT_NOT_SUPPORTED`]). A local-app
+    /// session shared by several onboards of one process keeps the choice of the onboard that
+    /// created it.
+    pub without_graphics_device: bool,
     /// Joins under this peer id (`QarOnboardPeerIdExt`), for a process whose peer id someone
     /// else planned and announced to the session. With [`OnboardMethod::Code`] or
     /// [`OnboardMethod::Invite`] only: it must equal any peer id the hub bound to the code or
@@ -284,6 +296,7 @@ pub(crate) struct OnboardInitStorage {
     app_tag: sys::QarOnboardLocalAppTagExt,
     remote_app_grant: sys::QarOnboardRemoteAppGrantExt,
     adapter: sys::QarGraphicsDeviceId,
+    graphics_device_disabled: sys::QarGraphicsDeviceDisabledExt,
     peer_id: sys::QarOnboardPeerIdExt,
     presentation: PresentationStorage,
     code_text: Option<CString>,
@@ -316,6 +329,7 @@ impl OnboardInitStorage {
             app_tag: defaults::qar_onboard_local_app_tag_ext_default(),
             remote_app_grant: defaults::qar_onboard_remote_app_grant_ext_default(),
             adapter: defaults::qar_graphics_device_id_default(),
+            graphics_device_disabled: defaults::qar_graphics_device_disabled_ext_default(),
             peer_id: defaults::qar_onboard_peer_id_ext_default(),
             presentation: PresentationStorage::new(presentation)?,
             code_text: None,
@@ -373,6 +387,9 @@ impl OnboardInitStorage {
             this.adapter = adapter.to_raw();
             chain.push(&raw mut this.adapter.header);
         }
+        if extensions.without_graphics_device {
+            chain.push(&raw mut this.graphics_device_disabled.header);
+        }
         if let Some(peer_id) = extensions.peer_id {
             this.peer_id.peer_id = peer_id.to_raw();
             chain.push(&raw mut this.peer_id.header);
@@ -406,6 +423,9 @@ fn validate_extensions(
         Some(id) if id.is_zero() => return refuse("the zero onboarding id names no slot"),
         Some(_) if local_app => return refuse("a local app is stateless; no slot to re-enroll"),
         _ => {}
+    }
+    if extensions.adapter.is_some() && extensions.without_graphics_device {
+        return refuse("a session without a graphics device takes no adapter");
     }
     if extensions.remote_app_grant.is_some() && !local_app {
         return refuse("a remote-app grant is redeemed only by a local app");

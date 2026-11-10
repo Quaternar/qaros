@@ -28,7 +28,7 @@ invitation, and is QAROS installed on its PC? ─────────yes─�
 - A source app normally runs on the QAROS PC: start with the local app.
 - Several places in one process (C, C#, a plug-in) each onboard as a local app with the same tag and share one session: [Several API Instances in One Process](/docs/developer-guide/tutorials/c/api-instances-in-one-process).
 - An app QAROS starts from **Source Applications** joins as a local app, the same way.
-- Target apps (the players on headsets) are QAROS's own apps. Your app brings one in with `qar_session_invite_target_app`; it does not onboard it.
+- Target apps (the players on headsets) are QAROS's own apps; your app does not onboard them. It can bring a HoloLens in with `qar_session_invite_target_app`; an Android headset is paired by the operator and joins by itself.
 
 ## What is stored, and how long credentials live
 

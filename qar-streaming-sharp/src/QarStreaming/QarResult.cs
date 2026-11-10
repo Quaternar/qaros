@@ -63,6 +63,25 @@ namespace Quaternar.Qaros
         MediaStreamingDestinationReservationFailed = 605,
         MediaStreamingSendPipelineFailed = 606,
         MediaStreamingLayoutChangeFailed = 607,
+        /// <summary>
+        /// The application's own graphics device (<see cref="StreamParamsVulkan"/>, or the D3D11
+        /// device it handed a sender or receiver) is on another GPU than the session's. Nothing was
+        /// created; the message names both adapters. Create the device on the adapter
+        /// <see cref="Session.GetGraphicsDeviceId"/> reports.
+        /// </summary>
+        MediaStreamingDeviceOnAnotherAdapter = 609,
+        /// <summary>
+        /// The session was created without a graphics device
+        /// (<see cref="OnboardOptions.WithoutGraphicsDevice"/>), so it streams no media and
+        /// reports no adapter. Nothing was created. Onboard without the option to stream.
+        /// </summary>
+        GraphicsDeviceNotInitialized = 610,
+        /// <summary>
+        /// No head pose has arrived from the viewer yet, so there is no pose to render with.
+        /// Recoverable: <see cref="RenderSender.NextRenderPose"/> succeeds once the viewer's first
+        /// pose is in.
+        /// </summary>
+        RenderingProducerMissingPoseData = 801,
         RenderingProducerUnableToDoBeginFrame = 803,
         RenderingProducerStreamIsClosed = 804,
         /// <summary>

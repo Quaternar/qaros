@@ -38,7 +38,9 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 | Symptom | Fix |
 |---|---|
 | the app renders on one GPU while the session uses another | create your graphics device on the session's adapter (`qar_session_get_graphics_device_id`), or chain the adapter you render on as `QarGraphicsDeviceId` ([Choosing the GPU](/docs/developer-guide/onboarding-and-sessions#choosing-the-gpu)) |
-| `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from onboard with a `QarGraphicsDeviceId` | the adapter is not supported: only NVIDIA GPUs are |
+| `QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER` (609) from creating a sender or receiver | the Vulkan or D3D11 device you passed is on another GPU than the session's; frames cannot be shared between two GPUs, and the message names both adapters. Create the device on the adapter `qar_session_get_graphics_device_id` reports, or chain the adapter you render on as `QarGraphicsDeviceId` when you onboard |
+| `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from onboard with a `QarGraphicsDeviceId` | the adapter is not supported: only NVIDIA GPUs are; or a `QarGraphicsDeviceDisabledExt` is chained too, which asks for no GPU at all |
+| `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` (610) from a sender or the adapter read | the session was onboarded with `QarGraphicsDeviceDisabledExt` (C#: `WithoutGraphicsDevice()`), so it has no GPU; onboard without it to stream ([A session without a graphics device](/docs/developer-guide/onboarding-and-sessions#a-session-without-a-graphics-device)) |
 | the Vulkan cube picks the wrong GPU | the cube renders on its session's GPU: the target's GPU when QAROS started it (`QAR_GPU_ADAPTER_ID`, read by the library), otherwise the library's pick. The cube itself reads no environment variable, prints the GPU it uses and stops when no Vulkan device matches. |
 
 ## Status codes that are part of normal flow

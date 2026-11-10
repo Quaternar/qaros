@@ -149,6 +149,13 @@ Design rules, following the SDK's API conventions:
   something else. `PixelFormat::D16Unorm` works on every graphics API, the depth-stencil formats
   on Vulkan only; a format the API cannot take is
   `StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED`.
+- `RenderSenderConfig::render_loop` is `RenderLoop::RequestDriven` by default: begin-frame waits
+  for the receiver's render request. An application rendering from a loop of its own declares
+  `RenderLoop::FreeRunning` and polls `try_begin_owned_frame`; begin-frame then waits only for a
+  destination, and the poses are predicted for when the frame will be shown. Chained as
+  `QarRenderSenderRenderLoopExt` only when free-running. Such a sender takes its poses before
+  begin-frame with `RenderSender::next_render_pose`, renders into its own target, then begins
+  the frame (which opens with exactly those poses), copies into it and shows it.
 - Subscription callbacks run on library threads and receive owned snapshots. `qaros::channel()`
   forwards them into a `std::sync::mpsc` receiver.
 - The Vulkan render sender is behind the feature `vulkan`, with `ash` 0.38 types:
@@ -194,7 +201,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | Error handling | `qaros::Error` with function, `StatusCode`, message and wrapped causes (`has_code`, `has_cause`) | the `qar_result_*` constructors and predicates, `qar_error_wrap_result`, `qar_result_log_if_error` | yes (`ResultInfo`, `StatusCode`) |
 | Cancellation | `CancelToken` with or without a timeout, `is_timed_out`, `CancelHandle` from another thread | `qar_cancel_token_cancel_after` | partly: a `CancellationToken` bridged to an internal native token; no timeout token or timeout query |
 | Runtime | `Runtime` | | yes |
-| Onboarding: local app and its app tag, invite (a companion), remote-app grant; deprecated: pairing code, remote Hub, planned peer id, re-enrolling a slot, rejoin, forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter, a remote-app grant), `OnboardMethod`, `RuntimeConfig::ephemeral_storage`; deprecated: `OnboardMethod::Code`, `HubAddress`, `OnboardExtensions::peer_id` and `onboarding_id`, `Onboarded::onboarding_id`, `rejoin`, `rejoin_on_adapter`, `forget` | | yes |
+| Onboarding: local app and its app tag, invite (a companion), remote-app grant; deprecated: pairing code, remote Hub, planned peer id, re-enrolling a slot, rejoin, forget | blocking: `Runtime::onboard`, `onboard_with` (`OnboardExtensions`: the adapter or no graphics device, a remote-app grant), `OnboardMethod`, `RuntimeConfig::ephemeral_storage`; deprecated: `OnboardMethod::Code`, `HubAddress`, `OnboardExtensions::peer_id` and `onboarding_id`, `Onboarded::onboarding_id`, `rejoin`, `rejoin_on_adapter`, `forget` | a rejoin without a graphics device (`QarGraphicsDeviceDisabledExt` in `QarRejoinInit`) | yes |
 | Co-process invites and the invite handle | `Session::request_onboarding_invite`, `start_onboarding_invite`, `OnboardingInvite` (serialize, deserialize) | `qar_onboarding_invite_handle_is_valid` (an `OnboardingInvite` is always valid) | yes |
 | Onboarding with a declared device | `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) at onboard and rejoin, `Session::update_device_identity` | | yes (`PeerPresentationOptions.WithDeviceIdentity`) |
 | Member hubs | `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, `MemberHubPermissions`, the remote-app grant as `app_grant_tag`), `Runtime::join_hub_as_member` (`JoinHubAsMemberConfig`), `MemberHubInvitation` (serialize, destroyed on drop), `Library::deserialize_member_hub_invitation`, redeeming a grant with `OnboardExtensions::remote_app_grant` | | yes |
@@ -210,6 +217,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | D3D11 render sender | feature `d3d11` (Windows; on macOS only for the tests against `qaros-stub`): `create_d3d11_render_sender`, `D3D11Frame` | | yes |
 | OpenGL render sender | not bound: the bindings are generated without `QAR_ENABLE_OPENGL` | | yes |
 | Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` | | yes |
+| Render sender render loop | `RenderSenderConfig::render_loop` (`RenderLoop`), chained as `QarRenderSenderRenderLoopExt`; `RenderSender::next_render_pose` | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |
@@ -433,8 +441,9 @@ python ..\ci\run.py rust --e2e
 `ci/run.py` reads its variables from the environment first, then from an env file: inside the
 Quaternar repository its root `ci.env`, which points `QAROS_NATIVE_BIN` at that repository's
 `windows-x64-relWithDebInfo` build (the CMake target `qar-streaming-c-ext_gtests`), else
-`ci/ci.env`. `python ../ci/run.py capi` runs these tests, the C# tests and the C API suite against
-one native folder.
+`ci/ci.env`. `python ../ci/run.py capi` runs these tests and the C# tests against one native
+folder, plus the C API suite when `QAROS_C_TESTS_BIN` points at a local build of it (a downloaded
+C API runtime has none, so `capi` reports it as skipped).
 
 `python ../ci/run.py rust` runs CI's checks: format, clippy, the workspace tests, the tutorial
 pages and the guide tabs; `--step` picks some of them.

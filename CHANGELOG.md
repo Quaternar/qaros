@@ -23,6 +23,38 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   messages your app receives and posts, and the rules and limits, with C, C# and Rust code.
 - **Docs:** *GUI Panels* states the display-name rules (at most 64 characters, one line, no
   bidirectional formatting characters) and how to rename a panel.
+
+- **Docs:** *Onboarding and Sessions* has a section *A session without a graphics device*: how a
+  companion that never streams chains `QarGraphicsDeviceDisabledExt` (C#
+  `WithoutGraphicsDevice()`, Rust `OnboardExtensions::without_graphics_device`), what still works and the status media calls return.
+  *Troubleshooting* lists `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
+
+- **Docs:** *qaros:// Links* in the Developer Guide: the links that open the Pair Headset QR code,
+  the Room Origin marker or the setup of one device type in QAROS, their exact grammar and rules,
+  and how to open one from C, C# and Rust.
+
+- **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
+  connected to a hub, an Android headset shows the connection prompt with its address and an
+  6-digit code (`123 456`) that changes every 30 s; type both (or pick the headset from those found on the
+  network) into **Invite device** › **By code** and click **Pair**. *Connecting to the Hub*,
+  *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the player installation
+  pages and *Security Deep Dive* name this way too.
+
+- **Docs:** a Visualizer tutorial, *Pair a headset*: pairing an Android headset (Meta Quest,
+  METALENSE 2, Android XR) by **Pair headset** over USB or by scanning **Show QR code**, how long a
+  code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset
+  sees from the Visualizer over USB; the headset remembers the password).
+
+- **Docs:** the Vulkan cube example and its *Vulkan Rendering* tutorial serve every viewer from one
+  render loop: free-running senders by default, request-driven with `--render-loop request-driven`,
+  on a fixed 60 fps schedule (`--fps <n>`) that a slow frame does not shift, or as fast as the
+  viewers take frames (`--uncapped`). *Getting Started* and *Render Loops* point at it.
+- **Docs:** *Render Loops* in the Developer Guide: the request-driven and free-running modes, how to
+  create a sender in each, and how to drive senders for several viewers — blocking with a thread per
+  viewer, non-blocking from one loop, free-running with the readiness check — in C, C# and Rust,
+  with the stream states each loop handles, what each renders for a slow, paused or departed
+  viewer, and which to choose.
+
 - **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website
   panels uses for certificate data updates (`update.googleapis.com` and `*.gvt1.com`, TCP 443),
   why to allow them, and what happens on an offline PC; *Maintenance and Updates* links to it.
@@ -93,6 +125,54 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
+
+- **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
+  installer sets it up, and several Hubs on one PC run from one installation or development build.
+
+- **Docs:** headset certificates: *Managing Devices* has a section *How long a device stays
+  paired* (a paired headset's certificate is valid 30 days, every other device's 24 hours; a
+  headset off for up to 37 days rejoins without pairing; revoke a lost headset in the Devices tab;
+  an EST server must allow 30-day certificates and issue the `qar://device-class/headset` URI
+  name). *Security Model*, *Security Deep Dive*, *Maintenance & Updates*, *Pair a Headset* and the
+  launcher configuration reference follow.
+
+- **Docs:** every device's setup ends with **Anchor: look at the anchoring QR code**: *Scene
+  Origin: Anchor Several Devices Together* describes **Show anchoring QR code**, the *Anchor your
+  headset: look at the anchoring QR code* message on the headset, the step that completes by
+  itself with the room on Meta Quest, METALENSE 2 and Android XR (marked by hand on HoloLens) and
+  the wrong-room warning, and tells the anchoring QR code from the connection QR code; *Meta Quest
+  and METALENSE 2 - Install and Pair*, *Pair a Headset*, the *HoloLens 2* tutorial and the glossary
+  follow.
+
+- **Docs:** Meta Quest setup has the **Wi-Fi on the headset** step, as Android XR and METALENSE 2:
+  *Meta Quest and METALENSE 2 - Install and Pair* gains a Wi-Fi section, *Pair a Headset* covers
+  Quest in *Wi-Fi on a Meta Quest or Android XR headset*, and these pages, *Put METALENSE 2 on
+  Wi-Fi* and the player installation pages say to use a 5 GHz network only, with the marking and
+  warnings a 2.4 GHz network gets.
+
+- **Docs:** *Connecting to the Hub* and *Managing Devices* no longer describe the Debug-only QR
+  invite for other players: **By QR code** in the **Invite device** card, in every UI mode, is the
+  one QR invite, the same code as **Show QR code** in a headset's setup steps.
+
+- **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
+  *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
+  *Troubleshooting* and the glossary say
+  that a code is made only when a card or dialog that shows it opens, appears at once, lives 60 s
+  and is replaced a few seconds before it expires while it stays open. The launcher configuration
+  reference says `codeRotationSec` only sets the shortest lifetime of a code minted without one of
+  its own.
+
+- **Docs:** the device and launcher guides (*Managing Devices*, *Connecting to the Hub*, *Meta Quest
+  and METALENSE 2 - Install and Pair*, the METALENSE 2 Wi-Fi tutorial, the player installation
+  pages, *Launcher Configuration Reference*) pair Android headsets with **Pair headset** (USB) or
+  **Show QR code** instead of inviting them by IP address; **Invite device** and `targetApps` take
+  only a HoloLens. The target app invite docs (*Onboarding and Sessions*, *Choosing an Onboarding
+  Mode*, the C# and Rust API references) say an Android headset returns
+  `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`; *Working with Peers* says a headset joins with
+  its exact model.
+
+- **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
+  in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
 
 - **Docs:** *Choosing an Onboarding Mode* and *Onboarding and Sessions* show exactly three ways an
   app joins: a local app on the QAROS PC, a companion process the local app starts (one invite per
@@ -230,6 +310,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
+  Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
+  enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
 

@@ -67,6 +67,8 @@ EXPORT_DEFAULT(QarRenderSenderAlphaModeExt,
                qar_render_sender_alpha_mode_ext_default)
 EXPORT_DEFAULT(QarRenderSenderColorEncodingExt,
                qar_render_sender_color_encoding_ext_default)
+EXPORT_DEFAULT(QarRenderSenderRenderLoopExt,
+               qar_render_sender_render_loop_ext_default)
 EXPORT_DEFAULT(QarGuiPanelStreamIdExt, qar_gui_panel_stream_id_ext_default)
 EXPORT_DEFAULT(QarGuiPanelUrlExt, qar_gui_panel_url_ext_default)
 EXPORT_DEFAULT(QarGuiPanelServedContentExt, qar_gui_panel_served_content_ext_default)
@@ -77,6 +79,8 @@ EXPORT_DEFAULT(QarGuiPanelInit, qar_gui_panel_init_default)
 EXPORT_DEFAULT(QarAppVolumeInit, qar_app_volume_init_default)
 EXPORT_DEFAULT(QarRenderFrameShow, qar_render_frame_show_default)
 EXPORT_DEFAULT(QarGraphicsDeviceId, qar_graphics_device_id_default)
+EXPORT_DEFAULT(QarGraphicsDeviceDisabledExt,
+               qar_graphics_device_disabled_ext_default)
 EXPORT_DEFAULT(QarSessionLifecycleInfo, qar_session_lifecycle_info_default)
 EXPORT_DEFAULT(QarStreamParamsVulkan, qar_stream_params_vulkan_default)
 EXPORT_DEFAULT(QarSyncFrameVulkan, qar_sync_frame_vulkan_default)

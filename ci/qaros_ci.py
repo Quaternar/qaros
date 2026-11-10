@@ -149,8 +149,7 @@ def native_folder(key: str, required_files: tuple[str, ...], hint: str = "") -> 
 
 def download_runtime(release: str, repository: str, directory: Path) -> Path:
     """Downloads the ``QAROS-CApi-*-RelWithDebInfo.zip`` asset of ``release`` with gh and unpacks it
-    into ``directory`` (emptied first). Returns the unpacked folder (``bin/``, ``include/``,
-    ``tests/``)."""
+    into ``directory`` (emptied first). Returns the unpacked folder (``bin/``, ``include/``)."""
     gh = require_tool("gh", "install the GitHub CLI from https://cli.github.com")
     if not env("GH_TOKEN") and not env("GITHUB_TOKEN") and not succeeds([gh, "auth", "status"]):
         raise CiError(f"gh is not logged in: run 'gh auth login', or set GH_TOKEN to a token that can read "
@@ -186,9 +185,10 @@ def release_origin(release: str, repository: str) -> str:
 
 def use_runtime(unpacked: Path) -> None:
     """Points the native variables at an unpacked C API runtime, for this process and its children.
-    It has no qar-hub-test-ext: that one is built only in the repository that embeds qaros."""
+    It has no qar-hub-test-ext and no C API suite: those are built only in the repository that
+    embeds qaros, and another build's would not match these natives."""
     os.environ["QAROS_NATIVE_BIN"] = str(unpacked / "bin")
-    os.environ["QAROS_C_TESTS_BIN"] = str(unpacked / "tests")
+    os.environ.pop("QAROS_C_TESTS_BIN", None)
     os.environ.pop("QAROS_HUB_TEST_EXT_BIN", None)
 
 
