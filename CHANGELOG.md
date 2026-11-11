@@ -310,6 +310,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** the C and Rust Vulkan rendering tutorials and the Rust local-app onboarding tutorial
+  link to the *Started by QAROS* section of *Onboarding and Sessions* again, and the 0.9.0
+  *Onboarding and Rejoin* tutorial page is served instead of a redirect.
 - **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
   Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
   enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).

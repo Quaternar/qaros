@@ -313,4 +313,4 @@ The C tutorial is [Vulkan Rendering](/docs/developer-guide/tutorials/c/vulkan-re
 
 - [`docs/vulkan-api.md`](https://github.com/Quaternar/qaros/blob/main/qar-streaming-rust/docs/vulkan-api.md): every type of the Vulkan path, its safety rules, and how the stub emulates it.
 - [Rendering Streams](/docs/developer-guide/rendering-streams): layouts, hand tracking, the lifecycle of a stream.
-- [Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps): the contract this example follows, so an operator can add it to the Visualizer as a QAROS API app.
+- [Launched by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros): the contract this example follows, so an operator can add it to the Visualizer as a QAROS API app.

@@ -356,7 +356,7 @@
  * \section vulkan_next Next
  * - <a href="/docs/developer-guide/rendering-streams">Rendering Streams</a>:
  *   layouts, hand tracking, the lifecycle of a stream.
- * - <a href="/docs/developer-guide/onboarding-and-sessions#launched-by-qaros-qaros-api-apps">Launched
+ * - <a href="/docs/developer-guide/onboarding-and-sessions#started-by-qaros">Launched
  *   by QAROS</a>: the contract the cube follows, so an operator can add it to
  *   the Visualizer as a QAROS API app.
  * - <a href="/docs/developer-guide/tutorials/rust/vulkan-rendering">Vulkan

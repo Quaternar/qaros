@@ -130,7 +130,6 @@ const config: Config = {
 					{ from: "/docs/user-guide/glossary", to: "/docs/glossary" },
 					{ from: "/docs/developer-guide/examples/c/dynamic-loading", to: "/docs/developer-guide/tutorials/c/dynamic-loading" },
 					{ from: "/docs/developer-guide/examples/c/onboarding-and-rejoin", to: "/docs/developer-guide/onboarding-and-sessions" },
-					{ from: "/docs/developer-guide/tutorials/c/onboarding-and-rejoin", to: "/docs/developer-guide/onboarding-and-sessions" },
 					{ from: "/docs/developer-guide/tutorials/c/launched-app-onboarding", to: "/docs/developer-guide/onboarding-and-sessions" },
 					{ from: "/docs/developer-guide/tutorials/rust/onboarding-and-rejoin", to: "/docs/developer-guide/onboarding-and-sessions" },
 					{ from: "/docs/developer-guide/examples/c/gui-panel-operations", to: "/docs/developer-guide/tutorials/c/gui-panel-operations" },
