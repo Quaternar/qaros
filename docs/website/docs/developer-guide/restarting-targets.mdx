@@ -1,0 +1,147 @@
+---
+sidebar_position: 8.7
+title: When a Target Restarts
+description: How a source app keeps streaming when its target app restarts or crashes - what QAROS recovers on its own, which stream states and status codes to watch, when to destroy and recreate the render sender, and how to back off.
+---
+
+# When a Target Restarts
+
+A target app (a headset, a visualizer, a mixer pipeline) can restart while your source app keeps running: it crashes and comes back, QAROS rebuilds its pipeline, or someone starts a new session of it. Your source app must pick up streaming again without being restarted itself. This page says what QAROS does for you, what you must do, and gives the code.
+
+## What QAROS does for you
+
+- **A dropped connection or a short restart** (the target comes back within a few seconds, with its connection to your sender lost): the sender keeps its stream and reconnects by itself while `enable_auto_reconnects` is on (the default). Frame calls report `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` meanwhile, and the stream state is `QAR_RENDER_SENDER_STREAM_STATE_RECONNECTING`. A dead peer is noticed within about 2 s. Keep the sender and skip the frame.
+- **A target that pauses** (its display is not visible): `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED`, state `PAUSED`. Keep the sender; frames resume when the target does.
+- **A target that is not there yet**: `qar_render_sender_create` waits until the target asks for the stream. Pass a cancel token to end the wait.
+- **A stream the session closes**: when the target comes back as a new session of itself (the launcher rebuilt its pipeline, or the old stream was replaced), QAROS closes the old stream **for good** and the sender closes itself. QAROS does not create a new sender for you. Every frame call then fails with `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` and the stream state is `QAR_RENDER_SENDER_STREAM_STATE_CLOSED`.
+
+A closed sender never resumes, whether the target comes back under the same peer id or a new one. Creating a new sender is your part.
+
+## What you must do
+
+1. **Watch for the closed stream.** Check every frame call for `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`, or read `qar_render_sender_get_stream_state()` when a call is not ready and tell the states apart:
+
+   | State | Meaning | You |
+   |---|---|---|
+   | `CONNECTING` | a receiver is attached, its transfer is not up yet | keep the sender, skip the frame |
+   | `WAITING_FOR_RECEIVER` | no receiver is attached | keep the sender, skip the frame |
+   | `STREAMING` | frames are taken | render and show |
+   | `PAUSED` | the target paused the stream | keep the sender, skip the frame |
+   | `RECONNECTING` | the connection is being re-established | keep the sender, skip the frame |
+   | `CLOSED` | closed for good | destroy the sender and create a new one |
+
+2. **Destroy the closed sender** with `qar_render_stream_handle_destroy()` (after the images it lent you are no longer in use), then **create a new one for the same target** while the target is still in the peer list.
+3. **Do not wait for a peer-list event.** A target that restarts under the same peer id stays `QAR_PEER_PRESENCE_ONLINE`, so the peer list reports nothing new. If your app recreates senders only when a peer update arrives, it stays dark after the restart. Keep the target on your own *wanted* list from the moment you serve it, and take it off only when the peer list says it is gone (`OFFLINE`, `LEAVING` or `RETIRED`).
+4. **Back off.** The new `qar_render_sender_create` blocks until the target asks for the stream, so a target that is still starting only holds your creating thread. Space the attempts anyway: wait 1 s before the first, double the wait for each attempt that ends without streaming, cap it at 15 s, and start over at 1 s once a sender streamed. Do not create senders in a tight loop; each one allocates GPU images.
+5. **Create off the render thread.** The blocking create must not hold up the senders of other targets.
+
+## Example
+
+This C program keeps one sender alive for one target. It creates the sender on a worker thread, renders while the stream is usable, and creates a new sender after a close. The `create_sender` helper fills the init as in [Rendering Streams](/docs/developer-guide/rendering-streams#creating-a-sender); the pose and frame code is the loop of [Render Loops](/docs/developer-guide/render-loops).
+
+```c
+#include <qar_streaming.h>
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct Serve
+{
+    QarSession*      session;
+    QarPeerId        target;
+    QarRenderSender* sender;      /* NULL while none exists                         */
+    uint64_t         retry_at_ms; /* no new sender before this time                 */
+    uint32_t         wait_ms;     /* back-off: 1 s, doubling to 15 s                */
+    bool             wanted;      /* cleared only when the peer list says "gone"    */
+} Serve;
+
+extern uint64_t now_ms(void);
+extern QarResult create_sender(QarSession*, QarPeerId, QarRenderSender**); /* blocks until the target answers */
+extern bool render_and_show(QarRenderSender*);                             /* one frame, false if none was ready */
+
+/* Called on every peer update for this target. The target stays ONLINE across a restart, so
+ * an update is not the signal to recreate the sender; it is only the signal to stop. */
+void on_target_presence(Serve* s, QarPeerPresence presence)
+{
+    s->wanted = (presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN);
+}
+
+static void drop_sender(Serve* s, bool streamed)
+{
+    qar_render_stream_handle_destroy(s->sender);
+    s->sender = NULL;
+    s->wait_ms = streamed ? 1000 : (s->wait_ms * 2 > 15000 ? 15000 : s->wait_ms * 2);
+    s->retry_at_ms = now_ms() + s->wait_ms;
+}
+
+/* One pass of the main loop. */
+void serve_target(Serve* s)
+{
+    if(!s->wanted)
+    {
+        if(s->sender)
+            drop_sender(s, true);
+        return;
+    }
+    if(!s->sender)
+    {
+        if(now_ms() < s->retry_at_ms)
+            return;
+        /* In a real app run this on a worker thread with a cancel token: it blocks until the
+         * target asks for the stream. */
+        QarResult created = create_sender(s->session, s->target, &s->sender);
+        if(qar_result_is_error(created))
+        {
+            s->sender = NULL;
+            s->wait_ms = s->wait_ms ? (s->wait_ms * 2 > 15000 ? 15000 : s->wait_ms * 2) : 1000;
+            s->retry_at_ms = now_ms() + s->wait_ms;
+        }
+        return;
+    }
+
+    QarRenderSenderStreamState state = QAR_RENDER_SENDER_STREAM_STATE_CLOSED;
+    QarResult read = qar_render_sender_get_stream_state(s->sender, &state);
+    if(qar_result_is_success(read) && state == QAR_RENDER_SENDER_STREAM_STATE_CLOSED)
+    {
+        drop_sender(s, true);   /* closed for good: a new sender after the wait */
+        return;
+    }
+    if(!render_and_show(s->sender))
+        return;                 /* paused, reconnecting, not ready: keep the sender */
+}
+```
+
+A frame call that returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` ends the sender the same way, so a loop that does not call `qar_render_sender_get_stream_state()` (a runtime older than that function returns `QAR_STATUS_NOT_IMPLEMENTED`) routes that code to `drop_sender`.
+
+The `vulkan_cube` program of the [Vulkan tutorial](/docs/developer-guide/tutorials/c/vulkan-rendering) does this for every target at once, with each target's sender created on a thread of its own.
+
+## C# and Unity
+
+The C# API has the same rules and the same codes: `sender.BeginFrame()` / `TryBeginFrame()` fail with `StatusCode.RenderingProducerStreamIsClosed`, and a new sender comes from `session.RenderSenders.Create(options)`. The C# `RenderSender` has no stream-state getter; the status codes above are the signal. Dispose the closed sender, then create a new one while the target is online:
+
+```csharp
+// On the render thread, per target you serve.
+Result<RenderFrameInfo> begun = sender.TryBeginFrame();
+if (begun.Info.StatusCode == StatusCode.RenderingProducerStreamIsClosed)
+{
+    sender.Dispose();
+    sender = null;
+    retryAt = Time.Now + wait;                        // 1 s, doubling to 15 s
+    wait = Math.Min(wait * 2, TimeSpan.FromSeconds(15));
+}
+// Elsewhere, while the target is in the peer list and sender == null and Time.Now >= retryAt:
+//   create on a worker task, because Create blocks until the target answers.
+```
+
+In Unity, do the same in the component that owns the sender: dispose the closed sender, and create the new one from a background task so the main thread never waits.
+
+## Checking it
+
+Crash the target, then start it again. The source should log the closed stream, and start streaming again a few seconds after the target is back, without being restarted. Doing this twice in a row shows that the wait resets after a sender streamed.
+
+## See also
+
+- [Render Loops: Stream states](/docs/developer-guide/render-loops#stream-states) for what each state returns from each call.
+- [Rendering Streams: Lifecycle and failure](/docs/developer-guide/rendering-streams#lifecycle-and-failure).
+- [Troubleshooting: Status codes that are part of normal flow](/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow).
+- [Peers](/docs/developer-guide/peers) for presence.

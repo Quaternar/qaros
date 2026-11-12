@@ -108,6 +108,25 @@ if let Err(error) = Command::new("explorer").arg(link).spawn() {
 
 A web page can link to the same URLs (`<a href="qaros://visualizer/v1/devices/pair-qr">Pair a headset</a>`); the browser asks the user once whether to open QAROS. From a terminal: `start "" "qaros://visualizer/v1/scene-origin/qr"`.
 
+## Several QAROS on one PC
+
+The operating system has one handler for `qaros://` links, and it hands a link to the **most recently started** QAROS of the session. That is the right guess for a web page, but not for an app that a QAROS started itself: a development hub of one worktree, a build folder started by hand and the installed QAROS can run side by side, and each starts its apps with `QAR_INSTANCE=<name>` (`default` for the installed QAROS, `dev-<hash>` for a development hub).
+
+An app that was started by QAROS opens a link for **its own** QAROS instead: it starts that instance's tray, `qaros.exe`, with `--own-instance` and the link.
+
+```
+"<tray of QAR_INSTANCE>\qaros.exe" --own-instance "qaros://visualizer/v1/devices/pair-qr"
+```
+
+- The tray of the instance is the `RuntimeFolder` value of `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a development hub), else the `bin` folder of that record's `InstallFolder`; for `default`, the `bin` folder of `InstallFolder` in `HKLM\SOFTWARE\Quaternar\QAROS`. It is the same folder the runtime of that instance loads from.
+- The tray gives the link to the running QAROS of its own instance, and to no other. If that QAROS is not running, it starts and then shows the link.
+- Start the tray without the inherited `QAR_APP_DATA_ROOT` and `QAR_LOCAL_ENROLLMENT_PIPE`, so it works out its own data folder.
+- The link itself is the same one as in the table above: there is no `instance` parameter, and a link that another process or a web page writes cannot choose an instance.
+- If `QAR_INSTANCE` is set but its tray cannot be found (the instance is not installed, or its build folder is gone), report the error; do not fall back to the system handler, which could open a different QAROS.
+- If `QAR_INSTANCE` is not set, your app was not started by QAROS: open the link through the system handler as shown above. It goes to the most recently started QAROS.
+
+The TerraExplorer add-on does this for its own panel buttons (Set up Meta Quest, METALENSE and Android XR, Show anchoring QR, Show headset onboarding QR).
+
 ## See also
 
 - [Managing devices](/docs/operator-guide/managing-devices): what the operator does with these dialogs.

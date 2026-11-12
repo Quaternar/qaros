@@ -310,6 +310,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** new page *When a Target Restarts*: what QAROS recovers by itself (reconnect, pause),
+  when a sender closes for good, the stream states and status codes to watch, recreating the sender
+  with a back-off while the target is in the peer list, with C code and the C# equivalent. Linked
+  from *Render Loops*, *Rendering Streams* and *Troubleshooting*. The Vulkan cube creates a new
+  sender after a close instead of waiting for a peer-list update.
+
 - **Docs:** the C and Rust Vulkan rendering tutorials and the Rust local-app onboarding tutorial
   link to the *Started by QAROS* section of *Onboarding and Sessions* again, and the 0.9.0
   *Onboarding and Rejoin* tutorial page is served instead of a redirect.

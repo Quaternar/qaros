@@ -193,8 +193,11 @@
  *
  * Subscribe first, then list the peers already there, so a target that joins
  * in between is not missed. The main thread then manages targets only: it
- * starts one for each new target app, restarts one that failed after 3 s, and
- * forgets one whose stream closed for good.
+ * starts one for each new target app and creates a new sender for every one
+ * whose sender ended, a stream closed for good included, after a wait that
+ * grows from 1 s to 15 s. A target that restarts keeps its peer id and stays
+ * online, so the peer list says nothing when its stream closes: the cube
+ * forgets a target only when the list says it is gone.
  * \snippet main.cpp vulkan_follow
  *
  * \subsection vulkan_sender_step 6. One sender per target
@@ -276,7 +279,9 @@
  * volume that does not resolve yet, or a target whose first head pose has not
  * arrived; the next pass tries again. Any other failure ends the target,
  * `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` included; a closed stream
- * is forgotten until the peer list offers the target again
+ * gets a new sender after a short wait while the peer list still shows the target
+ * (see
+ * <a href="/docs/developer-guide/restarting-targets">When a target restarts</a>)
  * (<a href="/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow">Status
  * codes that are part of normal flow</a>).
  *
@@ -349,7 +354,8 @@
  * | `This app no longer matches what QAROS approved ...` (exit 7) | `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH`: the executable moved, was copied or re-signed | revoke it in the Visualizer, then start it again |
  * | `` The session's GPU (...) names no graphics GPU with external memory/semaphore support `` (exit 1) | no Vulkan device on the session's adapter has a graphics queue and both extensions | update the GPU driver; check that the GPU is supported |
  * | `Connected. Waiting for rendering targets.` and nothing more | no target app runs in the session, or none answered its sender yet | open the Visualizer, or start a headset |
- * | `Expected separated stereo color/depth layout` | the sender reported another layout than the cube asked for | none in your setup; the cube ends that target and tries it again after 3 s |
+ * | `The stream to a target closed; creating a new sender in <n> s.` | the target restarted or was replaced and its old stream closed for good | none; the cube creates a new sender and serves the target again once it answers |
+ * | `Expected separated stereo color/depth layout` | the sender reported another layout than the cube asked for | none in your setup; the cube ends that target and tries it again after a short wait |
  * | no more frames after the "Vulkan Cube" volume was removed | begin-frame reports `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED`; a removed volume never resolves, and the cube does not recreate it | start the cube again |
  * | your own app crashes at exit | the Vulkan device was destroyed before the session | destroy the session first, the device last |
  *
@@ -385,6 +391,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -683,6 +690,8 @@ public:
 	bool Finished() const { return not m_ready || m_finished.load(); }
 	// The target is gone for good, not just failing for now.
 	bool StreamClosed() const { return m_closed.load(); }
+	// The sender and camera were up before the target ended.
+	bool WasStreaming() const { return m_created.load(); }
 
 	//! [vulkan_frame]
 	// One pass of the render loop for this target: a frame only when its
@@ -979,6 +988,11 @@ private:
 // A target can be rendered for unless the hub says it is gone or it announced its leave. UNKNOWN
 // is a hub that has not reconciled the peer yet (or an older hub that never does): nothing says
 // it is gone, so it counts.
+//
+// A closed stream is not a departure. A target that restarts under the same peer id, or one whose
+// pipeline the launcher rebuilt, closes the old stream while the peer stays online, so the peer
+// list reports nothing new. The cube therefore keeps serving every target until the list says it
+// is gone, and creates a new sender after each close (see TargetBook).
 bool
 IsReachable(QarPeerPresence presence)
 {
@@ -996,7 +1010,9 @@ struct Targets
 {
 	std::mutex lock;
 	std::map<PeerKey, QarPeerId> pending;
-	// Queues the peer when it is a reachable target app.
+	// Target apps the list says are gone; the cube stops recreating their senders.
+	std::set<PeerKey> departed;
+	// Queues the peer when it is a reachable target app, and notes it when a target app is gone.
 	void Offer(QarPeerSpec* spec)
 	{
 		QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
@@ -1006,7 +1022,7 @@ struct Targets
 		}
 		QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
 		QarPeerId id{};
-		if(not Check(qar_peer_spec_get_presence(spec, &presence)) || not IsReachable(presence)
+		if(not Check(qar_peer_spec_get_presence(spec, &presence))
 		   || not Check(qar_peer_spec_get_id(spec, &id)))
 		{
 			return;
@@ -1014,7 +1030,16 @@ struct Targets
 		PeerKey key{};
 		std::memcpy(key.data(), id.data, key.size());
 		const std::lock_guard<std::mutex> guard(lock);
-		pending.insert_or_assign(key, id);
+		if(IsReachable(presence))
+		{
+			departed.erase(key);
+			pending.insert_or_assign(key, id);
+		}
+		else
+		{
+			pending.erase(key);
+			departed.insert(key);
+		}
 	}
 	static void OnPeerUpdate(QarPeerSpec* spec, void* context)
 	{
@@ -1054,11 +1079,18 @@ struct Targets
 		}
 		return listedAll;
 	}
-	std::map<PeerKey, QarPeerId> Take()
+	// What the list reported since the last call.
+	struct Update
 	{
-		std::map<PeerKey, QarPeerId> taken;
+		std::map<PeerKey, QarPeerId> offered;
+		std::set<PeerKey> departed;
+	};
+	Update Take()
+	{
+		Update taken;
 		const std::lock_guard<std::mutex> guard(lock);
-		taken.swap(pending);
+		taken.offered.swap(pending);
+		taken.departed.swap(departed);
 		return taken;
 	}
 };
@@ -1074,18 +1106,31 @@ struct LoopOptions
 };
 
 // The targets the cube serves, managed between render passes: one is started
-// for each new target app, one that failed is restarted after 3 s, and one
-// whose stream closed for good is forgotten until the peer list offers it
-// again.
+// for each target app the peer list offers, and a new one replaces every
+// sender that ended, closed for good or failed, after a growing wait. A target
+// is forgotten only when the peer list says it is gone.
 struct TargetBook
 {
+	// The wait before a new sender: 1 s, doubling to 15 s while the target keeps
+	// ending without streaming, back to 1 s once a sender streamed.
+	static constexpr std::chrono::seconds kFirstWait{ 1 };
+	static constexpr std::chrono::seconds kLongestWait{ 15 };
+
 	std::map<PeerKey, QarPeerId> wanted;
 	std::map<PeerKey, std::unique_ptr<Target>> targets;
 	std::map<PeerKey, Clock::time_point> retries;
+	std::map<PeerKey, std::chrono::seconds> waits;
 
 	void Manage(Targets& found, const Scene& scene, RenderLoop loop, Clock::time_point now)
 	{
-		for(const auto& [key, id] : found.Take())
+		const Targets::Update update = found.Take();
+		for(const PeerKey& key : update.departed)
+		{
+			wanted.erase(key);
+			retries.erase(key);
+			waits.erase(key);
+		}
+		for(const auto& [key, id] : update.offered)
 		{
 			wanted.insert_or_assign(key, id);
 		}
@@ -1103,11 +1148,20 @@ struct TargetBook
 				++it;
 				continue;
 			}
+			// A sender that streamed starts over with the shortest wait; a target that
+			// ended before it streamed (not answering, a layout it refuses) backs off.
+			std::chrono::seconds& wait = waits.try_emplace(it->first, kFirstWait).first->second;
+			if(it->second->WasStreaming())
+			{
+				wait = kFirstWait;
+			}
 			if(it->second->StreamClosed())
 			{
-				wanted.erase(it->first);
+				std::cout << "The stream to a target closed; creating a new sender in "
+						  << wait.count() << " s.\n";
 			}
-			retries[it->first] = now + std::chrono::seconds(3);
+			retries[it->first] = now + wait;
+			wait = std::min(wait * 2, kLongestWait);
 			it = targets.erase(it);
 		}
 	}
