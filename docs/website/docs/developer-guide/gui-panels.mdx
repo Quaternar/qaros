@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. Panel content is currently **web content**: the panel renders a URI, which makes any existing web UI immediately usable in the room.
+GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. A panel shows **web content**: a page at a URI, which makes any existing web UI immediately usable in the room, or a page your app serves over the session itself ([served panels](#serving-panel-content-from-your-app)).
 
 The concepts (identity by common name, top-edge-midpoint pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
 
@@ -22,6 +22,8 @@ Panels are identified by a stable **common name**; `get_or_create` returns the e
 :::warning Required display name
 Set both the stable ASCII common name (`common_name` / `CommonName`) and a non-empty user-facing label (`display_name` / `DisplayName`) when creating or reopening a panel. The common name supplies identity; it is not a fallback label. C# option constructors leave `DisplayName` null, so set it explicitly in the initializer even though the property is nullable. An already open object may ignore creation options, which can hide an omitted label until a clean install or reopen.
 :::
+
+The display name is shown above the panel, so it must fit one line: UTF-8 with emoji, at most **64 characters** (Unicode code points, not bytes), no line breaks or other control characters, and no bidirectional formatting characters (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069). A name that breaks a rule fails the call with `QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID`; it is never shortened. Rename a panel later with `qar_gui_panels_change_display_name` (Rust: `GuiPanels::set_display_name`).
 
 <CodeTabs>
 <Lang value="c">
@@ -188,6 +190,106 @@ unsafe { (api.qar_impl_result_log_if_error)(result) };
 </Lang>
 </CodeTabs>
 
+## Serving panel content from your app
+
+A **served panel** shows a web page your application serves over the session itself: no web server, no URL, no video. You publish a folder or a list of files once as a **content bundle**; every user's mixer loads the page in its own browser and fetches the files from your app over the session, so each user has their own page state, scroll and focus. The page and your app exchange JSON messages.
+
+- **Publishing copies the files.** Nothing on disk is read while serving, so a request can reach only a file the bundle lists. To change a file, publish the bundle again: its version goes up and every panel showing it reloads.
+- **The content belongs to your app.** Only the session that published a bundle may put it on a panel, receives the panels' messages and posts to them (`QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER` otherwise). Users and other apps may still move, resize, hide or close the panel.
+- **Each message is stamped** with the panel and the user (the target peer) it comes from. Treat it as input from that user: check it against what you expect and authorise it per user before acting on it.
+- **Pages run sandboxed to their bundle**: scripts, styles and assets from the bundle only, no network access. Inline scripts do not run.
+- **Rules**: relative `/`-separated paths (no `..`, backslash, `:` or `%`), web file types from a fixed list (html, js, mjs, css, json, svg, png, jpg, gif, webp, ico, fonts, wasm, glb, gltf, bin, audio, video), 16 MiB per file, 64 MiB and 1024 files per bundle, 64 KiB per message. Each refusal has its own `QAR_STATUS_PANEL_CONTENT_*` code.
+
+In the page:
+
+```js
+qaros.panel.onMessage(msg => render(msg));    // from your app
+qaros.panel.send({ t: "call", name: "start" }); // to your app
+```
+
+In your app:
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+QarPanelContentBundleId bundle;
+qar_result_log_if_error(qar_panel_content_publish_directory(
+    session, "ui", "C:/MyApp/panels", &bundle)); /* folder with inspector/index.html */
+
+QarGuiPanelServedContentExt served = qar_gui_panel_served_content_ext_default();
+served.bundle = bundle;
+served.entry = "inspector/index.html";
+
+QarGuiPanelInit init = qar_gui_panel_init_default();
+init.header.next = &served.header;
+init.common_name = "inspector.myapp.example.com";
+init.display_name = "Inspector";
+QarGuiPanelId panel_id;
+qar_result_log_if_error(qar_gui_panels_get_or_create(session, &init, &panel_id));
+
+/* Messages from every panel showing the bundle; reply to one panel and user. */
+static void on_message(const QarPanelContentMessage* message, void* user_state)
+{
+    /* message->json, message->panel, message->user: valid during the call only */
+}
+qar_panel_content_subscribe_messages(session, &bundle, on_message, NULL, token);
+qar_panel_content_post_message(session, &bundle, &panel_id, NULL, "{\"t\":\"state\"}");
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+PanelContentBundleId bundle = session.PanelContent
+    .PublishDirectory("ui", @"C:\MyApp\panels").ValueOrThrow();
+
+GuiPanelId panelId = session.GuiPanels.GetOrCreate(
+    new GuiPanelOptions("inspector.myapp.example.com")
+    {
+        DisplayName = "Inspector",
+        ServedContent = new GuiPanelServedContent(bundle, "inspector/index.html"),
+    }).ValueOrThrow();
+
+using IDisposable messages = session.PanelContent.SubscribeMessages(bundle, (_, e) =>
+{
+    // e.Message.Json, e.Message.Panel, e.Message.User
+}).ValueOrThrow();
+session.PanelContent.PostMessage(bundle, "{\"t\":\"state\"}", panelId).EnsureSuccess();
+```
+
+</Lang>
+<Lang value="rust">
+
+{/* Generated by cargo xtask guide from examples/guide/gui-panels.md of the Rust binding. Edit that file, not this tab. */}
+
+```rust
+let content = session.panel_content();
+// A folder holding inspector/index.html and its scripts, styles and images.
+let bundle = content.publish_directory("ui", std::path::Path::new("C:/MyApp/panels"))?;
+
+let config = GuiPanelConfig {
+    display_name: Some("Inspector".to_string()),
+    served: Some(GuiPanelServedContent {
+        bundle: bundle.clone(),
+        entry: "inspector/index.html".to_string(),
+    }),
+    ..GuiPanelConfig::new("inspector.myapp.example.com")
+};
+let panel_id = session.gui_panels().get_or_create(&config)?;
+
+// Messages from every panel showing the bundle, stamped with panel and user.
+let messages = content.subscribe_messages(&bundle, |message| {
+    log::info!("{} from {}: {}", message.panel, message.user, message.json);
+})?;
+content.post_message(&bundle, r#"{"t":"state"}"#, Some(panel_id), None)?;
+```
+
+</Lang>
+</CodeTabs>
+
+Change the page a panel shows with `qar_gui_panels_set_served_content` (C# `SetServedContent`, Rust `GuiPanels::set_served_content`), and stop serving with `qar_panel_content_remove`. A website or stream panel cannot become a served panel.
+
 ## Observing panels
 
 Your app can react to panels changing — whether changed by another peer, another app, or a user grabbing the panel in the room:
@@ -195,7 +297,7 @@ Your app can react to panels changing — whether changed by another peer, anoth
 - `qar_gui_panels_subscribe_updates(session, callback, state)` — all panels,
 - `qar_gui_panels_subscribe_panel_updates(session, &panel_id, callback, state)` — one panel,
 - `qar_query_gui_panels_count` / `qar_query_gui_panels` — enumerate current panels (count-then-fetch),
-- per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_uri`, `_get_visible_to_peers`.
+- per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_type`, `_get_content_uri`, `_get_content_served`, `_get_visible_to_peers`.
 
 Update callbacks arrive on library threads — see the [callback rules](/docs/developer-guide/api-conventions#4-blocking--async-pairs).
 
@@ -205,7 +307,7 @@ In Rust, `session.gui_panels()` lists the panels (`list`) and subscribes to all 
 
 **Expose your app's existing web UI.** If your application already serves a web frontend (local status page, embedded HTTP server), a panel is a one-call integration: `get_or_create` + `navigate_to_uri` pointing at your server. Interaction happens directly in the room.
 
-**Drive app state from a panel.** Host a small web page that calls back into your application (REST/WebSocket). The panel is shared, so any user in the room can press the buttons; your app sees the effect and updates its rendered content accordingly.
+**Drive app state from a panel.** Serve the panel's page from your app and handle its messages ([served panels](#serving-panel-content-from-your-app)), or host a small web page that calls back into your application (REST/WebSocket). The panel is shared, so any user in the room can press the buttons; your app sees the effect and updates its rendered content accordingly.
 
 **Attach a panel to your app volume.** Panels don't parent to volumes automatically, but you can keep one docked: subscribe to your volume's pose updates and reposition the panel relative to it. Remember the differing conventions — panel pose is the **midpoint of its top edge**, volume pose is the **center**.
 

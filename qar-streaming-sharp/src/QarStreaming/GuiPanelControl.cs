@@ -10,8 +10,8 @@ using Quaternar.Qaros.Mathematics;
 namespace Quaternar.Qaros
 {
     /// <summary>
-    /// The session's GUI panels: shared 2D surfaces in the room showing a web page or a video
-    /// stream. Reached through <see cref="Session.GuiPanels"/>.
+    /// The session's GUI panels: shared 2D surfaces in the room showing a web page, a video
+    /// stream, or a page this session serves (<see cref="PanelContentControl"/>). Reached through <see cref="Session.GuiPanels"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -83,7 +83,8 @@ namespace Quaternar.Qaros
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
         /// <exception cref="ArgumentException">
-        /// <see cref="GuiPanelOptions.CommonName"/> is null, or both a URI and a stream id are set.
+        /// <see cref="GuiPanelOptions.CommonName"/> is null, or more than one of a URI, a stream id and
+        /// served content are set.
         /// </exception>
         public Result<GuiPanelId> GetOrCreate(GuiPanelOptions options)
         {
@@ -91,8 +92,9 @@ namespace Quaternar.Qaros
                 throw new ArgumentNullException(nameof(options));
             if (options.CommonName == null)
                 throw new ArgumentException("GuiPanelOptions.CommonName is required.", nameof(options));
-            if (options.ContentUri != null && options.ContentStreamId.HasValue)
-                throw new ArgumentException("A GUI panel can have either URI or stream content, but not both.", nameof(options));
+            var contentKinds = (options.ContentUri != null ? 1 : 0) + (options.ContentStreamId.HasValue ? 1 : 0) + (options.ServedContent != null ? 1 : 0);
+            if (contentKinds > 1)
+                throw new ArgumentException("A GUI panel shows one of URI, stream or served content, not several.", nameof(options));
             using (var scope = new NativeMemoryScope())
             using (var chain = NativeStructureChain.From(options.Extension))
             {
@@ -230,6 +232,41 @@ namespace Quaternar.Qaros
             using (var nativeUri = NativeUtf8String.FromUtf8(uri))
             using (var session = _context.Borrow())
                 return Results.FromNative(NativeMethods.qar_impl_gui_panels_navigate_to_uri(session.Handle, ref nativeId, nativeUri.Pointer));
+        }
+
+        /// <summary>
+        /// Replaces the panel's display name, for any content type: UTF-8, emoji included, at most
+        /// 64 characters (Unicode code points), no control or bidirectional formatting
+        /// characters. A refused name fails with <see cref="StatusCode.GuiPanelDisplayNameInvalid"/>
+        /// and is never shortened; the panel keeps its previous name. Empty shows no name.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="displayName"/> is null.</exception>
+        public Result<Unit> ChangeDisplayName(GuiPanelId id, string displayName)
+        {
+            if (displayName == null)
+                throw new ArgumentNullException(nameof(displayName));
+            var nativeId = id.ToNative();
+            using (var nativeName = NativeUtf8String.FromUtf8(displayName))
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_gui_panels_change_display_name(session.Handle, ref nativeId, nativeName.Pointer));
+        }
+
+        /// <summary>
+        /// Shows another page, or another bundle of this session, on a served panel. Only the
+        /// bundle's publisher may assign it: a bundle another session published fails with
+        /// <see cref="StatusCode.PanelContentNotPublisher"/>. A web or stream panel fails with
+        /// <see cref="StatusCode.GuiPanelChangeNotPermitted"/>: content type is fixed at creation.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="content"/> is null.</exception>
+        public Result<Unit> SetServedContent(GuiPanelId id, GuiPanelServedContent content)
+        {
+            if (content == null)
+                throw new ArgumentNullException(nameof(content));
+            var nativeId = id.ToNative();
+            var nativeBundle = content.Bundle.ToNative();
+            using (var entry = NativeUtf8String.FromUtf8(content.Entry))
+            using (var session = _context.Borrow())
+                return Results.FromNative(NativeMethods.qar_impl_gui_panels_set_served_content(session.Handle, ref nativeId, ref nativeBundle, entry.Pointer));
         }
 
         /// <summary>
@@ -513,6 +550,15 @@ namespace Quaternar.Qaros
                 {
                     Header = NativeDefaults.Header(StructureType.GuiPanelStreamIdExt, next),
                     StreamId = options.ContentStreamId.Value.ToNative()
+                });
+            }
+            if (options.ServedContent != null)
+            {
+                return scope.AllocStruct(new GuiPanelServedContentExtNative
+                {
+                    Header = NativeDefaults.Header(StructureType.GuiPanelServedContentExt, next),
+                    Bundle = options.ServedContent.Bundle.ToNative(),
+                    Entry = scope.AllocUtf8(options.ServedContent.Entry)
                 });
             }
             if (options.ContentUri != null)

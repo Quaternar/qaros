@@ -15,5 +15,7 @@ mod gui_panels;
 mod onboarding_and_sessions;
 mod peers;
 mod peers_identity;
+mod qaros_links;
+mod render_loops;
 mod rendering_streams;
 mod troubleshooting;

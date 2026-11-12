@@ -27,6 +27,26 @@ namespace Quaternar.Qaros
         LogicError = 7,
         GuiPanelChangeNotPermitted = 304,
         GuiPanelInvalidId = 305,
+        /// <summary>
+        /// A GUI panel display name was refused: more than 64 characters (Unicode code points),
+        /// not valid UTF-8, or holding a control or bidirectional formatting character. The panel
+        /// keeps its previous name.
+        /// </summary>
+        GuiPanelDisplayNameInvalid = 306,
+        /// <summary>A content bundle name was refused: 1 to 64 characters of A-Z, a-z, 0-9, '.', '_' and '-', not starting with '.'.</summary>
+        PanelContentBundleRefused = 340,
+        /// <summary>A bundle path was refused: not relative, holding '..', a backslash, ':', '%' or a control character, or a link in a published folder.</summary>
+        PanelContentPathRefused = 341,
+        /// <summary>A bundle file's extension is not served, or its declared MIME type does not match it.</summary>
+        PanelContentMimeRefused = 342,
+        /// <summary>A bundle file is larger than 16 MiB, the bundle larger than 64 MiB, or it holds no file or more than 1024.</summary>
+        PanelContentSizeRefused = 343,
+        /// <summary>The bundle was published by another session; only its publisher may assign, remove or message it.</summary>
+        PanelContentNotPublisher = 344,
+        /// <summary>This session publishes no bundle of that name, or the folder to publish does not exist.</summary>
+        PanelContentNotFound = 345,
+        /// <summary>A panel message is not one JSON value or is larger than 64 KiB.</summary>
+        PanelContentMessageRefused = 346,
         AppVolumeInvalidId = 325,
         /// <summary>
         /// A gesture configuration was refused because a rule in it could never
@@ -43,6 +63,25 @@ namespace Quaternar.Qaros
         MediaStreamingDestinationReservationFailed = 605,
         MediaStreamingSendPipelineFailed = 606,
         MediaStreamingLayoutChangeFailed = 607,
+        /// <summary>
+        /// The application's own graphics device (<see cref="StreamParamsVulkan"/>, or the D3D11
+        /// device it handed a sender or receiver) is on another GPU than the session's. Nothing was
+        /// created; the message names both adapters. Create the device on the adapter
+        /// <see cref="Session.GetGraphicsDeviceId"/> reports.
+        /// </summary>
+        MediaStreamingDeviceOnAnotherAdapter = 609,
+        /// <summary>
+        /// The session was created without a graphics device
+        /// (<see cref="OnboardOptions.WithoutGraphicsDevice"/>), so it streams no media and
+        /// reports no adapter. Nothing was created. Onboard without the option to stream.
+        /// </summary>
+        GraphicsDeviceNotInitialized = 610,
+        /// <summary>
+        /// No head pose has arrived from the viewer yet, so there is no pose to render with.
+        /// Recoverable: <see cref="RenderSender.NextRenderPose"/> succeeds once the viewer's first
+        /// pose is in.
+        /// </summary>
+        RenderingProducerMissingPoseData = 801,
         RenderingProducerUnableToDoBeginFrame = 803,
         RenderingProducerStreamIsClosed = 804,
         /// <summary>

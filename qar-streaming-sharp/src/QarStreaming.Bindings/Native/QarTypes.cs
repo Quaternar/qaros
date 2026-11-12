@@ -628,6 +628,13 @@ namespace Quaternar.Qaros.Interop
         public byte[] Uuid;
     }
 
+    /// <summary>C <c>QarGraphicsDeviceDisabledExt</c>: the header alone.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct GraphicsDeviceDisabledExtNative
+    {
+        public StructureHeaderNative Header;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct SessionLifecycleInfoNative
     {
@@ -682,6 +689,44 @@ namespace Quaternar.Qaros.Interop
     {
         public StructureHeaderNative Header;
         public IntPtr Url;
+    }
+
+    /// <summary>QarPanelContentBundleId: the publisher and a NUL-terminated ASCII name.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PanelContentBundleIdNative
+    {
+        public const int NameCapacity = 65;
+        public PeerIdNative Publisher;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = NameCapacity)]
+        public byte[] Name;
+        public static PanelContentBundleIdNative CreateDefault() { return new PanelContentBundleIdNative { Publisher = PeerIdNative.CreateDefault(), Name = new byte[NameCapacity] }; }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct GuiPanelServedContentExtNative
+    {
+        public StructureHeaderNative Header;
+        public PanelContentBundleIdNative Bundle;
+        public IntPtr Entry;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PanelContentFileNative
+    {
+        public IntPtr Path;
+        public IntPtr MimeType;
+        public IntPtr Data;
+        public UIntPtr Size;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PanelContentMessageNative
+    {
+        public GuiPanelIdNative Panel;
+        public PeerIdNative User;
+        public ulong Sequence;
+        public IntPtr Json;
+        public UIntPtr JsonSize;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -799,6 +844,13 @@ namespace Quaternar.Qaros.Interop
     {
         public StructureHeaderNative Header;
         public ColorEncoding ColorEncoding;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RenderSenderRenderLoopExtNative
+    {
+        public StructureHeaderNative Header;
+        public RenderLoop RenderLoop;
     }
 
     [StructLayout(LayoutKind.Sequential)]

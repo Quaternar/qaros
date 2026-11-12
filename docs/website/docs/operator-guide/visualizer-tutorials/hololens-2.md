@@ -14,8 +14,9 @@ player. No Developer Mode, no Device Portal, no cable.
 ## 1. Install the player
 
 1. **Session** › **Devices**, scroll to **Set up or update a device**.
-2. Set **Device type** to **HoloLens · Install code**. Four steps are listed: **Show the install
-   code**, **Trust the QAROS certificate**, **Install QAROS Player**, **Invite the HoloLens**.
+2. Set **Device type** to **HoloLens · Install code**. Five steps are listed: **Show the install
+   code**, **Trust the QAROS certificate**, **Install QAROS Player**, **Invite the HoloLens**,
+   **Anchor: look at the anchoring QR code**.
 3. Under **Show the install code**, click **Show install code**. The **Install QAROS Player on
    HoloLens** dialog shows a QR code and, beside it:
 
@@ -66,6 +67,11 @@ A HoloLens with an older player build (package version `1.0.0.0`) must uninstall
 
 On the first run the connection can take a while. If the player does not show *Receiving...* within
 about 60 seconds, reboot the HoloLens and invite it again.
+
+Then anchor it: in the last setup step, **Anchor: look at the anchoring QR code**, click **Show
+anchoring QR code** and look at the code with the HoloLens until *Anchor your headset: look at the
+anchoring QR code* goes. The HoloLens does not report its anchor, so click **Mark as done**
+yourself ([Scene Origin](./scene-origin-and-rooms.md#4-anchor-each-device)).
 
 ## 3. Start and stop streaming
 

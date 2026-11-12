@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use qaros::{
     AppState, AppVolumeConfig, BlockingOptions, ColorAlphaMode, ColorEncoding, Error, Eye,
     GraphicsAdapter, GuiPanelConfig, GuiPanelState, Library, OnboardExtensions, OnboardMethod,
-    OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose, RuntimeConfig, SessionChangeCause,
-    SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
+    OwnedFrame, PeerId, PeerPresentation, PixelFormat, Pose, RenderLoop, RuntimeConfig,
+    SessionChangeCause, SessionLifecycleState, ShowParams, StatusCode, Vec3, ViewKind,
 };
 use qaros_stub::frame_stamp;
 
@@ -28,6 +28,8 @@ mod async_create;
 #[cfg(qaros_d3d11)]
 #[path = "stub/d3d11_path.rs"]
 mod d3d11_path;
+#[path = "stub/graphics_device.rs"]
+mod graphics_device;
 #[path = "stub/onboarding.rs"]
 mod onboarding;
 #[path = "stub/raw_handles.rs"]
@@ -585,6 +587,185 @@ fn gui_panels_and_app_volumes_round_trip() {
     drop(runtime);
     drop(library);
     assert_eq!(fixture.control.live_handle_count(), 0);
+}
+
+#[test]
+fn a_served_panel_shows_its_publishers_bundle_and_only_the_publisher_changes_it() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let content = session.panel_content();
+    let index = qaros::PanelContentFile {
+        path: "index.html".to_owned(),
+        mime_type: None,
+        data: b"<p>served</p>".to_vec(),
+    };
+
+    let refused = content
+        .publish_files("bad/name", std::slice::from_ref(&index))
+        .expect_err("bad name");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_BUNDLE_REFUSED));
+    let traversal = qaros::PanelContentFile {
+        path: "../index.html".to_owned(),
+        ..index.clone()
+    };
+    let refused = content
+        .publish_files("ui", &[traversal])
+        .expect_err("traversal");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_PATH_REFUSED));
+    let too_long = content
+        .remove(&qaros::PanelContentBundleId {
+            publisher: PeerId::ZERO,
+            name: "n".repeat(qaros::PANEL_CONTENT_BUNDLE_NAME_MAX + 1),
+        })
+        .expect_err("name too long");
+    assert!(matches!(too_long, Error::InvalidArgument { .. }));
+
+    let bundle = content
+        .publish_files("ui", std::slice::from_ref(&index))
+        .expect("publish");
+    assert_eq!(bundle.name, "ui");
+    assert!(!bundle.publisher.is_zero());
+
+    let panels = session.gui_panels();
+    let mut config = GuiPanelConfig::new("served.tests.qaros");
+    config.display_name = Some("Inspector".to_owned());
+    config.served = Some(qaros::GuiPanelServedContent {
+        bundle: bundle.clone(),
+        entry: "index.html".to_owned(),
+    });
+    let panel = panels.get_or_create(&config).expect("served panel");
+    let listed = panels.list().expect("list");
+    assert_eq!(listed[0].content_type, qaros::GuiPanelContentType::Served);
+    assert_eq!(listed[0].served, config.served);
+    assert_eq!(listed[0].content_uri, "");
+
+    let foreign = qaros::PanelContentBundleId {
+        publisher: PeerId([7; 16]),
+        name: "ui".to_owned(),
+    };
+    let refused = panels
+        .set_served_content(
+            panel,
+            &qaros::GuiPanelServedContent {
+                bundle: foreign.clone(),
+                entry: "index.html".to_owned(),
+            },
+        )
+        .expect_err("foreign bundle");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_NOT_PUBLISHER));
+    let settings = qaros::GuiPanelServedContent {
+        bundle: bundle.clone(),
+        entry: "settings.html".to_owned(),
+    };
+    panels
+        .set_served_content(panel, &settings)
+        .expect("change entry");
+    assert_eq!(panels.list().expect("list")[0].served, Some(settings));
+
+    let subscription = content
+        .subscribe_messages(&bundle, |_message| {})
+        .expect("subscribe");
+    content
+        .post_message(&bundle, r#"{"t":"state"}"#, Some(panel), None)
+        .expect("post");
+    let refused = content
+        .post_message(&foreign, "1", None, None)
+        .expect_err("foreign post");
+    assert!(refused.has_code(StatusCode::PANEL_CONTENT_NOT_PUBLISHER));
+    subscription.cancel().expect("cancel");
+
+    content.remove(&bundle).expect("remove");
+    let gone = content.remove(&bundle).expect_err("removed twice");
+    assert!(gone.has_code(StatusCode::PANEL_CONTENT_NOT_FOUND));
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_gui_panel_display_name_is_changed_and_a_refused_one_is_never_shortened() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let runtime = library
+        .create_runtime(&fixture.runtime_config())
+        .expect("runtime");
+    let session = runtime
+        .onboard(
+            &code("ABCD-EFGH"),
+            &PeerPresentation::default(),
+            &BlockingOptions::default(),
+        )
+        .expect("onboard")
+        .session;
+    let panels = session.gui_panels();
+
+    let mut too_long = GuiPanelConfig::new("too-long.tests.qaros");
+    too_long.display_name = Some("a".repeat(65));
+    let refused = panels.get_or_create(&too_long).expect_err("65 characters");
+    assert!(refused.has_code(StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID));
+    assert_eq!(
+        panels.list().expect("list"),
+        Vec::<qaros::GuiPanelInfo>::new()
+    );
+
+    let mut config = GuiPanelConfig::new("named.tests.qaros");
+    // 64 four-byte characters: the limit counts characters, not bytes.
+    let longest = "\u{1F3AC}".repeat(64);
+    config.display_name = Some(longest.clone());
+    let panel = panels.get_or_create(&config).expect("64 characters");
+    assert_eq!(panels.list().expect("list")[0].display_name, longest);
+
+    let (forward, updates) = qaros::channel();
+    let subscription = panels.subscribe_panel(panel, forward).expect("subscribe");
+    panels.set_display_name(panel, "Inspector").expect("rename");
+    assert_eq!(
+        updates.try_recv().expect("update").display_name,
+        "Inspector"
+    );
+
+    for bad in ["two\nlines", "\u{202E}gnp.exe", &"a".repeat(65)] {
+        let refused = panels
+            .set_display_name(panel, bad)
+            .expect_err("refused name");
+        assert!(refused.has_code(StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID));
+    }
+    assert_eq!(panels.list().expect("list")[0].display_name, "Inspector");
+
+    let interior_nul = panels
+        .set_display_name(panel, "a\0b")
+        .expect_err("interior NUL");
+    assert!(matches!(interior_nul, Error::InvalidArgument { .. }));
+
+    fixture
+        .control
+        .fail_next("gui_panels_change_display_name", 7);
+    let injected = panels
+        .set_display_name(panel, "Renamed")
+        .expect_err("injected");
+    assert_eq!(
+        injected.to_string(),
+        "qar_gui_panels_change_display_name failed with QAR_STATUS_LOGIC_ERROR (7): injected \
+         failure"
+    );
+
+    let missing = panels
+        .set_display_name(qaros::GuiPanelId([3; 16]), "Name")
+        .expect_err("unknown panel");
+    assert!(missing.has_code(StatusCode::GUI_PANEL_INVALID_ID));
+
+    subscription.cancel().expect("cancel");
+    drop(session);
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 
 #[allow(deprecated)] // exercises the deprecated onboarding paths
@@ -1496,6 +1677,110 @@ fn the_colour_declarations_are_chained_only_when_set() {
             "render sender colour alpha_mode=3 color_encoding=none".to_string(),
         ]
     );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn the_render_loop_is_chained_only_when_free_running() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    drop(request_driven);
+    config.render_loop = RenderLoop::FreeRunning;
+    config.color_encoding = ColorEncoding::Linear;
+    let free_running = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender beside a colour declaration");
+    drop(free_running);
+
+    assert_eq!(
+        fixture
+            .control
+            .entries_starting_with("render sender render_loop="),
+        vec!["render sender render_loop=1".to_string()]
+    );
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn the_next_render_pose_is_the_pose_the_next_frame_opens_with() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    let refused = request_driven.next_render_pose(2);
+    assert!(
+        refused
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{refused:?}"
+    );
+    drop(request_driven);
+
+    config.render_loop = RenderLoop::FreeRunning;
+    let mut sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender");
+    let too_many = sender.next_render_pose(config.views.len() + 1);
+    assert!(
+        too_many
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{too_many:?}"
+    );
+    let poses = sender.next_render_pose(2).expect("next render pose");
+    assert_eq!(poses.len(), 2);
+    let frame = sender
+        .begin_owned_frame(&BlockingOptions::default())
+        .expect("frame");
+    for (index, pose) in poses.iter().enumerate() {
+        assert_eq!(frame.view(index).expect("view"), *pose);
+    }
+    assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
+}
+
+#[test]
+fn a_free_running_sender_is_ready_again_once_its_frame_is_shown() {
+    let fixture = Fixture::new();
+    let library = load_stub();
+    let (_runtime, session) = onboarded_session(&fixture, &library);
+    let mut config = stereo_color_and_depth(VISUALIZER_PEER);
+    let request_driven = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("request-driven sender");
+    let refused = request_driven.is_ready_for_next_frame();
+    assert!(
+        refused
+            .as_ref()
+            .is_err_and(|error| error.has_code(StatusCode::LOGIC_ERROR)),
+        "{refused:?}"
+    );
+    drop(request_driven);
+
+    config.render_loop = RenderLoop::FreeRunning;
+    let mut sender = session
+        .create_render_sender(&config, &BlockingOptions::default())
+        .expect("free-running sender");
+    assert!(sender.is_ready_for_next_frame().expect("ready"));
+    sender.next_render_pose(2).expect("next render pose");
+    let frame = sender
+        .begin_owned_frame(&BlockingOptions::default())
+        .expect("frame");
+    frame
+        .show(&ShowParams {
+            near: 0.1,
+            far: 10.0,
+            depth_scale: 1.0,
+        })
+        .expect("show");
+    assert!(sender.is_ready_for_next_frame().expect("ready"));
     assert_eq!(fixture.errors_in_log(), Vec::<String>::new());
 }
 

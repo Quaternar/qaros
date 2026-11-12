@@ -14,9 +14,9 @@ use crate::Stub;
 use crate::exports::{StubApi, StubReturn};
 use crate::frame_stamp::{self, ViewArea};
 use crate::state::{
-    self, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubPanel, StubSubscription,
-    StubVolume, SubscriptionKind, destroy_handle, handle_value, new_handle, note, success,
-    write_c_string,
+    self, RemotePeer, ReportedAdapter, ScenarioAction, ScenarioStep, StubBundle, StubPanel,
+    StubServedContent, StubSubscription, StubVolume, SubscriptionKind, destroy_handle,
+    handle_value, new_handle, note, success, write_c_string,
 };
 
 const RUNTIME: &str = "runtime";
@@ -60,6 +60,9 @@ struct SessionValue {
     /// mints co-process invites for. (The runtime's hub also mints them for a process its
     /// launcher started, which the stub cannot tell from another invite.)
     local_app: bool,
+    /// Created with `QarGraphicsDeviceDisabledExt`: media streaming calls and
+    /// `qar_session_get_graphics_device_id` return `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
+    graphics_device_disabled: bool,
     /// This application's own presence, role and device: the desktop default, or what it
     /// declared at onboard, rejoin or `qar_peer_update_device_identity`.
     device: PeerIdentityValue,
@@ -216,6 +219,8 @@ struct RenderSenderValue {
     /// has not completed. On the real runtime that wait holds the sender
     /// alive past its handle's destruction.
     begin_wait_started: Option<Instant>,
+    /// Created with `QAR_RENDER_LOOP_FREE_RUNNING`, so `next_render_pose` answers.
+    free_running: bool,
 }
 
 struct FrameInfoValue {
@@ -876,6 +881,7 @@ unsafe fn create_session(
     onboarding_id: [u8; 16],
     presentation: &QarPeerPresentation,
     local_app: bool,
+    graphics_device_disabled: bool,
 ) -> *mut QarSession {
     // SAFETY: presentation strings are valid C strings or NULL.
     let (display_name, app_version, custom_info) = unsafe {
@@ -894,6 +900,7 @@ unsafe fn create_session(
             app_version,
             custom_info,
             local_app,
+            graphics_device_disabled,
             // SAFETY: the presentation's chain was checked by check_presentation.
             device: unsafe { declared_device(presentation) },
         },
@@ -967,6 +974,8 @@ struct OnboardPlan {
     /// A local app, or a runtime with ephemeral storage: nothing persisted, the zero id.
     stateless: bool,
     local_app: bool,
+    /// `QarGraphicsDeviceDisabledExt` was chained.
+    graphics_device_disabled: bool,
     /// The slot to re-enroll (`QarOnboardInit::onboarding_id`); `None` for a new identity.
     requested_id: Option<[u8; 16]>,
 }
@@ -1002,6 +1011,13 @@ unsafe fn check_onboard(
     // SAFETY: the chain was validated, so it holds a mode extension first.
     let mode = unsafe { (*init.header.next.cast_const().cast::<QarStructureHeader>()).type_ };
     let local_app = mode == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_LOCAL_APP_EXT;
+    // SAFETY: the chain was validated.
+    let graphics_device_disabled = unsafe {
+        chain_holds(
+            init.header.next.cast_const().cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        )
+    };
     // SAFETY: runtime comes from this stub.
     let ephemeral = unsafe { runtime_is_ephemeral(runtime) };
     let requested_id = (init.onboarding_id.data != [0; 16]).then_some(init.onboarding_id.data);
@@ -1027,6 +1043,7 @@ unsafe fn check_onboard(
         storage,
         stateless: local_app || ephemeral,
         local_app,
+        graphics_device_disabled,
         requested_id,
     })
 }
@@ -1043,7 +1060,15 @@ unsafe fn finish_onboard(
 ) -> Result<([u8; 16], *mut QarSession), QarResult> {
     if plan.stateless {
         // SAFETY: forwarded to the caller.
-        let session = unsafe { create_session(runtime, [0; 16], presentation, plan.local_app) };
+        let session = unsafe {
+            create_session(
+                runtime,
+                [0; 16],
+                presentation,
+                plan.local_app,
+                plan.graphics_device_disabled,
+            )
+        };
         return Ok(([0; 16], session));
     }
     let onboarding_id = plan.requested_id.unwrap_or_else(fresh_identity);
@@ -1062,8 +1087,73 @@ unsafe fn finish_onboard(
         ));
     }
     // SAFETY: forwarded to the caller.
-    let session = unsafe { create_session(runtime, onboarding_id, presentation, false) };
+    let session = unsafe {
+        create_session(
+            runtime,
+            onboarding_id,
+            presentation,
+            false,
+            plan.graphics_device_disabled,
+        )
+    };
     Ok((onboarding_id, session))
+}
+
+/// Whether a chain holds an extension of `extension_type`.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped structures.
+unsafe fn chain_holds(
+    mut next: *const QarStructureHeader,
+    extension_type: QarStructureType,
+) -> bool {
+    while !next.is_null() {
+        // SAFETY: forwarded to the caller.
+        let header = unsafe { &*next };
+        if header.type_ == extension_type {
+            return true;
+        }
+        next = header.next.cast_const().cast();
+    }
+    false
+}
+
+/// Whether a checked `QarRejoinInit` chains `QarGraphicsDeviceDisabledExt`.
+///
+/// # Safety
+///
+/// `init` passed [`check_rejoin`].
+unsafe fn rejoin_disables_graphics(init: *const QarRejoinInit) -> bool {
+    // SAFETY: forwarded to the caller.
+    unsafe {
+        chain_holds(
+            (*init).header.next.cast_const().cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        )
+    }
+}
+
+/// `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` when `session` was created without a graphics
+/// device, as the runtime returns from every media streaming call there.
+///
+/// # Safety
+///
+/// `session` must be null or a handle from this stub.
+unsafe fn refuse_without_graphics_device(
+    session: *const QarSession,
+    function: &str,
+) -> Result<(), QarResult> {
+    // SAFETY: forwarded to the caller.
+    let disabled =
+        unsafe { session_value(session) }.is_some_and(|session| session.graphics_device_disabled);
+    if disabled {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED,
+            format!("{function}: the session was created without a graphics device"),
+        ));
+    }
+    Ok(())
 }
 
 /// The synchronous checks of `qar_runtime_rejoin`.
@@ -1631,6 +1721,8 @@ unsafe fn create_sender_value(
     if unsafe { session_value(session) }.is_none() {
         return Err(invalid("session is not a live handle"));
     }
+    // SAFETY: session comes from this stub.
+    unsafe { refuse_without_graphics_device(session, "qar_render_sender_create") }?;
     // SAFETY: header checked.
     let init = unsafe { &*init };
     if init.peer_id.data == [0; 16] {
@@ -1649,8 +1741,9 @@ unsafe fn create_sender_value(
         ));
     }
     // SAFETY: the chain is the caller's stamped extension structures.
-    let graphics_extension = unsafe { render_sender_graphics_extension(init) }?;
+    let (graphics_extension, free_running) = unsafe { render_sender_graphics_extension(init) }?;
     let mut sender = build_sender(session as usize, init);
+    sender.free_running = free_running;
     if init.graphics_api == QarGraphicsAPI::QAR_GRAPHICS_API_VULKAN {
         // SAFETY: the extension is one of the caller's stamped extension structures.
         sender.vulkan = Some(unsafe { create_vulkan_sender(graphics_extension, &sender) }?);
@@ -1669,22 +1762,25 @@ unsafe fn create_sender_value(
     Ok(sender)
 }
 
-/// The graphics extension of a render sender init's chain, or null. The colour declarations
-/// the header allows beside it in any position are taken out: at most one
-/// `QarRenderSenderAlphaModeExt` and one `QarRenderSenderColorEncodingExt`, each with a value
-/// the header names (another is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as the header states), and
-/// what they declare goes to the call log. At most one other extension may be chained; the
-/// graphics API's own checks then take it.
+/// The graphics extension of a render sender init's chain, or null. The declarations the
+/// header allows beside it in any position are taken out: at most one
+/// `QarRenderSenderAlphaModeExt`, one `QarRenderSenderColorEncodingExt` and one
+/// `QarRenderSenderRenderLoopExt`, each with a value the header names (another is
+/// `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as the header states), and what they declare goes to
+/// the call log. At most one other extension may be chained; the
+/// graphics API's own checks then take it. The second value is whether the chain declares
+/// `QAR_RENDER_LOOP_FREE_RUNNING`.
 ///
 /// # Safety
 ///
 /// `init.header.next` must be null or a chain of stamped extension structures.
 unsafe fn render_sender_graphics_extension(
     init: &QarRenderSenderInit,
-) -> Result<*const QarStructureHeader, QarResult> {
+) -> Result<(*const QarStructureHeader, bool), QarResult> {
     let mut graphics_extension: *const QarStructureHeader = std::ptr::null();
     let mut alpha_mode = None;
     let mut color_encoding = None;
+    let mut render_loop = None;
     let mut next = init.header.next.cast_const().cast::<QarStructureHeader>();
     while !next.is_null() {
         // SAFETY: forwarded to the caller.
@@ -1715,6 +1811,19 @@ unsafe fn render_sender_graphics_extension(
                 ));
             }
             color_encoding = Some(extension.color_encoding.0);
+        } else if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT
+        {
+            // SAFETY: the type identifies the structure.
+            let extension = unsafe { &*next.cast::<QarRenderSenderRenderLoopExt>() };
+            if render_loop.is_some() {
+                return Err(invalid("QarRenderSenderRenderLoopExt is chained twice"));
+            }
+            if extension.render_loop.0 > QarRenderLoop::QAR_RENDER_LOOP_FREE_RUNNING.0 {
+                return Err(invalid(
+                    "QarRenderSenderRenderLoopExt::render_loop is not a known loop",
+                ));
+            }
+            render_loop = Some(extension.render_loop.0);
         } else if graphics_extension.is_null() {
             graphics_extension = next;
         } else {
@@ -1733,7 +1842,11 @@ unsafe fn render_sender_graphics_extension(
             declared(color_encoding)
         ));
     }
-    Ok(graphics_extension)
+    if let Some(render_loop) = render_loop {
+        note(format!("render sender render_loop={render_loop}"));
+    }
+    let free_running = render_loop == Some(QarRenderLoop::QAR_RENDER_LOOP_FREE_RUNNING.0);
+    Ok((graphics_extension, free_running))
 }
 
 /// The deferred half of `qar_render_sender_create_async`: the outcome its
@@ -2017,6 +2130,7 @@ impl StubApi for Stub {
                 (*init).onboarding_id.data,
                 &(*init).presentation,
                 false,
+                rejoin_disables_graphics(init),
             );
         };
         success()
@@ -2053,11 +2167,23 @@ impl StubApi for Stub {
                 let runtime = runtime_address as *mut QarRuntime;
                 let init = init_address as *const QarRejoinInit;
                 // SAFETY: the caller keeps init alive until the result callback has run.
-                let (onboarding_id, presentation) =
-                    unsafe { ((*init).onboarding_id.data, &(*init).presentation) };
+                let (onboarding_id, presentation, graphics_device_disabled) = unsafe {
+                    (
+                        (*init).onboarding_id.data,
+                        &(*init).presentation,
+                        rejoin_disables_graphics(init),
+                    )
+                };
                 // SAFETY: the runtime's destroy waits for this call, so it is live.
-                let session =
-                    unsafe { create_session(runtime, onboarding_id, presentation, false) };
+                let session = unsafe {
+                    create_session(
+                        runtime,
+                        onboarding_id,
+                        presentation,
+                        false,
+                        graphics_device_disabled,
+                    )
+                };
                 Ok((onboarding_id, session as usize))
             },
         )
@@ -2679,6 +2805,12 @@ impl StubApi for Stub {
         if out_device_id.is_null() || out_present.is_null() {
             return invalid("out parameters must not be NULL");
         }
+        // SAFETY: session comes from this stub.
+        if let Err(failure) =
+            unsafe { refuse_without_graphics_device(session, "qar_session_get_graphics_device_id") }
+        {
+            return failure;
+        }
         let reported = state::lock().reported_adapter;
         let Some(reported) = reported else {
             // SAFETY: out_present is writable.
@@ -2908,6 +3040,12 @@ impl StubApi for Stub {
         user_state: *mut c_void,
         token: *mut QarCancelToken,
     ) -> QarResult {
+        // SAFETY: session comes from this stub.
+        if let Err(failure) = unsafe {
+            refuse_without_graphics_device(session, "qar_render_sender_subscribe_requests")
+        } {
+            return failure;
+        }
         let registered = register_subscription(
             session,
             SubscriptionKind::RenderRequests,
@@ -3006,6 +3144,12 @@ impl StubApi for Stub {
         // SAFETY: session comes from this stub.
         if unsafe { session_value(session) }.is_none() {
             return invalid("session is not a live handle");
+        }
+        // SAFETY: session comes from this stub.
+        if let Err(failure) =
+            unsafe { refuse_without_graphics_device(session, "qar_render_sender_create_async") }
+        {
+            return failure;
         }
         // SAFETY: init checked non-null; the caller keeps it alive until the callback.
         let target_peer = unsafe { (*init).peer_id.data };
@@ -3572,6 +3716,83 @@ impl StubApi for Stub {
         success()
     }
 
+    unsafe fn qar_impl_render_sender_next_render_pose(
+        stream: *mut QarRenderSender,
+        view_count: usize,
+        out_view_poses: *mut QarPose,
+        out_view_fovs: *mut QarFov,
+    ) -> QarResult {
+        // SAFETY: stream comes from this stub.
+        let Some(sender) =
+            (unsafe { handle_value::<RenderSenderValue, QarRenderSender>(stream, RENDER_SENDER) })
+        else {
+            return invalid("render sender is not a live handle");
+        };
+        if !sender.free_running {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_next_render_pose needs a sender created with                  QAR_RENDER_LOOP_FREE_RUNNING",
+            );
+        }
+        if view_count > sender.views.len() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "view_count exceeds the sender's views",
+            );
+        }
+        if view_count > 0 && (out_view_poses.is_null() || out_view_fovs.is_null()) {
+            return invalid("out_view_poses and out_view_fovs must not be NULL");
+        }
+        // The poses the next begin-frame opens its frame with, as its frame info reports them.
+        for (index, view) in sender.views.iter().take(view_count).enumerate() {
+            let pose = issued_eye_pose(sender.target_peer, sender.frames_begun, view.eye);
+            // SAFETY: both out-arrays hold view_count elements.
+            unsafe {
+                *out_view_poses.add(index) = pose;
+                *out_view_fovs.add(index) = defaults::qar_fov_default();
+            }
+        }
+        note(format!(
+            "next render pose frame={} views={view_count}",
+            sender.frames_begun
+        ));
+        success()
+    }
+
+    unsafe fn qar_impl_render_sender_is_ready_for_next_frame(
+        stream: *mut QarRenderSender,
+        out_ready: *mut bool,
+    ) -> QarResult {
+        // SAFETY: stream comes from this stub.
+        let Some(sender) =
+            (unsafe { handle_value::<RenderSenderValue, QarRenderSender>(stream, RENDER_SENDER) })
+        else {
+            return invalid("render sender is not a live handle");
+        };
+        if out_ready.is_null() {
+            return invalid("out_ready must not be NULL");
+        }
+        if !sender.free_running {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_is_ready_for_next_frame needs a sender created with \
+                 QAR_RENDER_LOOP_FREE_RUNNING",
+            );
+        }
+        if sender.begin_wait_started.is_some() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "qar_render_sender_is_ready_for_next_frame while a begin-frame is waiting",
+            );
+        }
+        // The stub's receiver hands the destination back as soon as the frame is shown.
+        let ready = sender.open_frame.is_none();
+        // SAFETY: out_ready is writable.
+        unsafe { *out_ready = ready };
+        note(format!("is ready for next frame ready={ready}"));
+        success()
+    }
+
     unsafe fn qar_impl_render_sender_begin_frame(
         stream: *mut QarRenderSender,
         _token: *mut QarCancelToken,
@@ -3837,6 +4058,24 @@ impl StubApi for Stub {
                 peer_array(init.visible_to_peers, init.visible_to_peer_count),
             )
         };
+        if let Some(refused) = refuse_panel_display_name(&display_name) {
+            return refused;
+        }
+        // SAFETY: header.next is null or a chain of stamped extensions.
+        let served = match unsafe { served_extension(init.header.next.cast_const().cast()) } {
+            Ok(served) => served,
+            Err(refused) => return refused,
+        };
+        if let Some(served) = &served {
+            // SAFETY: session checked above.
+            let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+            if me != Some(served.publisher) {
+                return state::error(
+                    QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+                    "the bundle was published by another session",
+                );
+            }
+        }
         let panel_id = derive_id(&common_name);
         let mut guard = state::lock();
         if !guard.panels.iter().any(|panel| panel.id == panel_id) {
@@ -3847,6 +4086,7 @@ impl StubApi for Stub {
                 size: init.size,
                 state: QarGuiPanelState::QAR_GUI_PANEL_STATE_VISIBLE,
                 content_uri: String::new(),
+                served,
                 visible_to,
             });
         }
@@ -3896,6 +4136,23 @@ impl StubApi for Stub {
         let uri = unsafe { text_or_empty(uri) };
         // SAFETY: forwarded.
         unsafe { update_panel(session, id, |panel| panel.content_uri.clone_from(&uri)) }
+    }
+
+    unsafe fn qar_impl_gui_panels_change_display_name(
+        session: *mut QarSession,
+        id: *const QarGuiPanelId,
+        display_name: *const c_char,
+    ) -> QarResult {
+        if display_name.is_null() {
+            return invalid("display_name is NULL");
+        }
+        // SAFETY: display_name is a C string.
+        let display_name = unsafe { text_or_empty(display_name) };
+        if let Some(refused) = refuse_panel_display_name(&display_name) {
+            return refused;
+        }
+        // SAFETY: forwarded.
+        unsafe { update_panel(session, id, |panel| panel.display_name = display_name) }
     }
 
     unsafe fn qar_impl_gui_panels_close_panel(
@@ -4045,6 +4302,257 @@ impl StubApi for Stub {
                 write_c_string(&panel.content_uri, out_uri, buffer_size);
             })
         }
+    }
+
+    unsafe fn qar_impl_gui_panel_get_content_type(
+        handle: *mut QarGuiPanel,
+        out_type: *mut QarGuiPanelContentType,
+    ) -> QarResult {
+        // SAFETY: forwarded.
+        unsafe {
+            with_panel(handle, |panel| {
+                *out_type = if panel.served.is_some() {
+                    QarGuiPanelContentType::QAR_GUI_PANEL_CONTENT_TYPE_SERVED
+                } else {
+                    QarGuiPanelContentType::QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI
+                };
+            })
+        }
+    }
+
+    unsafe fn qar_impl_gui_panel_get_content_served(
+        handle: *mut QarGuiPanel,
+        out_bundle: *mut QarPanelContentBundleId,
+        entry: *mut c_char,
+        entry_capacity: usize,
+        entry_size: *mut usize,
+    ) -> QarResult {
+        if out_bundle.is_null() {
+            return invalid("out_bundle is NULL");
+        }
+        // SAFETY: handle comes from this stub.
+        let Some(panel) = (unsafe { handle_value::<StubPanel, QarGuiPanel>(handle, GUI_PANEL) })
+        else {
+            return invalid("GUI panel is not a live handle");
+        };
+        let Some(served) = panel.served.clone() else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED,
+                "the panel does not show served content",
+            );
+        };
+        // SAFETY: out_bundle is writable.
+        unsafe { *out_bundle = raw_bundle(served.publisher, &served.name) };
+        if !entry_size.is_null() {
+            // SAFETY: entry_size is writable.
+            unsafe { *entry_size = served.entry.len() };
+        }
+        if entry.is_null() {
+            return success();
+        }
+        if entry_capacity <= served.entry.len() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+                "the entry buffer is too small",
+            );
+        }
+        // SAFETY: entry holds entry_capacity bytes.
+        unsafe { write_c_string(&served.entry, entry, entry_capacity) };
+        success()
+    }
+
+    unsafe fn qar_impl_gui_panels_set_served_content(
+        session: *mut QarSession,
+        id: *const QarGuiPanelId,
+        bundle: *const QarPanelContentBundleId,
+        entry: *const c_char,
+    ) -> QarResult {
+        if bundle.is_null() || entry.is_null() {
+            return invalid("bundle or entry is NULL");
+        }
+        // SAFETY: bundle is readable; entry is a C string.
+        let (bundle, entry) = unsafe { (bundle_value(&*bundle), text_or_empty(entry)) };
+        if let Some(refused) = refuse_entry(&entry) {
+            return refused;
+        }
+        // SAFETY: session comes from this stub.
+        let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+        if me != Some(bundle.publisher) {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+                "the bundle was published by another session",
+            );
+        }
+        if id.is_null() {
+            return invalid("panel id is NULL");
+        }
+        // SAFETY: id is readable.
+        let panel_id = unsafe { (*id).data };
+        let is_served = state::lock()
+            .panels
+            .iter()
+            .any(|panel| panel.id == panel_id && panel.served.is_some());
+        if !is_served {
+            return state::error(
+                QarStatusCode::QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED,
+                "the panel does not show served content",
+            );
+        }
+        let served = StubServedContent {
+            publisher: bundle.publisher,
+            name: bundle.name,
+            entry,
+        };
+        // SAFETY: forwarded.
+        unsafe { update_panel(session, id, |panel| panel.served = Some(served)) }
+    }
+
+    unsafe fn qar_impl_panel_content_publish_files(
+        session: *mut QarSession,
+        name: *const c_char,
+        files: *const QarPanelContentFile,
+        count: usize,
+        out_bundle: *mut QarPanelContentBundleId,
+    ) -> QarResult {
+        if name.is_null() || out_bundle.is_null() || (files.is_null() && count > 0) {
+            return invalid("name, files or out_bundle is NULL");
+        }
+        // SAFETY: session comes from this stub.
+        let Some(me) = (unsafe { session_value(session) }).map(|value| value.my_peer) else {
+            return invalid("session is not a live handle");
+        };
+        // SAFETY: name is a C string.
+        let name = unsafe { text_or_empty(name) };
+        if let Some(refused) = refuse_bundle_name(&name) {
+            return refused;
+        }
+        if count == 0 {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED,
+                "a bundle holds no file",
+            );
+        }
+        // SAFETY: files holds count entries.
+        let files = unsafe { std::slice::from_raw_parts(files, count) };
+        for file in files {
+            // SAFETY: path is a C string or NULL.
+            let path = unsafe { text_or_empty(file.path) };
+            if let Some(refused) = refuse_entry(&path) {
+                return refused;
+            }
+        }
+        // SAFETY: out_bundle is writable.
+        unsafe { *out_bundle = raw_bundle(me, &name) };
+        let mut guard = state::lock();
+        let bundle = StubBundle {
+            publisher: me,
+            name,
+        };
+        if !guard.bundles.contains(&bundle) {
+            guard.bundles.push(bundle);
+        }
+        drop(guard);
+        success()
+    }
+
+    unsafe fn qar_impl_panel_content_publish_directory(
+        session: *mut QarSession,
+        name: *const c_char,
+        root_utf8: *const c_char,
+        out_bundle: *mut QarPanelContentBundleId,
+    ) -> QarResult {
+        if name.is_null() || root_utf8.is_null() || out_bundle.is_null() {
+            return invalid("name, root or out_bundle is NULL");
+        }
+        // SAFETY: root is a C string.
+        let root = PathBuf::from(unsafe { text_or_empty(root_utf8) });
+        if !root.is_dir() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_FOUND,
+                "the folder does not exist",
+            );
+        }
+        let index = QarPanelContentFile {
+            path: c"index.html".as_ptr(),
+            mime_type: std::ptr::null(),
+            data: std::ptr::null(),
+            size: 0,
+        };
+        // SAFETY: forwarded; the stub publishes the folder as one placeholder file.
+        unsafe {
+            Self::qar_impl_panel_content_publish_files(
+                session,
+                name,
+                &raw const index,
+                1,
+                out_bundle,
+            )
+        }
+    }
+
+    unsafe fn qar_impl_panel_content_remove(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+    ) -> QarResult {
+        // SAFETY: forwarded.
+        let bundle = match unsafe { own_bundle(session, bundle) } {
+            Ok(bundle) => bundle,
+            Err(refused) => return refused,
+        };
+        state::lock().bundles.retain(|known| *known != bundle);
+        success()
+    }
+
+    unsafe fn qar_impl_panel_content_subscribe_messages(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+        callback: qar_panel_content_message_callback_t,
+        user_state: *mut c_void,
+        token: *mut QarCancelToken,
+    ) -> QarResult {
+        if token.is_null() || callback.is_none() {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "a callback and a cancel token are required",
+            );
+        }
+        // SAFETY: forwarded.
+        if let Err(refused) = unsafe { own_bundle(session, bundle) } {
+            return refused;
+        }
+        register_subscription(
+            session,
+            SubscriptionKind::PanelContentMessages,
+            state::callback_address(callback),
+            user_state,
+            token,
+            None,
+        )
+    }
+
+    unsafe fn qar_impl_panel_content_post_message(
+        session: *mut QarSession,
+        bundle: *const QarPanelContentBundleId,
+        _panel: *const QarGuiPanelId,
+        _user: *const QarPeerId,
+        json: *const c_char,
+    ) -> QarResult {
+        if json.is_null() {
+            return invalid("json is NULL");
+        }
+        // SAFETY: forwarded.
+        if let Err(refused) = unsafe { own_bundle(session, bundle) } {
+            return refused;
+        }
+        // SAFETY: json is a C string.
+        let json = unsafe { text_or_empty(json) };
+        if json.trim().is_empty() || json.len() > 64 * 1024 {
+            return state::error(
+                QarStatusCode::QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED,
+                "a panel message must be one JSON value of at most 64 KiB",
+            );
+        }
+        success()
     }
 
     unsafe fn qar_impl_gui_panel_get_state(
@@ -4415,8 +4923,9 @@ enum OptionalExtensions {
     Rejoin,
 }
 
-/// Walks the rest of a chain: the adapter (`QarGraphicsDeviceId`, logged), a
-/// planned peer id after a code or invite, the hub address after a code, and
+/// Walks the rest of a chain: the adapter (`QarGraphicsDeviceId`, logged) or
+/// no graphics device (`QarGraphicsDeviceDisabledExt`, logged; both together are
+/// `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`), a planned peer id after a code or invite, the hub address after a code, and
 /// the app tag and remote-app grant after the local-app mode. Any of these with
 /// another onboarding mode is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, as in the
 /// runtime; anything else is an error.
@@ -4428,6 +4937,8 @@ unsafe fn validate_optional_extensions(
     mut next: *const QarStructureHeader,
     allowed: OptionalExtensions,
 ) -> Result<(), QarResult> {
+    let mut seen_adapter = false;
+    let mut seen_graphics_disabled = false;
     while !next.is_null() {
         // SAFETY: forwarded to the caller.
         let header = unsafe { &*next };
@@ -4493,7 +5004,21 @@ unsafe fn validate_optional_extensions(
         }
         let is_adapter =
             extension_type == QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_ID;
+        let is_graphics_disabled = extension_type
+            == QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT;
+        seen_adapter |= is_adapter;
+        seen_graphics_disabled |= is_graphics_disabled;
+        if seen_adapter && seen_graphics_disabled {
+            return Err(state::error(
+                QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED,
+                "QarGraphicsDeviceDisabledExt cannot be chained together with QarGraphicsDeviceId",
+            ));
+        }
+        if is_graphics_disabled {
+            note("no graphics device".to_string());
+        }
         let accepted = is_adapter
+            || is_graphics_disabled
             || (extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_HOST_EXT
                 && allowed == OptionalExtensions::AfterCodeMode)
             || (extension_type == QarStructureType::QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_PEER_ID_EXT
@@ -4889,6 +5414,7 @@ fn build_sender(session: usize, init: &QarRenderSenderInit) -> RenderSenderValue
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         d3d11: None,
         begin_wait_started: None,
+        free_running: false,
     }
 }
 
@@ -4951,6 +5477,137 @@ unsafe fn update_panel(
     drop(guard);
     fire_panel_updates(session as usize, panel_id);
     success()
+}
+
+/// The header's bundle-name rules: 1 to 64 bytes of `A-Z a-z 0-9 . _ -`, not starting with `.`.
+fn refuse_bundle_name(name: &str) -> Option<QarResult> {
+    let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
+    let refused = name.is_empty()
+        || name.len() > QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize
+        || name.starts_with('.')
+        || !name.chars().all(allowed);
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED,
+            "bundle name refused",
+        )
+    })
+}
+
+/// The header's path rules, the part the stub checks: relative, no empty, `.` or `..`
+/// segment, no backslash, `:` or `%`.
+fn refuse_entry(path: &str) -> Option<QarResult> {
+    let refused = path.is_empty()
+        || path.contains(['\\', ':', '%'])
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..");
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_PATH_REFUSED,
+            "bundle path refused",
+        )
+    })
+}
+
+fn raw_bundle(publisher: [u8; 16], name: &str) -> QarPanelContentBundleId {
+    let mut raw = QarPanelContentBundleId {
+        publisher: QarPeerId { data: publisher },
+        name: [0; QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize + 1],
+    };
+    for (slot, byte) in raw.name.iter_mut().zip(name.bytes()) {
+        *slot = c_char::from_ne_bytes([byte]);
+    }
+    raw
+}
+
+fn bundle_value(raw: &QarPanelContentBundleId) -> StubBundle {
+    let bytes: Vec<u8> = raw
+        .name
+        .iter()
+        .map(|byte| u8::from_ne_bytes(byte.to_ne_bytes()))
+        .take_while(|byte| *byte != 0)
+        .collect();
+    StubBundle {
+        publisher: raw.publisher.data,
+        name: String::from_utf8_lossy(&bytes).into_owned(),
+    }
+}
+
+/// # Safety
+///
+/// `session` must come from this stub; `bundle` must be null or readable.
+unsafe fn own_bundle(
+    session: *mut QarSession,
+    bundle: *const QarPanelContentBundleId,
+) -> Result<StubBundle, QarResult> {
+    if bundle.is_null() {
+        return Err(invalid("bundle is NULL"));
+    }
+    // SAFETY: bundle is readable.
+    let bundle = bundle_value(unsafe { &*bundle });
+    // SAFETY: session comes from this stub.
+    let me = unsafe { session_value(session) }.map(|value| value.my_peer);
+    if me != Some(bundle.publisher) {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER,
+            "the bundle was published by another session",
+        ));
+    }
+    if !state::lock().bundles.contains(&bundle) {
+        return Err(state::error(
+            QarStatusCode::QAR_STATUS_PANEL_CONTENT_NOT_FOUND,
+            "this session publishes no bundle of that name",
+        ));
+    }
+    Ok(bundle)
+}
+
+/// The served-content extension of a panel init chain, if any.
+///
+/// # Safety
+///
+/// `next` must be null or a chain of stamped extension structures.
+unsafe fn served_extension(
+    mut next: *const QarStructureHeader,
+) -> Result<Option<StubServedContent>, QarResult> {
+    while !next.is_null() {
+        // SAFETY: every extension starts with QarStructureHeader.
+        let header = unsafe { &*next };
+        if header.type_ == QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT {
+            // SAFETY: the type says what the structure is.
+            let extension = unsafe { &*next.cast::<QarGuiPanelServedContentExt>() };
+            // SAFETY: entry is a C string or NULL.
+            let entry = unsafe { text_or_empty(extension.entry) };
+            if let Some(refused) = refuse_entry(&entry) {
+                return Err(refused);
+            }
+            let bundle = bundle_value(&extension.bundle);
+            return Ok(Some(StubServedContent {
+                publisher: bundle.publisher,
+                name: bundle.name,
+                entry,
+            }));
+        }
+        next = header.next.cast_const().cast();
+    }
+    Ok(None)
+}
+
+/// The header's display-name rules: at most 64 code points, no control (C0, DEL, C1) or
+/// bidirectional formatting characters. `text_or_empty` already replaced invalid UTF-8, so the
+/// stub cannot refuse that case.
+fn refuse_panel_display_name(display_name: &str) -> Option<QarResult> {
+    const MAX_CODE_POINTS: usize = 64;
+    let is_bidi = |c: char| matches!(c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}');
+    let refused = display_name.chars().count() > MAX_CODE_POINTS
+        || display_name.chars().any(|c| c.is_control() || is_bidi(c));
+    refused.then(|| {
+        state::error(
+            QarStatusCode::QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID,
+            "display name refused",
+        )
+    })
 }
 
 /// # Safety

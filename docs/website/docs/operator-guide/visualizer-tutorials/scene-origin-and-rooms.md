@@ -9,7 +9,14 @@ description: Show or print a room's scene origin code, anchor HoloLens 2, Meta Q
 Every headset tracks its own space. To make several headsets in one physical room see the streamed
 scene in **the same place**, each one anchors the scene at the same printed or on-screen **scene
 origin code**: a 10 cm QR code made by the Visualizer. The code's position becomes the scene's
-origin for every device that sees it.
+origin for every device that sees it. The Visualizer and the headsets call it the **anchoring QR
+code**.
+
+:::note Two different QR codes
+The **anchoring QR code** (this page) places the scene. The **connection QR code** (**Show QR
+code**, **By QR code**) pairs an Android headset with the Hub
+([Pair a Headset](./pair-a-headset.md)). Scanning one never does the other's job.
+:::
 
 - The scene is always **level** (up is gravity up), whatever surface the code is on. The code gives
   only the position and the facing direction.
@@ -20,12 +27,12 @@ origin for every device that sees it.
 
 | Device | Scans the code | What you do | Feedback on the device |
 |---|---|---|---|
-| **HoloLens 2** | Yes | Look at the code with the player running | *Headset is not anchored! Look at QR code.* until it is anchored |
-| **METALENSE 2** | Yes | Look at the code with the player running | A green outline on the code when it is picked up |
-| **Meta Quest** | Yes, on a recent Horizon OS | Allow the player's **spatial data** permission on its first start, then look at the code with the player running | A green outline on the code when it is picked up |
+| **HoloLens 2** | Yes | Look at the code with the player running | *Anchor your headset: look at the anchoring QR code* until it is anchored |
+| **METALENSE 2** | Yes | Look at the code with the player running | *Look at the anchoring QR code* while connected to the Hub and not anchored; a green outline on the code when it is picked up |
+| **Meta Quest** | Yes, on a recent Horizon OS | Allow the player's **spatial data** permission on its first start, then look at the code with the player running | *Look at the anchoring QR code* while connected to the Hub and not anchored; a green outline on the code when it is picked up |
 
 - Every player anchors only to a QAROS scene origin code. Other QR codes in view (posters, badges,
-  the Visualizer's pairing code) are ignored.
+  the connection QR code that pairs a headset) are ignored.
 - **Meta Quest** reads QR codes through Meta's QR detection, which Meta still calls experimental.
   A headset on an older Horizon OS does not detect codes at all; update it. Denying the spatial data
   permission has the same effect: allow it again for the QAROS Player in the headset's app
@@ -87,13 +94,33 @@ Keep the white border around it.
 
 ## 4. Anchor each device
 
-For every headset in the room, one after another:
+Every device's setup steps (**Session** › **Devices** › **Set up or update a device**) end with
+**Anchor: look at the anchoring QR code**. For every headset in the room, one after another:
 
-1. Start the player and invite the device ([HoloLens 2](./hololens-2.md),
+1. Start the player and invite (HoloLens) or pair (Meta Quest, METALENSE 2, Android XR) the device ([HoloLens 2](./hololens-2.md),
    [Meta Quest and METALENSE 2](./quest-and-metalense-2.md)).
-2. Put it on and **look at the code** until the device confirms
-   (HoloLens: the *not anchored* message goes; Meta Quest and METALENSE 2: the green outline).
-3. Look around the room for a few seconds before taking it off, so the device can save its anchor.
+2. Open the step **Anchor: look at the anchoring QR code** and click **Show anchoring QR code**. It
+   opens the same marker as **Show** in **Tools** › **Origin**, for the room picked there, also while
+   that panel is hidden. A printed code works as well.
+3. Put the device on and **look at the code** until it confirms: the *Look at the anchoring QR code*
+   message goes (HoloLens 2: *Anchor your headset: look at the anchoring QR code*; Meta Quest and
+   METALENSE 2 also outline the code in green).
+4. Look around the room for a few seconds before taking it off, so the device can save its anchor.
+
+How the step completes:
+
+| Device | Step done | Shows |
+|---|---|---|
+| Meta Quest, METALENSE 2, Android XR | By itself, once the headset reports it is anchored, also for an anchor it restored at start | `anchored · room N`, or `waiting for the player` until the player joined |
+| HoloLens 2 | When you click **Mark as done**: the HoloLens does not report its anchor | - |
+
+- A headset anchored in another room than the code shows warns: *Anchored in room 1, but the
+  anchoring QR code shows room 2. Look at the code again to move it.*
+- An Android headset shows the *Look at the anchoring QR code* message only while it is connected to the Hub. Not
+  connected, it shows the connection prompt instead
+  ([Pair a Headset](./pair-a-headset.md#pair-by-the-code-the-headset-shows)).
+- A player from an earlier release does not report its anchor: the step stays at `waiting for the
+  player`. Update the player.
 
 All devices that scanned the same code now share the same origin: content placed on the table is on
 the table for everyone.
