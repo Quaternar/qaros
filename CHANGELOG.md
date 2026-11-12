@@ -316,6 +316,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
   Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
   enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).
+- **Docs:** *Onboarding and Sessions*, "Launched by QAROS": an API app QAROS starts is no longer
+  restarted when it exits unless the operator turned on **Restart when it exits** for it.
+
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
 
