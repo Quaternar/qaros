@@ -318,6 +318,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   which then follow it into the hub's next session. The *Session Lifecycle* tutorial
   (`session_lifecycle.c`) does so on every new session id.
 
+### Changed
+
+- **Docs:** the documentation site opens the newest release by default and offers **Dev (main)** in
+  the version dropdown: the unreleased docs as they are on `main` now, under `/docs/dev/` and
+  `/api/dev/`. The former `/next/` addresses redirect there.
+
 ### Fixed
 
 - **Docs:** new page *When a Target Restarts*: what QAROS recovers by itself (reconnect, pause),
