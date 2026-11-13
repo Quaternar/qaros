@@ -12,8 +12,7 @@ require("graceful-fs").gracefulify(nodeFs);
 
 // Docs versioning (see scripts/docs-versions.js and README.md): both docs
 // instances share one version list; the newest release is the default, the
-// unreleased working copy (main) is "Dev (main)" under /dev/, labelled with the
-// next planned release from qaros/VERSION.
+// unreleased working copy (main) is "Dev (main)" under /dev/.
 const {
 	currentVersionOptions,
 	legacyDevRedirects,

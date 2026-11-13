@@ -86,7 +86,8 @@ set `QAROS_DOXYGEN_BIN=/path/to/doxygen` before `npm run build`.
   `qaros/VERSION`, which still names the last release until the bump.
 - Newest release (the default) at `/docs/`, `/api/`; `Dev (main)` at `/docs/dev/`,
   `/api/dev/` with the unreleased banner; older releases at `/docs/X.Y.Z/`, `/api/X.Y.Z/`.
-  The former `/next/` URLs of the working copy redirect to `/dev/`.
+  The former `/next/` URLs of the working copy redirect to `/dev/`. The released versions are
+  listed in `versions.json` and `api_versions.json`.
 - With no release yet, the working copy is served at the root instead.
 - Release step, from `docs/website`, before bumping `qaros/VERSION`:
   `npm run docs:version -- X.Y.Z` (version defaults to `qaros/VERSION`). It

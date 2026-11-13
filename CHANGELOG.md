@@ -306,6 +306,39 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   approve local apps again, join member Hubs again and activate the licence again.
 - **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
   Hub's local message router.
+- **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
+  C API do, when to use which, how they stack, what they need, how they join the Hub (a local app
+  on the Hub's PC, code pairing for a Hub on another PC) and the installed runtime they were
+  checked against, 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** a Limits and Behaviors to Design Around page in the Developer Guide: retiring and
+  resizing a video stream, locating the operator, what a stream panel ignores or refuses, the
+  gesture rules of an app volume and what happens to a panel or volume that already exists, each as
+  far as the C header states it, plus what a query of the installed runtime costs (about two
+  seconds each, measured with 0.9.0-dev.3008+65dc9aeb) and observations made with earlier SDK
+  drops.
+- **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
+  GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
+  does to show a widget in AR, including stable panel names that the next start finds again, how a
+  resize swaps the stream of the same panel and what happens to a panel when a window or the session
+  ends.
+- **Docs:** a Streaming an Ogre Scene to QAROS page in the Developer Guide: how the Ogre library
+  joins the Hub with its session owner and streams a scene to each target, the three ways to use it,
+  the conventions a scene follows and where the library stops, as checked against the installed
+  runtime.
+- **Docs:** a Running the RViz2 Plugin on Windows page in the Operator Guide: starting RViz2 with
+  the plugin, joining the Hub of this PC as a local app or the Hub of another PC with a pairing
+  code, the Connection tab, what you see and do in AR, the environment variables, reading the logs
+  and the known issues, as checked against the installed runtime 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** the Ogre, Qt and RViz2 pages follow the division of the three libraries into
+  independent repositories. The Qt panel package `qar_qt_streaming` is standalone (Qt 5.15 or
+  Qt 6.5 and newer, the C++ SDK `qar-streaming-cpp`, no Ogre, ROS 2 or RViz2): *Video in GUI
+  Panels, and Qt Widgets as AR Panels* describes its three layers, the CMake package and its
+  components, how a program joins the Hub and hands the session to it, the threads, the example
+  program, touch input under Qt 6 and the drop shadow of popups; *Limits and Behaviors to Design
+  Around* lists what a build needs from the C++ SDK headers. *Ogre, Qt and RViz2 on QAROS* shows
+  that the Ogre and Qt libraries are independent and that the RViz2 plugin builds on both, all at
+  version 0.2.0; *Streaming an Ogre Scene* lists five adapter components. The pages that name
+  the pairing code of a Hub on another PC no longer name a Hub screen or a lifetime of the code.
 - **Docs:** *Onboarding and Sessions* has a section *When the hub's session changes*: what a
   session keeps when its Hub starts a new session or joins another Hub, subscribing to the session
   lifecycle (`qar_session_subscribe_lifecycle`, C# `Session.SubscribeLifecycle`), reacting to a
@@ -392,6 +425,22 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
   with the same one-time approval; a launch invite on stdin remains only where local enrollment is
   not available.
+- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers and Rendering Streams guides now
+  match the current API: poses, sizes, render sender options and render frame views are built with
+  their constructors (`Pose` and `Vector3` come from `Quaternar.Qaros.Mathematics`), and the
+  `Peers.Updated` event needs a running `SubscribeUpdates()` subscription.
+- **Docs:** the C code of the Peers and GUI Panels guides now passes the cancel token that
+  `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
+  `qar_gui_panels_subscribe_panel_updates` require.
+- **Docs:** the GUI Panels guide and the Glossary no longer say that GUI panels show web content
+  only: a panel can also show the video stream of a video sender.
+- **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
+  convention: the C header states it.
+- **Docs:** the Source Applications guide says that a QAROS API app chooses the target
+  applications it renders for: **Streams to** shows *Chosen by the app*, not "all target
+  applications that request it".
+- **Docs:** the Welcome page lists the C# API reference next to the C API reference, and the
+  documentation site README no longer says that no version is released yet.
 - **Docs:** every current guide, tutorial and example loads the installed runtime with
   `qar_library_load(NULL)` and joins as a local app on the QAROS PC. The App Volume, GUI Panel, CPU
   and D3D11 rendering examples join as local apps with an app tag instead of pairing with a code
