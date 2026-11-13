@@ -25,6 +25,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Scene Origin*: a screen is calibrated inside the **Room Origin** dialog, by dragging
   **Bar for 10 cm** until the bar under the code measures 10 cm; the **Print** section is folded
   until opened, and the paper you pick is kept.
+- **Docs:** *Scene Origin* and *QAROS World*: the **Room Origin** dialog draws the code at true
+  size whenever the monitor's size is known or calibrated; there is no **Show at true size**
+  switch. **Calibrate...** is always there.
 - **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
   *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
   and the player installation pages describe them: **All devices** has **Pair headset**, which opens
