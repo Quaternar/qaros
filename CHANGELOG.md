@@ -22,6 +22,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   anchoring QR code and prints it (or saves it as PDF), opened from **Tools** › **Origin** or a
   room's QR icon in **Rooms**. *qaros:// Links*: a dialog a link opens while the Visualizer is
   hidden is a window of its own, with the dialog's title, that can be resized.
+- **Docs:** *Scene Origin*: a screen is calibrated inside the **Room Origin** dialog, by dragging
+  **Bar for 10 cm** until the bar under the code measures 10 cm; the **Print** section is folded
+  until opened, and the paper you pick is kept.
 - **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
   *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
   and the player installation pages describe them: **All devices** has **Pair headset**, which opens

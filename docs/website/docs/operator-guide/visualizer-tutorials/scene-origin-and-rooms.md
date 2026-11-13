@@ -65,15 +65,16 @@ Each room card shows its number, name, device count, **Offset** and **Devices**:
    | | Print (the dialog's **Print** section) | On this monitor |
    |---|---|---|
    | Use for | A fixed installation, the most stable choice | A quick session, or no printer at hand |
-   | Size | Printed at actual size (100 %), with a 10 cm check ruler and cut marks; pick the **Printer** and **Paper** and click **Print**, or **Save as PDF...** to print elsewhere | Drawn in the dialog. Tick **Show at true size** for exactly 10 cm |
+   | Size | Printed at actual size (100 %), with a 10 cm check ruler and cut marks; open the **Print** section, pick the **Printer** and **Paper** (your choice is kept; the first time it is your Windows region's paper) and click **Print**, or **Save as PDF...** to print elsewhere | Drawn in the dialog. Tick **Show at true size** for exactly 10 cm |
    | Check | The ruler on the sheet and the code's black area both measure 10 cm | The black area measures 10 cm on the screen |
 
    ![The Room Origin dialog](../../img/visualizer/origin-show.png)
 
 3. **Showing at true size on a monitor that does not report its size:** the dialog says *Unknown
-   screen size* or *Not at true size*. Click **Calibrate...**, measure the white bar with a ruler,
-   type its length in **Bar length (mm)** and click **Save calibration**. The calibration is kept
-   per monitor.
+   screen size* or *Not at true size*. Click **Calibrate...**: the same dialog shows a bar under
+   the code. Hold a ruler to the bar and drag **Bar for 10 cm** until the bar measures exactly
+   10 cm; the code resizes with it. Click **Save calibration**. The calibration is kept per
+   monitor.
 
    ![Calibrating the screen for a true-size code](../../img/visualizer/origin-true-size.png)
 
