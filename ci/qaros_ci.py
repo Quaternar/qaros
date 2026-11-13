@@ -196,19 +196,32 @@ def use_runtime(unpacked: Path) -> None:
 # Visual Studio
 
 
-def visual_studio_environment(base: dict[str, str]) -> dict[str, str]:
-    """``base`` after Visual Studio's ``vcvars64.bat`` (what a developer shell sets: compiler, its
-    CMake and Ninja on PATH). Windows only."""
+def vcvars_file() -> Path:
+    """``QAROS_VCVARS_FILE`` when set (a Build Tools layout without a Visual Studio installation),
+    else the ``vcvars64.bat`` of the latest Visual Studio that vswhere finds."""
+    given = env("QAROS_VCVARS_FILE")
+    if given:
+        if not Path(given).is_file():
+            raise CiError(f"QAROS_VCVARS_FILE names {given}, which does not exist")
+        return Path(given)
     vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / \
         "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
     if not vswhere.is_file():
-        raise CiError(f"missing tool 'vswhere' ({vswhere}): install Visual Studio 2022 with the C++ workload")
+        raise CiError(f"missing tool 'vswhere' ({vswhere}): install Visual Studio 2022 with the C++ workload "
+                      "(or set QAROS_VCVARS_FILE to a vcvars64.bat)")
     installation = output_of([str(vswhere), "-latest", "-products", "*", "-property", "installationPath"]).strip()
     if not installation:
         raise CiError("no Visual Studio found: install Visual Studio 2022 with the C++ workload")
     vcvars = Path(installation) / "VC" / "Auxiliary" / "Build" / "vcvars64.bat"
     if not vcvars.is_file():
         raise CiError(f"{vcvars} missing: add the C++ workload to Visual Studio")
+    return vcvars
+
+
+def visual_studio_environment(base: dict[str, str]) -> dict[str, str]:
+    """``base`` after Visual Studio's ``vcvars64.bat`` (what a developer shell sets: compiler, its
+    CMake and Ninja on PATH; see vcvars_file). Windows only."""
+    vcvars = vcvars_file()
     completed = subprocess.run(f'cmd /d /s /c ""{vcvars}" >nul && set"', env=base, capture_output=True,
                                text=True, shell=False)
     if completed.returncode != 0:

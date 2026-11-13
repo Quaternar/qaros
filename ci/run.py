@@ -6,6 +6,7 @@
     python ci/run.py c [--filter <gtest filter>] [--timeout <s>]
     python ci/run.py capi                    # c, csharp and the Rust e2e tests on one native folder
     python ci/run.py vulkan-cube [--strict]
+    python ci/run.py cpp                     # qar-streaming-cpp compile matrix and a C++-only CMake consumer
     python ci/run.py docs
 
 Native files (C API runtime, test counterparts, the C test executable) come from environment
@@ -279,6 +280,74 @@ def vulkan_cube(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------------------------
+# cpp: the header-only C++ wrapper
+
+
+CPP_DIR = QAROS_ROOT / "qar-streaming-cpp"
+CPP_HEADERS = CPP_DIR / "include" / "qar_streaming_cpp"
+CPP_CHECK = CPP_DIR / "tests" / "compile_check.cpp"
+C_INCLUDE = QAROS_ROOT / "qar-streaming-c" / "include"
+CPP_STANDARDS = ("c++17", "c++20")
+CPP_CONSUMER = """cmake_minimum_required(VERSION 3.29)
+project(QarosCppConsumer LANGUAGES CXX)
+add_subdirectory("{c}" qar-streaming-c)
+add_subdirectory("{cpp}" qar-streaming-cpp)
+add_executable(consumer "{check}")
+target_link_libraries(consumer PRIVATE qar-streaming-cpp)
+target_compile_options(consumer PRIVATE /W4 /WX)
+get_property(languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if("C" IN_LIST languages)
+  message(FATAL_ERROR "linking qar-streaming-cpp enabled the C language")
+endif()
+if(TARGET dynamic_loading)
+  message(FATAL_ERROR "add_subdirectory(qar-streaming-c) added the C examples")
+endif()
+"""
+
+
+def cpp_check_covers_every_header() -> None:
+    text = CPP_CHECK.read_text(encoding="utf-8")
+    missing = [header.name for header in sorted(CPP_HEADERS.glob("*.hpp"))
+               if f"<qar_streaming_cpp/{header.name}>" not in text]
+    if missing:
+        raise CiError(f"{CPP_CHECK.relative_to(QAROS_ROOT)} does not include {', '.join(missing)}")
+
+
+def cpp(args: argparse.Namespace) -> None:
+    """Every header of qar-streaming-cpp in one translation unit with the dynamic-loading
+    implementation, MSVC /W4 /WX in C++17 and C++20, with and without /permissive- (no alternative
+    tokens, no deprecated C call), then a C++-only CMake project that adds qar-streaming-c and
+    qar-streaming-cpp with add_subdirectory (no C language, no examples)."""
+    if not WINDOWS:
+        raise CiError("the wrapper check compiles with MSVC: Windows only")
+    cpp_check_covers_every_header()
+    environment = visual_studio_environment(dict(os.environ))
+    for tool in ("cl", "cmake", "ninja"):
+        if not shutil.which(tool, path=environment.get("PATH")):
+            raise CiError(f"'{tool}' is not on PATH in the Visual Studio developer environment")
+    out = QAROS_ROOT / "build" / "cpp-check"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for standard in CPP_STANDARDS:
+        for conformance in ([], ["/permissive-"]):
+            label = " ".join([standard, *conformance]) or standard
+            print(f"== cpp {label}", flush=True)
+            run(["cl", "/nologo", "/c", "/EHsc", "/W4", "/WX", f"/std:{standard}", *conformance,
+                 "/DQAR_ENABLE_DYNAMIC_LOADING", f"/I{C_INCLUDE}", f"/I{CPP_DIR / 'include'}",
+                 f"/Fo{out / 'compile_check.obj'}", str(CPP_CHECK)], cwd=out, environment=environment)
+    print("== cpp CMake consumer (CXX only)", flush=True)
+    consumer = out / "consumer"
+    consumer.mkdir()
+    (consumer / "CMakeLists.txt").write_text(CPP_CONSUMER.format(
+        c=(QAROS_ROOT / "qar-streaming-c").as_posix(), cpp=CPP_DIR.as_posix(), check=CPP_CHECK.as_posix()))
+    run(["cmake", "-S", str(consumer), "-B", str(consumer / "build"), "-G", "Ninja",
+         "-DCMAKE_BUILD_TYPE=Release"], environment=environment)
+    run(["cmake", "--build", str(consumer / "build"), "--parallel", "2"], environment=environment)
+    print("C++ wrapper: compile matrix and CMake consumer passed.", flush=True)
+
+
+# ---------------------------------------------------------------------------------------------
 # docs
 
 
@@ -351,6 +420,10 @@ def parser() -> argparse.ArgumentParser:
     cube_parser = commands.add_parser("vulkan-cube", parents=[common], help="Vulkan cube build as documented")
     cube_parser.add_argument("--strict", action="store_true", help="fail on a Vulkan SDK on the host (CI)")
     cube_parser.set_defaults(handler=vulkan_cube)
+
+    cpp_parser = commands.add_parser("cpp", parents=[common],
+                                     help="qar-streaming-cpp compile matrix (MSVC) and a C++-only CMake consumer")
+    cpp_parser.set_defaults(handler=cpp)
 
     docs_parser = commands.add_parser("docs", parents=[common], help="documentation website build")
     docs_parser.set_defaults(handler=docs)

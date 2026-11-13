@@ -1,5 +1,5 @@
-# Header-only C++17 helpers over qar_streaming.h. The headers are mirrored from
-# the Quaternar build; do not edit them here.
+# Header-only C++17 helpers over qar_streaming.h (see README.md). C++ only: linking it needs no C
+# language. It inherits QAR_ENABLE_DYNAMIC_LOADING from qar-streaming-c-headers.
 add_library(qar-streaming-cpp INTERFACE)
 
 target_include_directories(
