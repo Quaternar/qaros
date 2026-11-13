@@ -18,6 +18,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
+  *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
+  and the player installation pages describe them: **All devices** has **Pair headset**, which opens
+  the **Pair Headset** dialog (QR code and the field for the code a device shows); **HoloLens (legacy)**
+  invites by address. The old **By address**, **By QR code** and **By code** picks are gone.
+
 - **Docs:** *GUI Panels* has a section on served panels: publishing a folder or files as a content
   bundle, putting a page of it on a panel, the page's `qaros.panel.send` / `onMessage`, the
   messages your app receives and posts, and the rules and limits, with C, C# and Rust code.

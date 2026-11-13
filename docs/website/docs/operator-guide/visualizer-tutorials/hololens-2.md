@@ -53,14 +53,16 @@ A HoloLens with an older player build (package version `1.0.0.0`) must uninstall
 
 ## 2. Invite the HoloLens
 
-1. **Session** › **Devices**. The **Invite device** card is open at the top.
-2. Pick **HoloLens** (it carries the *LEGACY* tag).
+1. **Session** › **Devices**. The **Invite device** card is open at the top, on its **All devices**
+   tab.
+2. Open the **HoloLens (legacy)** tab. A HoloLens is the only device invited by address; every
+   other device pairs on **All devices**.
 3. Type the HoloLens IP address in **Address**. The address and the device kind are all the Hub
    needs; the device is listed under its address.
 4. Tick **Invite automatically** to have the Hub invite it again on every start. Left unticked, it
    is invited once (the device is still listed and can be invited again by hand).
 
-   ![Invite device card with HoloLens selected](../../img/visualizer/invite-hololens.png)
+   ![Invite device card, HoloLens (legacy) tab](../../img/visualizer/invite-hololens.png)
 
 5. Click **Invite HoloLens**. The device row shows *Waiting for player*, then *Streaming from
    &lt;hub&gt;* in green.

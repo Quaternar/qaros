@@ -14,7 +14,7 @@ code**.
 
 :::note Two different QR codes
 The **anchoring QR code** (this page) places the scene. The **connection QR code** (**Show QR
-code**, **By QR code**) pairs an Android headset with the Hub
+code**, or **Pair headset** on the **All devices** tab) pairs an Android headset with the Hub
 ([Pair a Headset](./pair-a-headset.md)). Scanning one never does the other's job.
 :::
 

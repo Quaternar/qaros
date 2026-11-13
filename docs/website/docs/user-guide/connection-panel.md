@@ -66,13 +66,16 @@ Opens only when you ask for it. Pairing takes both Hubs:
    ([Player installation](/docs/operator-guide/player-installation-to-device)).
 2. **Android headsets** (Meta Quest, METALENSE 2, Android XR) are not invited: pair them once with
    **Pair headset** (a one-time invite over the USB cable) or **Show QR code** in the device's last
-   setup step on the Devices tab, or with **By code** in the **Invite device** card: pick the
-   headset from the list of those showing a code on the network (or type its **Address**), type
-   the **Pairing code** it shows and press **Pair**
-   ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset#pair-by-the-code-the-headset-shows)). The headset then
-   joins by itself and reports its exact model. Stop here for an Android headset.
-   For a **HoloLens** (*legacy*: streams over holographic remoting), the **Invite device** card is
-   open on the Devices tab; pick **By address**, whose only kind is **HoloLens**.
+   setup step on the Devices tab, or from the **All devices** tab of the **Invite device** card,
+   which is open on the Devices tab: its **Pair headset** button opens the **Pair Headset** dialog
+   with a one-time QR code to scan and a field for the code the device shows (pick the headset
+   from the list of those showing a code on the network or type its **Address**, type the
+   **Pairing code** and press **Pair**;
+   [Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset#pair-by-the-code-the-headset-shows)).
+   Every device except a HoloLens joins this way. The device then joins by itself and reports its
+   exact model. Stop here unless the device is a HoloLens.
+   For a **HoloLens** (*legacy*: streams over holographic remoting), open the **HoloLens (legacy)**
+   tab of the **Invite device** card: it invites by address.
 
 An address typed with `headset:`, `android:` or `quest:` is refused: *Android headsets are not
 invited: pair them with Pair headset on the Devices tab (adb push or Show QR code).*
@@ -85,6 +88,7 @@ invited: pair them with Pair headset on the Devices tab (adb push or Show QR cod
    device** in the title folds it away.
 
 An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
-uses the code shown by **Let another hub join us** above. **By QR code** in the **Invite device** card,
-in every UI mode, shows the same one-time QR code for an Android headset as **Show QR code** in its
-setup steps; it is the one QR invite.
+uses the code shown by **Let another hub join us** above. **Pair headset** on the **All devices** tab
+of the **Invite device** card, in every UI mode, opens the **Pair Headset** dialog, which shows the
+same one-time QR code for an Android headset as **Show QR code** in its setup steps; it is the one
+QR invite.

@@ -18,7 +18,7 @@ description: Short definitions of every QAROS term used in this documentation.
 
 **Common name** — the stable string identity of an app volume or GUI panel (e.g. `cad-review.hub1.example.com`); asking for the same name always returns the same object.
 
-**Connection QR code** — the one-time QR code (**Show QR code**, **By QR code**) an Android headset scans to pair with the Hub; not the anchoring QR code.
+**Connection QR code** — the one-time QR code (**Show QR code**, or **Pair headset** on the **All devices** tab) an Android headset scans to pair with the Hub; not the anchoring QR code.
 
 **Discovery** — the Hub's unauthenticated LAN beacon (UDP multicast) that lets devices find it without configuration.
 
