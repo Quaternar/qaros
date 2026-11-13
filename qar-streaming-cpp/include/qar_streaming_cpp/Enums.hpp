@@ -544,31 +544,6 @@ FromNative(QarLogSeverity value) noexcept
 	return static_cast<LogSeverity>(value);
 }
 
-/// QarOnboardingMethod
-enum class OnboardingMethod : std::underlying_type_t<QarOnboardingMethod>
-{
-	Pake = QAR_ONBOARDING_METHOD_PAKE,
-	Password = QAR_ONBOARDING_METHOD_PASSWORD,
-};
-
-template<>
-struct NativeOf<OnboardingMethod>
-{
-	using Type = QarOnboardingMethod;
-};
-
-constexpr QarOnboardingMethod
-ToNative(OnboardingMethod value) noexcept
-{
-	return static_cast<QarOnboardingMethod>(value);
-}
-
-constexpr OnboardingMethod
-FromNative(QarOnboardingMethod value) noexcept
-{
-	return static_cast<OnboardingMethod>(value);
-}
-
 /// QarPixelFormat
 enum class PixelFormat : std::underlying_type_t<QarPixelFormat>
 {

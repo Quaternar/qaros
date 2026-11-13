@@ -122,7 +122,6 @@ using PeerPresentation = QarPeerPresentation;
 using RejoinInit = QarRejoinInit;
 using RenderSenderInit = QarRenderSenderInit;
 using RequestInviteInit = QarRequestInviteInit;
-using RequestOnboardingCodesInit = QarRequestOnboardingCodesInit;
 using RuntimeInit = QarRuntimeInit;
 using SessionInviteTargetAppInit = QarSessionInviteTargetAppInit;
 using VideoSenderInit = QarVideoSenderInit;

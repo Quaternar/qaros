@@ -28,13 +28,6 @@ public:
 
 	[[nodiscard]]
 	Result<std::vector<uint8_t>> Serialize() const noexcept;
-	[[nodiscard]]
-	Result<OnboardingMethod> GetMethod() const noexcept;
-	[[nodiscard]]
-	Result<int64_t> GetExpiresUnix() const noexcept;
-	/// The pairing code of a PAKE invite. A secret: never log it.
-	[[nodiscard]]
-	Result<std::string> GetCode() const noexcept;
 
 private:
 	OnboardingInvitePtr m_handle;

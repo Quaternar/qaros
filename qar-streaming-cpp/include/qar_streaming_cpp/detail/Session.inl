@@ -173,46 +173,6 @@ Session::RequestOnboardingInviteAsync(CallOptions options, Token&& token) const 
 	return detail::Initiate<V>(start, std::move(options), nullptr, std::forward<Token>(token));
 }
 
-inline Result<std::vector<OnboardingInvite>>
-Session::RequestOnboardingCodes(
-	uint32_t count,
-	std::chrono::seconds lifetime,
-	const std::optional<PeerId>& planned_peer,
-	const CallOptions& options
-) const noexcept
-{
-	native::RequestOnboardingCodesInit init = native::Default<native::RequestOnboardingCodesInit>();
-	init.count = count;
-	init.lifetime_seconds = static_cast<uint32_t>(lifetime.count());
-	if(planned_peer.has_value())
-	{
-		init.planned_peer_id = ToNative(planned_peer.value());
-	}
-	std::vector<OnboardingInviteHandle*> raws(count > 0 ? count : 1, nullptr);
-	const Status status(qar_session_request_onboarding_codes(
-		m_handle.get(),
-		&init,
-		detail::BlockingProgressCallback(options),
-		detail::BlockingProgressState(options),
-		options.Cancel,
-		raws.data()
-	));
-	std::vector<OnboardingInvite> invites;
-	invites.reserve(raws.size());
-	for(OnboardingInviteHandle* raw : raws)
-	{
-		if(raw != nullptr)
-		{
-			invites.emplace_back(OnboardingInvitePtr(raw));
-		}
-	}
-	if(not status.Ok())
-	{
-		return Result<std::vector<OnboardingInvite>>(status);
-	}
-	return invites;
-}
-
 inline Result<PeerId>
 Session::InviteTargetApp(
 	const std::string& connection_string, const CallOptions& options

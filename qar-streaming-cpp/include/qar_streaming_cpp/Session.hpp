@@ -64,16 +64,6 @@ public:
 	template<typename Token = UseFutureT>
 	auto
 	RequestOnboardingInviteAsync(CallOptions options = {}, Token&& token = Token{}) const noexcept;
-	/// `count` one-time codes (1 to 64), each its own invite, valid for
-	/// `lifetime` (0 means 120 s, at most 600 s). With `planned_peer`, a device
-	/// pairing with one can only join under that peer id.
-	[[nodiscard]]
-	Result<std::vector<OnboardingInvite>> RequestOnboardingCodes(
-		uint32_t count,
-		std::chrono::seconds lifetime = std::chrono::seconds(0),
-		const std::optional<PeerId>& planned_peer = std::nullopt,
-		const CallOptions& options = {}
-	) const noexcept;
 
 	/// Starts the target app named by `connection_string` (see
 	/// TargetAppConnectionString); its peer id.

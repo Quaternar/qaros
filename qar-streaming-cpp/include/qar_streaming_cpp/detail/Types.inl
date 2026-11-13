@@ -187,13 +187,6 @@ Default<RequestInviteInit>() noexcept
 }
 
 template<>
-inline RequestOnboardingCodesInit
-Default<RequestOnboardingCodesInit>() noexcept
-{
-	return qar_request_onboarding_codes_init_default();
-}
-
-template<>
 inline RuntimeInit
 Default<RuntimeInit>() noexcept
 {
