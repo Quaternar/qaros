@@ -107,12 +107,11 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
-var options = new RenderSenderOptions
+// The target peer (who receives this stream) and the graphics API are constructor arguments.
+var options = new RenderSenderOptions(targetPeerId, GraphicsAPI.Cpu)
 {
-    PeerId              = targetPeerId,   // who receives this stream
     EnableAutoReconnects = true,          // survive network hiccups
     AppVolumeId         = volumeId,       // composite into our app volume
-    GraphicsApi         = GraphicsApi.Cpu,
     ColorFormat         = PixelFormat.R8G8B8A8,
     DepthFormat         = PixelFormat.R32Float,
 
@@ -120,12 +119,7 @@ var options = new RenderSenderOptions
     TextureLayout = FrameLayout.SideBySide,
     FrameViews = new[]
     {
-        new RenderFrameView
-        {
-            DataType     = VideoFrameViewType.Color,
-            Eye          = VideoFrameViewEye.Left,
-            TextureIndex = 0,
-        },
+        new RenderFrameView(VideoFrameViewType.Color, VideoFrameViewEye.Left, 0),
         // ... one entry per view (right eye, depth views, ...) ...
     },
 };
