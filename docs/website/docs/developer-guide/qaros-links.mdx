@@ -14,7 +14,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 Your app can send the user straight to a place in QAROS: the QR code a headset pairs with, the QR code a device anchors its room with, or the setup steps of one device type. You open a `qaros://` link the way you open any web link; no API call and no session are needed.
 
 - QAROS starts if it is not running, and the link is shown once it is ready.
-- While the Visualizer is hidden (QAROS running in the tray), only the dialog the link names comes up, in a window of its size. Closing the dialog hides it again.
+- While the Visualizer is hidden (QAROS running in the tray), only the dialog the link names comes up, as a window of its own: the dialog fills it, its title bar shows the dialog's title, and the user can move, resize, minimize or maximize it like any window. Closing the window closes the dialog and hides it again.
 - While the Visualizer is open, the dialog opens on top of it.
 - If the dialog cannot open (for example, a pairing is already running), the Visualizer opens instead and says why.
 
@@ -25,7 +25,7 @@ Links work on Windows, where the QAROS installer registers the `qaros` scheme. L
 | Link | Opens |
 |---|---|
 | `qaros://visualizer/v1/devices/pair-qr` | **Pair Headset** dialog: the QR code and a field for the code shown on the headset. The QAROS Player on a headset scans the QR code to join, or you type the code and address the headset shows. A fresh single-use QR code is made each time; a dialog already on screen is brought to the front instead. |
-| `qaros://visualizer/v1/scene-origin/qr` | **Room Origin** marker: the anchoring QR code a device scans to place the room origin. |
+| `qaros://visualizer/v1/scene-origin/qr` | **Room Origin**: the anchoring QR code a device scans to place the room origin, with **Print** and **Save as PDF...** in the same dialog. |
 | `qaros://visualizer/v1/devices/setup?kind=<kind>` | **Set up a device**: the setup steps of one device type, the same as in the Devices tab. |
 
 `<kind>` is one of:

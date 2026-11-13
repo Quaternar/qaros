@@ -18,6 +18,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Scene Origin* and *QAROS World* describe the one **Room Origin** dialog that shows the
+  anchoring QR code and prints it (or saves it as PDF), opened from **Tools** › **Origin** or a
+  room's QR icon in **Rooms**. *qaros:// Links*: a dialog a link opens while the Visualizer is
+  hidden is a window of its own, with the dialog's title, that can be resized.
 - **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
   *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
   and the player installation pages describe them: **All devices** has **Pair headset**, which opens
