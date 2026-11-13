@@ -20,11 +20,11 @@ PeerSpec::Read(PeerSpecHandle* handle) noexcept
 	chain.Take(
 		&spec.AppCustomPeerInfo, detail::ReadString(qar_peer_spec_get_app_custom_peer_info, handle)
 	);
-	chain.Add(qar_peer_spec_get_app_state(handle, detail::OutValue(&spec.AppState)));
+	chain.Add(qar_peer_spec_get_presence(handle, detail::OutValue(&spec.Presence)));
 	chain.Take(&spec.VersionId, detail::ReadString(qar_peer_spec_get_version_id, handle));
 	chain.Take(&spec.RoomTag, detail::ReadString(qar_peer_spec_get_room_tag, handle));
 	chain.Add(qar_peer_spec_is_target_app(handle, &spec.IsTargetApp));
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<PeerSpec>(chain.First());
 	}
@@ -47,7 +47,7 @@ PeerControl::GetMySpec() const noexcept
 {
 	PeerSpecPtr me;
 	const Status status(qar_session_get_my_spec(m_session.get(), OutPtr(me)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<PeerSpec>(status);
 	}

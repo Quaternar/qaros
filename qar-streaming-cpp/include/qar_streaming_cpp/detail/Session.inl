@@ -17,7 +17,7 @@ inline void
 OnInviteRequested(NativeResult status, OnboardingInviteHandle* invite, void* user_state) noexcept
 {
 	const Status result(status);
-	if(not result.Ok())
+	if(!result.Ok())
 	{
 		Finish<OnboardingInvite>(user_state, Result<OnboardingInvite>(result));
 		return;
@@ -29,7 +29,7 @@ inline void
 OnTargetAppAnswered(NativeResult status, const native::PeerId* peer_id, void* user_state) noexcept
 {
 	const Status result(status);
-	if(not result.Ok())
+	if(!result.Ok())
 	{
 		Finish<PeerId>(user_state, Result<PeerId>(result));
 		return;
@@ -98,7 +98,7 @@ Session::GetId() const noexcept
 {
 	SessionId id;
 	const Status status(qar_session_get_id(m_handle.get(), detail::OutValue(&id)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<SessionId>(status);
 	}
@@ -111,11 +111,11 @@ Session::GetGraphicsDeviceId() const noexcept
 	native::GraphicsDeviceId device = native::Default<native::GraphicsDeviceId>();
 	bool present = false;
 	const Status status(qar_session_get_graphics_device_id(m_handle.get(), &device, &present));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<std::optional<GraphicsDeviceId>>(status);
 	}
-	if(not present)
+	if(!present)
 	{
 		return std::optional<GraphicsDeviceId>();
 	}
@@ -129,7 +129,7 @@ Session::FindRenderTarget(const std::string& connection) const noexcept
 	const Status status(
 		qar_session_find_render_target(m_handle.get(), connection.c_str(), detail::OutValue(&peer))
 	);
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<PeerId>(status);
 	}
@@ -149,7 +149,7 @@ Session::RequestOnboardingInvite(const CallOptions& options) const noexcept
 		options.Cancel,
 		OutPtr(invite)
 	));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<OnboardingInvite>(status);
 	}
@@ -189,7 +189,7 @@ Session::InviteTargetApp(
 		options.Cancel,
 		detail::OutValue(&peer)
 	));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<PeerId>(status);
 	}

@@ -48,7 +48,7 @@ AppVolumeGestureState::Read(AppVolumeHandle* handle, const std::vector<PeerId>& 
 		chain.Add(qar_app_volume_get_active_gesture_mode(handle, detail::InValue(peer), &mode_id));
 		state.ActiveModeByPeer.emplace_back(peer, mode_id);
 	}
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<AppVolumeGestureState>(chain.First());
 	}
@@ -82,7 +82,7 @@ AppVolume::Read(AppVolumeHandle* handle) noexcept
 	chain.Add(qar_app_volume_get_gesture_configuration(handle, &configuration));
 	volume.GestureConfiguration = FromNative(configuration);
 	chain.Take(&volume.GestureState, AppVolumeGestureState::Read(handle, volume.UsedByPeers));
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<AppVolume>(chain.First());
 	}
@@ -117,7 +117,7 @@ AppVolumeGesture::FromCallback(AppVolumeGestureHandle* gesture) noexcept
 	chain.Add(qar_app_volume_gesture_get_handedness(gesture, detail::OutValue(&value.Handedness)));
 	chain.Add(qar_app_volume_gesture_get_gesture_id(gesture, &value.GestureId));
 	chain.Add(qar_app_volume_gesture_get_mode(gesture, &value.ModeId));
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<AppVolumeGesture>(chain.First());
 	}
@@ -155,7 +155,7 @@ inline Result<AppVolumeId>
 AppVolumeControl::GetOrCreate(const AppVolumeBuilder& builder) const noexcept
 {
 	const Result<void> valid = builder.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return Result<AppVolumeId>(valid.GetStatus());
 	}
@@ -163,7 +163,7 @@ AppVolumeControl::GetOrCreate(const AppVolumeBuilder& builder) const noexcept
 	const Status status(
 		qar_app_volumes_get_or_create(m_session.get(), &builder.Get(), detail::OutValue(&id))
 	);
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<AppVolumeId>(status);
 	}
@@ -296,7 +296,7 @@ AppVolumeControl::GetLatestAppScale(const AppVolumeId& id) const noexcept
 	const Status status(
 		qar_app_volume_get_latest_app_scale(m_session.get(), detail::InValue(id), &scale)
 	);
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<float>(status);
 	}
@@ -424,7 +424,7 @@ AppVolumeControl::Latest(Get get, const AppVolumeId& id) const noexcept
 {
 	T value = {};
 	const Status status(get(m_session.get(), detail::InValue(id), detail::OutValue(&value)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<T>(status);
 	}

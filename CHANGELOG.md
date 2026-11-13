@@ -142,6 +142,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Language Bindings* shows how a C++-only CMake project adds the header-only C++ wrapper
+  `qar-streaming-cpp` (no C language, no examples; `QAR_ENABLE_DYNAMIC_LOADING` comes with the
+  target), joins as a local app with `OnboardBuilder::WithLocalApp`, and migrates from the removed
+  `Runtime::Rejoin` / `Runtime::Forget`. It no longer asks for `/permissive-` with MSVC. *Limits
+  and Behaviors to Design Around* and *Qt AR Panels* say the same of the wrapper.
+
 - **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
   installer sets it up, and several Hubs on one PC run from one installation or development build.
 

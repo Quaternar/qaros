@@ -18,7 +18,7 @@ CancelToken::Create() noexcept
 {
 	CancelTokenPtr token;
 	const Status status(qar_cancel_token_create(OutPtr(token)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<CancelToken>(status);
 	}
@@ -32,7 +32,7 @@ CancelToken::Create(std::chrono::milliseconds timeout) noexcept
 	const Status status(
 		qar_cancel_token_create_with_timeout(OutPtr(token), static_cast<uint32_t>(timeout.count()))
 	);
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<CancelToken>(status);
 	}

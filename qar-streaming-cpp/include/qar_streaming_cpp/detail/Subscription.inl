@@ -79,7 +79,7 @@ inline Subscription::~Subscription() noexcept
 inline Result<void>
 Subscription::Cancel() const noexcept
 {
-	if(not m_token)
+	if(!m_token)
 	{
 		return Result<void>();
 	}
@@ -105,7 +105,7 @@ SubscribeWith(Fn&& fn, Start&& start) noexcept
 {
 	using State = detail::CallableState<std::decay_t<Fn>>;
 	Result<CancelToken> token = CancelToken::Create();
-	if(not token.Ok())
+	if(!token.Ok())
 	{
 		return Result<Subscription>(token.GetStatus());
 	}
@@ -113,7 +113,7 @@ SubscribeWith(Fn&& fn, Start&& start) noexcept
 	const Status subscribed(
 		start(&detail::Forwarder<State, Args...>::Invoke, state.get(), token.Value().Get())
 	);
-	if(not subscribed.Ok())
+	if(!subscribed.Ok())
 	{
 		return Result<Subscription>(subscribed);
 	}

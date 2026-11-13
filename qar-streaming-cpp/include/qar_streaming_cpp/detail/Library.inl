@@ -55,7 +55,7 @@ inline Result<Library>
 Library::Init(const LibraryBuilder& builder) noexcept
 {
 	const Status status(qar_library_init(&builder.Get()));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<Library>(status);
 	}
@@ -90,7 +90,7 @@ inline Library::~Library() noexcept
 inline Result<void>
 Library::Shutdown() noexcept
 {
-	if(not std::exchange(m_active, false))
+	if(!std::exchange(m_active, false))
 	{
 		return Result<void>();
 	}

@@ -3,9 +3,9 @@
 // Every C handle as a std::unique_ptr with its own deleter, and the helpers to
 // fill one from a C out-parameter or share it.
 //
-//   qaros::SessionPtr session;
-//   qar_runtime_rejoin(runtime, &builder.Get(), nullptr, nullptr, nullptr, qaros::OutPtr(session));
-//   std::shared_ptr<SessionHandle> shared = qaros::Share(std::move(session));
+//   qaros::OnboardingInvitePtr invite;
+//   qar_onboarding_invite_deserialize(data, size, qaros::OutPtr(invite));
+//   std::shared_ptr<OnboardingInviteHandle> shared = qaros::Share(std::move(invite));
 //
 // The deleter releases the handle only; it never tears down what the handle
 // refers to (a runtime, panel or volume lives on, see the C API per type).

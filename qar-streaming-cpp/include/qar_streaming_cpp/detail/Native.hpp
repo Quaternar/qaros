@@ -34,7 +34,7 @@ public:
 	template<typename T>
 	void Take(T* target, Result<T> result)
 	{
-		if(not result.Ok())
+		if(!result.Ok())
 		{
 			Add(result.GetStatus().Raw());
 			return;
@@ -138,7 +138,7 @@ template<typename Cpp>
 Result<std::vector<Cpp>>
 FromNativeAll(Result<std::vector<typename NativeOf<Cpp>::Type>> natives) noexcept
 {
-	if(not natives.Ok())
+	if(!natives.Ok())
 	{
 		return Result<std::vector<Cpp>>(natives.GetStatus());
 	}
@@ -158,7 +158,7 @@ ReadString(Get get, Handle* handle) noexcept
 {
 	std::array<char, MaxStringLength> buffer = {};
 	const Status status(get(handle, buffer.data(), buffer.size()));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<std::string>(status);
 	}
@@ -172,7 +172,7 @@ ReadCounted(Count count, Fill fill, Handle* handle) noexcept
 {
 	size_t total = 0;
 	const Status counted(count(handle, &total));
-	if(not counted.Ok())
+	if(!counted.Ok())
 	{
 		return Result<std::vector<T>>(counted);
 	}
@@ -183,7 +183,7 @@ ReadCounted(Count count, Fill fill, Handle* handle) noexcept
 	}
 	size_t written = 0;
 	const Status filled(fill(handle, values.data(), values.size(), &written));
-	if(not filled.Ok())
+	if(!filled.Ok())
 	{
 		return Result<std::vector<T>>(filled);
 	}
@@ -198,7 +198,7 @@ ReadWithCapacity(Get get, Handle* handle) noexcept
 {
 	size_t total = 0;
 	const Status counted(get(handle, nullptr, 0, &total));
-	if(not counted.Ok())
+	if(!counted.Ok())
 	{
 		return Result<std::vector<T>>(counted);
 	}
@@ -209,7 +209,7 @@ ReadWithCapacity(Get get, Handle* handle) noexcept
 	}
 	size_t again = 0;
 	const Status filled(get(handle, values.data(), values.size(), &again));
-	if(not filled.Ok())
+	if(!filled.Ok())
 	{
 		return Result<std::vector<T>>(filled);
 	}
@@ -225,7 +225,7 @@ QuerySnapshots(Count count, Query query, Session* session) noexcept
 {
 	size_t total = 0;
 	const Status counted(count(session, &total));
-	if(not counted.Ok())
+	if(!counted.Ok())
 	{
 		return Result<std::vector<Snapshot>>(counted);
 	}
@@ -234,7 +234,7 @@ QuerySnapshots(Count count, Query query, Session* session) noexcept
 	if(total > 0)
 	{
 		const Status queried(query(session, raws.data(), raws.size(), &written));
-		if(not queried.Ok())
+		if(!queried.Ok())
 		{
 			return Result<std::vector<Snapshot>>(queried);
 		}
@@ -250,7 +250,7 @@ QuerySnapshots(Count count, Query query, Session* session) noexcept
 	for(const UniquePtr<Raw>& raw : owned)
 	{
 		Result<Snapshot> snapshot = Snapshot::Read(raw.get());
-		if(not snapshot.Ok())
+		if(!snapshot.Ok())
 		{
 			return Result<std::vector<Snapshot>>(snapshot.GetStatus());
 		}

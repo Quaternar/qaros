@@ -12,7 +12,7 @@ namespace qaros
 
 struct OnboardSession
 {
-	/// Persist it: the ticket for every later rejoin and forget.
+	/// Zero for a local app and a co-process, which persist nothing.
 	OnboardingId OnboardingId = {};
 	qaros::Session Session;
 };
@@ -33,7 +33,7 @@ public:
 	[[nodiscard]]
 	RuntimeHandle* Release() noexcept;
 
-	/// Full onboarding; the builder names the mode (code or invite).
+	/// Joins the session; the builder names the mode (local app, invite or code).
 	[[nodiscard]]
 	Result<OnboardSession>
 	Onboard(const OnboardBuilder& builder, const CallOptions& options = {}) const noexcept;
@@ -42,20 +42,6 @@ public:
 	auto OnboardAsync(
 		const OnboardBuilder& builder, CallOptions options = {}, Token&& token = Token{}
 	) const noexcept;
-
-	/// Restores a persisted onboarding.
-	[[nodiscard]]
-	Result<Session>
-	Rejoin(const RejoinBuilder& builder, const CallOptions& options = {}) const noexcept;
-	/// Completes with Result<Session>.
-	template<typename Token = UseFutureT>
-	auto RejoinAsync(
-		const RejoinBuilder& builder, CallOptions options = {}, Token&& token = Token{}
-	) const noexcept;
-
-	/// Erases a persisted identity slot. Its session must be gone.
-	[[nodiscard]]
-	Result<void> Forget(const OnboardingId& onboarding_id) const noexcept;
 
 private:
 	RuntimePtr m_handle;

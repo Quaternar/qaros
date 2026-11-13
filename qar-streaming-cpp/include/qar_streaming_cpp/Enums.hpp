@@ -67,34 +67,6 @@ FromNative(QarAppScaleSensitivityMode value) noexcept
 	return static_cast<AppScaleSensitivityMode>(value);
 }
 
-/// QarAppState
-enum class AppState : std::underlying_type_t<QarAppState>
-{
-	Unknown = QAR_APP_STATE_UNKNOWN,
-	Initializing = QAR_APP_STATE_INITIALIZING,
-	Running = QAR_APP_STATE_RUNNING,
-	ShuttingDown = QAR_APP_STATE_SHUTTING_DOWN,
-	Retired = QAR_APP_STATE_RETIRED,
-};
-
-template<>
-struct NativeOf<AppState>
-{
-	using Type = QarAppState;
-};
-
-constexpr QarAppState
-ToNative(AppState value) noexcept
-{
-	return static_cast<QarAppState>(value);
-}
-
-constexpr AppState
-FromNative(QarAppState value) noexcept
-{
-	return static_cast<AppState>(value);
-}
-
 /// QarAppVolumeAxisFlags
 enum class AppVolumeAxisFlags : std::underlying_type_t<QarAppVolumeAxisFlags>
 {
@@ -151,7 +123,8 @@ HasFlag(AppVolumeAxisFlags flags, AppVolumeAxisFlags flag) noexcept
 }
 
 /// QarAppVolumeControllerRayLineStyle
-enum class AppVolumeControllerRayLineStyle : std::underlying_type_t<QarAppVolumeControllerRayLineStyle>
+enum class AppVolumeControllerRayLineStyle : std::underlying_type_t<
+	QarAppVolumeControllerRayLineStyle>
 {
 	None = QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_NONE,
 	Solid = QAR_APP_VOLUME_CONTROLLER_RAY_LINE_STYLE_SOLID,
@@ -544,6 +517,34 @@ FromNative(QarLogSeverity value) noexcept
 	return static_cast<LogSeverity>(value);
 }
 
+/// QarPeerPresence
+enum class PeerPresence : std::underlying_type_t<QarPeerPresence>
+{
+	Unknown = QAR_PEER_PRESENCE_UNKNOWN,
+	Online = QAR_PEER_PRESENCE_ONLINE,
+	Offline = QAR_PEER_PRESENCE_OFFLINE,
+	Leaving = QAR_PEER_PRESENCE_LEAVING,
+	Retired = QAR_PEER_PRESENCE_RETIRED,
+};
+
+template<>
+struct NativeOf<PeerPresence>
+{
+	using Type = QarPeerPresence;
+};
+
+constexpr QarPeerPresence
+ToNative(PeerPresence value) noexcept
+{
+	return static_cast<QarPeerPresence>(value);
+}
+
+constexpr PeerPresence
+FromNative(QarPeerPresence value) noexcept
+{
+	return static_cast<PeerPresence>(value);
+}
+
 /// QarPixelFormat
 enum class PixelFormat : std::underlying_type_t<QarPixelFormat>
 {
@@ -590,7 +591,8 @@ enum class StatusCode : std::underlying_type_t<QarStatusCode>
 	MediaStreamingStreamIsPaused = QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED,
 	MediaStreamingStreamIsReconnecting = QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING,
 	MediaStreamingNoActiveTransfers = QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS,
-	MediaStreamingDestinationReservationFailed = QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED,
+	MediaStreamingDestinationReservationFailed =
+		QAR_STATUS_MEDIA_STREAMING_DESTINATION_RESERVATION_FAILED,
 	MediaStreamingSendPipelineFailed = QAR_STATUS_MEDIA_STREAMING_SEND_PIPELINE_FAILED,
 	MediaStreamingLayoutChangeFailed = QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED,
 	RenderingProducerUnableToDoBeginFrame = QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME,

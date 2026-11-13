@@ -34,7 +34,7 @@ VideoSender::GetStreamId() const noexcept
 {
 	native::StreamId stream_id = native::Default<native::StreamId>();
 	const Status status(qar_video_sender_stream_id(m_handle.get(), &stream_id));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<StreamId>(status);
 	}
@@ -46,7 +46,7 @@ VideoSender::GetLayout() const noexcept
 {
 	native::VideoFrameLayout layout = native::Default<native::VideoFrameLayout>();
 	const Status status(qar_video_sender_layout(m_handle.get(), &layout));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameLayout>(status);
 	}
@@ -57,7 +57,7 @@ inline Result<void>
 VideoSender::ChangeLayout(const VideoFrameLayout& layout) const noexcept
 {
 	const Result<void> valid = layout.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return valid;
 	}
@@ -69,7 +69,7 @@ VideoSender::TryBeginFrame() const noexcept
 {
 	bool ready = false;
 	const Status status(qar_video_sender_try_begin_frame(m_handle.get(), &ready));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<bool>(status);
 	}
@@ -87,7 +87,7 @@ VideoSender::GetCpuFrame() const noexcept
 {
 	native::VideoFrameCpu frame = native::Default<native::VideoFrameCpu>();
 	const Status status(qar_video_sender_frame_cpu(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameCpu>(status);
 	}
@@ -100,7 +100,7 @@ VideoSender::GetD3D11Frame() const noexcept
 {
 	native::VideoFrameD3D11 frame = native::Default<native::VideoFrameD3D11>();
 	const Status status(qar_video_sender_frame_d3d11(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameD3D11>(status);
 	}
@@ -114,7 +114,7 @@ VideoSender::GetOpenGlFrame() const noexcept
 {
 	native::VideoFrameOpenGl frame = native::Default<native::VideoFrameOpenGl>();
 	const Status status(qar_video_sender_frame_opengl(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameOpenGl>(status);
 	}
@@ -128,7 +128,7 @@ VideoSender::GetVulkanFrame() const noexcept
 {
 	native::VideoFrameVulkan* frame = nullptr;
 	const Status status(qar_video_sender_frame_vulkan(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VulkanFrame>(status);
 	}
@@ -145,13 +145,13 @@ inline Result<VideoSender>
 VideoSenderControl::Create(const VideoSenderBuilder& builder) const noexcept
 {
 	const Result<void> valid = builder.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return Result<VideoSender>(valid.GetStatus());
 	}
 	VideoSenderPtr sender;
 	const Status status(qar_video_sender_create(m_session.get(), &builder.Get(), OutPtr(sender)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoSender>(status);
 	}

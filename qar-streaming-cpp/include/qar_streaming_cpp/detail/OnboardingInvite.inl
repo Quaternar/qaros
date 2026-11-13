@@ -19,7 +19,7 @@ OnboardingInvite::Deserialize(const uint8_t* data, size_t size) noexcept
 {
 	OnboardingInvitePtr invite;
 	const Status status(qar_onboarding_invite_deserialize(data, size, OutPtr(invite)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<OnboardingInvite>(status);
 	}
@@ -49,7 +49,7 @@ OnboardingInvite::Serialize() const noexcept
 {
 	size_t size = 0;
 	const Status sized(qar_onboarding_invite_serialized_size(m_handle.get(), &size));
-	if(not sized.Ok())
+	if(!sized.Ok())
 	{
 		return Result<std::vector<uint8_t>>(sized);
 	}
@@ -58,7 +58,7 @@ OnboardingInvite::Serialize() const noexcept
 	const Status serialized(
 		qar_onboarding_invite_serialize(m_handle.get(), wire.data(), wire.size(), &written)
 	);
-	if(not serialized.Ok())
+	if(!serialized.Ok())
 	{
 		return Result<std::vector<uint8_t>>(serialized);
 	}

@@ -72,7 +72,27 @@ inline OnboardBuilder::OnboardBuilder() noexcept
 	: m_init(native::Default<native::OnboardInit>())
 	, m_code(native::Default<native::OnboardCodeExt>())
 	, m_invite(native::Default<native::OnboardInviteExt>())
+	, m_localApp(native::Default<native::OnboardLocalAppExt>())
 {
+}
+
+inline OnboardBuilder&
+OnboardBuilder::WithLocalApp(uint32_t approval_timeout_ms) noexcept
+{
+	m_mode = Mode::LocalApp;
+	m_localApp.approval_timeout_ms = approval_timeout_ms;
+	m_host.reset();
+	Sync();
+	return *this;
+}
+
+inline OnboardBuilder&
+OnboardBuilder::WithAppTag(std::string app_tag) noexcept
+{
+	m_appTagText = std::move(app_tag);
+	m_appTag = native::Default<native::OnboardLocalAppTagExt>();
+	Sync();
+	return *this;
 }
 
 inline OnboardBuilder&
@@ -170,7 +190,15 @@ OnboardBuilder::Sync() noexcept
 	{
 		m_host->hostname = m_hostname.c_str();
 	}
+	if(m_appTag.has_value())
+	{
+		m_appTag->app_tag = m_appTagText.c_str();
+	}
 	native::StructureHeader* mode = nullptr;
+	if(m_mode == Mode::LocalApp)
+	{
+		mode = &m_localApp.header;
+	}
 	if(m_mode == Mode::Code)
 	{
 		mode = &m_code.header;
@@ -182,63 +210,11 @@ OnboardBuilder::Sync() noexcept
 	detail::Link(
 		&m_init.header,
 		{ mode,
+		  detail::OptionalHeader(m_appTag),
 		  detail::OptionalHeader(m_host),
 		  detail::OptionalHeader(m_peerId),
 		  detail::OptionalHeader(m_graphicsDevice) }
 	);
-}
-
-// RejoinBuilder
-
-inline RejoinBuilder::RejoinBuilder(const OnboardingId& onboarding_id) noexcept
-	: m_init(native::Default<native::RejoinInit>())
-{
-	m_init.onboarding_id = ToNative(onboarding_id);
-}
-
-inline RejoinBuilder&
-RejoinBuilder::WithGraphicsDevice(const GraphicsDeviceId& device) noexcept
-{
-	m_graphicsDevice = ToNative(device);
-	Sync();
-	return *this;
-}
-
-inline RejoinBuilder&
-RejoinBuilder::WithDisplayName(std::string name) noexcept
-{
-	m_presentation.DisplayName = std::move(name);
-	Sync();
-	return *this;
-}
-
-inline RejoinBuilder&
-RejoinBuilder::WithAppVersion(std::string version) noexcept
-{
-	m_presentation.AppVersion = std::move(version);
-	Sync();
-	return *this;
-}
-
-inline RejoinBuilder&
-RejoinBuilder::WithAppCustomPeerInfo(std::string info) noexcept
-{
-	m_presentation.AppCustomPeerInfo = std::move(info);
-	Sync();
-	return *this;
-}
-
-inline const native::RejoinInit&
-RejoinBuilder::Get() const noexcept
-{
-	return m_init;
-}
-
-inline void
-RejoinBuilder::Sync() noexcept
-{
-	detail::ApplyPresentation(m_presentation, &m_init.presentation);
-	detail::Link(&m_init.header, { detail::OptionalHeader(m_graphicsDevice) });
 }
 
 } // namespace qaros

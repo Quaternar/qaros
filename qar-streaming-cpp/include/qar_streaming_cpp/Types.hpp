@@ -108,7 +108,6 @@ using VideoFrameVulkan = QarVideoFrameVulkan;
 
 // Init structs and their chained extensions
 using AppVolumeInit = QarAppVolumeInit;
-using ForgetInit = QarForgetInit;
 using GuiPanelInit = QarGuiPanelInit;
 using GuiPanelStreamIdExt = QarGuiPanelStreamIdExt;
 using GuiPanelUrlExt = QarGuiPanelUrlExt;
@@ -117,9 +116,10 @@ using OnboardCodeExt = QarOnboardCodeExt;
 using OnboardHostExt = QarOnboardHostExt;
 using OnboardInit = QarOnboardInit;
 using OnboardInviteExt = QarOnboardInviteExt;
+using OnboardLocalAppExt = QarOnboardLocalAppExt;
+using OnboardLocalAppTagExt = QarOnboardLocalAppTagExt;
 using OnboardPeerIdExt = QarOnboardPeerIdExt;
 using PeerPresentation = QarPeerPresentation;
-using RejoinInit = QarRejoinInit;
 using RenderSenderInit = QarRenderSenderInit;
 using RequestInviteInit = QarRequestInviteInit;
 using RuntimeInit = QarRuntimeInit;

@@ -233,7 +233,7 @@ AppVolumeBuilder::WithGestureConfiguration(GestureConfigurationBuilder configura
 inline Result<void>
 AppVolumeBuilder::Validate() const noexcept
 {
-	if(not m_gestureConfiguration.has_value())
+	if(!m_gestureConfiguration.has_value())
 	{
 		return Result<void>();
 	}

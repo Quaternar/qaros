@@ -19,7 +19,9 @@ struct PeerSpec
 	std::string DisplayName;
 	std::string AppVersion;
 	std::string AppCustomPeerInfo;
-	qaros::AppState AppState = qaros::AppState::Unknown;
+	/// Whether the peer is here: pick targets by it (Online, or Unknown for a
+	/// peer the hub has not reconciled yet).
+	qaros::PeerPresence Presence = qaros::PeerPresence::Unknown;
 	std::string VersionId;
 	std::string RoomTag;
 	bool IsTargetApp = false;

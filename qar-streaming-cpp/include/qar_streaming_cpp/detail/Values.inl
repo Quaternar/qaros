@@ -62,7 +62,7 @@ Id<Tag>::ToString() const noexcept
 {
 	std::array<char, QAR_UUID_TEXT_BUFFER_SIZE> text = {};
 	const Status status(qar_uuid_to_string(Bytes.data(), text.data(), text.size()));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<std::string>(status);
 	}
@@ -75,7 +75,7 @@ Id<Tag>::FromString(const std::string& text) noexcept
 {
 	Id id;
 	const Status status(qar_uuid_from_string(text.c_str(), id.Bytes.data()));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<Id>(status);
 	}
@@ -354,7 +354,7 @@ FromNative(const native::GeoAnchorFrame& value) noexcept
 inline std::optional<GeoAnchorFrame>
 FromNative(const native::AppWorldAnchor& value) noexcept
 {
-	if(not value.has_anchor)
+	if(!value.has_anchor)
 	{
 		return std::nullopt;
 	}
@@ -433,7 +433,7 @@ FromNative(const native::VideoFrameView& value) noexcept
 inline Result<void>
 VideoFrameLayout::Validate() const noexcept
 {
-	if(Views.size() > MaxFrameViews or Textures.size() > MaxFrameTextures)
+	if(Views.size() > MaxFrameViews || Textures.size() > MaxFrameTextures)
 	{
 		return Result<void>(Status::Error(
 			StatusCode::ArgumentNotSupported,

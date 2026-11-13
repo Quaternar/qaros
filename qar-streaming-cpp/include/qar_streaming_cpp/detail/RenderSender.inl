@@ -17,7 +17,7 @@ inline void
 OnFrameBegun(NativeResult status, RenderFrameInfoHandle* frame_info, void* user_state) noexcept
 {
 	const Status result(status);
-	if(not result.Ok())
+	if(!result.Ok())
 	{
 		Finish<RenderFrameInfo>(user_state, Result<RenderFrameInfo>(result));
 		return;
@@ -30,7 +30,7 @@ inline void
 OnRenderSenderCreated(NativeResult status, RenderSenderHandle* sender, void* user_state) noexcept
 {
 	const Status result(status);
-	if(not result.Ok())
+	if(!result.Ok())
 	{
 		Finish<RenderSender>(user_state, Result<RenderSender>(result));
 		return;
@@ -66,7 +66,7 @@ RenderFrameInfo::GetViewPose(size_t view_index) const noexcept
 {
 	native::Pose pose = native::Default<native::Pose>();
 	const Status status(qar_render_frame_info_get_view_pose(m_handle.get(), view_index, &pose));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<Pose>(status);
 	}
@@ -78,7 +78,7 @@ RenderFrameInfo::GetViewFov(size_t view_index) const noexcept
 {
 	native::Fov fov = native::Default<native::Fov>();
 	const Status status(qar_render_frame_info_get_view_fov(m_handle.get(), view_index, &fov));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<Fov>(status);
 	}
@@ -97,7 +97,7 @@ RenderStreamRequest::FromCallback(RenderStreamRequestHandle* raw) noexcept
 		qar_render_request_get_target_peer_id(owned.get(), detail::OutValue(&request.TargetPeerId))
 	);
 	chain.Add(qar_render_request_get_stream_id(owned.get(), detail::OutValue(&request.StreamId)));
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<RenderStreamRequest>(chain.First());
 	}
@@ -131,7 +131,7 @@ RenderSender::GetLayout() const noexcept
 {
 	native::VideoFrameLayout layout = native::Default<native::VideoFrameLayout>();
 	const Status status(qar_render_sender_layout(m_handle.get(), &layout));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameLayout>(status);
 	}
@@ -142,7 +142,7 @@ inline Result<void>
 RenderSender::ChangeLayout(const VideoFrameLayout& layout) const noexcept
 {
 	const Result<void> valid = layout.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return valid;
 	}
@@ -154,7 +154,7 @@ RenderSender::GetStreamId() const noexcept
 {
 	native::StreamId stream_id = native::Default<native::StreamId>();
 	const Status status(qar_render_sender_stream_id(m_handle.get(), &stream_id));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<StreamId>(status);
 	}
@@ -166,7 +166,7 @@ RenderSender::GetLastHands() const noexcept
 {
 	native::DeviceHandsWithJoints hands = {};
 	const Status status(qar_render_sender_last_hands(m_handle.get(), &hands));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<DeviceHands>(status);
 	}
@@ -178,7 +178,7 @@ RenderSender::BeginFrame(CancelTokenHandle* cancel) const noexcept
 {
 	RenderFrameInfoPtr info;
 	const Status status(qar_render_sender_begin_frame(m_handle.get(), cancel, OutPtr(info)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<RenderFrameInfo>(status);
 	}
@@ -191,11 +191,11 @@ RenderSender::TryBeginFrame() const noexcept
 	RenderFrameInfoPtr info;
 	bool ready = false;
 	const Status status(qar_render_sender_try_begin_frame(m_handle.get(), OutPtr(info), &ready));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<std::optional<RenderFrameInfo>>(status);
 	}
-	if(not ready)
+	if(!ready)
 	{
 		return std::optional<RenderFrameInfo>();
 	}
@@ -221,7 +221,7 @@ inline Result<void>
 RenderSender::ShowFrame(const FrameShowBuilder& frame_show) const noexcept
 {
 	const Result<void> valid = frame_show.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return valid;
 	}
@@ -233,7 +233,7 @@ RenderSender::GetCpuFrame() const noexcept
 {
 	native::VideoFrameCpu frame = native::Default<native::VideoFrameCpu>();
 	const Status status(qar_render_sender_frame_cpu(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameCpu>(status);
 	}
@@ -246,7 +246,7 @@ RenderSender::GetD3D11Frame() const noexcept
 {
 	native::VideoFrameD3D11 frame = native::Default<native::VideoFrameD3D11>();
 	const Status status(qar_render_sender_frame_d3d11(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameD3D11>(status);
 	}
@@ -260,7 +260,7 @@ RenderSender::GetOpenGlFrame() const noexcept
 {
 	native::VideoFrameOpenGl frame = native::Default<native::VideoFrameOpenGl>();
 	const Status status(qar_render_sender_frame_opengl(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VideoFrameOpenGl>(status);
 	}
@@ -274,7 +274,7 @@ RenderSender::GetVulkanFrame() const noexcept
 {
 	native::VideoFrameVulkan* frame = nullptr;
 	const Status status(qar_render_sender_frame_vulkan(m_handle.get(), &frame));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<VulkanFrame>(status);
 	}
@@ -295,7 +295,7 @@ RenderSenderControl::Create(
 ) const noexcept
 {
 	const Result<void> valid = builder.Validate();
-	if(not valid.Ok())
+	if(!valid.Ok())
 	{
 		return Result<RenderSender>(valid.GetStatus());
 	}
@@ -303,7 +303,7 @@ RenderSenderControl::Create(
 	native::RenderSenderInit* init = const_cast<native::RenderSenderInit*>(&builder.Get());
 	RenderSenderPtr sender;
 	const Status status(qar_render_sender_create(m_session.get(), init, cancel, OutPtr(sender)));
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<RenderSender>(status);
 	}
@@ -321,7 +321,7 @@ RenderSenderControl::CreateAsync(
 		[session = m_session.get(), builder = &builder](void* user_state, CancelTokenHandle* cancel)
 	{
 		const Result<void> valid = builder->Validate();
-		if(not valid.Ok())
+		if(!valid.Ok())
 		{
 			return valid.GetStatus().Raw();
 		}

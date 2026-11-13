@@ -155,7 +155,7 @@ StartWithHandler(
 	);
 	const Status started(start(static_cast<Completion<V>*>(state.get()), options.Cancel));
 	State* owned = state.release();
-	if(not started.Ok())
+	if(!started.Ok())
 	{
 		owned->Complete(Result<V>(started));
 	}
@@ -284,7 +284,7 @@ struct AsioInitiation
 			std::move(Options.OnProgress),
 			std::move(Context)
 		);
-		if(not token_status.Ok())
+		if(!token_status.Ok())
 		{
 			state->MarkStartFailed();
 			state.release()->Complete(Result<V>(token_status));
@@ -296,7 +296,7 @@ struct AsioInitiation
 		}
 		const Status started(StartCall(static_cast<Completion<V>*>(state.get()), cancel));
 		State* owned = state.release();
-		if(not started.Ok())
+		if(!started.Ok())
 		{
 			owned->MarkStartFailed();
 			owned->Complete(Result<V>(started));

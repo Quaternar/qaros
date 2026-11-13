@@ -27,7 +27,7 @@ GuiPanel::Read(GuiPanelHandle* handle) noexcept
 		))
 	);
 	ReadContent(handle, &panel, &chain);
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<GuiPanel>(chain.First());
 	}
@@ -76,7 +76,7 @@ GuiPanelGesture::FromCallback(GuiPanelGestureHandle* gesture) noexcept
 	chain.Add(qar_gui_panel_gesture_get_timestamp(gesture, detail::OutValue(&value.Timestamp)));
 	chain.Add(qar_gui_panel_gesture_get_handedness(gesture, detail::OutValue(&value.Handedness)));
 	chain.Add(qar_gui_panel_gesture_get_tap_count(gesture, &value.TapCount));
-	if(not chain.Ok())
+	if(!chain.Ok())
 	{
 		return Result<GuiPanelGesture>(chain.First());
 	}
@@ -95,7 +95,7 @@ GuiPanelControl::GetOrCreate(const GuiPanelBuilder& builder) const noexcept
 	const Status status(
 		qar_gui_panels_get_or_create(m_session.get(), &builder.Get(), detail::OutValue(&id))
 	);
-	if(not status.Ok())
+	if(!status.Ok())
 	{
 		return Result<GuiPanelId>(status);
 	}

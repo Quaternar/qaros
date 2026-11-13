@@ -91,8 +91,36 @@ The C header compiles cleanly as C++, so you can consume it directly and add you
 wrappers. The repository also carries `qar-streaming-cpp`, a header-only C++17 wrapper over
 the C header (CMake target `qar-streaming-cpp`): owning handles, result types, builders and
 optional asio completion tokens. It has no binding of its own to keep in step; it only calls the
-`qar_*` functions of the header. With MSVC in C++17, compile with `/permissive-`. The
-recommended idioms for your own wrappers:
+`qar_*` functions of the header. MSVC compiles it in C++17 and C++20 with or without
+`/permissive-`, warning-free at `/W4`.
+
+A C++-only project adds it with CMake and needs no C language:
+
+```cmake
+project(MyApp LANGUAGES CXX)
+add_subdirectory(qaros/qar-streaming-c)
+add_subdirectory(qaros/qar-streaming-cpp)
+target_link_libraries(my_app PRIVATE qar-streaming-cpp)
+```
+
+- The target `qar-streaming-c-headers` (linked by `qar-streaming-cpp`) adds
+  `QAR_ENABLE_DYNAMIC_LOADING` to every target that links it: put `QAR_IMPLEMENT_DYNAMIC_LOADING()`
+  in exactly one source file and call `qar_library_load` first, as
+  [Getting Started](/docs/developer-guide/getting-started) shows.
+- The C examples build only when qaros is the top-level project; `QAROS_BUILD_EXAMPLES` turns them
+  on or off (`BUILD_CORE_EXAMPLES` still works).
+
+Join as a local app with `OnboardBuilder::WithLocalApp()` (and `WithAppTag` to tell instances of
+one app apart), or as a co-process with `WithInvite`. The wrapper no longer has `Runtime::Rejoin`,
+`Runtime::RejoinAsync`, `RejoinBuilder` or `Runtime::Forget`: they wrapped the deprecated
+`qar_runtime_rejoin` and `qar_runtime_forget`, which only the deprecated code onboarding needs. A
+local app onboards again on every start and stores nothing, so there is nothing to rejoin or
+forget; the user revokes its approval in the Visualizer. `PeerSpec::AppState` is replaced by
+`PeerSpec::Presence`. The wrapper's
+[README](https://github.com/Quaternar/qaros/blob/main/qar-streaming-cpp/README.md#migrating-from-rejoin-and-forget)
+has the full migration.
+
+The recommended idioms for your own wrappers:
 
 - wrap each handle in a small RAII type that calls the matching `qar_*_handle_destroy`,
 - wrap `QarResult` in a checker that throws or logs via `qar_result_log_if_error`,

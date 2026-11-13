@@ -47,13 +47,6 @@ Default<AppVolumeSize>() noexcept
 }
 
 template<>
-inline ForgetInit
-Default<ForgetInit>() noexcept
-{
-	return qar_forget_init_default();
-}
-
-template<>
 inline Fov
 Default<Fov>() noexcept
 {
@@ -124,6 +117,20 @@ Default<OnboardInviteExt>() noexcept
 }
 
 template<>
+inline OnboardLocalAppExt
+Default<OnboardLocalAppExt>() noexcept
+{
+	return qar_onboard_local_app_ext_default();
+}
+
+template<>
+inline OnboardLocalAppTagExt
+Default<OnboardLocalAppTagExt>() noexcept
+{
+	return qar_onboard_local_app_tag_ext_default();
+}
+
+template<>
 inline OnboardPeerIdExt
 Default<OnboardPeerIdExt>() noexcept
 {
@@ -156,13 +163,6 @@ inline Quaternion
 Default<Quaternion>() noexcept
 {
 	return qar_quaternion_default();
-}
-
-template<>
-inline RejoinInit
-Default<RejoinInit>() noexcept
-{
-	return qar_rejoin_init_default();
 }
 
 template<>
