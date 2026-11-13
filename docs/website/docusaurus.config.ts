@@ -258,7 +258,7 @@ const config: Config = {
 						// A plain link while no released docs version has the Rust tutorials:
 						// a `doc` item fails in a version that lacks its doc.
 						{
-							to: "/docs/next/developer-guide/tutorials/rust/",
+							to: "/docs/dev/developer-guide/tutorials/rust/",
 							label: "Tutorials",
 						},
 					]

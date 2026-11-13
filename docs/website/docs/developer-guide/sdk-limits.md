@@ -46,7 +46,7 @@ The other pose getters of the header return the pose of a GUI panel or of an app
 
 ## What a stream panel ignores or refuses
 
-A GUI panel shows either web content or a video stream, chosen at creation with `QarGuiPanelUrlExt` or `QarGuiPanelStreamIdExt` (see [Custom GUI Panels](/docs/developer-guide/gui-panels)). A stream panel differs from a web panel in three ways:
+A GUI panel shows a page at a URI, a page your session serves or a video stream, chosen at creation with `QarGuiPanelUrlExt`, `QarGuiPanelServedContentExt` or `QarGuiPanelStreamIdExt` (see [Custom GUI Panels](/docs/developer-guide/gui-panels)). A stream panel differs from a web panel in three ways:
 
 - **It ignores the content scale.** For a web panel, `QarGuiPanelSize::content_scale` is the zoom of the page. A stream panel always draws its video at the full panel width, and the renderer scrolls the video vertically when it is taller than the panel.
 - **It refuses navigation.** `qar_gui_panels_navigate_to_uri` on a stream panel returns `QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED`, because the content type of a panel is fixed at creation. A web panel returns the same status from `qar_gui_panels_set_stream`.
@@ -74,7 +74,7 @@ Plan for this:
 
 ## A panel or volume that already exists
 
-`qar_gui_panels_get_or_create` and `qar_app_volumes_get_or_create` derive the identity of the object from a required, stable ASCII common name, so the same name finds the same object in the next session. The header leaves open what the call applies to an object that already exists: whether the pose, the size and the content that you pass replace the stored ones or are ignored, whether a panel that was closed can be reopened under its name, and whether `qar_gui_panels_set_stream` accepts the stream of a sender of another size.
+`qar_gui_panels_get_or_create` and `qar_app_volumes_get_or_create` derive the identity of the object from a required, stable ASCII common name, so the same name finds the same object in the next session. When the object already exists and is not closed, the call ignores the init (the pose, the size and the content that you pass) and this session takes the object over: set the stream, the size, the pose and the state yourself afterwards. Call it again for every common name on a new session id. The header does not say whether a panel that was closed can be reopened under its name; for `qar_gui_panels_set_stream` it says that the current layout of the sender sets the resolution of the panel's receiver.
 
 In the live checks of the authors with the installed runtime, a hidden panel that came back from `get_or_create` accepted a new stream, a new size and the state VISIBLE. But the Hub reported the old stored state (HIDDEN) about 40 milliseconds after the authors had shown a found panel, so a program that shows a panel has to check the state it gets back and ask again. The libraries that make panels keep the state they asked for for a short time after they asked and check again when it ends; the `qaros` backend of the Qt package holds it for one second. Read back what an existing object holds before you rely on it.
 
@@ -107,10 +107,10 @@ The Qt package [`qar_qt_streaming`](/docs/developer-guide/qt-ar-panels) builds i
 
 - **It includes the C header by name.** Its headers include `<qar_streaming.h>`, so a build must have a folder with that header on the include path of every file that includes the wrapper. The macro `QAR_STREAMING_CPP_C_HEADER` names another header to include instead. The wrapper works with a static link and with `QAR_ENABLE_DYNAMIC_LOADING` alike, because it only calls the `qar_*` functions of the header.
 - **It needs C++17 or newer.** A build with an older standard stops with an `#error`.
-- **MSVC needs the conforming mode in C++17.** The wrapper uses the alternative token `not` in `detail/Values.inl`, `detail/Library.inl` and `detail/Native.hpp`. In the default C++17 mode of MSVC it does not compile; compile with `/permissive-` or with C++20 or newer. The backend target `qar_qt_streaming::qaros` of the Qt package passes `/permissive-` to every program that links it, because its public headers include the wrapper.
+- **MSVC needs the conforming mode in C++17.** The wrapper uses the alternative token `not` throughout `detail/`. In the default C++17 mode of MSVC it does not compile; compile with `/permissive-` or with C++20 or newer. The backend target `qar_qt_streaming::qaros` of the Qt package passes `/permissive-` to every program that links it, because its public headers include the wrapper.
 - **It pairs with the C header of the installed runtime.** The authors build the wrapper with the C header of the installed QAROS 0.9.0-dev.3008+65dc9aeb.
-- **It has no builder for the local-app join.** The wrapper offers builders for the code pairing and the rejoin; a program that joins as a local app calls `qar_runtime_onboard` with `QarOnboardLocalAppExt` itself, as the example of the Qt package does.
-- **Its licence is not stated in the source.** The folder that the authors copied carries no licence text and no notice file. The copy is revision `1914bc2` of the branch `feature/cpp-api` of the repository [Quaternar/qaros](https://github.com/Quaternar/qaros), folder `qar-streaming-cpp`.
+- **It has no builder for the local-app join.** The wrapper offers builders for the code pairing and the rejoin, both deprecated in the C API, and for a companion invite; a program that joins as a local app calls `qar_runtime_onboard` with `QarOnboardLocalAppExt` itself, as the example of the Qt package does.
+- **Its licence is not stated in the source.** The folder that the authors copied carries no licence text and no notice file. The copy is revision `1914bc2` of the branch `feature/cpp-api` of the repository [Quaternar/qaros](https://github.com/Quaternar/qaros), folder `qar-streaming-cpp`. That revision does not compile against the current C header, which no longer has the calls that mint pairing codes or read a code from an invite; the folder `qar-streaming-cpp` of this repository drops them and builds with the current header.
 
 ## Observed in live sessions
 

@@ -353,15 +353,21 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   onboarding again, and say that a restarted app takes over the objects its previous run left,
   which then follow it into the hub's next session. The *Session Lifecycle* tutorial
   (`session_lifecycle.c`) does so on every new session id.
-
-### Changed
-
 - **Docs:** the documentation site opens the newest release by default and offers **Dev (main)** in
   the version dropdown: the unreleased docs as they are on `main` now, under `/docs/dev/` and
   `/api/dev/`. The former `/next/` addresses redirect there.
 
 ### Fixed
 
+- **Docs:** the Ogre, Qt and RViz2 pages, *Limits and Behaviors to Design Around* and *Custom GUI
+  Panels* follow the current C header: a GUI panel shows a URI, served content or a video stream
+  (`QarGuiPanelServedContentExt` too); `get_or_create` ignores the init for a panel or volume that
+  exists and is not closed and takes it over; only a HoloLens is invited, an Android headset is
+  paired in the Visualizer (`headset:` returns `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`);
+  `qar_library_load(NULL)` no longer reads `QAROS_RUNTIME_DIR` (the libraries' own loader still
+  does); the C++ wrapper copy `1914bc2` does not compile against the current header.
+  *Language Bindings* describes the header-only C++ wrapper `qar-streaming-cpp` in this repository.
+- **Docs:** the *Tutorials* entry of the *Rust API* menu opens `/docs/dev/`, not the former `/next/`.
 - **Docs:** new page *When a Target Restarts*: what QAROS recovers by itself (reconnect, pause),
   when a sender closes for good, the stream states and status codes to watch, recreating the sender
   with a back-off while the target is in the peer list, with C code and the C# equivalent. Linked

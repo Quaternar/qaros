@@ -11,7 +11,7 @@ import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
 
 <LanguageSwitcher />
 
-GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. A panel shows either **web content** — a page at a URI, which makes any existing web UI immediately usable in the room, or a page your app serves over the session itself ([served panels](#serving-panel-content-from-your-app)) — or a **video stream** from a video sender. Chain `QarGuiPanelUrlExt` or `QarGuiPanelStreamIdExt` into `QarGuiPanelInit` to choose a URI or a stream (C#: `ContentUri` or `ContentStreamId`); the content type is fixed at creation. The examples on this page use web content.
+GUI panels let you place your application's 2D interfaces into the shared 3D room: dashboards, settings pages, control surfaces. Panels are *shared session state* — every peer sees the same panel at the same place, live. A panel shows either **web content** — a page at a URI, which makes any existing web UI immediately usable in the room, or a page your app serves over the session itself ([served panels](#serving-panel-content-from-your-app)) — or a **video stream** from a video sender. Chain one of `QarGuiPanelUrlExt`, `QarGuiPanelServedContentExt` or `QarGuiPanelStreamIdExt` into `QarGuiPanelInit` to choose a URI, served content or a stream (C#: `ContentUri`, `ServedContent` or `ContentStreamId`); the content type is fixed at creation. The examples on this page use web content.
 
 The concepts (identity by common name, top-edge-midpoint pose, size + content scale, per-peer visibility) are explained in [The QAROS World](/docs/user-guide/qaros-world#gui-panels) and [Coordinate Systems](/docs/developer-guide/coordinate-systems#gui-panels--2d-quads-in-room-space).
 
@@ -299,7 +299,7 @@ Your app can react to panels changing — whether changed by another peer, anoth
 - `qar_gui_panels_subscribe_updates(session, callback, state, token)` — all panels,
 - `qar_gui_panels_subscribe_panel_updates(session, &panel_id, callback, state, token)` — one panel,
 - `qar_query_gui_panels_count` / `qar_query_gui_panels` — enumerate current panels (count-then-fetch),
-- per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_type`, `_get_content_uri`, `_get_content_served`, `_get_visible_to_peers`.
+- per-panel getters: `qar_gui_panel_get_display_name`, `_get_pose`, `_get_size`, `_get_state`, `_get_content_type`, `_get_content_uri`, `_get_content_served`, `_get_content_stream_id`, `_get_visible_to_peers`.
 
 Update callbacks arrive on library threads — see the [callback rules](/docs/developer-guide/api-conventions#4-blocking--async-pairs).
 

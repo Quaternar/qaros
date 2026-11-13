@@ -87,8 +87,12 @@ building and testing are in the binding's
 
 ## C++
 
-There is no separate C++ binding: the C header compiles cleanly as C++, so
-consume it directly and add your own RAII wrappers. The recommended idioms:
+The C header compiles cleanly as C++, so you can consume it directly and add your own RAII
+wrappers. The repository also carries `qar-streaming-cpp`, a header-only C++17 wrapper over
+the C header (CMake target `qar-streaming-cpp`): owning handles, result types, builders and
+optional asio completion tokens. It has no binding of its own to keep in step; it only calls the
+`qar_*` functions of the header. With MSVC in C++17, compile with `/permissive-`. The
+recommended idioms for your own wrappers:
 
 - wrap each handle in a small RAII type that calls the matching `qar_*_handle_destroy`,
 - wrap `QarResult` in a checker that throws or logs via `qar_result_log_if_error`,
