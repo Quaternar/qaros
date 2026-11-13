@@ -48,7 +48,7 @@ The **room** is only part of that idea: it is the physical area where people col
 From a user's perspective, joining a Shared Space is simple:
 
 - you connect a device to the Hub,
-- you enter or scan a pairing code when needed,
+- the operator pairs it once (over USB, with a QR code you scan, or with the code your headset shows),
 - after that first successful join, the device usually reconnects automatically.
 
 The operator controls which devices are accepted, removed, or re-invited.

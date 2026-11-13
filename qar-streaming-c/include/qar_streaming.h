@@ -462,8 +462,9 @@ typedef enum QarStatusCode
 	 * receiver is waited for; nothing was created. The result's message names
 	 * what is missing. */
 	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
-	/// Code-based onboarding handshake rejected / expired / timed out. Ask the
-	/// user to re-check the code shown on the hub and retry.
+	/// Code-based onboarding handshake rejected / expired / timed out: a wrong,
+	/// spent or expired code, or a code that is no device pairing code (a hub
+	/// join code). Retry with a fresh code.
 	QAR_STATUS_PAKE_ERROR = 1600,
 	/// No persisted state for the provided onboarding id — fall back to a full
 	/// onboard (qar_runtime_onboard).
@@ -1834,8 +1835,8 @@ typedef struct QarOnboardInit
 } QarOnboardInit;
 
 /**
- * @brief Extension: onboard with the short code shown on the hub onboarding
- * screen.
+ * @brief Extension: onboard with a short pairing code minted for the hub's
+ * operators.
  *
  * @deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
  * PC), as a co-process with QarOnboardInviteExt and the invite of
@@ -1853,7 +1854,8 @@ typedef struct QarOnboardCodeExt
 {
 	QarStructureHeader
 		header; /**< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT */
-	/// Required; short code shown on the hub onboarding screen, or an
+	/// Required; short pairing code minted for the hub's operators (the QAROS
+	/// Visualizer shows none: its hub join code is for another hub only), or an
 	/// addressed code (qar-code:...) an app is given by hand. Copied before the
 	/// call returns.
 	/// QAROS hands an app it launches a full invite instead: use
@@ -3357,7 +3359,8 @@ static inline QarResult qar_runtime_rejoin_async(
  * @brief Run full onboarding using exactly one chained mode extension.
  *
  * Chain one of:
- * - QarOnboardCodeExt: PAKE code shown on the hub onboarding screen
+ * - QarOnboardCodeExt: a PAKE pairing code minted for the hub's operators
+ *   (deprecated; the QAROS Visualizer shows no such code)
  * - QarOnboardInviteExt: a co-process invite blob from the app that started
  *   this process (on an ephemeral runtime), or a launch invite
  *

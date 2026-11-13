@@ -18,7 +18,7 @@ Devices find the Hub with zero configuration: the Hub broadcasts a beacon on the
 
 ### Layer 1 — Pairing (EC-JPAKE)
 
-The Hub issues short-lived pairing **codes** (8 digits). A user transfers the code out-of-band — reads it off the Hub's screen, scans a QR, or pastes it. Device and Hub then run **EC-JPAKE** (a password-authenticated key exchange on P-256): each side proves it knows the code *without ever transmitting it*. What actually protects the deployment is not code length but code handling:
+The Hub issues short-lived pairing **codes** (8 digits). The code travels out-of-band — over the USB cable, as a QR code the device scans, or, for the code a headset shows, typed by the operator into the Visualizer. Device and Hub then run **EC-JPAKE** (a password-authenticated key exchange on P-256): each side proves it knows the code *without ever transmitting it*. What actually protects the deployment is not code length but code handling:
 
 - every code is **single-use** — consumed on success *and* on failure,
 - codes expire after **10 seconds** (the Hub mints a fresh one every few seconds),

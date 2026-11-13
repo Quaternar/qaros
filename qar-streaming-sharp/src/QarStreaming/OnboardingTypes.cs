@@ -195,7 +195,8 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Onboards with a pairing code: the short code on the hub's onboarding screen, or an
+        /// Onboards with a pairing code: a short code minted for the hub's operators (the QAROS
+        /// Visualizer shows none: its hub join code is for another hub only), or an
         /// addressed code (<c>qar-code:...</c>) given by hand. Without
         /// <see cref="WithHost"/> it finds this user's hub on this PC by itself.
         /// </summary>

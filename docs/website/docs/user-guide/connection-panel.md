@@ -41,9 +41,10 @@ This Hub and every Hub paired with it share one **session**.
 
 Opens only when you ask for it. Pairing takes both Hubs:
 
-1. On the Hub that shares: **Let another hub join us** shows a pairing code (digits, valid 60 s;
-   a new one replaces it a few seconds before it expires), a countdown and the addresses this Hub is reachable at, each with a copy
-   button. **Stop sharing** closes it; no code is offered while it is closed.
+1. On the Hub that shares: **Let another hub join us** shows **Our join code** (single use, valid
+   60 s), a countdown and the addresses this Hub is reachable at, each with a copy button. The
+   code is only for another Hub: a device or an app cannot pair with it. **Stop sharing** drops
+   it from the screen; no code is offered while the card is closed.
 2. On the joining Hub: **Join another hub**. Turn on **Discover** to list Hubs on this LAN and press
    **Use** on one, or type its **Address**. Type the **Code** from step 1 and press **Pair with hub**.
 
@@ -80,15 +81,18 @@ Opens only when you ask for it. Pairing takes both Hubs:
 An address typed with `headset:`, `android:` or `quest:` is refused: *Android headsets are not
 invited: pair them with Pair headset on the Devices tab (adb push or Show QR code).*
 
-3. Enter the device's **Address** and an optional **Label**.
+3. Enter the device's **Address**.
 4. Check **Invite automatically** to have the Hub invite the device on every start; leave it
    unchecked to invite once.
-5. Press **Invite**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
+5. Press **Invite HoloLens**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
    notification. The card stays open for the next device; **Clear** empties it, and **Invite
    device** in the title folds it away.
 
-An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
-uses the code shown by **Let another hub join us** above. **Pair headset** on the **All devices** tab
+The Visualizer shows no pairing code to type into a device or an app: the join code of **Let
+another hub join us** above is for another Hub, and a device or an app that types it fails. An app
+on this PC joins as a local app, without a code; an app on another PC joins through that PC's own
+Hub, made a member of this one ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#remote-app-through-a-member-hub)).
+**Pair headset** on the **All devices** tab
 of the **Invite device** card, in every UI mode, opens the **Pair Headset** dialog, which shows the
 same one-time QR code for an Android headset as **Show QR code** in its setup steps; it is the one
 QR invite.

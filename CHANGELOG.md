@@ -359,6 +359,18 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** no page sends a device or an app to **Let another hub join us** for a pairing code any
+  more: that card shows a join code for another Hub only, and a device or an app that types it
+  fails pairing. *Getting Started* and *Troubleshooting* of the User Guide, *Connecting to the Hub*,
+  *Managing Devices* (new section *Handing a code to a device*), *Security Model*, *Security Deep
+  Dive* and the Developer Guide's *Getting Started* describe how a device really gets its code:
+  **Pair headset** over USB, the QR code of **Show QR code** or the **Pair Headset** dialog
+  (**Invite device** › **All devices**), the code the headset shows typed into that dialog, or an
+  invite by address on **HoloLens (legacy)**. The Ogre, Qt and RViz2 pages say that their code
+  pairing with a Hub on another PC has no code to use today, and to join a member Hub on this PC
+  as a local app instead. *Connecting to the Hub*: the HoloLens card has no Label field and its
+  button is **Invite HoloLens**. The C header, the C# and the Rust docs of the code onboarding no
+  longer name a hub onboarding screen.
 - **Docs:** the Ogre, Qt and RViz2 pages, *Limits and Behaviors to Design Around* and *Custom GUI
   Panels* follow the current C header: a GUI panel shows a URI, served content or a video stream
   (`QarGuiPanelServedContentExt` too); `get_or_create` ignores the init for a panel or volume that
