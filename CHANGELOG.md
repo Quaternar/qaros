@@ -18,6 +18,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Source Applications*: a new *Web apps QAROS provides* section lists the ready-made web
+  app adaptations, where they are published, how the visualizer keeps them up to date (tile states,
+  **Update ready**, the **Web app updates** settings) and how unsigned releases are handled.
 - **Docs:** *qaros:// Links*: a new *Opening a view from a session* section shows
   `qar_session_open_qaros_view` (C, C#, Rust), which opens the pairing QR code, the anchoring QR
   code or a device setup in the session's own QAROS without a link.

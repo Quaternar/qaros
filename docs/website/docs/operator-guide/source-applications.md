@@ -111,6 +111,44 @@ A **web app** streams an existing website (for example a three.js viewer or conf
    Leave all of it empty to use the stored profile that matches the address.
 3. Press **Launch**. The page loads; the app starts streaming by itself as soon as the visualizer finds the page's renderer.
 
+### Web apps QAROS provides
+
+QAROS comes with ready-made adaptations for some public web apps, each a tile in **Built-in**:
+
+| Tile | Website | Shown from |
+|---|---|---|
+| **Foxglove** | `https://app.foxglove.dev/`: the largest 3D panel of any project and layout, after you sign in | Basic |
+| **three.js Littlest Tokyo** | the three.js animated glTF example | Basic |
+| **three.js examples** | any official three.js example (`https://threejs.org/examples/`) | Basic |
+| **three.js Shinjuku Station** | the Shinjuku Station indoor map demo, as a table model | Basic |
+| three.js Shapes, WebGL Aquarium, WebGPU Deferred Rendering | developer samples, only in development builds | Developer |
+
+These adaptations are published in the public repository
+[Quaternar/qaros-webapps](https://github.com/Quaternar/qaros-webapps), each with its own version.
+Every QAROS setup includes the newest release at the time it was built, and the visualizer keeps
+them up to date by itself:
+
+- At start and every hour while the PC is online, the visualizer checks the newest release. It
+  installs a newer version of an adaptation you already have when that version runs with your
+  QAROS version, after checking the package's SHA-256. The update is installed for the Windows user
+  only and keeps the tile's settings.
+- A web app that is running keeps the version it started with. Its tile shows **Update ready**; the
+  new version applies the next time you start it.
+- An adaptation the release adds shows as **Installable**: press **Install** on its tile to add it.
+- Each tile shows its state: **Installed**, **Needs update** (press **Update**), **Update ready**,
+  **Installable**, or **Not available** with the reason in its tooltip (for example, a version that
+  needs a newer QAROS).
+- **Settings** > **General** > **Web app updates**: turn **Update web apps automatically** off to
+  download nothing by yourself, and **Check now** to look for a new release at once. The line below
+  shows the release last read.
+- Downloads use the PC's proxy settings. Offline, nothing changes; the next check tries again.
+- The releases are not signed yet; the visualizer installs them without asking because they come
+  only from this repository over HTTPS. Once the releases are signed, only packages signed by
+  Quaternar install by themselves.
+
+To change one of these adaptations, contribute to the repository, or duplicate it in the
+visualizer under a new id: an update never changes your own copy.
+
 ### Logging in
 
 When the address opens on a login page, there is no renderer yet and the row shows **Waiting for a renderer - log in on Page, then Probe**:
@@ -182,8 +220,8 @@ The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug
 
 | Apps | Shown from |
 |---|---|
-| StereoKit, your OpenXR presets | Basic |
-| QAROS API apps (yours and the Vulkan cube) | Developer |
+| StereoKit, your OpenXR presets, the web apps QAROS provides | Basic |
+| QAROS API apps (yours and the Vulkan cube), the web app developer samples | Developer |
 | CPU Renderer, Test OpenXR | Debug |
 
 In a lower mode their tiles and running rows are hidden, but apps already running keep running.
