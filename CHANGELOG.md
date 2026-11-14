@@ -378,6 +378,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 - **Docs:** *Onboarding and Sessions*: onboarding as a local app (`QarOnboardLocalAppExt`) works on
   Linux too; the page said Windows only.
+- **Docs:** *Custom GUI Panels* and *Limits and Behaviors to Design Around*: `get_or_create` on
+  an open served panel applies a served page from a bundle the calling session published, so an app
+  restarted under a new peer id shows its new bundle; the rest of the init is still ignored.
 - **Docs:** no page sends a device or an app to **Let another hub join us** for a pairing code any
   more: that card shows a join code for another Hub only, and a device or an app that types it
   fails pairing. *Getting Started* and *Troubleshooting* of the User Guide, *Connecting to the Hub*,
