@@ -18,6 +18,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Unity*: a new *GUI panels and served panels* section shows how a Unity app reaches
+  GUI panels and serves its own panel pages through `QarSession.Current`.
 - **Docs:** *Scene Origin* and *QAROS World* describe the one **Room Origin** dialog that shows the
   anchoring QR code and prints it (or saves it as PDF), opened from **Tools** › **Origin** or a
   room's QR icon in **Rooms**. *qaros:// Links*: a dialog a link opens while the Visualizer is
