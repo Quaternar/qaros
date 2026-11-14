@@ -1520,6 +1520,7 @@ typedef enum QarStructureType
 	QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY = 0x2009,
 	QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO = 0x200B,
 	QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT = 0x200C,
+	QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO = 0x200D,
 	QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT = 0x3000,
 	QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME = 0x3001,
 	QAR_STRUCTURE_TYPE_RENDERING_END_FRAME = 0x3002,
@@ -2407,6 +2408,64 @@ typedef struct QarSessionLifecycleInfo
 
 // --- end of session lifecycle
 // --------------------------------------------------
+
+// --- QAROS views ------------------------------------------------------------
+
+/**
+ * @brief A predefined view of the QAROS Visualizer an app can open with
+ * qar_session_open_qaros_view(). Each is the dialog a qaros://visualizer link
+ * of the same name opens.
+ */
+typedef enum QarQarosView
+{
+	/// The Pair Headset QR code of the Devices tab
+	/// (qaros://visualizer/v1/devices/pair-qr).
+	QAR_QAROS_VIEW_PAIR_HEADSET_QR = 1,
+	/// The Room Origin marker: the QR code headsets anchor the room to
+	/// (qaros://visualizer/v1/scene-origin/qr).
+	QAR_QAROS_VIEW_ROOM_ORIGIN_QR = 2,
+	/// The setup steps of one device type; name it in
+	/// QarOpenQarosViewInfo::device_kind
+	/// (qaros://visualizer/v1/devices/setup?kind=<kind>).
+	QAR_QAROS_VIEW_DEVICE_SETUP = 3,
+} QarQarosView;
+
+/**
+ * @brief The device type a QAR_QAROS_VIEW_DEVICE_SETUP view shows the setup
+ * of.
+ */
+typedef enum QarQarosDeviceKind
+{
+	/// No device type: every view but QAR_QAROS_VIEW_DEVICE_SETUP.
+	QAR_QAROS_DEVICE_KIND_NONE = 0,
+	/// Meta Quest (kind=quest).
+	QAR_QAROS_DEVICE_KIND_META_QUEST = 1,
+	/// Metalens (kind=metalens).
+	QAR_QAROS_DEVICE_KIND_METALENS = 2,
+	/// Android XR headsets (kind=android-xr).
+	QAR_QAROS_DEVICE_KIND_ANDROID_XR = 3,
+	/// HoloLens 2 (kind=hololens).
+	QAR_QAROS_DEVICE_KIND_HOLOLENS = 4,
+} QarQarosDeviceKind;
+
+/**
+ * @brief Which QAROS view qar_session_open_qaros_view() opens.
+ *
+ * Initialize with qar_open_qaros_view_info_default().
+ */
+typedef struct QarOpenQarosViewInfo
+{
+	QarStructureHeader
+		header; /**< QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO */
+	QarQarosView view;
+	/// QAR_QAROS_VIEW_DEVICE_SETUP: the device type, never
+	/// QAR_QAROS_DEVICE_KIND_NONE. Every other view:
+	/// QAR_QAROS_DEVICE_KIND_NONE.
+	QarQarosDeviceKind device_kind;
+} QarOpenQarosViewInfo;
+
+// --- end of QAROS views
+// ----------------------------------------------------------
 
 typedef struct QarGuiPanelInit
 {
@@ -3899,6 +3958,53 @@ static inline QarResult qar_session_subscribe_lifecycle(
 	qar_session_lifecycle_callback_t callback,
 	void* user_state,
 	QarCancelToken* token
+);
+
+/**
+ * @brief Open a predefined view of the QAROS Visualizer of this session's
+ * QAROS: the Pair Headset QR code, the Room Origin marker or the setup of one
+ * device type.
+ *
+ * The same dialog the matching qaros://visualizer link opens, in the QAROS
+ * whose hub this session joined, never another one running beside it. The
+ * app needs neither the link, nor the qaros:// scheme to be registered, nor
+ * to find that QAROS itself:
+ *
+ * - Installed QAROS: its own qaros.exe opens the view.
+ * - Developer setup (a QAROS run from a build folder, the app started with
+ *   its QAR_INSTANCE): the qaros.exe of the instance's runtime folder, else
+ *   of the folder QarRuntimeInit::runtime_binaries_folder_path named, else of
+ *   the folder this library was loaded from. The registered qaros:// handler
+ *   is never used: it may belong to another build.
+ *
+ * That qaros.exe hands the view to its running QAROS, or starts that QAROS
+ * when it does not run. The Visualizer brings the dialog to the front, and
+ * shows only that dialog while its main window is hidden.
+ *
+ * Only a session onboarded as a local app (QarOnboardLocalAppExt) can open a
+ * view: its hub is the QAROS of this PC. Returns once the view was handed
+ * over, not when it shows. Windows only.
+ *
+ * Added after a release: an app built against this header that runs with an
+ * older runtime gets QAR_STATUS_NOT_IMPLEMENTED.
+ *
+ * @param session Active session handle.
+ * @param info The view; initialize with qar_open_qaros_view_info_default().
+ * @return Success: the view was handed to this session's QAROS.
+ * @retval QAR_STATUS_ARGUMENT_NOT_SUPPORTED `info->header.type` is not
+ *   QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO; an unknown view or device
+ *   kind; no device kind for QAR_QAROS_VIEW_DEVICE_SETUP or one for another
+ *   view; or the session was not onboarded as a local app, so no QAROS of
+ *   this PC is behind it.
+ * @retval QAR_STATUS_ONBOARDING_HUB_UNREACHABLE this session's QAROS has no
+ *   qaros.exe where it should be (its build or install is gone), or it could
+ *   not be started.
+ * @retval QAR_STATUS_NOT_IMPLEMENTED not Windows, or a runtime older than this
+ *   function.
+ * @retval QAR_STATUS_LOGIC_ERROR an invalid session handle or a null `info`.
+ */
+static inline QarResult qar_session_open_qaros_view(
+	QarSession* session, const QarOpenQarosViewInfo* info
 );
 
 /** @} */ /* end of qar_c_session */
@@ -6216,6 +6322,9 @@ qar_graphics_device_disabled_ext_default(void);
 /** @brief A QarSessionLifecycleInfo with its structure type set, for
  * qar_session_get_lifecycle_state(). */
 static inline QarSessionLifecycleInfo qar_session_lifecycle_info_default(void);
+/** @brief A QarOpenQarosViewInfo with its structure type set, for
+ * qar_session_open_qaros_view(). */
+static inline QarOpenQarosViewInfo qar_open_qaros_view_info_default(void);
 /** @brief Default init for QarRenderFrameShow. */
 static inline QarRenderFrameShow qar_render_frame_show_default(void);
 /** @brief Default init for QarGuiPanelInit. */
@@ -7777,6 +7886,17 @@ qar_session_lifecycle_info_default(void)
 	return info;
 }
 
+static inline QarOpenQarosViewInfo
+qar_open_qaros_view_info_default(void)
+{
+	QarOpenQarosViewInfo info = {
+		{ QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO, NULL }, // header
+		QAR_QAROS_VIEW_PAIR_HEADSET_QR,							   // view
+		QAR_QAROS_DEVICE_KIND_NONE // device_kind
+	};
+	return info;
+}
+
 static inline QarRenderSenderInit
 qar_render_sender_init_default(void)
 {
@@ -8990,7 +9110,12 @@ typedef void (*qar_session_lifecycle_callback_t)(
 	   qar_session_lifecycle_callback_t callback,                              \
 	   void* user_state,                                                       \
 	   QarCancelToken* token),                                                 \
-	  (session, callback, user_state, token))
+	  (session, callback, user_state, token))                                  \
+	X(OPTIONAL_SYMBOL,                                                         \
+	  QarResult,                                                               \
+	  session_open_qaros_view,                                                 \
+	  (QarSession * session, const QarOpenQarosViewInfo* info),                \
+	  (session, info))
 
 QAR_DECLARE_MODULE_COMMON(SESSION, Session, session, QAR_SESSION_FUNCTION_LIST);
 QAR_DECLARE_MODULE_IMPL_EXTERNS(QAR_SESSION_FUNCTION_LIST)

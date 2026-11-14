@@ -92,6 +92,53 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
+        /// Opens a predefined view of the QAROS Visualizer in this session's QAROS: the Pair Headset
+        /// QR code, the Room Origin marker or the setup of one device type. The app needs neither a
+        /// qaros:// link nor a registered qaros:// handler, and never looks for QAROS itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An installed QAROS opens the view through its own qaros.exe. In a developer setup (a
+        /// QAROS run from a build folder, the app started with its <c>QAR_INSTANCE</c>) the
+        /// qaros.exe of the instance's runtime folder does, else the one beside the loaded runtime;
+        /// the registered qaros:// handler, which may belong to another build, is never used.
+        /// That qaros.exe hands the view to its running QAROS, or starts it.
+        /// </para>
+        /// <para>
+        /// Only a session onboarded as a local app can open a view. Returns once the view was
+        /// handed over, not when it shows. Windows only.
+        /// </para>
+        /// <para>
+        /// Failures: <see cref="StatusCode.ArgumentNotSupported"/> for an unknown view or kind, a
+        /// <paramref name="deviceKind"/> missing for <see cref="QarosView.DeviceSetup"/> or given for
+        /// another view, or a session not onboarded as a local app;
+        /// <see cref="StatusCode.OnboardingHubUnreachable"/> when this session's QAROS has no
+        /// qaros.exe where it should be or it could not be started;
+        /// <see cref="StatusCode.NotImplemented"/> off Windows or with a runtime older than this call.
+        /// </para>
+        /// </remarks>
+        /// <param name="view">The view to open.</param>
+        /// <param name="deviceKind">
+        /// The device type for <see cref="QarosView.DeviceSetup"/>; <see cref="QarosDeviceKind.None"/>
+        /// for every other view.
+        /// </param>
+        public Result<Unit> OpenQarosView(QarosView view, QarosDeviceKind deviceKind = QarosDeviceKind.None)
+        {
+            _context.ThrowIfDisposed();
+            var native = OpenQarosViewInfoNative.Create(view, deviceKind);
+            using var session = _context.Borrow();
+            try
+            {
+                return Results.FromNative(NativeMethods.qar_impl_session_open_qaros_view(session.Handle, ref native));
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return Result<Unit>.Failure(new ResultInfo(
+                    StatusCode.NotImplemented, 0, "The QAROS runtime is older than Session.OpenQarosView; update QAROS."));
+            }
+        }
+
+        /// <summary>
         /// Starts delivering lifecycle states to <see cref="LifecycleChanged"/> until the returned
         /// subscription is disposed.
         /// </summary>

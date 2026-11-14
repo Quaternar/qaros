@@ -74,6 +74,39 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
+    /// A predefined view of the QAROS Visualizer (C <c>QarQarosView</c>), opened with
+    /// <see cref="Session.OpenQarosView"/>. Each is the dialog the qaros://visualizer link of the
+    /// same name opens.
+    /// </summary>
+    public enum QarosView
+    {
+        /// <summary>The Pair Headset QR code of the Devices tab.</summary>
+        PairHeadsetQr = 1,
+        /// <summary>The Room Origin marker: the QR code headsets anchor the room to.</summary>
+        RoomOriginQr = 2,
+        /// <summary>The setup steps of one device type, named by a <see cref="QarosDeviceKind"/>.</summary>
+        DeviceSetup = 3
+    }
+
+    /// <summary>
+    /// The device type a <see cref="QarosView.DeviceSetup"/> view shows the setup of
+    /// (C <c>QarQarosDeviceKind</c>).
+    /// </summary>
+    public enum QarosDeviceKind
+    {
+        /// <summary>No device type: every view but <see cref="QarosView.DeviceSetup"/>.</summary>
+        None = 0,
+        /// <summary>Meta Quest.</summary>
+        MetaQuest = 1,
+        /// <summary>Metalens.</summary>
+        Metalens = 2,
+        /// <summary>Android XR headsets.</summary>
+        AndroidXr = 3,
+        /// <summary>HoloLens 2.</summary>
+        HoloLens = 4
+    }
+
+    /// <summary>
     /// Why a session moved into another session id (C <c>QarSessionChangeCause</c>).
     /// Informational: the move is the same. Treat a value not named here as <see cref="Rotated"/>.
     /// </summary>
@@ -486,6 +519,7 @@ namespace Quaternar.Qaros
         PeerDeviceIdentity = 0x2009,
         SessionLifecycleInfo = 0x200B,
         SessionGraphicsDeviceDisabledExt = 0x200C,
+        SessionOpenQarosViewInfo = 0x200D,
         SessionInviteTargetAppInit = 0x2007,
         // 0x2008 (the removed request-onboarding-codes init) is never reused.
         RenderingStreamSenderInit = 0x3000,

@@ -107,8 +107,8 @@ pub use session::{Session, Subscription};
 pub use types::{
     ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout,
     GuiPanelContentType, GuiPanelId, GuiPanelState, LogSeverity, OnboardingId, PeerId, PixelFormat,
-    Pose, Quat, SessionChangeCause, SessionId, SessionLifecycle, SessionLifecycleState, StreamId,
-    Vec3, ViewKind,
+    Pose, QarosDeviceKind, QarosView, Quat, SessionChangeCause, SessionId, SessionLifecycle,
+    SessionLifecycleState, StreamId, Vec3, ViewKind,
 };
 pub use volumes::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, AppVolumes};
 

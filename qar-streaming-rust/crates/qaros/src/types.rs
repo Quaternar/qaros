@@ -460,3 +460,55 @@ impl SessionLifecycle {
         }
     }
 }
+
+/// The device type whose setup a [`QarosView::DeviceSetup`] view shows (`QarQarosDeviceKind`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum QarosDeviceKind {
+    /// Meta Quest.
+    MetaQuest,
+    /// Metalens.
+    Metalens,
+    /// Android XR headsets.
+    AndroidXr,
+    /// HoloLens 2.
+    HoloLens,
+}
+
+impl QarosDeviceKind {
+    pub(crate) fn to_raw(self) -> sys::QarQarosDeviceKind {
+        match self {
+            Self::MetaQuest => sys::QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_META_QUEST,
+            Self::Metalens => sys::QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_METALENS,
+            Self::AndroidXr => sys::QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_ANDROID_XR,
+            Self::HoloLens => sys::QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_HOLOLENS,
+        }
+    }
+}
+
+/// A predefined view of the QAROS Visualizer (`QarQarosView`), opened with
+/// [`crate::Session::open_qaros_view`]: each is the dialog the `qaros://visualizer` link of the
+/// same name opens. The device kind sits in the setup variant, so no other view can carry one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum QarosView {
+    /// The Pair Headset QR code of the Devices tab.
+    PairHeadsetQr,
+    /// The Room Origin marker: the QR code headsets anchor the room to.
+    RoomOriginQr,
+    /// The setup steps of one device type.
+    DeviceSetup(QarosDeviceKind),
+}
+
+impl QarosView {
+    /// The view and device kind of `QarOpenQarosViewInfo`.
+    pub(crate) fn to_raw(self) -> (sys::QarQarosView, sys::QarQarosDeviceKind) {
+        let none = sys::QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_NONE;
+        match self {
+            Self::PairHeadsetQr => (sys::QarQarosView::QAR_QAROS_VIEW_PAIR_HEADSET_QR, none),
+            Self::RoomOriginQr => (sys::QarQarosView::QAR_QAROS_VIEW_ROOM_ORIGIN_QR, none),
+            Self::DeviceSetup(kind) => (
+                sys::QarQarosView::QAR_QAROS_VIEW_DEVICE_SETUP,
+                kind.to_raw(),
+            ),
+        }
+    }
+}

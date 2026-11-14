@@ -658,6 +658,25 @@ namespace Quaternar.Qaros.Interop
         }
     }
 
+    /// <summary>C <c>QarOpenQarosViewInfo</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct OpenQarosViewInfoNative
+    {
+        public StructureHeaderNative Header;
+        public QarosView View;
+        public QarosDeviceKind DeviceKind;
+
+        public static OpenQarosViewInfoNative Create(QarosView view, QarosDeviceKind deviceKind)
+        {
+            return new OpenQarosViewInfoNative
+            {
+                Header = NativeDefaults.Header(StructureType.SessionOpenQarosViewInfo),
+                View = view,
+                DeviceKind = deviceKind
+            };
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct ForgetInitNative
     {

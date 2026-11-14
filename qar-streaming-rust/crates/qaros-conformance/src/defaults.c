@@ -82,6 +82,7 @@ EXPORT_DEFAULT(QarGraphicsDeviceId, qar_graphics_device_id_default)
 EXPORT_DEFAULT(QarGraphicsDeviceDisabledExt,
                qar_graphics_device_disabled_ext_default)
 EXPORT_DEFAULT(QarSessionLifecycleInfo, qar_session_lifecycle_info_default)
+EXPORT_DEFAULT(QarOpenQarosViewInfo, qar_open_qaros_view_info_default)
 EXPORT_DEFAULT(QarStreamParamsVulkan, qar_stream_params_vulkan_default)
 EXPORT_DEFAULT(QarSyncFrameVulkan, qar_sync_frame_vulkan_default)
 EXPORT_DEFAULT(QarVideoFrameVulkan, qar_video_frame_vulkan_default)

@@ -23,7 +23,7 @@ use crate::render::{
 };
 use crate::runtime::RuntimeInner;
 use crate::strings;
-use crate::types::{PeerId, SessionId, SessionLifecycle};
+use crate::types::{PeerId, QarosView, SessionId, SessionLifecycle};
 use crate::volumes::AppVolumes;
 
 /// A `QarSession`, obtained by [`crate::Runtime::rejoin`] or
@@ -317,6 +317,28 @@ impl Session {
         };
         check(api, "qar_session_get_lifecycle_state", result)?;
         Ok(SessionLifecycle::from_raw(&info))
+    }
+
+    /// Opens a predefined view of the QAROS Visualizer in this session's QAROS
+    /// (`qar_session_open_qaros_view`): the Pair Headset QR code, the Room Origin marker or the
+    /// setup of one device type. The app needs no `qaros://` link, no registered handler, and
+    /// never looks for QAROS itself: an installed QAROS opens it through its own `qaros.exe`, a
+    /// developer setup through the `qaros.exe` of the instance's runtime folder, else the one
+    /// beside the loaded runtime.
+    ///
+    /// Only a session onboarded as a local app can open a view (`ARGUMENT_NOT_SUPPORTED`
+    /// otherwise); `ONBOARDING_HUB_UNREACHABLE` when this session's QAROS has no `qaros.exe`
+    /// where it should be or it could not be started; `NOT_IMPLEMENTED` off Windows. Returns
+    /// once the view was handed over, not when it shows.
+    pub fn open_qaros_view(&self, view: QarosView) -> Result<()> {
+        let api = self.inner.api();
+        let mut info = defaults::qar_open_qaros_view_info_default();
+        (info.view, info.device_kind) = view.to_raw();
+        // SAFETY: live session handle; info is stamped and outlives the call.
+        let result = unsafe {
+            (api.qar_impl_session_open_qaros_view)(self.inner.handle.as_ptr(), &raw const info)
+        };
+        check(api, "qar_session_open_qaros_view", result)
     }
 
     /// Calls `callback` with each lifecycle state of the session

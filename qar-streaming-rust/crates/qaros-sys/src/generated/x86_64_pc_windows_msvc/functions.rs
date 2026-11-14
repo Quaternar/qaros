@@ -684,6 +684,10 @@ macro_rules! qar_impl_function_list {
                 stream: *mut QarRenderSender,
                 out_frame: *mut *mut QarVideoFrameVulkan,
             ) -> QarResult;
+            pub fn qar_impl_render_sender_get_stream_state(
+                stream: *mut QarRenderSender,
+                out_state: *mut QarRenderSenderStreamState,
+            ) -> QarResult;
             pub fn qar_impl_render_sender_is_ready_for_next_frame(
                 stream: *mut QarRenderSender,
                 out_ready: *mut bool,
@@ -846,6 +850,10 @@ macro_rules! qar_impl_function_list {
                 update_callback: qar_progress_callback_t,
                 user_state: *mut ::std::os::raw::c_void,
                 cancel: *mut QarCancelToken,
+            ) -> QarResult;
+            pub fn qar_impl_session_open_qaros_view(
+                session: *mut QarSession,
+                info: *const QarOpenQarosViewInfo,
             ) -> QarResult;
             pub fn qar_impl_session_request_onboarding_invite(
                 session: *mut QarSession,

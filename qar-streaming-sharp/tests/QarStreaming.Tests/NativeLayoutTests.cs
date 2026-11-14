@@ -79,6 +79,7 @@ namespace Quaternar.Qaros.Tests
             { typeof(GraphicsDeviceIdNative), 48 },
             { typeof(GraphicsDeviceDisabledExtNative), 16 },
             { typeof(SessionLifecycleInfoNative), 72 },
+            { typeof(OpenQarosViewInfoNative), 24 },
             { typeof(GuiPanelInitNative), 88 },
             { typeof(GuiPanelStreamIdExtNative), 32 },
             { typeof(GuiPanelUrlExtNative), 24 },
@@ -189,6 +190,8 @@ namespace Quaternar.Qaros.Tests
             { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.PreviousSessionId), 40 },
             { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.HasPreviousSession), 56 },
             { typeof(SessionLifecycleInfoNative), nameof(SessionLifecycleInfoNative.Reason), 64 },
+            { typeof(OpenQarosViewInfoNative), nameof(OpenQarosViewInfoNative.View), 16 },
+            { typeof(OpenQarosViewInfoNative), nameof(OpenQarosViewInfoNative.DeviceKind), 20 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.CommonName), 16 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.DisplayName), 24 },
             { typeof(GuiPanelInitNative), nameof(GuiPanelInitNative.Pose), 32 },
@@ -335,6 +338,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(0x1010, (int)StructureType.RuntimeEphemeralStorageExt);
             Assert.Equal(0x1011, (int)StructureType.RuntimeMemberHubInvitationAppGrantExt);
             Assert.Equal(0x1012, (int)StructureType.RuntimeOnboardRemoteAppGrantExt);
+            Assert.Equal(0x200D, (int)StructureType.SessionOpenQarosViewInfo);
             Assert.False(Enum.IsDefined(typeof(StructureType), 0x100B));
             Assert.False(Enum.IsDefined(typeof(StructureType), 0x100C));
             // The untagged request-invite init and the removed onboarding-codes init are retired.
@@ -575,7 +579,6 @@ namespace Quaternar.Qaros.Tests
                 var options = new RenderSenderOptions(PeerId.Parse(CanonicalId), GraphicsAPI.Cpu);
                 Assert.Equal(RenderLoop.RequestDriven, options.RenderLoop);
                 Assert.Equal(IntPtr.Zero, NativeInit.RenderSender(options, scope).Header.Next);
-
                 options.RenderLoop = RenderLoop.FreeRunning;
                 var native = NativeInit.RenderSender(options, scope);
                 Assert.NotEqual(IntPtr.Zero, native.Header.Next);

@@ -32,6 +32,8 @@ mod d3d11_path;
 mod graphics_device;
 #[path = "stub/onboarding.rs"]
 mod onboarding;
+#[path = "stub/qaros_views.rs"]
+mod qaros_views;
 #[path = "stub/raw_handles.rs"]
 mod raw_handles;
 #[cfg(feature = "vulkan")]

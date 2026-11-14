@@ -230,6 +230,31 @@ struct FrameInfoValue {
     views: Vec<QarVideoFrameViewEye>,
 }
 
+/// The `qaros://visualizer` link of a view, as the library builds it; `None` for an unknown view
+/// or kind, a setup view without a kind, or another view with one.
+fn qaros_view_link(view: QarQarosView, kind: QarQarosDeviceKind) -> Option<String> {
+    let token = match kind {
+        QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_META_QUEST => Some("quest"),
+        QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_METALENS => Some("metalens"),
+        QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_ANDROID_XR => Some("android-xr"),
+        QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_HOLOLENS => Some("hololens"),
+        _ => None,
+    };
+    let none = kind == QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_NONE;
+    match view {
+        QarQarosView::QAR_QAROS_VIEW_PAIR_HEADSET_QR if none => {
+            Some("qaros://visualizer/v1/devices/pair-qr".to_string())
+        }
+        QarQarosView::QAR_QAROS_VIEW_ROOM_ORIGIN_QR if none => {
+            Some("qaros://visualizer/v1/scene-origin/qr".to_string())
+        }
+        QarQarosView::QAR_QAROS_VIEW_DEVICE_SETUP => {
+            token.map(|token| format!("qaros://visualizer/v1/devices/setup?kind={token}"))
+        }
+        _ => None,
+    }
+}
+
 fn invalid(message: &str) -> QarResult {
     state::error(QarStatusCode::QAR_STATUS_ARGUMENT_NOT_SUPPORTED, message)
 }
@@ -2750,6 +2775,41 @@ impl StubApi for Stub {
         }
         // SAFETY: out_info is writable; its header is left untouched, as the header says.
         unsafe { write_connected_lifecycle(&mut *out_info, value, std::ptr::null()) };
+        success()
+    }
+
+    /// Checks the info as the library does and notes the link a local-app session would open
+    /// (`open qaros view <link>`); the stub starts no tray. Any other session is refused.
+    unsafe fn qar_impl_session_open_qaros_view(
+        session: *mut QarSession,
+        info: *const QarOpenQarosViewInfo,
+    ) -> QarResult {
+        if info.is_null() {
+            return state::error(QarStatusCode::QAR_STATUS_LOGIC_ERROR, "info is NULL");
+        }
+        if let Some(mismatch) = header_mismatch(
+            info.cast(),
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO,
+            "QarOpenQarosViewInfo",
+        ) {
+            return mismatch;
+        }
+        // SAFETY: checked non-null and stamped above.
+        let info = unsafe { &*info };
+        let Some(link) = qaros_view_link(info.view, info.device_kind) else {
+            return invalid("not a QAROS view, or a device kind on the wrong view");
+        };
+        // SAFETY: session comes from this stub.
+        let Some(value) = (unsafe { session_value(session) }) else {
+            return state::error(
+                QarStatusCode::QAR_STATUS_LOGIC_ERROR,
+                "session is not a live handle",
+            );
+        };
+        if !value.local_app {
+            return invalid("only a local-app session can open a QAROS view");
+        }
+        note(format!("open qaros view {link}"));
         success()
     }
 

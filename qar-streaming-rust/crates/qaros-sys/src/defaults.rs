@@ -722,6 +722,14 @@ pub fn qar_session_lifecycle_info_default() -> QarSessionLifecycleInfo {
     }
 }
 
+pub fn qar_open_qaros_view_info_default() -> QarOpenQarosViewInfo {
+    QarOpenQarosViewInfo {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO),
+        view: QarQarosView::QAR_QAROS_VIEW_PAIR_HEADSET_QR,
+        device_kind: QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_NONE,
+    }
+}
+
 /// The header leaves the id empty and picks the id type by platform: LUID on
 /// Windows, UUID elsewhere.
 pub fn qar_graphics_device_id_default() -> QarGraphicsDeviceId {

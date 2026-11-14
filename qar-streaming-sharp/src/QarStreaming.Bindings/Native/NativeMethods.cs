@@ -125,6 +125,10 @@ namespace Quaternar.Qaros.Interop
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_subscribe_lifecycle(IntPtr session, SessionLifecycleCallback callback, IntPtr userState, IntPtr token);
 
+        /// <summary>Appended after a release: an older runtime lacks it (EntryPointNotFoundException).</summary>
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_session_open_qaros_view(IntPtr session, ref OpenQarosViewInfoNative info);
+
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_request_onboarding_invite(IntPtr session, ref RequestInviteInitNative init, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel, out IntPtr outInvite);
 

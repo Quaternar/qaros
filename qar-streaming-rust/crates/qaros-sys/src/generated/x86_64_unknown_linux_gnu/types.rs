@@ -15,6 +15,9 @@ pub const QAR_HAND_JOINT_COUNT: u32 = 26;
 pub const QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES: u32 = 16;
 pub const QAR_MAX_APP_TAG_LENGTH: u32 = 256;
 pub const QAR_PANEL_CONTENT_BUNDLE_NAME_MAX: u32 = 64;
+pub const QAR_SYMBOL_OPTIONAL_ACTIVE: u32 = 0;
+pub const QAR_SYMBOL_OPTIONAL_DEPRECATED: u32 = 0;
+pub const QAR_SYMBOL_OPTIONAL_OPTIONAL_SYMBOL: u32 = 1;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct VkPhysicalDevice_T {
@@ -333,8 +336,9 @@ impl QarStatusCode {
     what is missing.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED: QarStatusCode =
         QarStatusCode(807);
-    /** Code-based onboarding handshake rejected / expired / timed out. Ask the
-    user to re-check the code shown on the hub and retry.*/
+    /** Code-based onboarding handshake rejected / expired / timed out: a wrong,
+    spent or expired code, or a code that is no device pairing code (a hub
+    join code). Retry with a fresh code.*/
     pub const QAR_STATUS_PAKE_ERROR: QarStatusCode = QarStatusCode(1600);
     /** No persisted state for the provided onboarding id — fall back to a full
     onboard (qar_runtime_onboard).*/
@@ -940,6 +944,32 @@ impl QarRenderLoop {
 /// When a render sender's application renders its frames.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarRenderLoop(pub ::std::os::raw::c_uint);
+impl QarRenderSenderStreamState {
+    /// A receiver is attached and its transfer is not established yet.
+    pub const QAR_RENDER_SENDER_STREAM_STATE_CONNECTING: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(0);
+    /// No receiver is attached to the stream.
+    pub const QAR_RENDER_SENDER_STREAM_STATE_WAITING_FOR_RECEIVER: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(1);
+    /// A receiver is attached and takes frames.
+    pub const QAR_RENDER_SENDER_STREAM_STATE_STREAMING: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(2);
+    /** The receiver (or the application) paused the stream. The sender and its
+    connection stay up and begin-frame resumes when the stream does.*/
+    pub const QAR_RENDER_SENDER_STREAM_STATE_PAUSED: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(3);
+    /// The receiver's connection was lost and is being re-established.
+    pub const QAR_RENDER_SENDER_STREAM_STATE_RECONNECTING: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(4);
+    /// The stream reached its terminal close state. It does not recover.
+    pub const QAR_RENDER_SENDER_STREAM_STATE_CLOSED: QarRenderSenderStreamState =
+        QarRenderSenderStreamState(5);
+}
+#[repr(transparent)]
+/** What a render sender's stream is doing right now, as
+qar_render_sender_get_stream_state() reports it. Values are append-only.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarRenderSenderStreamState(pub ::std::os::raw::c_uint);
 impl QarFrameLayout {
     pub const QAR_FRAME_LAYOUT_SIDE_BY_SIDE: QarFrameLayout = QarFrameLayout(0);
     pub const QAR_FRAME_LAYOUT_SEPARATED_TEXTURES: QarFrameLayout = QarFrameLayout(1);
@@ -1605,6 +1635,8 @@ impl QarStructureType {
     pub const QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO: QarStructureType = QarStructureType(8203);
     pub const QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT: QarStructureType =
         QarStructureType(8204);
+    pub const QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO: QarStructureType =
+        QarStructureType(8205);
     pub const QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT: QarStructureType =
         QarStructureType(12288);
     pub const QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME: QarStructureType = QarStructureType(12289);
@@ -2110,8 +2142,8 @@ const _: () = {
     ["Offset of field: QarOnboardInit::presentation"]
         [::std::mem::offset_of!(QarOnboardInit, presentation) - 32usize];
 };
-/** @brief Extension: onboard with the short code shown on the hub onboarding
-screen.
+/** @brief Extension: onboard with a short pairing code minted for the hub's
+operators.
 
 @deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
 PC), as a co-process with QarOnboardInviteExt and the invite of
@@ -2129,7 +2161,8 @@ QarOnboardHostExt.*/
 pub struct QarOnboardCodeExt {
     ///< QAR_STRUCTURE_TYPE_RUNTIME_ONBOARD_CODE_EXT
     pub header: QarStructureHeader,
-    /** Required; short code shown on the hub onboarding screen, or an
+    /** Required; short pairing code minted for the hub's operators (the QAROS
+    Visualizer shows none: its hub join code is for another hub only), or an
     addressed code (qar-code:...) an app is given by hand. Copied before the
     call returns.
     QAROS hands an app it launches a full invite instead: use
@@ -2853,6 +2886,66 @@ const _: () = {
         [::std::mem::offset_of!(QarSessionLifecycleInfo, has_previous_session) - 56usize];
     ["Offset of field: QarSessionLifecycleInfo::reason"]
         [::std::mem::offset_of!(QarSessionLifecycleInfo, reason) - 64usize];
+};
+impl QarQarosView {
+    /** The Pair Headset QR code of the Devices tab
+    (qaros://visualizer/v1/devices/pair-qr).*/
+    pub const QAR_QAROS_VIEW_PAIR_HEADSET_QR: QarQarosView = QarQarosView(1);
+    /** The Room Origin marker: the QR code headsets anchor the room to
+    (qaros://visualizer/v1/scene-origin/qr).*/
+    pub const QAR_QAROS_VIEW_ROOM_ORIGIN_QR: QarQarosView = QarQarosView(2);
+    /** The setup steps of one device type; name it in
+    QarOpenQarosViewInfo::device_kind
+    (qaros://visualizer/v1/devices/setup?kind=<kind>).*/
+    pub const QAR_QAROS_VIEW_DEVICE_SETUP: QarQarosView = QarQarosView(3);
+}
+#[repr(transparent)]
+/** @brief A predefined view of the QAROS Visualizer an app can open with
+qar_session_open_qaros_view(). Each is the dialog a qaros://visualizer link
+of the same name opens.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarQarosView(pub ::std::os::raw::c_uint);
+impl QarQarosDeviceKind {
+    /// No device type: every view but QAR_QAROS_VIEW_DEVICE_SETUP.
+    pub const QAR_QAROS_DEVICE_KIND_NONE: QarQarosDeviceKind = QarQarosDeviceKind(0);
+    /// Meta Quest (kind=quest).
+    pub const QAR_QAROS_DEVICE_KIND_META_QUEST: QarQarosDeviceKind = QarQarosDeviceKind(1);
+    /// Metalens (kind=metalens).
+    pub const QAR_QAROS_DEVICE_KIND_METALENS: QarQarosDeviceKind = QarQarosDeviceKind(2);
+    /// Android XR headsets (kind=android-xr).
+    pub const QAR_QAROS_DEVICE_KIND_ANDROID_XR: QarQarosDeviceKind = QarQarosDeviceKind(3);
+    /// HoloLens 2 (kind=hololens).
+    pub const QAR_QAROS_DEVICE_KIND_HOLOLENS: QarQarosDeviceKind = QarQarosDeviceKind(4);
+}
+#[repr(transparent)]
+/** @brief The device type a QAR_QAROS_VIEW_DEVICE_SETUP view shows the setup
+of.*/
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarQarosDeviceKind(pub ::std::os::raw::c_uint);
+/** @brief Which QAROS view qar_session_open_qaros_view() opens.
+
+Initialize with qar_open_qaros_view_info_default().*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarOpenQarosViewInfo {
+    ///< QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO
+    pub header: QarStructureHeader,
+    pub view: QarQarosView,
+    /** QAR_QAROS_VIEW_DEVICE_SETUP: the device type, never
+    QAR_QAROS_DEVICE_KIND_NONE. Every other view:
+    QAR_QAROS_DEVICE_KIND_NONE.*/
+    pub device_kind: QarQarosDeviceKind,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarOpenQarosViewInfo"][::std::mem::size_of::<QarOpenQarosViewInfo>() - 24usize];
+    ["Alignment of QarOpenQarosViewInfo"][::std::mem::align_of::<QarOpenQarosViewInfo>() - 8usize];
+    ["Offset of field: QarOpenQarosViewInfo::header"]
+        [::std::mem::offset_of!(QarOpenQarosViewInfo, header) - 0usize];
+    ["Offset of field: QarOpenQarosViewInfo::view"]
+        [::std::mem::offset_of!(QarOpenQarosViewInfo, view) - 16usize];
+    ["Offset of field: QarOpenQarosViewInfo::device_kind"]
+        [::std::mem::offset_of!(QarOpenQarosViewInfo, device_kind) - 20usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]

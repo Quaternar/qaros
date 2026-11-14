@@ -208,6 +208,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | Async calls | `PendingCall` from `Runtime::start_onboard`, the deprecated `start_rejoin` (`PendingOnboard`), `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, `RenderSender::start_owned_frame` (`PendingFrame`); `Session::start_render_sender` and its Vulkan and D3D11 forms, with `PendingRenderSender` | | yes (`Task` forms) |
 | Session | `Session::id`, `Session::graphics_adapter`, `Session::find_render_target` | | yes |
 | Session lifecycle | `Session::lifecycle`, `Session::subscribe_lifecycle`, `SessionLifecycle` | | yes |
+| QAROS views | `Session::open_qaros_view` (`QarosView`, `QarosDeviceKind`) | | yes (`Session.OpenQarosView`) |
 | Target apps | `Session::invite_target_app`, `kill_target_app` and their `start_` forms, `Library::target_app_connection_string` (`TargetDevice`) | | yes |
 | Peers: list, own spec, display name, updates | `Session::peers`, `my_peer`, `set_display_name`, `subscribe_peer_updates`; `PeerInfo` with the app state and `is_target_app` | | yes |
 | Peers: presence, role, category, device identity | `PeerInfo::identity` (`PeerIdentity`: `PeerPresence`, `PeerRole`, `DeviceCategory`, device id, family and name) | | yes |
@@ -219,6 +220,7 @@ A runtime that lacks any function of that header does not load (`LoadError::Miss
 | Render sender colour and depth declarations | `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`) and `color_encoding` (`ColorEncoding`), chained as `QarRenderSenderAlphaModeExt` and `QarRenderSenderColorEncodingExt`; the depth formats `PixelFormat::D16Unorm`, `D24UnormS8Uint`, `D32FloatS8X24Uint` | | yes |
 | Render sender render loop | `RenderSenderConfig::render_loop` (`RenderLoop`), chained as `QarRenderSenderRenderLoopExt`; `RenderSender::next_render_pose` | | yes |
 | More of the render sender | | `qar_render_sender_stream_id`, `qar_render_sender_change_layout`, view overrides at show | yes |
+| Render sender stream state | | `qar_render_sender_get_stream_state` | no |
 | Hands and gestures | | `qar_render_sender_last_hands`; the gesture events, configuration and modes of GUI panels and app volumes | yes |
 | Video senders (primaryless) | | every function but the OpenGL frame, which is not bound | yes |
 | GUI panels | `GuiPanels`: get or create, pose, size, state, navigate, display name, close, list (with the peers a panel is visible to), updates | `qar_gui_panels_update_visible_to`, `qar_gui_panel_get_content_type` | yes |

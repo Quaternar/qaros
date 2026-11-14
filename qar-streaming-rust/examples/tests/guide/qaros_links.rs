@@ -1,3 +1,14 @@
+use qaros::{QarosDeviceKind, QarosView, Session};
+
+fn open_qaros_view(session: &Session) -> qaros::Result<()> {
+    // ANCHOR: open_qaros_view
+    // Opens the setup of a Meta Quest in this session's QAROS; QAROS starts if it is not running.
+    session.open_qaros_view(QarosView::DeviceSetup(QarosDeviceKind::MetaQuest))?;
+    // The other views: QarosView::PairHeadsetQr, QarosView::RoomOriginQr.
+    // ANCHOR_END: open_qaros_view
+    Ok(())
+}
+
 #[cfg(windows)]
 fn open_qaros_link() {
     // ANCHOR: open_qaros_link

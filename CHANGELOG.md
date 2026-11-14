@@ -18,6 +18,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *qaros:// Links*: a new *Opening a view from a session* section shows
+  `qar_session_open_qaros_view` (C, C#, Rust), which opens the pairing QR code, the anchoring QR
+  code or a device setup in the session's own QAROS without a link.
 - **Docs:** *Unity*: a new *GUI panels and served panels* section shows how a Unity app reaches
   GUI panels and serves its own panel pages through `QarSession.Current`.
 - **Docs:** *Scene Origin* and *QAROS World* describe the one **Room Origin** dialog that shows the
