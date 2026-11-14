@@ -8,6 +8,8 @@
     python ci/run.py vulkan-cube [--strict]
     python ci/run.py cpp                     # qar-streaming-cpp compile matrix and a C++-only CMake consumer
     python ci/run.py docs
+    python ci/run.py package [--tag vX.Y.Z]  # version checks, the NuGet package and the crates
+    python ci/run.py publish --nuget --crates [--dry-run]
 
 Native files (C API runtime, test counterparts, the C test executable) come from environment
 variables, never from a build this script starts:
@@ -30,10 +32,14 @@ the Rust e2e tests, and reports ``c`` as skipped.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
+import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # no __pycache__ in the checkout
@@ -376,6 +382,139 @@ def docs(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------------------------
+# package and publish: Quaternar.Qaros on nuget.org, qaros-sys and qaros on crates.io
+
+
+VERSION_FILE = QAROS_ROOT / "VERSION"
+PACKAGES_DIR = QAROS_ROOT / "build" / "packages"
+NUGET_PACKAGE = "Quaternar.Qaros"
+NUGET_SOURCE = "https://api.nuget.org/v3/index.json"
+# In publishing order: qaros depends on qaros-sys.
+CRATES = ("qaros-sys", "qaros")
+# crates.io refuses API requests without a User-Agent that names the client.
+USER_AGENT = "qaros-ci (https://github.com/Quaternar/qaros)"
+
+
+def release_version() -> str:
+    """The version every package ships as: the VERSION file, which the csproj reads as well. The
+    Cargo workspace version and its exact pins of the published crates must equal it."""
+    import tomllib  # Python 3.11 or newer; only these commands need it
+
+    version = VERSION_FILE.read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?", version):
+        raise CiError(f"{VERSION_FILE.name} holds {version!r}, not a version such as 1.2.3 or 1.2.3-rc.1")
+    manifest = tomllib.loads((RUST_DIR / "Cargo.toml").read_text(encoding="utf-8"))["workspace"]
+    problems = []
+    if manifest["package"]["version"] != version:
+        problems.append(f"[workspace.package] version is {manifest['package']['version']}")
+    for crate in CRATES:
+        pin = manifest["dependencies"][crate].get("version")
+        if pin != f"={version}":
+            problems.append(f"[workspace.dependencies] {crate} has version {pin!r}, expected '={version}'")
+    if problems:
+        raise CiError(f"qar-streaming-rust/Cargo.toml does not match {VERSION_FILE.name} ({version}): "
+                      + "; ".join(problems))
+    return version
+
+
+def check_tag(tag: str | None, version: str) -> None:
+    if tag and tag != f"v{version}":
+        raise CiError(f"tag {tag} does not match {VERSION_FILE.name}: expected v{version}")
+
+
+def package(args: argparse.Namespace) -> None:
+    """Checks the versions, packs Quaternar.Qaros (with its symbol package) into
+    build/packages/nuget and packages and verifies the crates (cargo package builds each one from its
+    .crate file, against the packaged qaros-sys)."""
+    version = release_version()
+    check_tag(args.tag, version)
+    require_tool("dotnet", DOTNET_HINT)
+    require_tool("cargo", RUSTUP_HINT)
+    nuget_dir = PACKAGES_DIR / "nuget"
+    if nuget_dir.exists():
+        shutil.rmtree(nuget_dir)
+    print(f"== package {NUGET_PACKAGE} {version}", flush=True)
+    run(["dotnet", "pack", "Quaternar.Qaros.csproj", "-c", "Release", "-o", str(nuget_dir)], cwd=SHARP_DIR)
+    nupkg = nuget_dir / f"{NUGET_PACKAGE}.{version}.nupkg"
+    if not nupkg.is_file():
+        raise CiError(f"{nupkg} missing after dotnet pack")
+    print(f"== package crates {', '.join(CRATES)} {version}", flush=True)
+    run(["cargo", "package", "--locked", *[arg for crate in CRATES for arg in ("-p", crate)]], cwd=RUST_DIR)
+    print(f"Packages {version}: {nuget_dir} and {RUST_DIR / 'target' / 'package'}", flush=True)
+
+
+def published(url: str) -> dict | None:
+    """The JSON at ``url``, or None on 404 (not published yet)."""
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        raise CiError(f"{url}: HTTP {error.code}") from None
+
+
+def nuget_has(version: str) -> bool:
+    index = published(f"https://api.nuget.org/v3-flatcontainer/{NUGET_PACKAGE.lower()}/index.json")
+    return bool(index) and version.lower() in index.get("versions", [])
+
+
+def crates_io_has(crate: str, version: str) -> bool:
+    info = published(f"https://crates.io/api/v1/crates/{crate}/{version}")
+    return bool(info) and "version" in info
+
+
+def publish(args: argparse.Namespace) -> None:
+    """Pushes what ``package`` made; a version already published is skipped, so a re-run after a
+    partial failure finishes the job. The keys come from the environment: NUGET_API_KEY and
+    CARGO_REGISTRY_TOKEN (the workflow gets both by trusted publishing)."""
+    if not (args.nuget or args.crates):
+        raise CiError("pass --nuget, --crates or both")
+    version = release_version()
+    check_tag(args.tag, version)
+    if args.nuget:
+        nupkg = PACKAGES_DIR / "nuget" / f"{NUGET_PACKAGE}.{version}.nupkg"
+        if not nupkg.is_file():
+            raise CiError(f"{nupkg} missing: run 'python ci/run.py package' first")
+        if nuget_has(version):
+            print(f"SKIPPED {NUGET_PACKAGE} {version}: already on nuget.org", flush=True)
+        elif args.dry_run:
+            print(f"dry run: would push {nupkg.name} (and its .snupkg) to {NUGET_SOURCE}", flush=True)
+        else:
+            key = env("NUGET_API_KEY")
+            if not key:
+                raise CiError("NUGET_API_KEY is not set")
+            require_tool("dotnet", DOTNET_HINT)
+            # Not run(): it echoes the command, and the key is on it. The .snupkg next to the
+            # .nupkg goes to the symbol server with it.
+            print(f"== push {nupkg.name} to {NUGET_SOURCE}", flush=True)
+            completed = subprocess.run([shutil.which("dotnet") or "dotnet", "nuget", "push", str(nupkg),
+                                        "--source", NUGET_SOURCE, "--api-key", key, "--skip-duplicate"])
+            if completed.returncode != 0:
+                raise CiError(f"dotnet nuget push {nupkg.name} failed (exit code {completed.returncode})")
+    if args.crates:
+        require_tool("cargo", RUSTUP_HINT)
+        pending = []
+        for crate in CRATES:
+            if crates_io_has(crate, version):
+                print(f"SKIPPED {crate} {version}: already on crates.io", flush=True)
+            else:
+                pending.append(crate)
+        if pending:
+            # One cargo publish for all of them (Cargo 1.90 or newer): it publishes in dependency
+            # order and verifies qaros against the qaros-sys being published, also in a dry run.
+            command = ["cargo", "publish", "--locked", *[arg for crate in pending for arg in ("-p", crate)]]
+            if args.dry_run:
+                command.append("--dry-run")
+            elif not env("CARGO_REGISTRY_TOKEN"):
+                raise CiError("CARGO_REGISTRY_TOKEN is not set")
+            print(f"== publish {', '.join(pending)} {version}", flush=True)
+            run(command, cwd=RUST_DIR)
+    print(f"Publish {version}: done" + (" (dry run)." if args.dry_run else "."), flush=True)
+
+
+# ---------------------------------------------------------------------------------------------
 
 
 def comma_list(choices: tuple[str, ...]):
@@ -427,6 +566,20 @@ def parser() -> argparse.ArgumentParser:
 
     docs_parser = commands.add_parser("docs", parents=[common], help="documentation website build")
     docs_parser.set_defaults(handler=docs)
+
+    tag = argparse.ArgumentParser(add_help=False)
+    tag.add_argument("--tag", help="the release tag (vX.Y.Z); fails unless it matches VERSION")
+    package_parser = commands.add_parser("package", parents=[common, tag],
+                                         help="version checks, the NuGet package and the crates")
+    package_parser.set_defaults(handler=package)
+
+    publish_parser = commands.add_parser("publish", parents=[common, tag],
+                                         help="push the packages to nuget.org and crates.io")
+    publish_parser.add_argument("--nuget", action="store_true", help=f"push {NUGET_PACKAGE} (NUGET_API_KEY)")
+    publish_parser.add_argument("--crates", action="store_true",
+                                help=f"publish {', '.join(CRATES)} (CARGO_REGISTRY_TOKEN)")
+    publish_parser.add_argument("--dry-run", action="store_true", help="check, push nothing")
+    publish_parser.set_defaults(handler=publish)
     return root
 
 
