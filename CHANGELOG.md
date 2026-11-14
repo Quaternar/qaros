@@ -18,6 +18,24 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Docs:** *Unity*: a new *GUI panels and served panels* section shows how a Unity app reaches
+  GUI panels and serves its own panel pages through `QarSession.Current`.
+- **Docs:** *Scene Origin* and *QAROS World* describe the one **Room Origin** dialog that shows the
+  anchoring QR code and prints it (or saves it as PDF), opened from **Tools** › **Origin** or a
+  room's QR icon in **Rooms**. *qaros:// Links*: a dialog a link opens while the Visualizer is
+  hidden is a window of its own, with the dialog's title, that can be resized.
+- **Docs:** *Scene Origin*: a screen is calibrated inside the **Room Origin** dialog, by dragging
+  **Bar for 10 cm** until the bar under the code measures 10 cm; the **Print** section is folded
+  until opened, and the paper you pick is kept.
+- **Docs:** *Scene Origin* and *QAROS World*: the **Room Origin** dialog draws the code at true
+  size whenever the monitor's size is known or calibrated; there is no **Show at true size**
+  switch. **Calibrate...** is always there.
+- **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
+  *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
+  and the player installation pages describe them: **All devices** has **Pair headset**, which opens
+  the **Pair Headset** dialog (QR code and the field for the code a device shows); **HoloLens (legacy)**
+  invites by address. The old **By address**, **By QR code** and **By code** picks are gone.
+
 - **Docs:** *GUI Panels* has a section on served panels: publishing a folder or files as a content
   bundle, putting a page of it on a panel, the page's `qaros.panel.send` / `onMessage`, the
   messages your app receives and posts, and the rules and limits, with C, C# and Rust code.
@@ -125,6 +143,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   Troubleshooting, Onboarding and the Unity page describe the new fallback.
 
 ### Changed
+
+- **Docs:** *Language Bindings* shows how a C++-only CMake project adds the header-only C++ wrapper
+  `qar-streaming-cpp` (no C language, no examples; `QAR_ENABLE_DYNAMIC_LOADING` comes with the
+  target), joins as a local app with `OnboardBuilder::WithLocalApp`, and migrates from the removed
+  `Runtime::Rejoin` / `Runtime::Forget`. It no longer asks for `/permissive-` with MSVC. *Limits
+  and Behaviors to Design Around* and *Qt AR Panels* say the same of the wrapper.
 
 - **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
   installer sets it up, and several Hubs on one PC run from one installation or development build.
@@ -296,6 +320,39 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   approve local apps again, join member Hubs again and activate the licence again.
 - **Docs:** *Launcher configuration reference* lists `memberRouterPort`, the port of a member
   Hub's local message router.
+- **Docs:** an Ogre, Qt and RViz2 page in the Developer Guide: what the three libraries built on the
+  C API do, when to use which, how they stack, what they need, how they join the Hub (a local app
+  on the Hub's PC, code pairing for a Hub on another PC) and the installed runtime they were
+  checked against, 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** a Limits and Behaviors to Design Around page in the Developer Guide: retiring and
+  resizing a video stream, locating the operator, what a stream panel ignores or refuses, the
+  gesture rules of an app volume and what happens to a panel or volume that already exists, each as
+  far as the C header states it, plus what a query of the installed runtime costs (about two
+  seconds each, measured with 0.9.0-dev.3008+65dc9aeb) and observations made with earlier SDK
+  drops.
+- **Docs:** a Video in GUI Panels, and Qt Widgets as AR Panels page in the Developer Guide: how a
+  GUI panel shows the video of a video sender, what a stream panel accepts, and what the Qt library
+  does to show a widget in AR, including stable panel names that the next start finds again, how a
+  resize swaps the stream of the same panel and what happens to a panel when a window or the session
+  ends.
+- **Docs:** a Streaming an Ogre Scene to QAROS page in the Developer Guide: how the Ogre library
+  joins the Hub with its session owner and streams a scene to each target, the three ways to use it,
+  the conventions a scene follows and where the library stops, as checked against the installed
+  runtime.
+- **Docs:** a Running the RViz2 Plugin on Windows page in the Operator Guide: starting RViz2 with
+  the plugin, joining the Hub of this PC as a local app or the Hub of another PC with a pairing
+  code, the Connection tab, what you see and do in AR, the environment variables, reading the logs
+  and the known issues, as checked against the installed runtime 0.9.0-dev.3008+65dc9aeb.
+- **Docs:** the Ogre, Qt and RViz2 pages follow the division of the three libraries into
+  independent repositories. The Qt panel package `qar_qt_streaming` is standalone (Qt 5.15 or
+  Qt 6.5 and newer, the C++ SDK `qar-streaming-cpp`, no Ogre, ROS 2 or RViz2): *Video in GUI
+  Panels, and Qt Widgets as AR Panels* describes its three layers, the CMake package and its
+  components, how a program joins the Hub and hands the session to it, the threads, the example
+  program, touch input under Qt 6 and the drop shadow of popups; *Limits and Behaviors to Design
+  Around* lists what a build needs from the C++ SDK headers. *Ogre, Qt and RViz2 on QAROS* shows
+  that the Ogre and Qt libraries are independent and that the RViz2 plugin builds on both, all at
+  version 0.2.0; *Streaming an Ogre Scene* lists five adapter components. The pages that name
+  the pairing code of a Hub on another PC no longer name a Hub screen or a lifetime of the code.
 - **Docs:** *Onboarding and Sessions* has a section *When the hub's session changes*: what a
   session keeps when its Hub starts a new session or joins another Hub, subscribing to the session
   lifecycle (`qar_session_subscribe_lifecycle`, C# `Session.SubscribeLifecycle`), reacting to a
@@ -307,17 +364,51 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   onboarding again, and say that a restarted app takes over the objects its previous run left,
   which then follow it into the hub's next session. The *Session Lifecycle* tutorial
   (`session_lifecycle.c`) does so on every new session id.
+- **Docs:** the documentation site opens the newest release by default and offers **Dev (main)** in
+  the version dropdown: the unreleased docs as they are on `main` now, under `/docs/dev/` and
+  `/api/dev/`. The former `/next/` addresses redirect there.
 
 ### Fixed
 
-- **Docs:** *Onboarding and Sessions*, "Launched by QAROS": an API app QAROS starts is no longer
-  restarted when it exits unless the operator turned on **Restart when it exits** for it.
+- **Docs:** *Custom GUI Panels* and *Limits and Behaviors to Design Around*: `get_or_create` on
+  an open served panel applies a served page from a bundle the calling session published, so an app
+  restarted under a new peer id shows its new bundle; the rest of the init is still ignored.
+- **Docs:** no page sends a device or an app to **Let another hub join us** for a pairing code any
+  more: that card shows a join code for another Hub only, and a device or an app that types it
+  fails pairing. *Getting Started* and *Troubleshooting* of the User Guide, *Connecting to the Hub*,
+  *Managing Devices* (new section *Handing a code to a device*), *Security Model*, *Security Deep
+  Dive* and the Developer Guide's *Getting Started* describe how a device really gets its code:
+  **Pair headset** over USB, the QR code of **Show QR code** or the **Pair Headset** dialog
+  (**Invite device** › **All devices**), the code the headset shows typed into that dialog, or an
+  invite by address on **HoloLens (legacy)**. The Ogre, Qt and RViz2 pages say that their code
+  pairing with a Hub on another PC has no code to use today, and to join a member Hub on this PC
+  as a local app instead. *Connecting to the Hub*: the HoloLens card has no Label field and its
+  button is **Invite HoloLens**. The C header, the C# and the Rust docs of the code onboarding no
+  longer name a hub onboarding screen.
+- **Docs:** the Ogre, Qt and RViz2 pages, *Limits and Behaviors to Design Around* and *Custom GUI
+  Panels* follow the current C header: a GUI panel shows a URI, served content or a video stream
+  (`QarGuiPanelServedContentExt` too); `get_or_create` ignores the init for a panel or volume that
+  exists and is not closed and takes it over; only a HoloLens is invited, an Android headset is
+  paired in the Visualizer (`headset:` returns `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`);
+  `qar_library_load(NULL)` no longer reads `QAROS_RUNTIME_DIR` (the libraries' own loader still
+  does); the C++ wrapper copy `1914bc2` does not compile against the current header.
+  *Language Bindings* describes the header-only C++ wrapper `qar-streaming-cpp` in this repository.
+- **Docs:** the *Tutorials* entry of the *Rust API* menu opens `/docs/dev/`, not the former `/next/`.
+- **Docs:** new page *When a Target Restarts*: what QAROS recovers by itself (reconnect, pause),
+  when a sender closes for good, the stream states and status codes to watch, recreating the sender
+  with a back-off while the target is in the peer list, with C code and the C# equivalent. Linked
+  from *Render Loops*, *Rendering Streams* and *Troubleshooting*. The Vulkan cube creates a new
+  sender after a close instead of waiting for a peer-list update.
+
 - **Docs:** the C and Rust Vulkan rendering tutorials and the Rust local-app onboarding tutorial
   link to the *Started by QAROS* section of *Onboarding and Sessions* again, and the 0.9.0
   *Onboarding and Rejoin* tutorial page is served instead of a redirect.
 - **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
   Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
   enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).
+- **Docs:** *Onboarding and Sessions*, "Launched by QAROS": an API app QAROS starts is no longer
+  restarted when it exits unless the operator turned on **Restart when it exits** for it.
+
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
 
@@ -369,6 +460,22 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   say QAROS hands an API app it starts a code on stdin: on Windows the app joins as a local app,
   with the same one-time approval; a launch invite on stdin remains only where local enrollment is
   not available.
+- **Docs:** the C# snippets of the GUI Panels, App Volumes, Peers and Rendering Streams guides now
+  match the current API: poses, sizes, render sender options and render frame views are built with
+  their constructors (`Pose` and `Vector3` come from `Quaternar.Qaros.Mathematics`), and the
+  `Peers.Updated` event needs a running `SubscribeUpdates()` subscription.
+- **Docs:** the C code of the Peers and GUI Panels guides now passes the cancel token that
+  `qar_peer_subscribe_updates`, `qar_gui_panels_subscribe_updates` and
+  `qar_gui_panels_subscribe_panel_updates` require.
+- **Docs:** the GUI Panels guide and the Glossary no longer say that GUI panels show web content
+  only: a panel can also show the video stream of a video sender.
+- **Docs:** the Coordinate Systems guide no longer says that the C headers do not state the axis
+  convention: the C header states it.
+- **Docs:** the Source Applications guide says that a QAROS API app chooses the target
+  applications it renders for: **Streams to** shows *Chosen by the app*, not "all target
+  applications that request it".
+- **Docs:** the Welcome page lists the C# API reference next to the C API reference, and the
+  documentation site README no longer says that no version is released yet.
 - **Docs:** every current guide, tutorial and example loads the installed runtime with
   `qar_library_load(NULL)` and joins as a local app on the QAROS PC. The App Volume, GUI Panel, CPU
   and D3D11 rendering examples join as local apps with an app tag instead of pairing with a code

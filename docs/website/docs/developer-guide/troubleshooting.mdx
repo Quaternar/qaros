@@ -53,7 +53,7 @@ What the user sees when a source app on the QAROS PC cannot join, and what fixes
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` | The receiver paused the stream, for example because its display is not visible | Keep the sender and skip the frame; it resumes when the receiver does. Recreating the sender only restarts the negotiation |
 | `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING` | The stream lost its peer and is reconnecting | Skip the frame and keep calling; a dead peer is noticed within ~2 s, a restarted one streams again within a few seconds |
 | `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED` | The sender's app volume does not resolve yet (or was closed), so there is no app content space to hand poses out in | Keep calling `begin_frame`; create the volume before the sender and recreate one you closed |
-| `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` | The sender's stream was closed for good | Destroy the sender; create a new one if the target is still in the peer list |
+| `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` | The sender's stream was closed for good | Destroy the sender; create a new one if the target is still in the peer list, without waiting for a peer-list update, after a back-off ([When a Target Restarts](/docs/developer-guide/restarting-targets)) |
 
 ## Checking results
 

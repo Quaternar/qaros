@@ -107,12 +107,11 @@ qar_result_log_if_error(
 <Lang value="csharp">
 
 ```csharp
-var options = new RenderSenderOptions
+// The target peer (who receives this stream) and the graphics API are constructor arguments.
+var options = new RenderSenderOptions(targetPeerId, GraphicsAPI.Cpu)
 {
-    PeerId              = targetPeerId,   // who receives this stream
     EnableAutoReconnects = true,          // survive network hiccups
     AppVolumeId         = volumeId,       // composite into our app volume
-    GraphicsApi         = GraphicsApi.Cpu,
     ColorFormat         = PixelFormat.R8G8B8A8,
     DepthFormat         = PixelFormat.R32Float,
 
@@ -120,12 +119,7 @@ var options = new RenderSenderOptions
     TextureLayout = FrameLayout.SideBySide,
     FrameViews = new[]
     {
-        new RenderFrameView
-        {
-            DataType     = VideoFrameViewType.Color,
-            Eye          = VideoFrameViewEye.Left,
-            TextureIndex = 0,
-        },
+        new RenderFrameView(VideoFrameViewType.Color, VideoFrameViewEye.Left, 0),
         // ... one entry per view (right eye, depth views, ...) ...
     },
 };
@@ -493,7 +487,7 @@ This is how a source application implements grabbing, pointing, and touch agains
 ## Lifecycle and failure
 
 - `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected (typically `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING`) and recover on their own. A receiver that pauses (its display is not visible) makes them fail with `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` until it resumes; keep the sender. A dead peer is noticed within about 2 s, and a killed and restarted peer streams again within a few seconds.
-- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
+- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it. A restarted target keeps its peer id and stays online, so the peer list reports no change: do not wait for an update to recreate it. [When a Target Restarts](/docs/developer-guide/restarting-targets) has the pattern and code.
 - If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
 - Rendering senders are per target. For several users viewing the same scene, create a sender and camera for each target you serve from the peer list ([Finding rendering targets](#finding-rendering-targets)); use each target's poses and FOV even when the scene objects are shared.

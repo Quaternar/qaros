@@ -93,9 +93,10 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 
 | Code | Lifetime | Shown / announced |
 |---|---|---|
-| Onboarding screen code, minted only while the Visualizer shows a code and replaced a few seconds before it expires | 60 s | Yes, the only one; none while no code is shown |
+| Onboarding screen code, for the deprecated code onboarding of an app, minted only when a Visualizer asks for one; the current Visualizer never does | 60 s | Announced while one exists; none today |
+| Join code of **Let another hub join us**, for another Hub only; a device or an app that types it fails key confirmation | 60 s | Shown in that card while it is open |
 | **Pair headset** code, pushed over USB or shown as a QR code | 60 s | No |
-| Code a headset shows while connected to no Hub, registered by the Hub when the operator types it into the Visualizer (**By code**); the Visualizer then asks the headset to call back, without the code | 60 s, a new one after every attempt | No; it never crosses the network |
+| Code a headset shows while connected to no Hub, registered by the Hub when the operator types it into the Visualizer (**Pair Headset** dialog); the Visualizer then asks the headset to call back, without the code | 30 s, a new one after every attempt | No; it never crosses the network |
 | Codes minted for peers configured as the Hub's operators (1-64 per request, optionally bound to a planned peer id); the Visualizer offers no screen for them and applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 
@@ -248,7 +249,7 @@ M                  : verifies the reply, pins P's key, deletes its own CA, resta
 | # | Assumption | If it breaks |
 |---|---|---|
 | A1 | The Hub machine is trusted and operator-controlled | Full break: CA keys are on it |
-| A2 | The pairing code is shown only to the intended person, for its 10 s | Whoever has the code and network reach can onboard |
+| A2 | A pairing code reaches only the intended device or person, for its lifetime (60 s at most) | Whoever has the code and network reach can onboard |
 | A3 | A provisioned key reaches only the process it was minted for | Its holder can onboard within 5 minutes |
 | A3b | A requested or launch code reaches only the device or app it was minted for | Its holder can onboard within its lifetime (at most 10 minutes) |
 | A4 | OS file permissions on the Hub and devices are enforced | Local admin / same-user processes read keys |

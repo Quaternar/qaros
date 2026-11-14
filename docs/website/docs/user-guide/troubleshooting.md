@@ -8,15 +8,15 @@ description: Common issues when joining or using a QAROS session, and how to fix
 
 Most problems joining a session come down to one of a few things. Work through the section that matches what you're seeing. Anything that needs changes on the Hub belongs to your operator — see [Managing Devices](/docs/operator-guide/managing-devices) for the operator side.
 
-## The pairing code was rejected
+## Pairing failed
 
-Pairing codes are short-lived and single-use, so a rejection is almost always one of these:
+Pairing codes are short-lived and single-use, so a failed pairing is almost always one of these:
 
-- **Mistyped.** The code uses an alphabet with no easily-confused characters, but it's still easy to fumble under time pressure. Re-read it carefully, or scan the QR code instead of typing.
-- **Expired.** A code lapses after 60 seconds. If you were a moment too slow, it's already gone — ask for the current one.
-- **Not the current code.** While the operator keeps the code on screen, a new one replaces it a few seconds before it expires, and once they close it there is none. An old code from earlier in the conversation won't work.
+- **Expired.** A QR code lasts 60 seconds, and the code your headset shows changes every 30 seconds. Scan the QR code on screen now, or read the code your headset shows now.
+- **Mistyped.** When the operator types the code your headset shows, a typo fails the pairing; your headset then shows a new code. Read the new one out.
+- **Not the current QR code.** While the operator keeps the QR code on screen, a new one replaces it a few seconds before it expires, and once they close it there is none. A photo or an old screenshot of it won't work.
 
-The fix is the same in every case: **ask the operator for a fresh code and enter it right away.** There's no limit on how many times you can try.
+The fix is the same in every case: **pair again with the code shown now.** There's no limit on how many times you can try.
 
 ## Can't reach the Hub
 
@@ -39,11 +39,11 @@ An empty Shared Space right after joining is usually normal. If it stays empty, 
 
 Brief disconnects happen — a Wi-Fi hiccup, stepping out of range, closing and reopening the app. In almost all cases your device **reconnects and rejoins on its own**, as the same participant, with no code needed.
 
-You only need to enter a pairing code again if your device's identity was **forgotten** — for example, the operator removed it, or it's a brand-new device. If a normal reconnect isn't happening, ask the operator whether your device is still onboarded.
+You only need to pair again if your device's identity was **forgotten** — for example, the operator removed it, or it's a brand-new device. If a normal reconnect isn't happening, ask the operator whether your device is still onboarded.
 
 ## How do I get a new code
 
-You don't generate codes yourself — the Hub does, while the operator has a code open in the Visualizer, and each one lives 60 seconds. **Ask the operator for the code currently on screen**, and enter or scan it promptly before it lapses.
+You don't generate codes yourself, and the Hub shows none for you to type. A QR code exists only while the operator has it open in the Visualizer, and your headset shows its own code while it is connected to no Hub. **Ask the operator to pair your device**: over USB, with the QR code on screen, or with the code your headset shows now.
 
 ## Still stuck
 

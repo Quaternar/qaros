@@ -60,7 +60,7 @@ QAROS recovers on its own; nothing needs restarting by hand.
 | A stream stops delivering frames | The receiver probes the sender and reconnects the stream once the sender is gone. | ~5 s from kill to reconnected stream |
 | A source app is killed and relaunched | The relaunched app takes over its streams from the dead instance. A second copy is refused only while the first is provably still live. | ~2-3 s |
 | **Stop** on a running app | The Hub asks the app to stop (a QAROS API app: its stdin closes) and kills it if it has not exited after about 1 s. | ~1 s |
-| A QAROS API app exits within 10 s of starting | The Hub restarts it, backing off from 2 s up to 60 s, and reports the first failure. An app handed a launch invite gets a fresh one-time invite (the onboarding screen's code is not affected). | 2 s, doubling |
+| A QAROS API app exits within 10 s of starting | The Hub restarts it, backing off from 2 s up to 60 s, and reports the first failure. An app handed a launch invite gets a fresh one-time invite. | 2 s, doubling |
 | The Hub's router is unreachable | Processes keep retrying with backoff up to 10 s and reconnect once it is back, without a restart. | up to 10 s after it returns |
 
 ### When an app restarts

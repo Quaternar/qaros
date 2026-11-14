@@ -14,7 +14,7 @@ code**.
 
 :::note Two different QR codes
 The **anchoring QR code** (this page) places the scene. The **connection QR code** (**Show QR
-code**, **By QR code**) pairs an Android headset with the Hub
+code**, or **Pair headset** on the **All devices** tab) pairs an Android headset with the Hub
 ([Pair a Headset](./pair-a-headset.md)). Scanning one never does the other's job.
 :::
 
@@ -55,25 +55,26 @@ Each room card shows its number, name, device count, **Offset** and **Devices**:
 
 ## 2. Show or print the room's origin code
 
-1. Click the **QR icon** on the room's card, or open **Tools** › **Origin** and pick the **Room**.
+1. Click the **QR icon** on the room's card: the **Room Origin** dialog opens for that room. Or open
+   **Tools** › **Origin**, pick the **Room** and click **Show**.
 
    ![Tools › Origin with Room 1 · Lab B selected](../../img/visualizer/origin-card.png)
 
-2. Choose how to put the code in the room:
+2. The **Room Origin** dialog shows the code and prints it. Choose how to put the code in the room:
 
-   | | **Print...** | **Show** |
+   | | Print (the dialog's **Print** section) | On this monitor |
    |---|---|---|
    | Use for | A fixed installation, the most stable choice | A quick session, or no printer at hand |
-   | Size | Printed at **Actual size · 100 %**, with a 10 cm check ruler and cut marks. **Save as PDF...** to print elsewhere | Drawn on this monitor. Tick **Show at true size** for exactly 10 cm |
+   | Size | Printed at actual size (100 %), with a 10 cm check ruler and cut marks; open the **Print** section, pick the **Printer** and **Paper** (your choice is kept; the first time it is your Windows region's paper) and click **Print**, or **Save as PDF...** to print elsewhere | Drawn in the dialog at exactly 10 cm when the monitor reports its size or is calibrated |
    | Check | The ruler on the sheet and the code's black area both measure 10 cm | The black area measures 10 cm on the screen |
 
-   ![Print scene origin marker](../../img/visualizer/origin-print.png)
+   ![The Room Origin dialog](../../img/visualizer/origin-show.png)
 
-   ![Scene origin marker shown on screen](../../img/visualizer/origin-show.png)
-
-3. **Showing at true size on a monitor that does not report its size:** the dialog says *Unknown
-   screen size* or *Not at true size*. Click **Calibrate...**, measure the white bar with a ruler,
-   type its length in **Bar length (mm)** and click **Save calibration**. The calibration is kept
+3. **A monitor that does not report its size, or reports it wrongly:** the dialog then says
+   *Unknown screen size* and draws the code as large as it can, or the code's black area does not
+   measure 10 cm. Click **Calibrate...** (always above that line): the same dialog shows a bar
+   under the code. Hold a ruler to the bar and drag **Bar for 10 cm** until the bar measures
+   exactly 10 cm; the code resizes with it. Click **Save calibration**. The calibration is kept
    per monitor.
 
    ![Calibrating the screen for a true-size code](../../img/visualizer/origin-true-size.png)
@@ -100,7 +101,7 @@ Every device's setup steps (**Session** › **Devices** › **Set up or update a
 1. Start the player and invite (HoloLens) or pair (Meta Quest, METALENSE 2, Android XR) the device ([HoloLens 2](./hololens-2.md),
    [Meta Quest and METALENSE 2](./quest-and-metalense-2.md)).
 2. Open the step **Anchor: look at the anchoring QR code** and click **Show anchoring QR code**. It
-   opens the same marker as **Show** in **Tools** › **Origin**, for the room picked there, also while
+   opens the same **Room Origin** dialog as **Show** in **Tools** › **Origin**, for the room picked there, also while
    that panel is hidden. A printed code works as well.
 3. Put the device on and **look at the code** until it confirms: the *Look at the anchoring QR code*
    message goes (HoloLens 2: *Anchor your headset: look at the anchoring QR code*; Meta Quest and

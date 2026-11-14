@@ -1,4 +1,4 @@
-if(BUILD_CORE_EXAMPLES)
+if(QAROS_BUILD_EXAMPLES)
   set(QAR_DYNAMIC_EXAMPLES
       dynamic_loading
       app_volume_management

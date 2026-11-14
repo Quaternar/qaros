@@ -159,6 +159,25 @@ once. Joining again gets the same volume back with its placement.
 or off for the targets' hands. Keep it on for normal QAROS gesture handling. Turn it off when
 another input stack consumes the hands.
 
+## GUI panels and served panels
+
+The components wrap streaming only. For [GUI panels](/docs/developer-guide/gui-panels), including
+pages your app serves itself, use the C# API on the session the components joined:
+
+```csharp
+using Quaternar.Qaros;
+using QuaternarStreaming;
+
+Session session = QarSession.Current; // null until a QAROS component has joined the hub
+var bundle = session.PanelContent.PublishDirectory("ui", Application.streamingAssetsPath + "/panels");
+```
+
+- `QarSession.Current` is the one session of the process; never dispose it, the components own it.
+- `session.GuiPanels` creates and changes panels (`GuiPanelOptions.ServedContent` for a served
+  page), `session.PanelContent` publishes the files and carries the page's messages. Both work as
+  described in [Custom GUI Panels](/docs/developer-guide/gui-panels#serving-panel-content-from-your-app).
+- Put panel pages under `StreamingAssets` so a player build ships them as plain files.
+
 ## Coordinate spaces
 
 The views and hands a target's device receives are in its app volume's

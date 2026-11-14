@@ -79,8 +79,9 @@ pub struct HubAddress<'a> {
 #[allow(deprecated)] // the deprecated `Code` variant names the deprecated `HubAddress`
 #[derive(Clone, Copy, Debug)]
 pub enum OnboardMethod<'a> {
-    /// The short code shown on the hub's onboarding screen (it lives about
-    /// ten seconds). Without an address the library finds only this user's
+    /// A short pairing code minted for the hub's operators (the QAROS
+    /// Visualizer shows none: its hub join code is for another hub only).
+    /// Without an address the library finds only this user's
     /// hub: through the `hub-endpoint.json` the hub writes to the QAROS data
     /// root, then a discovery beacon whose owner is this user (up to 6 s), else
     /// [`crate::StatusCode::ONBOARDING_HUB_UNREACHABLE`]. Any other hub needs

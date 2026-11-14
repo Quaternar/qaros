@@ -57,9 +57,14 @@ are on the same network.
 1. Start QAROS Player on the headset. While it is connected to no hub (not paired yet, or its hub
    is away), it shows the connection prompt: *Scan the connection QR code or enter in QAROS:* with
    its address, a 6-digit code (`123 456`) and a countdown.
-2. In the Visualizer open **Session** › **Devices** › **Invite device** and pick **By code**. The
-   headsets showing a code on this network are listed by name and model with their address
-   (*Looking for headsets on this network...* until one answers).
+2. In the Visualizer open **Session** › **Devices** › **Invite device**, on the **All devices**
+   tab, and click **Pair headset**. The **Pair Headset** dialog opens: its QR code is for the
+   scanning way above, its code field for this one. The headsets showing a code on this network are
+   listed by name and model with their address (*Looking for headsets on this network...* until one
+   answers).
+
+   ![Invite device card, All devices tab](../../img/visualizer/invite-all-devices.png)
+
 3. Click the headset in the list, or type its **Address**.
 4. Type the **Pairing code** the headset shows now and click **Pair**. The card shows *Giving the
    code to the hub*, *Calling the headset at &lt;address&gt;*, then *The headset is pairing*; the
@@ -137,14 +142,14 @@ Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install Q
 
 | Situation | What happens |
 |---|---|
-| Headset not paired yet | Shows the connection prompt with its code; takes a code from **Pair headset**, a QR code or **By code** |
+| Headset not paired yet | Shows the connection prompt with its code; takes a code from **Pair headset**, a QR code or the code it shows |
 | Headset already paired (or its stored identity cannot be read right now) | Refuses **Pair headset** and keeps rejoining with its identity; a **QR code** scanned on the headset still pairs it again |
 | Headset joined | Shows no code and refuses new codes from the network; a QR code scanned on the headset still moves it |
 | Its stored identity no longer works (data restored from another install, refused by the Hub) | Waits for a new code: pair it again |
 | Uninstalled | Its identity is gone with the app: pair it again after reinstalling |
 
 - Every code is single use and lives 60 s, for **Pair headset** and for a QR code alike; the
-  code a headset shows for **By code** lives 30 s.
+  code a headset shows lives 30 s.
   **Pair again** always makes a new one. A headset that took a pushed code has 90 s to join.
 - **Pair headset** sends the code over the USB cable, never over the network. If the Visualizer
   cannot reach the player over USB it reports the failure and sends nothing; use a QR code then.
@@ -164,9 +169,9 @@ Meta Quest setup has the same **Wi-Fi on the headset** step, between **Install Q
 | *adb could not open a tunnel…* | The headset is not connected by USB, not authorised for USB debugging, or offline; reconnect it, or pair with a QR code |
 | *the headset already has a session identity…* | It is paired already; scan a QR code on the headset to pair it to this Hub again |
 | *Not paired: the headset did not join (code expired or onboarding failed) — pair again* | The headset took the code but never appeared: check it can reach the Hub over the network, then click **Pair again** |
-| **Pair headset** disabled | No headset on USB; **Show QR code** and **By code** still work |
-| *this is no code a headset shows; check it for a typo.* (**By code**) | The typed code has the wrong shape; type the 6 digits the headset shows |
-| *Not paired: ...* after **Pair** in **By code** | The code was wrong or expired. The headset shows a new code at once: type that one |
+| **Pair headset** disabled | No headset on USB; **Show QR code** and the code field of the **Pair Headset** dialog still work |
+| *this is no code a headset shows; check it for a typo.* (code field of the **Pair Headset** dialog) | The typed code has the wrong shape; type the 6 digits the headset shows |
+| *Not paired: ...* after **Pair** in the **Pair Headset** dialog | The code was wrong or expired. The headset shows a new code at once: type that one |
 
 ## Set the name the headset shows
 

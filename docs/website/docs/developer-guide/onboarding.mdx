@@ -58,6 +58,7 @@ Never log these, never put them on a command line or in an environment variable,
 | Remote app | yes: remembered on the primary under the grant's tag | the primary hub |
 
 - A remembered id is reused only while no other live process holds it; otherwise the newcomer gets a one-off id that is not remembered. Give instances that run together different tags.
+- Launched or not, a source app's peer follows its app tag. When QAROS starts your app from the Source Applications panel it does not choose or change the tag: stopping and starting the app again keeps its peer when it passes the same tag, and two instances of it must pass distinct tags. Resolving multiple instances is up to the app.
 - The hub keeps at most 64 tags per approval (least recently used dropped first) and forgets a tag unused for 30 days.
 - Revoking or narrowing an approval revokes its running instances and forgets all its remembered peer ids.
 

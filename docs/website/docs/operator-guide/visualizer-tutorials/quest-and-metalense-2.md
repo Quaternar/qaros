@@ -94,7 +94,7 @@ Android headsets are not invited by IP address. Pair the device once from the pa
 1. Start QAROS Player on the device.
 2. Click **Pair headset** to send it a one-time invite over the USB cable, or **Show QR code** for
    the player to scan. Without cable or camera, type the address and code the device shows into
-   **Invite device** › **By code**.
+   the **Pair Headset** dialog (**Invite device** › **All devices** › **Pair headset**).
 3. The device joins the session by itself and the Hub starts its mixer and video relay. It reports
    its exact model, and rejoins on its own after a restart.
 
@@ -115,6 +115,6 @@ Several devices, rooms and printing the code:
 [Scene Origin: Anchor Several Devices Together](./scene-origin-and-rooms.md#4-anchor-each-device).
 
 - A remembered Android headset row has no **Invite**; the device rejoins by itself.
-- An address typed with `headset:`, `android:` or `quest:` in **Invite device** is refused: *Android
+- An address typed with `headset:`, `android:` or `quest:` in the **HoloLens (legacy)** tab of **Invite device** is refused: *Android
   headsets are not invited: pair them with Pair headset on the Devices tab (adb push or Show QR
   code).*
