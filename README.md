@@ -33,7 +33,7 @@ Run without arguments, the examples load the installed QAROS with the default lo
 
 ## Repository structure
 
-- `ci/` - The checks and builds of the GitHub workflows: `python ci/run.py rust|csharp|c|capi|vulkan-cube|docs` (Python 3, standard library only, Windows and Linux) and `ci/ci.env`, its defaults. The workflows only set up the tools and call it; run it locally the same way, from any folder.
+- `ci/` - The checks and builds of the GitHub workflows: `python ci/run.py rust|csharp|c|capi|vulkan-cube|cpp|docs|package|publish` (Python 3, standard library only, Windows and Linux) and `ci/ci.env`, its defaults. The workflows only set up the tools and call it; run it locally the same way, from any folder.
 - `cmake/` - CMake helper files, including the vcpkg toolchain integration.
 - `docs/website/` - Documentation site source, authored with Docusaurus.
 - `package/` - Drop-in location for an SDK build the C# tests run against (`package/bin`, see C# binding).
