@@ -376,6 +376,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Onboarding and Sessions*: onboarding as a local app (`QarOnboardLocalAppExt`) works on
+  Linux too; the page said Windows only.
 - **Docs:** no page sends a device or an app to **Let another hub join us** for a pairing code any
   more: that card shows a join code for another Hub only, and a device or an app that types it
   fails pairing. *Getting Started* and *Troubleshooting* of the User Guide, *Connecting to the Hub*,

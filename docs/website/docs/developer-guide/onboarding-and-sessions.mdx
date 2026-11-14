@@ -25,7 +25,7 @@ In QAROS you never "create" or "join" a session directly: **every session is obt
 
 ## Local app: on the QAROS PC, no code
 
-Chain `QarOnboardLocalAppExt` as the only mode extension of `qar_runtime_onboard` (or `_async`). Windows only; elsewhere the call returns `QAR_STATUS_NOT_IMPLEMENTED`.
+Chain `QarOnboardLocalAppExt` as the only mode extension of `qar_runtime_onboard` (or `_async`). It works on Windows and Linux, wherever QAROS runs on the same PC.
 
 <CodeTabs>
 <Lang value="c">
