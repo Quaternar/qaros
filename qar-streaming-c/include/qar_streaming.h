@@ -4844,11 +4844,15 @@ static inline QarResult qar_video_sender_show_frame(QarVideoSender* sender);
  * QarGuiPanelStreamIdExt::stream_id.
  *
  * The id derives from the common name, so every call with one name answers
- * the same panel. When it already exists and is not closed, init is ignored
- * and this session takes the panel over (a previous run of the app may have
- * left it): it is carried into the hub's next session like a panel this
- * session created. Call it again for every common name the app owns on a new
- * session id and after a re-pair, see
+ * the same panel. When it already exists and is not closed, this session takes
+ * the panel over (a previous run of the app may have left it): it is carried
+ * into the hub's next session like a panel this session created, and its pose,
+ * size, display name and visibility stay as they are. Only a
+ * QarGuiPanelServedContentExt naming a bundle this session published is
+ * applied: the panel then shows that page, so an app that restarts under a new
+ * peer id reopens its panel on its new bundle instead of the old run's. Call it
+ * again for every common name the app owns on a new session id and after a
+ * re-pair, see
  * @ref qar_c_session_lifecycle "Session lifecycle".
  *
  * Fails with QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID when

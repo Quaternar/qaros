@@ -63,7 +63,10 @@ namespace Quaternar.Qaros
         /// </para>
         /// <para>
         /// When an open panel of that name exists, the rest of <paramref name="options"/> is
-        /// ignored. A closed panel is reopened, visible, with <paramref name="options"/>.
+        /// ignored, except a <see cref="GuiPanelOptions.ServedContent"/> whose bundle this session
+        /// published: the panel then shows that page, so an app that restarts under a new peer id
+        /// reopens its panel on its new bundle. A closed panel is reopened, visible, with
+        /// <paramref name="options"/>.
         /// </para>
         /// <para>
         /// An existing panel is taken over by this session (a previous run of the app may have
