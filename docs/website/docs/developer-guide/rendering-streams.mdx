@@ -187,6 +187,29 @@ Linear values sent without either look too dark on every device. Alpha is never 
 
 If you render into a texture of your own first and then copy into the sender's texture, an sRGB render target (for example `DXGI_FORMAT_B8G8R8A8_UNORM_SRGB`) gives you encoded bytes with no extra work.
 
+## Render loop
+
+By default a sender is **request-driven**: begin-frame waits for the receiver's render request and gives you the poses for the display time it names. If your application renders from a loop of its own, at its own rate, declare a **free-running** loop instead: chain a `QarRenderSenderRenderLoopExt` with `QAR_RENDER_LOOP_FREE_RUNNING` (`qar_render_sender_render_loop_ext_default()`); in C# set `RenderSenderOptions.RenderLoop = RenderLoop.FreeRunning`, in Rust `RenderSenderConfig::render_loop = RenderLoop::FreeRunning`.
+
+| Render loop | Begin-frame waits for | Poses |
+|---|---|---|
+| `QAR_RENDER_LOOP_REQUEST_DRIVEN` / `RequestDriven` (no extension) | The receiver's render request | For the display time the request names |
+| `QAR_RENDER_LOOP_FREE_RUNNING` / `FreeRunning` | Only a destination, which the receiver keeps ready | Predicted from the newest head pose for when the frame will be shown |
+
+A free-running application takes its poses **before** it begins the frame, so it renders while the receiver hands the frame's destination back. Each frame:
+
+1. **Take the poses**: `qar_render_sender_next_render_pose` (C# `RenderSender.NextRenderPose`, Rust `RenderSender::next_render_pose`) gives each view's pose and field of view, predicted for when the frame will be shown.
+2. **Render** into your own target with them.
+3. **Begin the frame**: `qar_render_sender_begin_frame`, or poll `qar_render_sender_try_begin_frame` (C# `TryBeginFrame`, Rust `try_begin_owned_frame`). It waits only for the receiver's destination, never for a render request, and opens the frame with exactly the poses of step 1.
+4. **Copy** your target into the sender's frame.
+5. **Show** the frame.
+
+- A blocking begin-frame also **throttles** a renderer that runs faster than the mixer consumes frames: it waits until the receiver hands a destination back.
+- Before the viewer's first head pose, step 1 fails with `QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA` (C# `RenderingProducerMissingPoseData`, Rust `StatusCode::RENDERING_MISSING_POSE_DATA`); retry on the next iteration. On a request-driven sender it fails with `QAR_STATUS_LOGIC_ERROR`.
+- A second call before begin-frame replaces the poses.
+- A render loop value the runtime does not know is refused with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+- How to drive senders for several viewers in each mode, blocking or not, and which loop to choose: [Render Loops](/docs/developer-guide/render-loops).
+
 ## Transparency
 
 A sender declares what its color's alpha means, and the mixer composites the stream by it. Chain a `QarRenderSenderAlphaModeExt` (`qar_render_sender_alpha_mode_ext_default()`, then set `alpha_mode`) on `init.header.next`; in C# set `RenderSenderOptions.AlphaMode`, in Rust `RenderSenderConfig::alpha_mode` (`ColorAlphaMode`).
@@ -464,7 +487,7 @@ This is how a source application implements grabbing, pointing, and touch agains
 ## Lifecycle and failure
 
 - `enable_auto_reconnects = true` makes the sender survive network drops and target restarts transparently — frame calls fail while disconnected (typically `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING`) and recover on their own. A receiver that pauses (its display is not visible) makes them fail with `QAR_STATUS_MEDIA_STREAMING_STREAM_IS_PAUSED` until it resumes; keep the sender. A dead peer is noticed within about 2 s, and a killed and restarted peer streams again within a few seconds.
-- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it.
+- When the stream is closed for good, `begin_frame` returns `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED`: the sender has closed itself, so destroy it. Create a new sender if the target is still in the peer list and you still want to serve it. A restarted target keeps its peer id and stays online, so the peer list reports no change: do not wait for an update to recreate it. [When a Target Restarts](/docs/developer-guide/restarting-targets) has the pattern and code.
 - If your application is killed and relaunched, its new sender takes the stream over from the dead instance within about 2-3 s. A second, concurrently running instance is refused while the first is still live.
 - Destroy with `qar_render_stream_handle_destroy(sender)`.
 - Rendering senders are per target. For several users viewing the same scene, create a sender and camera for each target you serve from the peer list ([Finding rendering targets](#finding-rendering-targets)); use each target's poses and FOV even when the scene objects are shared.

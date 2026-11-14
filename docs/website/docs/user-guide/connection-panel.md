@@ -1,7 +1,7 @@
 ---
 sidebar_position: 3
 title: Connecting to the Hub
-description: The Visualizer's Connection panel - the Hubs in your session, pairing another Hub, and inviting devices by IP address.
+description: The Visualizer's Connection panel - the Hubs in your session, pairing another Hub, inviting a HoloLens by IP address and pairing Android headsets, also by the code a headset shows.
 ---
 # Connection Panel
 
@@ -41,9 +41,10 @@ This Hub and every Hub paired with it share one **session**.
 
 Opens only when you ask for it. Pairing takes both Hubs:
 
-1. On the Hub that shares: **Let another hub join us** shows a pairing code (digits, it changes
-   every few seconds), a countdown and the addresses this Hub is reachable at, each with a copy
-   button. **Stop sharing** closes it; no code is offered while it is closed.
+1. On the Hub that shares: **Let another hub join us** shows **Our join code** (single use, valid
+   60 s), a countdown and the addresses this Hub is reachable at, each with a copy button. The
+   code is only for another Hub: a device or an app cannot pair with it. **Stop sharing** drops
+   it from the screen; no code is offered while the card is closed.
 2. On the joining Hub: **Join another hub**. Turn on **Discover** to list Hubs on this LAN and press
    **Use** on one, or type its **Address**. Type the **Code** from step 1 and press **Pair with hub**.
 
@@ -53,7 +54,8 @@ Opens only when you ask for it. Pairing takes both Hubs:
 &lt;hub&gt;*, *Waiting for player*, *Offline*) and address.
 
 - **Auto**: this Hub invites the device again whenever it starts.
-- **Invite** / **Stop** starts or stops streaming to it. The trash icon forgets it.
+- **Invite** / **Stop** starts or stops streaming to it. An Android headset row has no **Invite**:
+  the headset rejoins by itself. The trash icon forgets it.
 - A device streaming without being remembered (invited by an app) is listed too, without Auto.
 - **Revoked peers (N)**, folded under the list, holds the revoked peers no remembered device names:
   each with its name, device kind, the reason, the PC it ran on and when it was last seen, and an
@@ -63,23 +65,34 @@ Opens only when you ask for it. Pairing takes both Hubs:
 
 1. Install and start the QAROS player on the device
    ([Player installation](/docs/operator-guide/player-installation-to-device)).
-2. The **Invite device** card is open on the Devices tab. Pick the device's kind:
+2. **Android headsets** (Meta Quest, METALENSE 2, Android XR) are not invited: pair them once with
+   **Pair headset** (a one-time invite over the USB cable) or **Show QR code** in the device's last
+   setup step on the Devices tab, or from the **All devices** tab of the **Invite device** card,
+   which is open on the Devices tab: its **Pair headset** button opens the **Pair Headset** dialog
+   with a one-time QR code to scan and a field for the code the device shows (pick the headset
+   from the list of those showing a code on the network or type its **Address**, type the
+   **Pairing code** and press **Pair**;
+   [Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset#pair-by-the-code-the-headset-shows)).
+   Every device except a HoloLens joins this way. The device then joins by itself and reports its
+   exact model. Stop here unless the device is a HoloLens.
+   For a **HoloLens** (*legacy*: streams over holographic remoting), open the **HoloLens (legacy)**
+   tab of the **Invite device** card: it invites by address.
 
-| Kind | Notes |
-|---|---|
-| Headset (default) | Meta Quest, METALENS glasses and other Android devices. Invited by IP address until its player pairs by QR code. The headset reports its exact model itself once it runs |
-| HoloLens | *Legacy*: streams over holographic remoting and is invited by IP address only |
+An address typed with `headset:`, `android:` or `quest:` is refused: *Android headsets are not
+invited: pair them with Pair headset on the Devices tab (adb push or Show QR code).*
 
-A device remembered under an older kind (Meta Quest, Metalens) is not invited any more: forget it
-and add it again as a **Headset**.
-
-3. Enter the device's **Address** and an optional **Label**.
+3. Enter the device's **Address**.
 4. Check **Invite automatically** to have the Hub invite the device on every start; leave it
    unchecked to invite once.
-5. Press **Invite**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
+5. Press **Invite HoloLens**. The row shows *Waiting for player*, then *Streaming*. A failure is shown as a
    notification. The card stays open for the next device; **Clear** empties it, and **Invite
    device** in the title folds it away.
 
-An app or a device that pairs itself with a code (for example a [Unity app](/docs/developer-guide/unity))
-uses the code shown by **Let another hub join us** above. In Debug mode, **By QR code invite** in
-the **Invite device** card opens the large QR code for players that scan it.
+The Visualizer shows no pairing code to type into a device or an app: the join code of **Let
+another hub join us** above is for another Hub, and a device or an app that types it fails. An app
+on this PC joins as a local app, without a code; an app on another PC joins through that PC's own
+Hub, made a member of this one ([Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions#remote-app-through-a-member-hub)).
+**Pair headset** on the **All devices** tab
+of the **Invite device** card, in every UI mode, opens the **Pair Headset** dialog, which shows the
+same one-time QR code for an Android headset as **Show QR code** in its setup steps; it is the one
+QR invite.

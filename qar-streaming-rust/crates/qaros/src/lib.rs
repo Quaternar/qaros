@@ -58,6 +58,7 @@ mod error;
 mod invite;
 mod library;
 mod member_hub;
+mod panel_content;
 mod panels;
 mod peers;
 mod pending;
@@ -83,6 +84,10 @@ pub use library::{Library, LibraryConfig, RuntimeInfo, TargetDevice};
 pub use member_hub::{
     JoinHubAsMemberConfig, MemberHubInvitation, MemberHubInvitationConfig, MemberHubPermissions,
 };
+pub use panel_content::{
+    GuiPanelServedContent, PANEL_CONTENT_BUNDLE_NAME_MAX, PanelContent, PanelContentBundleId,
+    PanelContentFile, PanelContentMessage,
+};
 pub use panels::{GuiPanelConfig, GuiPanelInfo, GuiPanelSize, GuiPanels};
 pub use peers::PeerInfo;
 pub use pending::{PendingCall, PendingOnboard};
@@ -90,8 +95,8 @@ pub use pending_sender::PendingRenderSender;
 pub use render::PendingFrame;
 pub use render::{
     ColorAlphaMode, ColorEncoding, CpuFrame, CpuTexture, Frame, FrameViewSpec, OwnedFrame,
-    RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize, VideoFrameLayout,
-    VideoFrameView, ViewPose,
+    RenderLoop, RenderRequest, RenderSender, RenderSenderConfig, ShowParams, TextureSize,
+    VideoFrameLayout, VideoFrameView, ViewPose,
 };
 #[allow(deprecated)] // kept exported while deprecated
 pub use runtime::HubAddress;
@@ -100,9 +105,10 @@ pub use runtime::{
 };
 pub use session::{Session, Subscription};
 pub use types::{
-    ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout, GuiPanelId,
-    GuiPanelState, LogSeverity, OnboardingId, PeerId, PixelFormat, Pose, Quat, SessionChangeCause,
-    SessionId, SessionLifecycle, SessionLifecycleState, StreamId, Vec3, ViewKind,
+    ActionSeverity, AppState, AppVolumeId, AppVolumeLifetime, Eye, Fov, FrameLayout,
+    GuiPanelContentType, GuiPanelId, GuiPanelState, LogSeverity, OnboardingId, PeerId, PixelFormat,
+    Pose, Quat, SessionChangeCause, SessionId, SessionLifecycle, SessionLifecycleState, StreamId,
+    Vec3, ViewKind,
 };
 pub use volumes::{AppVolumeConfig, AppVolumeInfo, AppVolumeSize, AppVolumes};
 

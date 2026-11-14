@@ -82,9 +82,11 @@ The console shows `Joined QAROS as peer <id>`, names the GPU (`Rendering on ...`
 ## 6. See it
 
 - **On this PC:** the Visualizer opens when QAROS starts; if you closed it, left-click the QAROS tray icon. The console shows `Rendering for target ...`, and the cube streams into its own app volume, 1.5 m in front of the room origin.
-- **On a headset:** install the QAROS player on the device ([Player Installation](/docs/operator-guide/player-installation-to-device)) and join the hub with its pairing code ([User Guide: Getting Started](/docs/user-guide/getting-started)). Every viewer gets its own camera of the cube.
+- **On a headset:** install the QAROS player on the device ([Player Installation](/docs/operator-guide/player-installation-to-device)) and pair it once from the Visualizer: over USB, with a QR code or by the code the headset shows ([Pair a Headset](/docs/operator-guide/visualizer-tutorials/pair-a-headset)). Every viewer gets its own camera of the cube.
 
 Stop the cube with **Ctrl+C**.
+
+The cube renders 60 times a second for every viewer that can take a frame. `--fps <n>` changes the rate, `--uncapped` renders as fast as the viewers take frames, and `--render-loop request-driven` renders each frame for the viewer's request instead ([Render Loops](/docs/developer-guide/render-loops)).
 
 ## 7. Run it again
 

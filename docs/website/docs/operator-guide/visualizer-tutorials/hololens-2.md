@@ -14,8 +14,9 @@ player. No Developer Mode, no Device Portal, no cable.
 ## 1. Install the player
 
 1. **Session** › **Devices**, scroll to **Set up or update a device**.
-2. Set **Device type** to **HoloLens · Install code**. Four steps are listed: **Show the install
-   code**, **Trust the QAROS certificate**, **Install QAROS Player**, **Invite the HoloLens**.
+2. Set **Device type** to **HoloLens · Install code**. Five steps are listed: **Show the install
+   code**, **Trust the QAROS certificate**, **Install QAROS Player**, **Invite the HoloLens**,
+   **Anchor: look at the anchoring QR code**.
 3. Under **Show the install code**, click **Show install code**. The **Install QAROS Player on
    HoloLens** dialog shows a QR code and, beside it:
 
@@ -52,20 +53,27 @@ A HoloLens with an older player build (package version `1.0.0.0`) must uninstall
 
 ## 2. Invite the HoloLens
 
-1. **Session** › **Devices**. The **Invite device** card is open at the top.
-2. Pick **HoloLens** (it carries the *LEGACY* tag).
+1. **Session** › **Devices**. The **Invite device** card is open at the top, on its **All devices**
+   tab.
+2. Open the **HoloLens (legacy)** tab. A HoloLens is the only device invited by address; every
+   other device pairs on **All devices**.
 3. Type the HoloLens IP address in **Address**. The address and the device kind are all the Hub
    needs; the device is listed under its address.
 4. Tick **Invite automatically** to have the Hub invite it again on every start. Left unticked, it
    is invited once (the device is still listed and can be invited again by hand).
 
-   ![Invite device card with HoloLens selected](../../img/visualizer/invite-hololens.png)
+   ![Invite device card, HoloLens (legacy) tab](../../img/visualizer/invite-hololens.png)
 
 5. Click **Invite HoloLens**. The device row shows *Waiting for player*, then *Streaming from
    &lt;hub&gt;* in green.
 
 On the first run the connection can take a while. If the player does not show *Receiving...* within
 about 60 seconds, reboot the HoloLens and invite it again.
+
+Then anchor it: in the last setup step, **Anchor: look at the anchoring QR code**, click **Show
+anchoring QR code** and look at the code with the HoloLens until *Anchor your headset: look at the
+anchoring QR code* goes. The HoloLens does not report its anchor, so click **Mark as done**
+yourself ([Scene Origin](./scene-origin-and-rooms.md#4-anchor-each-device)).
 
 ## 3. Start and stop streaming
 

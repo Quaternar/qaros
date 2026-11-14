@@ -44,7 +44,7 @@ Four things are yours to manage:
 
 - **Configuration** - source apps (see [Source Applications](/docs/operator-guide/source-applications)), target devices, and other Hub behavior, managed through the visualizer and persisted across restarts.
 - **Network and ports** - firewall rules for the QAROS port range, discovery scope, and (for off-LAN) a relay.
-- **Device and Hub trust** - minting and reading pairing codes, connecting peers, forgetting or blacklisting devices, allowing and removing member Hubs, and reading the audit log.
+- **Device and Hub trust** - pairing devices, connecting peers, forgetting or blacklisting devices, allowing and removing member Hubs, and reading the audit log.
 - **Updates** - moving between versions with the installer and the device apps, and backing up Hub identity.
 
 ## What's in this guide

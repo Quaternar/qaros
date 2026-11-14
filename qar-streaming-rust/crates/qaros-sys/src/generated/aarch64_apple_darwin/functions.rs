@@ -305,6 +305,13 @@ macro_rules! qar_impl_function_list {
                 gesture: *mut QarGuiPanelGesture,
                 out_timestamp: *mut QarTimePoint,
             ) -> QarResult;
+            pub fn qar_impl_gui_panel_get_content_served(
+                handle: *mut QarGuiPanel,
+                out_bundle: *mut QarPanelContentBundleId,
+                entry: *mut ::std::os::raw::c_char,
+                entry_capacity: usize,
+                entry_size: *mut usize,
+            ) -> QarResult;
             pub fn qar_impl_gui_panel_get_content_stream_id(
                 handle: *mut QarGuiPanel,
                 out_stream_id: *mut QarStreamId,
@@ -352,6 +359,11 @@ macro_rules! qar_impl_function_list {
             pub fn qar_impl_gui_panel_handle_destroy(handle: *mut QarGuiPanel);
             pub fn qar_impl_gui_panel_handle_is_valid(handle: *mut QarGuiPanel) -> bool;
             pub fn qar_impl_gui_panel_id_unique() -> QarGuiPanelId;
+            pub fn qar_impl_gui_panels_change_display_name(
+                session: *mut QarSession,
+                id: *const QarGuiPanelId,
+                display_name: *const ::std::os::raw::c_char,
+            ) -> QarResult;
             pub fn qar_impl_gui_panels_change_size(
                 session: *mut QarSession,
                 id: *const QarGuiPanelId,
@@ -370,6 +382,12 @@ macro_rules! qar_impl_function_list {
                 session: *mut QarSession,
                 id: *const QarGuiPanelId,
                 uri: *const ::std::os::raw::c_char,
+            ) -> QarResult;
+            pub fn qar_impl_gui_panels_set_served_content(
+                session: *mut QarSession,
+                id: *const QarGuiPanelId,
+                bundle: *const QarPanelContentBundleId,
+                entry: *const ::std::os::raw::c_char,
             ) -> QarResult;
             pub fn qar_impl_gui_panels_set_state(
                 session: *mut QarSession,
@@ -460,6 +478,37 @@ macro_rules! qar_impl_function_list {
             pub fn qar_impl_onboarding_invite_serialized_size(
                 invite: *const QarOnboardingInvite,
                 out_size: *mut usize,
+            ) -> QarResult;
+            pub fn qar_impl_panel_content_post_message(
+                session: *mut QarSession,
+                bundle: *const QarPanelContentBundleId,
+                panel: *const QarGuiPanelId,
+                user: *const QarPeerId,
+                json: *const ::std::os::raw::c_char,
+            ) -> QarResult;
+            pub fn qar_impl_panel_content_publish_directory(
+                session: *mut QarSession,
+                name: *const ::std::os::raw::c_char,
+                root_utf8: *const ::std::os::raw::c_char,
+                out_bundle: *mut QarPanelContentBundleId,
+            ) -> QarResult;
+            pub fn qar_impl_panel_content_publish_files(
+                session: *mut QarSession,
+                name: *const ::std::os::raw::c_char,
+                files: *const QarPanelContentFile,
+                count: usize,
+                out_bundle: *mut QarPanelContentBundleId,
+            ) -> QarResult;
+            pub fn qar_impl_panel_content_remove(
+                session: *mut QarSession,
+                bundle: *const QarPanelContentBundleId,
+            ) -> QarResult;
+            pub fn qar_impl_panel_content_subscribe_messages(
+                session: *mut QarSession,
+                bundle: *const QarPanelContentBundleId,
+                callback: qar_panel_content_message_callback_t,
+                user_state: *mut ::std::os::raw::c_void,
+                token: *mut QarCancelToken,
             ) -> QarResult;
             pub fn qar_impl_peer_id_unique() -> QarPeerId;
             pub fn qar_impl_peer_spec_get_app_custom_peer_info(
@@ -635,6 +684,10 @@ macro_rules! qar_impl_function_list {
                 stream: *mut QarRenderSender,
                 out_frame: *mut *mut QarVideoFrameVulkan,
             ) -> QarResult;
+            pub fn qar_impl_render_sender_is_ready_for_next_frame(
+                stream: *mut QarRenderSender,
+                out_ready: *mut bool,
+            ) -> QarResult;
             pub fn qar_impl_render_sender_last_hands(
                 stream: *mut QarRenderSender,
                 out_hands: *mut QarDeviceHandsWithJoints,
@@ -642,6 +695,12 @@ macro_rules! qar_impl_function_list {
             pub fn qar_impl_render_sender_layout(
                 stream: *mut QarRenderSender,
                 out_layout: *mut QarVideoFrameLayout,
+            ) -> QarResult;
+            pub fn qar_impl_render_sender_next_render_pose(
+                stream: *mut QarRenderSender,
+                view_count: usize,
+                out_view_poses: *mut QarPose,
+                out_view_fovs: *mut QarFov,
             ) -> QarResult;
             pub fn qar_impl_render_sender_show_frame(
                 stream: *mut QarRenderSender,

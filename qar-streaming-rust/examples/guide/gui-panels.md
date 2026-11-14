@@ -17,3 +17,9 @@ Editing the visibility set is raw only: call `qar_gui_panels_update_visible_to` 
 ```rust
 {{#include ../tests/guide/gui_panels.rs:update_visible_to}}
 ```
+
+## Serving panel content from your app
+
+```rust
+{{#include ../tests/guide/gui_panels.rs:serve_content}}
+```

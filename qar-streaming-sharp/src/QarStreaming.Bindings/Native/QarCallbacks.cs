@@ -39,6 +39,9 @@ namespace Quaternar.Qaros.Interop
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void GuiPanelGestureEventCallback(IntPtr gesture, IntPtr userState);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void PanelContentMessageCallback(IntPtr message, IntPtr userState);
+
     /// <remarks>Shape of both qar_target_app_invite_result_callback_t and qar_target_app_kill_result_callback_t.</remarks>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void TargetAppResultCallback(ResultNative status, IntPtr peerId, IntPtr userState);

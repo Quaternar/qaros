@@ -14,6 +14,7 @@ pub const QAR_POSITION_TRACKED_BIT: u32 = 8;
 pub const QAR_HAND_JOINT_COUNT: u32 = 26;
 pub const QAR_MAX_APP_VOLUME_GESTURE_MAPPING_RULES: u32 = 16;
 pub const QAR_MAX_APP_TAG_LENGTH: u32 = 256;
+pub const QAR_PANEL_CONTENT_BUNDLE_NAME_MAX: u32 = 64;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct VkPhysicalDevice_T {
@@ -214,6 +215,36 @@ impl QarStatusCode {
     pub const QAR_STATUS_LOGIC_ERROR: QarStatusCode = QarStatusCode(7);
     pub const QAR_STATUS_GUI_PANEL_CHANGE_NOT_PERMITTED: QarStatusCode = QarStatusCode(304);
     pub const QAR_STATUS_GUI_PANEL_INVALID_ID: QarStatusCode = QarStatusCode(305);
+    /** A GUI panel display name was refused: more than 64 Unicode code
+    points, not valid UTF-8, or holding a control character (C0, DEL, C1)
+    or a bidirectional formatting character (U+200E, U+200F, U+202A to
+    U+202E, U+2066 to U+2069). The panel keeps its previous name; the
+    result's message names the rule.*/
+    pub const QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID: QarStatusCode = QarStatusCode(306);
+    /** A content bundle name was refused: empty, longer than 64 bytes,
+    starting with '.', or holding a character other than A-Z, a-z, 0-9,
+    '.', '_' and '-'.*/
+    pub const QAR_STATUS_PANEL_CONTENT_BUNDLE_REFUSED: QarStatusCode = QarStatusCode(340);
+    /** A path in a content bundle was refused: not relative, holding an
+    empty, '.' or '..' segment, a backslash, ':', '%', NUL or another
+    character outside A-Z a-z 0-9 . _ - ~ + @ ( ) ! , and '/', longer than
+    512 bytes, or a link when publishing a folder.*/
+    pub const QAR_STATUS_PANEL_CONTENT_PATH_REFUSED: QarStatusCode = QarStatusCode(341);
+    /** A bundle file's extension is not on the served list, or its declared
+    MIME type is not the one its extension maps to.*/
+    pub const QAR_STATUS_PANEL_CONTENT_MIME_REFUSED: QarStatusCode = QarStatusCode(342);
+    /** A bundle file is larger than 16 MiB, the bundle larger than 64 MiB, or
+    it holds no file or more than 1024.*/
+    pub const QAR_STATUS_PANEL_CONTENT_SIZE_REFUSED: QarStatusCode = QarStatusCode(343);
+    /** A bundle was assigned to a panel, removed or messaged by a session that
+    did not publish it. Only the publisher may.*/
+    pub const QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER: QarStatusCode = QarStatusCode(344);
+    /** This session publishes no bundle of that name, or the folder to publish
+    does not exist.*/
+    pub const QAR_STATUS_PANEL_CONTENT_NOT_FOUND: QarStatusCode = QarStatusCode(345);
+    /// A panel message is not one JSON value or is larger than 64 KiB.
+    pub const QAR_STATUS_PANEL_CONTENT_MESSAGE_REFUSED: QarStatusCode = QarStatusCode(346);
+    /// A panel message is not one JSON value or is larger than 64 KiB.
     pub const QAR_STATUS_APP_VOLUME_INVALID_ID: QarStatusCode = QarStatusCode(325);
     /** A gesture configuration was refused because a rule in it could never
     work, such as an enabled two-hand rotate that moves the app with no
@@ -256,16 +287,29 @@ impl QarStatusCode {
     it resumes when the receiver does. A render sender's begin-frame does
     not report it: it waits through the pause.*/
     pub const QAR_STATUS_MEDIA_STREAMING_LAYOUT_CHANGE_FAILED: QarStatusCode = QarStatusCode(607);
-    /** The receiver paused this stream (for example, its display is not
-    visible). Not a failure: keep the sender and try the next frame later;
-    it resumes when the receiver does. A render sender's begin-frame does
-    not report it: it waits through the pause.*/
+    /** The application's own graphics device (QarStreamParamsVulkan, or the
+    D3D11 device in QarStreamParamsD3D11) is on another GPU than the
+    session's. Nothing was created. Create the device on the adapter
+    qar_session_get_graphics_device_id() reports.*/
+    pub const QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER: QarStatusCode =
+        QarStatusCode(609);
+    /** The session was created with QarGraphicsDeviceDisabledExt, so it has
+    no graphics device: it streams no media and reports no graphics adapter.
+    Nothing was created. Final for this session; onboard or rejoin without
+    the extension to stream.*/
+    pub const QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED: QarStatusCode = QarStatusCode(610);
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_MISSING_POSE_DATA: QarStatusCode = QarStatusCode(801);
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_UNABLE_TO_DO_BEGIN_FRAME: QarStatusCode =
         QarStatusCode(803);
-    /** The receiver paused this stream (for example, its display is not
-    visible). Not a failure: keep the sender and try the next frame later;
-    it resumes when the receiver does. A render sender's begin-frame does
-    not report it: it waits through the pause.*/
+    /** No head pose has arrived from the viewer yet, so there is no pose to
+    render with. Recoverable: qar_render_sender_next_render_pose() succeeds
+    once the viewer's first pose is in.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED: QarStatusCode = QarStatusCode(804);
     /** The render sender's app volume does not resolve - it is not known to
     this session yet, or it was removed - so app content space is undefined
@@ -880,6 +924,22 @@ stream carries sRGB-encoded colour: a linear colour is encoded by the sender
 before the frame leaves the application. Values are appended, never reused.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarColorEncoding(pub ::std::os::raw::c_uint);
+impl QarRenderLoop {
+    /** The application renders a frame when the receiver asks: begin-frame
+    waits for the receiver's render request and renders for the display time
+    it names. The default.*/
+    pub const QAR_RENDER_LOOP_REQUEST_DRIVEN: QarRenderLoop = QarRenderLoop(0);
+    /** The application renders from a loop of its own, at its own rate:
+    begin-frame waits only for the receiver to have a destination ready, and
+    the view poses are predicted from the newest head pose for when the
+    frame will be shown. The receiver keeps a destination ready instead of
+    timing one.*/
+    pub const QAR_RENDER_LOOP_FREE_RUNNING: QarRenderLoop = QarRenderLoop(1);
+}
+#[repr(transparent)]
+/// When a render sender's application renders its frames.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct QarRenderLoop(pub ::std::os::raw::c_uint);
 impl QarFrameLayout {
     pub const QAR_FRAME_LAYOUT_SIDE_BY_SIDE: QarFrameLayout = QarFrameLayout(0);
     pub const QAR_FRAME_LAYOUT_SEPARATED_TEXTURES: QarFrameLayout = QarFrameLayout(1);
@@ -1219,6 +1279,9 @@ impl QarGuiPanelContentType {
         QarGuiPanelContentType(0);
     pub const QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID: QarGuiPanelContentType =
         QarGuiPanelContentType(1);
+    /** Web content its owner serves over the session from a content bundle;
+    see QarGuiPanelServedContentExt.*/
+    pub const QAR_GUI_PANEL_CONTENT_TYPE_SERVED: QarGuiPanelContentType = QarGuiPanelContentType(2);
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1540,6 +1603,8 @@ impl QarStructureType {
     pub const QAR_STRUCTURE_TYPE_PEER_PRESENTATION: QarStructureType = QarStructureType(8198);
     pub const QAR_STRUCTURE_TYPE_PEER_DEVICE_IDENTITY: QarStructureType = QarStructureType(8201);
     pub const QAR_STRUCTURE_TYPE_SESSION_LIFECYCLE_INFO: QarStructureType = QarStructureType(8203);
+    pub const QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT: QarStructureType =
+        QarStructureType(8204);
     pub const QAR_STRUCTURE_TYPE_RENDERING_STREAM_SENDER_INIT: QarStructureType =
         QarStructureType(12288);
     pub const QAR_STRUCTURE_TYPE_RENDERING_BEGIN_FRAME: QarStructureType = QarStructureType(12289);
@@ -1551,6 +1616,8 @@ impl QarStructureType {
         QarStructureType(12294);
     pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_COLOR_ENCODING_EXT: QarStructureType =
         QarStructureType(12295);
+    pub const QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT: QarStructureType =
+        QarStructureType(12296);
     pub const QAR_STRUCTURE_TYPE_STREAM_D3D11_PARAMS_EXT: QarStructureType =
         QarStructureType(16384);
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
@@ -1579,6 +1646,10 @@ impl QarStructureType {
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
     types. Retired rather than reused: the layout behind it changed.*/
     pub const QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT: QarStructureType = QarStructureType(20483);
+    /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
+    types. Retired rather than reused: the layout behind it changed.*/
+    pub const QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT: QarStructureType =
+        QarStructureType(20484);
     /** 0x4001 was QarStreamParamsOpenGl, one struct for all three context
     types. Retired rather than reused: the layout behind it changed.*/
     pub const QAR_STRUCTURE_TYPE_APP_VOLUME_INIT: QarStructureType = QarStructureType(21761);
@@ -1983,7 +2054,12 @@ const _: () = {
     ["Offset of field: QarPeerDeviceIdentity::device_name"]
         [::std::mem::offset_of!(QarPeerDeviceIdentity, device_name) - 40usize];
 };
-/// @brief Continue / rejoin the last persisted session (situation: continue).
+/** @brief Continue / rejoin the last persisted session (situation: continue).
+
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRejoinInit {
@@ -2037,6 +2113,11 @@ const _: () = {
 /** @brief Extension: onboard with the short code shown on the hub onboarding
 screen.
 
+@deprecated Join with QarOnboardLocalAppExt (a source app on the QAROS
+PC), as a co-process with QarOnboardInviteExt and the invite of
+qar_session_request_onboarding_invite, or through a member hub. Kept
+working for applications that already use it.
+
 Without QarOnboardHostExt it finds this user's hub: first through the
 hub-endpoint.json file the hub writes to the QAROS data root, then through
 a discovery beacon whose owner is this user, listening up to 6 s. When
@@ -2066,6 +2147,8 @@ const _: () = {
 };
 /** @brief Extension: override the hub discovery endpoint for
 qar_runtime_onboard when QarOnboardCodeExt is chained.
+
+@deprecated Code onboarding is deprecated (see QarOnboardCodeExt).
 
 Chain into QarOnboardInit.header.next; absent -> this user's hub (see
 QarOnboardCodeExt).*/
@@ -2114,6 +2197,10 @@ const _: () = {
         [::std::mem::offset_of!(QarOnboardInviteExt, invite) - 16usize];
 };
 /** @brief Extension: join the session under a peer id chosen by the caller.
+
+@deprecated A local app gets its peer id from the hub, remembered per app
+tag (QarOnboardLocalAppTagExt), and a co-process from its invite. Kept
+working for applications that already use it.
 
 Chain into QarOnboardInit.header.next, next to QarOnboardCodeExt or
 QarOnboardInviteExt, for a process whose peer id was planned and announced
@@ -2306,14 +2393,16 @@ const _: () = {
 
 `connection_string` names the device kind and its address:
   - `"hololens:<host>"` — HoloLens
-  - `"headset:<host>"`  — any other headset (Meta Quest, Android glasses),
-    served by the Android streamer; it reports its exact model itself
-  - `"quest:<host>"`, `"android:<host>"` — aliases of `"headset:<host>"`
   - `"<host>"` with no scheme — alias of `"hololens:<host>"`
 `<host>` is a hostname or an IP address; the two are interchangeable.
 
-Only these device kinds can be invited. Anything else — a visualizer, a
-desktop peer — is rejected with QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
+Only a HoloLens can be invited. An Android headset (`"headset:<host>"`,
+`"quest:<host>"`, `"android:<host>"`: Meta Quest, METALENSE, Android XR) is
+never invited: it pairs itself once (Pair headset in the QAROS Visualizer, or
+a QR code) and then joins the session on its own. Its invite is refused with
+QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE. Anything else — a
+visualizer, a desktop peer — is rejected with
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED.
 
 The invite is served only by the hub running on this machine, and is always a
 one-time invite: the hub remembers the device so it is visible in the
@@ -2365,7 +2454,10 @@ pub type qar_target_app_kill_result_callback_t = ::std::option::Option<
         user_state: *mut ::std::os::raw::c_void,
     ),
 >;
-/// @brief Teardown — erase a persisted identity slot.
+/** @brief Teardown — erase a persisted identity slot.
+
+@deprecated Only the deprecated code onboarding persists a slot; local apps
+and co-processes persist nothing.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarForgetInit {
@@ -2638,6 +2730,38 @@ const _: () = {
     ["Offset of field: QarGraphicsDeviceId::uuid"]
         [::std::mem::offset_of!(QarGraphicsDeviceId, uuid) - 28usize];
 };
+/** @brief Creates the session without a graphics device.
+
+Chain this extension from QarOnboardInit or QarRejoinInit for an application
+that never streams media, such as a companion process that only drives app
+volumes, GUI panels or peers. The session then starts faster: it creates no
+Vulkan or D3D11 device, enumerates no graphics adapter and loads no transfer
+plugin. Onboarding, joining, peers, app volumes, GUI panels and storage work
+as usual.
+
+On such a session every media streaming call (qar_render_sender_create(),
+qar_render_sender_create_async(), qar_render_sender_subscribe_requests(),
+qar_video_sender_create()) and qar_session_get_graphics_device_id() return
+QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED.
+
+Chaining it together with QarGraphicsDeviceId is refused with
+QAR_STATUS_ARGUMENT_NOT_SUPPORTED. A local-app session shared by several
+onboards of one process keeps the choice of the onboard that created it.
+Initialize with qar_graphics_device_disabled_ext_default().*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarGraphicsDeviceDisabledExt {
+    pub header: QarStructureHeader,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarGraphicsDeviceDisabledExt"]
+        [::std::mem::size_of::<QarGraphicsDeviceDisabledExt>() - 16usize];
+    ["Alignment of QarGraphicsDeviceDisabledExt"]
+        [::std::mem::align_of::<QarGraphicsDeviceDisabledExt>() - 8usize];
+    ["Offset of field: QarGraphicsDeviceDisabledExt::header"]
+        [::std::mem::offset_of!(QarGraphicsDeviceDisabledExt, header) - 0usize];
+};
 impl QarSessionLifecycleState {
     /// In the hub's current session; traffic flows.
     pub const QAR_SESSION_LIFECYCLE_STATE_CONNECTED: QarSessionLifecycleState =
@@ -2742,7 +2866,10 @@ pub struct QarGuiPanelInit {
     to derive the panel's id. Must not be NULL or empty, and must be
     ASCII.*/
     pub common_name: *const ::std::os::raw::c_char,
-    /// UTF-8 label shown to users; any characters, emoji included.
+    /** UTF-8 label shown above the panel; emoji included. At most 64 Unicode
+    code points, no control or bidirectional formatting characters,
+    otherwise gui_panels_get_or_create() fails with
+    QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID. NULL or empty shows no name.*/
     pub display_name: *const ::std::os::raw::c_char,
     pub pose: QarPose,
     pub size: QarGuiPanelSize,
@@ -2812,6 +2939,118 @@ const _: () = {
         [::std::mem::offset_of!(QarGuiPanelUrlExt, header) - 0usize];
     ["Offset of field: QarGuiPanelUrlExt::url"]
         [::std::mem::offset_of!(QarGuiPanelUrlExt, url) - 16usize];
+};
+/** @brief Names one content bundle: the peer that published it and serves its
+files, and its name, unique per publisher.
+
+A bundle is a named, versioned set of files a session publishes once with
+qar_panel_content_publish_files() or qar_panel_content_publish_directory()
+and serves to every mixer showing it on a served GUI panel. The publisher is
+the content's owner: it alone may put the bundle on a panel, receives the
+panels' messages and posts to them.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentBundleId {
+    pub publisher: QarPeerId,
+    /** NUL-terminated ASCII: A-Z, a-z, 0-9, '.', '_' and '-', not starting with
+    '.', at most QAR_PANEL_CONTENT_BUNDLE_NAME_MAX bytes.*/
+    pub name: [::std::os::raw::c_char; 65usize],
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentBundleId"][::std::mem::size_of::<QarPanelContentBundleId>() - 81usize];
+    ["Alignment of QarPanelContentBundleId"]
+        [::std::mem::align_of::<QarPanelContentBundleId>() - 1usize];
+    ["Offset of field: QarPanelContentBundleId::publisher"]
+        [::std::mem::offset_of!(QarPanelContentBundleId, publisher) - 0usize];
+    ["Offset of field: QarPanelContentBundleId::name"]
+        [::std::mem::offset_of!(QarPanelContentBundleId, name) - 16usize];
+};
+/** @brief Extension that creates a GUI panel showing a page of a content bundle.
+
+Chain this structure from QarGuiPanelInit::header.next. Only the bundle's
+publisher may assign it: a bundle another session published fails with
+QAR_STATUS_PANEL_CONTENT_NOT_PUBLISHER. The entry is copied during the call.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarGuiPanelServedContentExt {
+    pub header: QarStructureHeader,
+    pub bundle: QarPanelContentBundleId,
+    /// Path of the page inside the bundle, e.g. "inspector/index.html".
+    pub entry: *const ::std::os::raw::c_char,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarGuiPanelServedContentExt"]
+        [::std::mem::size_of::<QarGuiPanelServedContentExt>() - 112usize];
+    ["Alignment of QarGuiPanelServedContentExt"]
+        [::std::mem::align_of::<QarGuiPanelServedContentExt>() - 8usize];
+    ["Offset of field: QarGuiPanelServedContentExt::header"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, header) - 0usize];
+    ["Offset of field: QarGuiPanelServedContentExt::bundle"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, bundle) - 16usize];
+    ["Offset of field: QarGuiPanelServedContentExt::entry"]
+        [::std::mem::offset_of!(QarGuiPanelServedContentExt, entry) - 104usize];
+};
+/** @brief One file handed to qar_panel_content_publish_files().
+
+Every pointer is read during the call only; the bytes are copied.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentFile {
+    /// Relative, '/'-separated path inside the bundle.
+    pub path: *const ::std::os::raw::c_char,
+    /** NULL or empty: taken from the path's extension. Otherwise it must be
+    the type that extension is served as.*/
+    pub mime_type: *const ::std::os::raw::c_char,
+    pub data: *const u8,
+    pub size: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentFile"][::std::mem::size_of::<QarPanelContentFile>() - 32usize];
+    ["Alignment of QarPanelContentFile"][::std::mem::align_of::<QarPanelContentFile>() - 8usize];
+    ["Offset of field: QarPanelContentFile::path"]
+        [::std::mem::offset_of!(QarPanelContentFile, path) - 0usize];
+    ["Offset of field: QarPanelContentFile::mime_type"]
+        [::std::mem::offset_of!(QarPanelContentFile, mime_type) - 8usize];
+    ["Offset of field: QarPanelContentFile::data"]
+        [::std::mem::offset_of!(QarPanelContentFile, data) - 16usize];
+    ["Offset of field: QarPanelContentFile::size"]
+        [::std::mem::offset_of!(QarPanelContentFile, size) - 24usize];
+};
+/** @brief A message a served panel sent to its content owner.
+
+Valid only while the callback that received it runs; copy what you keep.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarPanelContentMessage {
+    /// The panel that sent it, stamped by the mixer showing it.
+    pub panel: QarGuiPanelId,
+    /// The user (the mixer's target peer) whose panel sent it.
+    pub user: QarPeerId,
+    /// Counts up per sending mixer and panel, from 1.
+    pub sequence: u64,
+    /// One JSON value, NUL-terminated UTF-8.
+    pub json: *const ::std::os::raw::c_char,
+    /// Bytes in json, without the terminating NUL.
+    pub json_size: usize,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarPanelContentMessage"][::std::mem::size_of::<QarPanelContentMessage>() - 56usize];
+    ["Alignment of QarPanelContentMessage"]
+        [::std::mem::align_of::<QarPanelContentMessage>() - 8usize];
+    ["Offset of field: QarPanelContentMessage::panel"]
+        [::std::mem::offset_of!(QarPanelContentMessage, panel) - 0usize];
+    ["Offset of field: QarPanelContentMessage::user"]
+        [::std::mem::offset_of!(QarPanelContentMessage, user) - 16usize];
+    ["Offset of field: QarPanelContentMessage::sequence"]
+        [::std::mem::offset_of!(QarPanelContentMessage, sequence) - 32usize];
+    ["Offset of field: QarPanelContentMessage::json"]
+        [::std::mem::offset_of!(QarPanelContentMessage, json) - 40usize];
+    ["Offset of field: QarPanelContentMessage::json_size"]
+        [::std::mem::offset_of!(QarPanelContentMessage, json_size) - 48usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -3039,6 +3278,40 @@ const _: () = {
     ["Offset of field: QarRenderSenderColorEncodingExt::color_encoding"]
         [::std::mem::offset_of!(QarRenderSenderColorEncodingExt, color_encoding) - 16usize];
 };
+/** @brief Declares when a render sender's application renders.
+
+Chain it on QarRenderSenderInit::header.next, in any position beside the
+graphics extension and the other render sender extensions. Without it the
+sender is QAR_RENDER_LOOP_REQUEST_DRIVEN. Declare
+QAR_RENDER_LOOP_FREE_RUNNING when the application renders from a loop of its
+own and polls qar_render_sender_try_begin_frame(): begin-frame then never
+waits for a render request, and each frame's pose is predicted from the
+newest head pose for when the frame will be shown.*/
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct QarRenderSenderRenderLoopExt {
+    /** QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT. Set with
+    qar_render_sender_render_loop_ext_default().*/
+    pub header: QarStructureHeader,
+    /** The declared loop. A value this library does not know is rejected with
+    QAR_STATUS_ARGUMENT_NOT_SUPPORTED.*/
+    pub render_loop: QarRenderLoop,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of QarRenderSenderRenderLoopExt"]
+        [::std::mem::size_of::<QarRenderSenderRenderLoopExt>() - 24usize];
+    ["Alignment of QarRenderSenderRenderLoopExt"]
+        [::std::mem::align_of::<QarRenderSenderRenderLoopExt>() - 8usize];
+    ["Offset of field: QarRenderSenderRenderLoopExt::header"]
+        [::std::mem::offset_of!(QarRenderSenderRenderLoopExt, header) - 0usize];
+    ["Offset of field: QarRenderSenderRenderLoopExt::render_loop"]
+        [::std::mem::offset_of!(QarRenderSenderRenderLoopExt, render_loop) - 16usize];
+};
+/** The application's own Vulkan device for a sender or receiver. It must be on
+the session's GPU, the adapter qar_session_get_graphics_device_id() reports;
+a device on another GPU is refused with
+QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarStreamParamsVulkan {
@@ -3217,6 +3490,15 @@ accessor, which is an additive change, instead of growing a struct, which
 would break every compiled consumer.*/
 pub type qar_gui_panel_gesture_event_callback_t = ::std::option::Option<
     unsafe extern "C" fn(gesture: *mut QarGuiPanelGesture, user_state: *mut ::std::os::raw::c_void),
+>;
+/** @brief Called once per message a panel showing the bundle sent.
+
+Runs on a library thread; @p message is valid only during the call.*/
+pub type qar_panel_content_message_callback_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        message: *const QarPanelContentMessage,
+        user_state: *mut ::std::os::raw::c_void,
+    ),
 >;
 pub type qar_app_volume_update_callback_t = ::std::option::Option<
     unsafe extern "C" fn(handle: *mut QarAppVolume, user_state: *mut ::std::os::raw::c_void),

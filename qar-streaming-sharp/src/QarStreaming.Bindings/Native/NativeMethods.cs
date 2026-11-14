@@ -131,7 +131,6 @@ namespace Quaternar.Qaros.Interop
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_session_request_onboarding_invite_async(IntPtr session, ref RequestInviteInitNative init, SessionRequestInviteResultCallback resultCallback, ProgressCallback? updateCallback, IntPtr userState, IntPtr cancel);
 
-
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_onboarding_invite_deserialize(byte[] wireData, UIntPtr wireDataSize, out IntPtr outInvite);
 
@@ -140,8 +139,6 @@ namespace Quaternar.Qaros.Interop
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_onboarding_invite_serialize(IntPtr invite, [Out] byte[] outBuffer, UIntPtr bufferSize, out UIntPtr outBytesWritten);
-
-
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         [return: MarshalAs(UnmanagedType.I1)]
@@ -335,6 +332,30 @@ namespace Quaternar.Qaros.Interop
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_gui_panels_set_stream(IntPtr session, ref GuiPanelIdNative id, ref StreamIdNative streamId);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_gui_panels_change_display_name(IntPtr session, ref GuiPanelIdNative id, IntPtr displayName);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_gui_panels_set_served_content(IntPtr session, ref GuiPanelIdNative id, ref PanelContentBundleIdNative bundle, IntPtr entry);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_gui_panel_get_content_served(IntPtr handle, ref PanelContentBundleIdNative bundle, IntPtr entry, UIntPtr entryCapacity, out UIntPtr entrySize);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_panel_content_publish_directory(IntPtr session, IntPtr name, IntPtr rootUtf8, ref PanelContentBundleIdNative bundle);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_panel_content_publish_files(IntPtr session, IntPtr name, IntPtr files, UIntPtr count, ref PanelContentBundleIdNative bundle);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_panel_content_remove(IntPtr session, ref PanelContentBundleIdNative bundle);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_panel_content_subscribe_messages(IntPtr session, ref PanelContentBundleIdNative bundle, PanelContentMessageCallback callback, IntPtr userState, IntPtr token);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_panel_content_post_message(IntPtr session, ref PanelContentBundleIdNative bundle, IntPtr panel, IntPtr user, IntPtr json);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_gui_panels_update_visible_to(IntPtr session, ref GuiPanelIdNative id, IntPtr peerIdsAdditions, UIntPtr additionsCount, IntPtr peerIdsRemovals, UIntPtr removalsCount);
@@ -612,6 +633,12 @@ namespace Quaternar.Qaros.Interop
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_render_sender_try_begin_frame(IntPtr stream, out IntPtr outFrameInfo, [MarshalAs(UnmanagedType.I1)] out bool outReady);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_render_sender_next_render_pose(IntPtr stream, UIntPtr viewCount, [Out] PoseNative[] outViewPoses, [Out] FovNative[] outViewFovs);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_render_sender_is_ready_for_next_frame(IntPtr stream, [MarshalAs(UnmanagedType.I1)] out bool outReady);
 
         // Exported only when the library is built with QAR_ENABLE_OPENGL.
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

@@ -64,7 +64,7 @@ Wire sequence (length-prefixed frames on one TCP connection):
 - The client rejects a public invitation whose id or server id differs from the one it was given, so a code for one Hub cannot be used against another.
 - A wrong code fails key confirmation; the invitation is then discarded.
 
-**Code entropy.** 8 digits is about 2^26.6. That is acceptable only because EC-JPAKE gives no offline-guessing foothold: each guess costs a live handshake against one invitation that allows one failure and lives 10 s. The TTL and the one-failure rule are load-bearing.
+**Code entropy.** 8 digits is about 2^26.6. That is acceptable only because EC-JPAKE gives no offline-guessing foothold: each guess costs a live handshake against one invitation that allows one failure and lives at most 60 s. The TTL and the one-failure rule are load-bearing.
 
 ## Layer 2 - Secure channel
 
@@ -93,7 +93,10 @@ The Hub holds many pairing codes at once, each its own single-use PAKE invitatio
 
 | Code | Lifetime | Shown / announced |
 |---|---|---|
-| Onboarding screen code | ~10 s, rotates | Yes, the only one |
+| Onboarding screen code, for the deprecated code onboarding of an app, minted only when a Visualizer asks for one; the current Visualizer never does | 60 s | Announced while one exists; none today |
+| Join code of **Let another hub join us**, for another Hub only; a device or an app that types it fails key confirmation | 60 s | Shown in that card while it is open |
+| **Pair headset** code, pushed over USB or shown as a QR code | 60 s | No |
+| Code a headset shows while connected to no Hub, registered by the Hub when the operator types it into the Visualizer (**Pair Headset** dialog); the Visualizer then asks the headset to call back, without the code | 30 s, a new one after every attempt | No; it never crosses the network |
 | Codes minted for peers configured as the Hub's operators (1-64 per request, optionally bound to a planned peer id); the Visualizer offers no screen for them and applications cannot request them | 2 min default, 10 min max | No |
 | Launch code of a QAROS API app, one per start, only where local enrollment is not available (not Windows) | 2 min | No, written to the app's stdin only |
 
@@ -145,6 +148,8 @@ Every decision is written to the gateway audit log.
 - The CA takes the certificate's names from the gateway's decision, never from the CSR; the CSR contributes only the public key.
 - Bootstrap is crash-safe (staged, then renamed into place); a damaged CA is reported, never silently replaced.
 - Certificate lifetime: the Hub requests the configured lifetime (`certLifetimeHours`). The gateway caps it at **24 h** for devices and **1 h** for local apps, and the CA caps it again.
+- A headset player paired with **Pair headset**, a QR code or the code it shows always gets **30 days**. The Hub alone decides it is one: from its own record of the invitation the headset paired with, or, on renewal, from the `qar://device-class/headset` name its CA put in the certificate being renewed; that name reaching the gateway any other way is dropped. No other certificate is signed for longer than 24 h.
+- An EST server must allow 30-day certificates and issue the headset URI name the request carries. A certificate longer than the gateway authorized is refused; a shorter one is accepted, and the headset renews sooner.
 
 ### Certificate URI SANs
 
@@ -153,6 +158,7 @@ Every decision is written to the gateway audit log.
 | `qar://peer/<peer-id>` | The QAROS peer the certificate is issued to | Derived by the gateway from the channel's peer, not copied from the CSR |
 | `qar://session/<session-id>` | The session the certificate is bound to | The channel's session; omitted when there is none |
 | `qar://member/<peer-id>` | The member Hub the request came through | Stamped by the primary on every forwarded request, never copied from the CSR |
+| `qar://device-class/headset` | A headset player, whose certificate lives 30 days | Stamped by the gateway from the Hub's own record of the pairing, or kept from the certificate being renewed |
 
 A stored certificate is reused only while the peer, the session and the session name still match; otherwise the device generates a new key and enrols again. A process opens a session only with a certificate naming that session and its own peer id.
 
@@ -208,7 +214,7 @@ Every secret is in an encrypted store; the rest are plain files. An **installed*
 | Re-entry | Only after an operator clicks **Allow**; a new pairing code alone is refused |
 
 - A peer that has read the list refuses the device's peer id: the launcher releases its pipeline at once and never provisions it again. The zenoh link is not closed; zenoh decides TLS acceptance itself and offers no per-certificate hook.
-- A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h. A missing list is "unknown", never "everyone is revoked".
+- A peer that has not read the list (storage unreachable, older build) accepts the certificate until it expires, at most 24 h (30 days for a headset player: revoke a lost headset, do not wait for expiry). A missing list is "unknown", never "everyone is revoked".
 - Removing a member Hub revokes the member and every certificate it forwarded. Revoking an app approval does not revoke certificates already issued through members; they expire within 30 minutes.
 - Revoke / allow / list run over the session for the Hub, its own Visualizer and configured operator peers. The Hub takes the sender from a signature made with the sender's session certificate, never from a field of the request. Revoke and allow also need the Hub's machine. Every action is audited.
 
@@ -243,7 +249,7 @@ M                  : verifies the reply, pins P's key, deletes its own CA, resta
 | # | Assumption | If it breaks |
 |---|---|---|
 | A1 | The Hub machine is trusted and operator-controlled | Full break: CA keys are on it |
-| A2 | The pairing code is shown only to the intended person, for its 10 s | Whoever has the code and network reach can onboard |
+| A2 | A pairing code reaches only the intended device or person, for its lifetime (60 s at most) | Whoever has the code and network reach can onboard |
 | A3 | A provisioned key reaches only the process it was minted for | Its holder can onboard within 5 minutes |
 | A3b | A requested or launch code reaches only the device or app it was minted for | Its holder can onboard within its lifetime (at most 10 minutes) |
 | A4 | OS file permissions on the Hub and devices are enforced | Local admin / same-user processes read keys |

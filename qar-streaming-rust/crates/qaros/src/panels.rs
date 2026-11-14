@@ -4,9 +4,10 @@ use std::rc::Rc;
 use qaros_sys::{self as sys, QarApi, QarResult, defaults};
 
 use crate::error::{Result, check};
+use crate::panel_content::{GuiPanelServedContent, PanelContentBundleId};
 use crate::session::{CallbackState, SessionInner, Subscription, query_owned_handles};
 use crate::strings;
-use crate::types::{GuiPanelId, GuiPanelState, PeerId, Pose};
+use crate::types::{GuiPanelContentType, GuiPanelId, GuiPanelState, PeerId, Pose};
 
 /// Physical size in meters and the scale mapping web content onto it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,6 +48,9 @@ pub struct GuiPanelConfig {
     /// Stable identity, for example `status.myapp.example.com`; the panel id
     /// derives from it.
     pub common_name: String,
+    /// Label shown above the panel: UTF-8, emoji included, at most 64 Unicode code points
+    /// (not bytes), no control or bidirectional formatting characters. A refused name fails
+    /// [`GuiPanels::get_or_create`] with `GUI_PANEL_DISPLAY_NAME_INVALID`; `None` shows none.
     pub display_name: Option<String>,
     /// Pose of panel space in room space. Its origin is the midpoint of the
     /// panel's top edge, and the surface hangs below it (x in ±width/2, y in
@@ -57,6 +61,10 @@ pub struct GuiPanelConfig {
     pub size: GuiPanelSize,
     /// Empty: visible to everyone.
     pub visible_to: Vec<PeerId>,
+    /// A page of a content bundle this session published
+    /// ([`crate::PanelContent`]); `None` creates a website panel with the default URL. Only
+    /// the bundle's publisher may put it on a panel (`PANEL_CONTENT_NOT_PUBLISHER`).
+    pub served: Option<GuiPanelServedContent>,
 }
 
 impl GuiPanelConfig {
@@ -68,6 +76,7 @@ impl GuiPanelConfig {
             pose: Pose::default(),
             size: GuiPanelSize::default(),
             visible_to: Vec::new(),
+            served: None,
         }
     }
 }
@@ -79,7 +88,12 @@ pub struct GuiPanelInfo {
     pub display_name: String,
     pub pose: Pose,
     pub size: GuiPanelSize,
+    /// Which content the panel shows; fixed at creation.
+    pub content_type: GuiPanelContentType,
+    /// The page shown, for [`GuiPanelContentType::WebsiteUri`]; empty otherwise.
     pub content_uri: String,
+    /// The bundle page shown, for [`GuiPanelContentType::Served`]; `None` otherwise.
+    pub served: Option<GuiPanelServedContent>,
     pub state: GuiPanelState,
     pub visible_to: Vec<PeerId>,
 }
@@ -112,6 +126,23 @@ impl<'session> GuiPanels<'session> {
         if !visible_to.is_empty() {
             init.visible_to_peers = visible_to.as_ptr();
             init.visible_to_peer_count = visible_to.len();
+        }
+        let served_entry = config
+            .served
+            .as_ref()
+            .map(|served| strings::to_c_string(&served.entry, "entry"))
+            .transpose()?;
+        let mut served_extension = match (&config.served, &served_entry) {
+            (Some(served), Some(entry)) => {
+                let mut extension = defaults::qar_gui_panel_served_content_ext_default();
+                extension.bundle = served.bundle.to_raw()?;
+                extension.entry = entry.as_ptr();
+                Some(extension)
+            }
+            _ => None,
+        };
+        if let Some(extension) = served_extension.as_mut() {
+            init.header.next = (&raw mut extension.header).cast();
         }
 
         let api = self.session.api();
@@ -190,6 +221,50 @@ impl<'session> GuiPanels<'session> {
             )
         };
         check(api, "qar_gui_panels_navigate_to_uri", result)
+    }
+
+    /// Replaces the label shown above the panel, any content type
+    /// (`qar_gui_panels_change_display_name`). The rules of [`GuiPanelConfig::display_name`]
+    /// apply: a refused name is `GUI_PANEL_DISPLAY_NAME_INVALID`, never shortened, and the
+    /// panel keeps its previous name. An empty string shows no name.
+    pub fn set_display_name(&self, panel: GuiPanelId, display_name: &str) -> Result<()> {
+        let api = self.session.api();
+        let panel_id = panel.to_raw();
+        let display_name = strings::to_c_string(display_name, "display name")?;
+        // SAFETY: live session; arguments live for the call.
+        let result = unsafe {
+            (api.qar_impl_gui_panels_change_display_name)(
+                self.session.handle.as_ptr(),
+                &raw const panel_id,
+                display_name.as_ptr(),
+            )
+        };
+        check(api, "qar_gui_panels_change_display_name", result)
+    }
+
+    /// Shows another page, or another bundle of this session, on a served panel
+    /// (`qar_gui_panels_set_served_content`). A bundle another session published is
+    /// `PANEL_CONTENT_NOT_PUBLISHER`; a website or stream panel is
+    /// `GUI_PANEL_CHANGE_NOT_PERMITTED`, since the content type is fixed at creation.
+    pub fn set_served_content(
+        &self,
+        panel: GuiPanelId,
+        content: &GuiPanelServedContent,
+    ) -> Result<()> {
+        let api = self.session.api();
+        let panel_id = panel.to_raw();
+        let bundle = content.bundle.to_raw()?;
+        let entry = strings::to_c_string(&content.entry, "entry")?;
+        // SAFETY: live session; arguments live for the call.
+        let result = unsafe {
+            (api.qar_impl_gui_panels_set_served_content)(
+                self.session.handle.as_ptr(),
+                &raw const panel_id,
+                &raw const bundle,
+                entry.as_ptr(),
+            )
+        };
+        check(api, "qar_gui_panels_set_served_content", result)
     }
 
     /// Closes and removes the panel (`qar_gui_panels_close_panel`).
@@ -278,9 +353,10 @@ fn read_gui_panel_info(api: &QarApi, handle: *mut sys::QarGuiPanel) -> Result<Gu
     let mut pose = defaults::qar_pose_default();
     let mut size = defaults::qar_gui_panel_size_default();
     let mut state = sys::QarGuiPanelState::QAR_GUI_PANEL_STATE_VISIBLE;
+    let mut content_type = sys::QarGuiPanelContentType::QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI;
     let mut visible_count = 0_usize;
     // SAFETY (all getters below): handle is live, out-pointers are valid.
-    let results: [(&'static str, QarResult); 5] = unsafe {
+    let results: [(&'static str, QarResult); 6] = unsafe {
         [
             (
                 "qar_gui_panel_get_id",
@@ -297,6 +373,10 @@ fn read_gui_panel_info(api: &QarApi, handle: *mut sys::QarGuiPanel) -> Result<Gu
             (
                 "qar_gui_panel_get_state",
                 (api.qar_impl_gui_panel_get_state)(handle, &raw mut state),
+            ),
+            (
+                "qar_gui_panel_get_content_type",
+                (api.qar_impl_gui_panel_get_content_type)(handle, &raw mut content_type),
             ),
             (
                 "qar_gui_panel_get_visible_to_peers_count",
@@ -330,21 +410,62 @@ fn read_gui_panel_info(api: &QarApi, handle: *mut sys::QarGuiPanel) -> Result<Gu
             unsafe { (api.qar_impl_gui_panel_get_display_name)(handle, buffer, buffer_size) };
         check(api, "qar_gui_panel_get_display_name", result)
     })?;
-    let content_uri = strings::read_string(|buffer: *mut c_char, buffer_size: usize| {
-        // SAFETY: as above.
-        let result =
-            unsafe { (api.qar_impl_gui_panel_get_content_uri)(handle, buffer, buffer_size) };
-        check(api, "qar_gui_panel_get_content_uri", result)
-    })?;
+    let content_type = GuiPanelContentType::from_raw(content_type);
+    let content_uri = if content_type == GuiPanelContentType::WebsiteUri {
+        strings::read_string(|buffer: *mut c_char, buffer_size: usize| {
+            // SAFETY: as above.
+            let result =
+                unsafe { (api.qar_impl_gui_panel_get_content_uri)(handle, buffer, buffer_size) };
+            check(api, "qar_gui_panel_get_content_uri", result)
+        })?
+    } else {
+        String::new()
+    };
+    let served = if content_type == GuiPanelContentType::Served {
+        Some(read_served_content(api, handle)?)
+    } else {
+        None
+    };
 
     Ok(GuiPanelInfo {
         id: GuiPanelId::from_raw(panel_id),
         display_name,
         pose: Pose::from_raw(pose),
         size: GuiPanelSize::from_raw(size),
+        content_type,
         content_uri,
+        served,
         state: GuiPanelState::from_raw(state),
         visible_to: visible_to.into_iter().map(PeerId::from_raw).collect(),
+    })
+}
+
+/// An entry is at most 512 bytes, so one 513-byte buffer reads it whole.
+fn read_served_content(
+    api: &QarApi,
+    handle: *mut sys::QarGuiPanel,
+) -> Result<GuiPanelServedContent> {
+    let mut bundle = sys::QarPanelContentBundleId {
+        publisher: PeerId::default().to_raw(),
+        name: [0; crate::panel_content::PANEL_CONTENT_BUNDLE_NAME_MAX + 1],
+    };
+    let mut entry = [0_u8; 513];
+    let mut entry_size = 0_usize;
+    // SAFETY: handle is live; the out-pointers are valid for their sizes.
+    let result = unsafe {
+        (api.qar_impl_gui_panel_get_content_served)(
+            handle,
+            &raw mut bundle,
+            entry.as_mut_ptr().cast(),
+            entry.len(),
+            &raw mut entry_size,
+        )
+    };
+    check(api, "qar_gui_panel_get_content_served", result)?;
+    let entry = &entry[..entry_size.min(entry.len())];
+    Ok(GuiPanelServedContent {
+        bundle: PanelContentBundleId::from_raw(&bundle),
+        entry: String::from_utf8_lossy(entry).into_owned(),
     })
 }
 

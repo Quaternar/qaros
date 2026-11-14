@@ -325,6 +325,16 @@ c_enum!(
 );
 
 c_enum!(
+    /// What a GUI panel shows (`QarGuiPanelContentType`), fixed at creation.
+    GuiPanelContentType: QarGuiPanelContentType {
+        WebsiteUri = QAR_GUI_PANEL_CONTENT_TYPE_WEBSITE_URI,
+        StreamId = QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID,
+        /// A page of a content bundle its owner serves over the session.
+        Served = QAR_GUI_PANEL_CONTENT_TYPE_SERVED,
+    }
+);
+
+c_enum!(
     /// Whether an app volume is active or closed (`QarAppVolumeLifetimeStatus`).
     AppVolumeLifetime: QarAppVolumeLifetimeStatus {
         Active = QAR_APP_VOLUME_ACTIVE,
