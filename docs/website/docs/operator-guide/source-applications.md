@@ -55,21 +55,21 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 ## Adding your own app
 
 1. Click **+**.
-2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**. The last card, **Import web app package**, imports a package instead (see [Importing a web app package](#importing-a-web-app-package)).
+2. Pick a card, the same four in every UI mode: **Add OpenXR app**, **Web app**, **Import app package** (imports a package instead, see [Importing a web app package](#importing-a-web-app-package)) or **Open QAROS supported app** (an app built on the QAROS API, such as Blender, Rviz or the ANARI demo).
 3. Set **Executable** (type a path or **Browse**), or for a web app its **Address**. **Name** defaults to the executable name or the address's host.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
 
 | App type | Settings | Processes |
 |---|---|---|
 | OpenXR app | Executable, Arguments (one per line) | One process per target app |
-| QAROS API app | Executable, Arguments (one per line) | One process for all targets |
+| QAROS supported app | Executable; Arguments (one per line) in the Developer and Debug UI modes | One process for all targets |
 | Web app | Address, adaptation (see [Web apps](#web-apps)) | Runs inside this visualizer, one page for all targets |
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
 
-To test your own QAROS API app: switch to Developer mode (Settings, no password), add it as above with type **QAROS API app**, then launch its tile. Check **Running** for its status and the Hub's log folder for its stdout/stderr.
+To start your own app built on the QAROS API: add it as above with **Open QAROS supported app**, then launch its row. Check **Running** for its status and the Hub's log folder for its stdout/stderr. Its launch arguments start it with QAROS (for Blender, `--addons qaros_anari`), so only the Developer and Debug UI modes show and change them; every mode sets its **Executable**.
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Started by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros).
+A **QAROS supported app** (QAROS API app) is an application built on the QAROS C or C# API, such as Blender with the QAROS add-on, ROS 2 Rviz with the QAROS plugin, or the ANARI demo. QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Started by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros).
 
 ## Approved local apps
 
@@ -233,7 +233,7 @@ To add another Blender version while one is already found, use **Locate another 
 
 ## Importing a web app package
 
-A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then the **Import web app package** card, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
+A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then the **Import app package** card, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
 
 ## Detected apps
 
@@ -241,7 +241,7 @@ On start, and when you press refresh, the visualizer looks in its own folder for
 
 | File | Tile |
 |---|---|
-| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Developer mode and up) |
+| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS supported app, Developer mode and up) |
 
 ## UI modes and mode-gated apps
 
@@ -249,8 +249,8 @@ The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug
 
 | Apps | Shown from |
 |---|---|
-| StereoKit, your OpenXR presets, the web apps QAROS provides | Basic |
-| QAROS API apps (yours and the Vulkan cube), the web app developer samples | Developer |
+| StereoKit, your OpenXR presets, the web apps QAROS provides, QAROS supported apps (Blender, Rviz, your own) | Basic |
+| The QAROS examples (Vulkan cube, ANARI cube), the web app developer samples | Developer |
 | CPU Renderer, Test OpenXR | Debug |
 
 In a lower mode their tiles and running rows are hidden, but apps already running keep running.
