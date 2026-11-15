@@ -54,8 +54,8 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 
 ## Adding your own app
 
-1. Click **+** and then **Add app preset...**.
-2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**.
+1. Click **+**.
+2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**. The last card, **Import web app package**, imports a package instead (see [Importing a web app package](#importing-a-web-app-package)).
 3. Set **Executable** (type a path or **Browse**), or for a web app its **Address**. **Name** defaults to the executable name or the address's host.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
 
@@ -234,7 +234,7 @@ To add another Blender version while one is already found, use **Locate another 
 
 ## Importing a web app package
 
-A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then **Import web app package...**, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
+A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then the **Import web app package** card, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
 
 ## Detected apps
 

@@ -2114,7 +2114,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 ### Changed
 
 - **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
-  (duplicate a preset, remove your own), the **+** menu with **Import web app package...**, and how
+  (duplicate a preset, remove your own), the **Import web app package** card of the **+** dialog, and how
   a running app's buttons move under its name in a narrow panel.
 - **Runtime:** an app you allowed to join QAROS once is admitted from any folder on this PC when it
   is validly signed by the same publisher as the same product: a second installation (another
