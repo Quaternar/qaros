@@ -12,10 +12,10 @@ A **source application** renders content into an app volume and streams it to th
 
 | Section | Shows |
 |---|---|
-| **Apps** | A tile grid: built-in apps, then detected apps, then your presets, then **+ Add source app**. The refresh icon looks for installed apps again. |
+| **Apps** | One row per app: built-in apps, detected apps and your presets. Above the list: search, filter by type, sort and **+**. The refresh icon in the heading looks for installed apps again. |
 | **Running** | One row per running app, with its status, **Streams to**, **Stop** and, where supported, **Live settings**. Web apps have their own buttons: see [Web apps](#web-apps). |
 
-Tile tags:
+Row tags:
 
 | Tag | Meaning |
 |---|---|
@@ -26,7 +26,21 @@ Tile tags:
 | **Debug** | Visible only in the Debug UI mode. |
 | **N on** | N copies of this app are running. |
 
-Built-in and detected apps cannot be edited or removed. To change one, open it and **Save as new preset**.
+Built-in and detected apps are system defaults: they cannot be edited or removed, by the panel or by any other request to the Hub. To change one, duplicate it as a preset of your own (see [Presets](#presets)).
+
+A known app that is not found on this PC (Blender, ROS 2 Rviz) stays in the list, greyed out, with **Locate...** (see [Locating an app QAROS did not find](#locating-an-app-qaros-did-not-find)).
+
+## Presets
+
+Each row's **...** menu:
+
+| Item | Shown for | Does |
+|---|---|---|
+| **Duplicate as new preset** | every app | Saves a copy named `<name> copy` and opens it, so you can rename it and set another **Executable**. Use it to keep several versions side by side, such as Blender 4.5 and Blender 5.2. |
+| **Locate...** / **Locate another folder...** | Blender, ROS 2 Rviz | Picks a folder for QAROS to search (see below). |
+| **Remove preset...** | your presets only | Asks to confirm under the row, then removes the preset. Apps already started from it keep running. |
+
+Saving a preset again updates it in place; nothing in the list is ever added twice by itself.
 
 ## Launching an app
 
@@ -40,7 +54,7 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 
 ## Adding your own app
 
-1. Click **+ Add source app**.
+1. Click **+** and then **Add app preset...**.
 2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**.
 3. Set **Executable** (type a path or **Browse**), or for a web app its **Address**. **Name** defaults to the executable name or the address's host.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
@@ -170,6 +184,8 @@ The login is kept: all web apps in a visualizer share one browser profile, cooki
 | **Start** | stopped | Streams again. After a failure or a visualizer restart, reloads the page first. |
 | **Remove** | always | Closes the page and removes the app from the list. |
 
+In a narrow panel the buttons move to a line under the app's name, and become icons (their name on hover) when even that line is too narrow. A name too long for two lines is cut with "..."; hover it to read it whole.
+
 **Details** shows the address, what the probe found (engine, canvases, depth), the adaptation profile in use, active targets, frame counters, the last error and the event log (**Clear**, **Copy**). **Probe again** probes now; **Reload** loads the page again without streaming. In the Developer and Debug UI modes, **Profile** switches the live app to another stored profile and reloads the page.
 
 A red warning above the Running list means the web apps together are close to the GPU's memory limit: remove one before starting another.
@@ -205,6 +221,20 @@ Changing it re-routes a running app without a restart. For a QAROS API app, **St
 | StereoKit | Model, Scale, Orientation, Draw a cube on each click |
 
 Everything else (Show gesture points, executable, arguments) applies at launch: stop the app and launch it again. Live changes affect only the running app and are not written back to its preset.
+
+## Locating an app QAROS did not find
+
+QAROS looks for Blender (4.5 or newer) and ROS 2 distributions with rviz2 in their usual places. When it finds none, the app's row stays greyed out with **Locate...**:
+
+1. Press **Locate...** on the row.
+2. Pick the folder: for Blender the folder with `blender.exe` (an unzipped blender.org download works), for ROS 2 Rviz the distribution folder with its setup script and rviz2.
+3. The row becomes usable. Every **Refresh** searches that folder from then on; picking the same folder again adds nothing.
+
+To add another Blender version while one is already found, use **Locate another folder...** in the row's **...** menu, or duplicate the row and set its **Executable**.
+
+## Importing a web app package
+
+A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then **Import web app package...**, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
 
 ## Detected apps
 
