@@ -2113,6 +2113,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Source Applications*: *Web apps QAROS provides* no longer lists the **three.js Littlest
+  Tokyo** and **three.js Shapes** tiles; Littlest Tokyo is opened from **three.js examples**.
 - **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
   (duplicate a preset, remove your own), the **Import web app package** card of the **+** dialog, and how
   a running app's buttons move under its name in a narrow panel.

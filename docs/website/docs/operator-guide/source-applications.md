@@ -132,10 +132,9 @@ QAROS comes with ready-made adaptations for some public web apps, each a tile in
 | Tile | Website | Shown from |
 |---|---|---|
 | **Foxglove** | `https://app.foxglove.dev/`: the largest 3D panel of any project and layout, after you sign in | Basic |
-| **three.js Littlest Tokyo** | the three.js animated glTF example | Basic |
-| **three.js examples** | any official three.js example (`https://threejs.org/examples/`) | Basic |
+| **three.js examples** | any official three.js example (`https://threejs.org/examples/`): pick it in the gallery, for instance Littlest Tokyo (`#webgl_animation_keyframes`) | Basic |
 | **three.js Shinjuku Station** | the Shinjuku Station indoor map demo, as a table model | Basic |
-| three.js Shapes, WebGL Aquarium, WebGPU Deferred Rendering | developer samples, only in development builds | Developer |
+| WebGL Aquarium, WebGPU Deferred Rendering | developer samples, only in development builds | Developer |
 
 These adaptations are published in the public repository
 [Quaternar/qaros-webapps](https://github.com/Quaternar/qaros-webapps), each with its own version.
