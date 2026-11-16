@@ -6,3 +6,4 @@ decision and its consequences; a later record supersedes an earlier one rather t
 | Record | Decision |
 |---|---|
 | [ADR-0001](0001-one-versioning-scheme.md) | One versioning scheme for every QAROS repository: SemVer, derived build versions that sort in build order, `release/X.Y` branches for patches of the previous minor |
+| [ADR-0002](0002-app-release-on-merge.md) | QAROS app repositories release on every merge that changes behaviour: the bump comes from the pull request's label or Conventional Commit title, `VERSION` holds the last release, CI commits, tags and publishes |
