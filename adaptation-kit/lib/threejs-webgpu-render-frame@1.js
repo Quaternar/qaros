@@ -1,27 +1,36 @@
-// @qaros-library threejs-webgpu-render-frame@1.0
+// @qaros-library threejs-webgpu-render-frame@1.1
 // @stage afterLoad
 // @needs render-frame-core@1 threejs-capture@1
 //
 // Answers each `qaros-render-frame` request for a three.js `WebGPURenderer` page (the threejs.org
-// `webgpu_*` examples, any r17x/r18x app built on `three/webgpu`) with the same atlas and request
-// tag as threejs-render-frame@1 does for a `WebGLRenderer`: colour per eye, depth at half
-// resolution as the nearest of each 2x2 block, alpha coverage that matches the colour, and colour
-// fill of empty pixels in covered blocks. List both libraries (after threejs-capture@1 and
+// `webgpu_*` examples, any app built on `three/webgpu`; verified with r180 and r187) with the same
+// atlas and request tag as threejs-render-frame@1 does for a `WebGLRenderer`: colour per eye, depth
+// at half resolution as the nearest of each 2x2 block, alpha coverage that matches the colour, and
+// colour fill of empty pixels in covered blocks. List both libraries (after threejs-capture@1 and
 // render-frame-core@1) and one profile covers both renderers: render-frame-core@1
 // `addRenderFrameHandler` gives each request to the library for the renderer the page created.
 //
 // Per tick:
 //   1. every eye is rendered by three.js itself into one `RenderTarget` of this library (half-float
-//      colour, with a depth texture), one `renderer.render` per eye into its own viewport, with the
+//      colour, with a `DepthTexture`), one `renderer.render` per eye into its own viewport, with the
 //      application's scene, lights and layers. Standard depth: cleared to 1, the far plane.
-//   2. three.js's own output pass (the node `renderer` uses for its canvas: tone mapping and the
-//      output colour space) converts that colour into a second, 8-bit `RenderTarget`, so users see
-//      the colours the page shows.
-//   3. WGSL passes on the renderer's own `GPUDevice` write the atlas into an `OffscreenCanvas`: the
-//      colour of each eye (an empty pixel in a block holding geometry takes the colour of the
-//      block's nearest pixel), the packed depth and, under `TransportAlpha`, the packed alpha; then
-//      the request tag. The atlas is published to the stream surface (render-frame-core@1
-//      `streamSurface`). The application's own canvas and frame are never touched.
+//   2. a `QuadMesh` whose `NodeMaterial` is TSL `renderOutput(texture(eye colour, screenUV),
+//      renderer.toneMapping, renderer.outputColorSpace)` converts that colour into a second, 8-bit
+//      `RenderTarget`, the tone mapping and output colour space the page's own canvas gets.
+//   3. WGSL passes on the renderer's own `GPUDevice` (`renderer.backend.device`, the targets' GPU
+//      textures through `renderer.backend.get(texture).texture`) write the atlas into an
+//      `OffscreenCanvas`: the colour of each eye (an empty pixel in a block holding geometry takes
+//      the colour of the block's nearest pixel), the packed depth and, under `TransportAlpha`, the
+//      packed alpha; then the request tag. The atlas is published to the stream surface
+//      (render-frame-core@1 `streamSurface`). The application's own canvas and frame are untouched.
+//
+// three.js's classes and TSL come from the page's own three.js module: the import map's
+// `three/webgpu` or `three` entry, or a loaded `three.webgpu.js`, imported again (a module is
+// evaluated once per URL, so this is the instance the page uses; it is taken only when the renderer
+// is an instance of its `WebGPURenderer`). A bundled app exposes no such module: then the
+// `RenderTarget` class and the target's depth texture come from the renderer's own objects
+// (feature-detected), and the colour pass applies the sRGB output encoding itself, without tone
+// mapping (reported once in the console).
 //
 // The block functions (`blockDepth`, `blockCoverage`, `fillTexel`) are the same WGSL as
 // webgpu-redirect-presenter@1's and the same rule as webgl-atlas-pack@1's GLSL;
@@ -30,12 +39,6 @@
 // The users' room and the scene: as threejs-render-frame@1 (`window.__qarAdaptationState
 // .sceneFromRoom`, the application camera's layers, opaque materials write depth for the users'
 // views, no scene background).
-//
-// It reads three.js internals no public API exposes to a script that cannot import three.js: the
-// renderer's WebGPU backend (`renderer.backend.device`, `renderer.backend.get(texture).texture`),
-// the depth texture three.js gives a render target (`renderer._textures`), its output node
-// (`renderer._nodes.getOutputNode`) and the classes of its output quad and frame buffer target.
-// Each is checked and reported by name when missing. Verified with three.js r180.
 //
 // Not covered: a `WebGPURenderer` on its WebGL 2 fallback backend, post-processing
 // (`PostProcessing` / `RenderPipeline` run on the application's own frame only), a logarithmic depth
@@ -52,49 +55,81 @@
 	const HalfFloatType = 1016;
 	const NearestFilter = 1003;
 	const LinearToneMapping = 1;
+	const NoToneMapping = 0;
 
 	const eyeCameras = new Map();
 	let classes = null;
+	let resolvingClasses = null;
 	let roomInScene = null;
 	let eyeTarget = null;
 	let outputTarget = null;
 	let outputQuad = null;
 	let outputKey = null;
+	let toneMappingReported = false;
 
-	function requireInternal(value, name) {
-		if (value === undefined || value === null) {
-			throw new Error(`QAR adaptation: this three.js release has no ${name}; threejs-webgpu-render-frame@1 cannot stream it.`);
+	// The specifiers the page's three.js module may be imported by: the import map's entries
+	// (imported by key, so the map resolves them as for the page) and loaded three.webgpu builds.
+	function threeModuleSpecifiers() {
+		const specifiers = [];
+		for (const script of document.querySelectorAll('script[type="importmap"]')) {
+			try {
+				const imports = JSON.parse(script.textContent).imports || {};
+				for (const key of ["three/webgpu", "three"]) if (typeof imports[key] === "string") specifiers.push(key);
+			} catch {}
 		}
-		return value;
+		const loaded = typeof performance !== "undefined" && performance.getEntriesByType ? performance.getEntriesByType("resource") : [];
+		for (const entry of loaded) if (/\/three\.webgpu(\.min)?\.js(\?|#|$)/.test(entry.name)) specifiers.push(entry.name);
+		return [...new Set(specifiers)];
 	}
 
-	// The classes come from objects the renderer already owns: its XR camera (an `ArrayCamera`, whose
-	// base class is `PerspectiveCamera`), its output quad (`QuadMesh` with a `NodeMaterial`) and its
-	// frame buffer target (a `RenderTarget`; created on demand when the page has no tone mapping and
-	// a linear output, for which a tone mapping is set for one call).
-	function findClasses(renderer) {
-		if (classes) return classes;
+	async function pageThreeModule(renderer) {
+		for (const specifier of threeModuleSpecifiers()) {
+			try {
+				const module = await import(specifier);
+				const { WebGPURenderer, RenderTarget, DepthTexture, QuadMesh, NodeMaterial, TSL } = module;
+				if (typeof WebGPURenderer !== "function" || !(renderer instanceof WebGPURenderer)) continue;
+				if (!RenderTarget || !DepthTexture || !QuadMesh || !NodeMaterial || !TSL) continue;
+				if (typeof TSL.renderOutput !== "function" || typeof TSL.texture !== "function" || !TSL.screenUV) continue;
+				return module;
+			} catch {}
+		}
+		return null;
+	}
+
+	// Without the page's module: a `RenderTarget` the renderer made itself (its frame buffer target;
+	// asked with a tone mapping set for one call, since a page with neither tone mapping nor an output
+	// conversion has none).
+	function rendererRenderTargetClass(renderer) {
+		let target = renderer._frameBufferTarget || null;
+		if (!target && typeof renderer._getFrameBufferTarget === "function") {
+			const toneMapping = renderer.toneMapping;
+			renderer.toneMapping = LinearToneMapping;
+			try { target = renderer._getFrameBufferTarget(); } catch { target = null; } finally { renderer.toneMapping = toneMapping; }
+		}
+		if (!target || !target.isRenderTarget) {
+			throw new Error("QAR adaptation: cannot find three.js's RenderTarget class: the page's three.js module is not importable and the renderer has no render target to take it from.");
+		}
+		return target.constructor;
+	}
+
+	// The camera classes come from the renderer's XR camera (an `ArrayCamera`, whose base class is
+	// `PerspectiveCamera`) whichever way the rest is found.
+	async function findClasses(renderer) {
 		const xrCamera = renderer.xr && typeof renderer.xr.getCamera === "function" ? renderer.xr.getCamera() : null;
 		if (!xrCamera || !xrCamera.isArrayCamera) throw new Error("QAR adaptation: cannot find three.js camera classes on the renderer.");
 		const PerspectiveCamera = Object.getPrototypeOf(xrCamera.constructor.prototype).constructor;
 		const Object3D = Object.getPrototypeOf(Object.getPrototypeOf(PerspectiveCamera.prototype)).constructor;
-		const quad = requireInternal(renderer._quad, "renderer._quad");
-		let frameBufferTarget = renderer._frameBufferTarget;
-		if (!frameBufferTarget) {
-			requireInternal(renderer._getFrameBufferTarget, "renderer._getFrameBufferTarget");
-			const toneMapping = renderer.toneMapping;
-			renderer.toneMapping = LinearToneMapping;
-			try { frameBufferTarget = renderer._getFrameBufferTarget(); } finally { renderer.toneMapping = toneMapping; }
+		const module = await pageThreeModule(renderer);
+		if (module) {
+			const { RenderTarget, DepthTexture, QuadMesh, NodeMaterial, TSL } = module;
+			return { PerspectiveCamera, Object3D, RenderTarget, DepthTexture, QuadMesh, NodeMaterial, TSL, source: "module" };
 		}
-		requireInternal(frameBufferTarget, "frame buffer target");
-		classes = {
-			PerspectiveCamera,
-			Object3D,
-			RenderTarget: frameBufferTarget.constructor,
-			QuadMesh: quad.constructor,
-			NodeMaterial: quad.material.constructor,
-		};
-		return classes;
+		return { PerspectiveCamera, Object3D, RenderTarget: rendererRenderTargetClass(renderer), source: "renderer" };
+	}
+
+	// A colour the renderer's `getClearColor` copies into, and `setClearColor` takes back.
+	function clearColorHolder() {
+		return { isColor: true, r: 0, g: 0, b: 0, copy(color) { this.r = color.r; this.g = color.g; this.b = color.b; return this; } };
 	}
 
 	function updateRoomInScene() {
@@ -198,28 +233,37 @@
 		if (outputTarget) outputTarget.dispose();
 		const options = { generateMipmaps: false, minFilter: NearestFilter, magFilter: NearestFilter };
 		eyeTarget = new classes.RenderTarget(width, height, { ...options, type: HalfFloatType, depthBuffer: true });
-		outputTarget = new classes.RenderTarget(width, height, { ...options, type: UnsignedByteType, depthBuffer: false });
+		if (classes.DepthTexture) eyeTarget.depthTexture = new classes.DepthTexture(width, height);
+		outputTarget = classes.QuadMesh
+			? new classes.RenderTarget(width, height, { ...options, type: UnsignedByteType, depthBuffer: false })
+			: null;
 		outputKey = null;
 	}
 
-	// three.js's own output node for its canvas (tone mapping, output colour space) reading the eye
-	// target, asked while no render target is bound so it converts to the page's output.
+	// The output conversion of the page's own canvas (tone mapping, output colour space), in TSL.
 	function updateOutputQuad(renderer) {
 		const key = `${renderer.toneMapping}|${renderer.outputColorSpace}|${eyeTarget.texture.uuid}`;
 		if (outputKey === key) return;
-		const nodes = requireInternal(renderer._nodes, "renderer._nodes");
-		requireInternal(nodes.getOutputNode, "renderer._nodes.getOutputNode");
+		const { TSL } = classes;
 		if (!outputQuad) outputQuad = new classes.QuadMesh(new classes.NodeMaterial());
-		outputQuad.material.fragmentNode = nodes.getOutputNode(eyeTarget.texture);
+		outputQuad.material.fragmentNode = TSL.renderOutput(TSL.texture(eyeTarget.texture, TSL.screenUV), renderer.toneMapping, renderer.outputColorSpace);
 		outputQuad.material.needsUpdate = true;
 		outputKey = key;
+	}
+
+	// The depth texture of the eye target: ours, or the one three.js gave it.
+	function eyeDepthTexture(renderer) {
+		if (eyeTarget.depthTexture) return eyeTarget.depthTexture;
+		const data = renderer._textures && typeof renderer._textures.get === "function" ? renderer._textures.get(eyeTarget) : null;
+		if (!data || !data.depthTexture) throw new Error("QAR adaptation: cannot find the depth texture of the eye render target.");
+		return data.depthTexture;
 	}
 
 	function renderEyes(renderer, scene, eyes) {
 		const previousTarget = renderer.getRenderTarget();
 		const autoClear = renderer.autoClear;
 		const scissorTest = renderer.getScissorTest();
-		const clearColor = renderer.getClearColor(renderer._clearColor.clone());
+		const clearColor = renderer.getClearColor(clearColorHolder());
 		const clearAlpha = renderer.getClearAlpha();
 		const background = scene.background;
 		const backgroundNode = scene.backgroundNode;
@@ -229,8 +273,7 @@
 		if (backgroundNode !== undefined) scene.backgroundNode = null;
 		const restoreDepthWrite = writeDepthForOpaqueMaterials(scene);
 		try {
-			renderer.setRenderTarget(null);
-			updateOutputQuad(renderer);
+			if (outputTarget) updateOutputQuad(renderer);
 			renderer.setRenderTarget(eyeTarget);
 			renderer.setClearColor(0x000000, 0);
 			renderer.autoClear = false;
@@ -244,8 +287,10 @@
 				renderer.render(scene, eye.camera);
 			}
 			renderer.setScissorTest(false);
-			renderer.setRenderTarget(outputTarget);
-			outputQuad.render(renderer);
+			if (outputTarget) {
+				renderer.setRenderTarget(outputTarget);
+				outputQuad.render(renderer);
+			}
 		} finally {
 			restoreDepthWrite();
 			scene.background = background;
@@ -313,7 +358,7 @@ fn fillTexel(x: i32, y: i32) -> vec2<i32> {
 	}
 	return texel;
 }`;
-	// `rect`: the destination rectangle's origin, then per pass: colour (fill flag), depth
+	// `rect`: the destination rectangle's origin, then per pass: colour (fill flag, sRGB encode flag), depth
 	// (halfWidth, tileHeight). `eye`: the eye's origin and size in the eye targets. Coverage is the
 	// converted colour's alpha (cleared to 0), as threejs-render-frame@1 packs it.
 	const eyeAccessors = `
@@ -327,13 +372,20 @@ fn eyeDepth(x: i32, y: i32) -> f32 { return textureLoad(depthTexture, params.eye
 fn eyeCoverage(x: i32, y: i32) -> f32 { return textureLoad(colorTexture, params.eye.xy + vec2<i32>(x, y), 0).a; }
 fn localPixel(frag: vec4<f32>) -> vec2<i32> { return vec2<i32>(floor(frag.xy)) - params.rect.xy; }
 ${blockFunctions}`;
-	// Opaque: alpha travels in its own packed view, never in the colour pixel.
+	// Opaque: alpha travels in its own packed view, never in the colour pixel. The sRGB encoding is
+	// applied here only when no output pass converted the colour (no page module).
 	const colorPass = `${eyeAccessors}
+fn srgbEncode(linear: vec3<f32>) -> vec3<f32> {
+	let c = clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0));
+	return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3<f32>(0.0031308));
+}
 @fragment fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 	let local = localPixel(frag);
 	var texel = local;
 	if (params.rect.z != 0) { texel = fillTexel(local.x, local.y); }
-	return vec4<f32>(textureLoad(colorTexture, params.eye.xy + texel, 0).rgb, 1.0);
+	var color = textureLoad(colorTexture, params.eye.xy + texel, 0).rgb;
+	if (params.rect.w != 0) { color = srgbEncode(color); }
+	return vec4<f32>(color, 1.0);
 }`;
 	// Two side-by-side tiles of half the view's width and a quarter of its height, row 0 the view's
 	// top row; 24-bit unsigned normalized little-endian RGB, saturated before splitting bytes (at
@@ -398,7 +450,7 @@ ${blockFunctions}`;
 		return buffer;
 	}
 
-	function packEyes(device, colorTexture, depthTexture, eyes, texture) {
+	function packEyes(device, colorTexture, depthTexture, eyes, texture, encodeSrgb) {
 		const encoder = device.createCommandEncoder({ label: "qar-threejs-atlas" });
 		encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear",
 			clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] }).end();
@@ -419,7 +471,7 @@ ${blockFunctions}`;
 			pass.end();
 		};
 		for (const eye of eyes) {
-			if (eye.color) draw(`${eye.key}:color`, atlas.color, eye.color.rect, [eye.depth ? 1 : 0, 0], eye);
+			if (eye.color) draw(`${eye.key}:color`, atlas.color, eye.color.rect, [eye.depth ? 1 : 0, encodeSrgb ? 1 : 0], eye);
 			if (eye.depth) draw(`${eye.key}:depth`, atlas.depth, eye.depth.rect, [eye.depth.logicalWidth / 2, eye.depth.rect.height], eye);
 			if (eye.alpha) draw(`${eye.key}:alpha`, atlas.alpha, eye.alpha.rect, [0, 0], eye);
 		}
@@ -447,20 +499,14 @@ ${blockFunctions}`;
 		return Boolean(renderer && renderer.isWebGPURenderer);
 	}
 
-	function render(detail) {
-		const renderer = state && state.renderer;
-		const scene = state && state.scene;
-		if (!renderer || !scene) {
-			throw new Error("QAR adaptation: no captured three.js renderer/scene yet -- the application has not rendered a frame.");
-		}
-		if (!isWebGpuRenderer(renderer)) throw new Error("QAR adaptation: threejs-webgpu-render-frame@1 streams a WebGPURenderer only.");
+	function gpuTexture(backend, texture, what) {
+		const data = typeof backend.get === "function" ? backend.get(texture) : null;
+		if (!data || !data.texture) throw new Error(`QAR adaptation: the WebGPU backend has no GPU texture for the ${what}.`);
+		return data.texture;
+	}
+
+	function drawFrame(renderer, scene, detail) {
 		const backend = renderer.backend;
-		if (!backend || !backend.isWebGPUBackend || !backend.device) {
-			throw new Error("QAR adaptation: this WebGPURenderer runs on its WebGL 2 fallback; threejs-webgpu-render-frame@1 needs the WebGPU backend.");
-		}
-		if (renderer.logarithmicDepthBuffer) throw new Error("QAR adaptation: a logarithmic depth buffer cannot be streamed with depth.");
-		findClasses(renderer);
-		const textures = requireInternal(renderer._textures, "renderer._textures");
 		const device = backend.device;
 		const layersMask = state.camera && state.camera.layers ? state.camera.layers.mask : 1;
 		updateRoomInScene();
@@ -473,10 +519,14 @@ ${blockFunctions}`;
 			if (eyes.length > 0) {
 				ensureTargets(width, height);
 				renderEyes(renderer, scene, eyes);
-				const depthTexture = requireInternal(textures.get(eyeTarget).depthTexture, "render target depth texture");
-				const colorGpu = requireInternal(backend.get(outputTarget.texture).texture, "GPU texture of the output target");
-				const depthGpu = requireInternal(backend.get(depthTexture).texture, "GPU texture of the depth target");
-				packEyes(device, colorGpu, depthGpu, eyes, texture);
+				const encodeSrgb = !outputTarget && renderer.outputColorSpace === "srgb";
+				if (!outputTarget && renderer.toneMapping !== NoToneMapping && !toneMappingReported) {
+					toneMappingReported = true;
+					console.warn("QAR adaptation: the page's three.js module is not importable; users' views get the sRGB output encoding without the page's tone mapping.");
+				}
+				const colorGpu = gpuTexture(backend, (outputTarget || eyeTarget).texture, "eye colour");
+				const depthGpu = gpuTexture(backend, eyeDepthTexture(renderer), "eye depth");
+				packEyes(device, colorGpu, depthGpu, eyes, texture, encodeSrgb);
 			} else {
 				const encoder = device.createCommandEncoder();
 				encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear",
@@ -489,6 +539,29 @@ ${blockFunctions}`;
 		}
 		core.streamSurface.publish(atlas.canvas.transferToImageBitmap(), detail.atlas.width, detail.atlas.height);
 		return tagged;
+	}
+
+	// The first request waits for three.js's classes (an asynchronous import); later ones draw at
+	// once.
+	function render(detail) {
+		const renderer = state && state.renderer;
+		const scene = state && state.scene;
+		if (!renderer || !scene) {
+			throw new Error("QAR adaptation: no captured three.js renderer/scene yet -- the application has not rendered a frame.");
+		}
+		if (!isWebGpuRenderer(renderer)) throw new Error("QAR adaptation: threejs-webgpu-render-frame@1 streams a WebGPURenderer only.");
+		const backend = renderer.backend;
+		if (!backend || !backend.isWebGPUBackend || !backend.device) {
+			throw new Error("QAR adaptation: this WebGPURenderer runs on its WebGL 2 fallback; threejs-webgpu-render-frame@1 needs the WebGPU backend.");
+		}
+		if (renderer.logarithmicDepthBuffer) throw new Error("QAR adaptation: a logarithmic depth buffer cannot be streamed with depth.");
+		if (classes) return drawFrame(renderer, scene, detail);
+		if (!resolvingClasses) {
+			// `state.threejsClassSource` ("module" or "renderer") tells an author which way was found.
+			resolvingClasses = findClasses(renderer).then((found) => { classes = found; state.threejsClassSource = found.source; return found; },
+				(error) => { resolvingClasses = null; throw error; });
+		}
+		return resolvingClasses.then(() => drawFrame(renderer, scene, detail));
 	}
 
 	// Establish the compositor before native code waits for the first atlas-size paint.

@@ -2,10 +2,11 @@
 <!--
 	Fixture of KitLibraries.Threejs*OnePixelLinesKeepTheirDepth: a three.js scene of 1-px lines at
 	many angles and sub-pixel offsets, drawn by a WebGPURenderer, or by a WebGLRenderer with
-	`#webgl`. A module script cannot load another file from a file:// page, so the test replaces
-	__THREE_IMPORT_MAP__ with an import map whose `three`, `three/webgpu` and `three-core` entries
-	are data: URLs of the three.js build of examples/threejs-reference-app (their
-	`three.core.min.js` import renamed to `three-core`).
+	`#webgl`. `#bundled` removes the import map once three.js is loaded, as a bundled app has none:
+	the adaptation then cannot import the page's three.js module. A module script cannot load
+	another file from a file:// page, so the test replaces __THREE_IMPORT_MAP__ with an import map
+	of data: URLs of a three.js build: `three/webgpu`, `three` (WebGL), and the files they import
+	(`three-core`, `three-tsl`).
 -->
 <html>
 <body style="margin:0;overflow:hidden;background:#000">
@@ -17,7 +18,7 @@ window.addEventListener("unhandledrejection", (event) => window.__fixtureErrors.
 </script>
 <script type="importmap">__THREE_IMPORT_MAP__</script>
 <script type="module">
-const webgl = location.hash === "#webgl";
+const webgl = location.hash.includes("webgl");
 const THREE = await import(webgl ? "three" : "three/webgpu");
 
 async function start() {
@@ -44,6 +45,7 @@ async function start() {
 		scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
 	});
 	renderer.setAnimationLoop(() => renderer.render(scene, camera));
+	if (location.hash.includes("bundled")) document.querySelectorAll('script[type="importmap"]').forEach((map) => map.remove());
 	window.__fixtureReady = true;
 }
 start().catch((error) => window.__fixtureErrors.push(String((error && error.stack) || error)));

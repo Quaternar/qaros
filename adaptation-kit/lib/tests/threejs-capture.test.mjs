@@ -230,3 +230,11 @@ test("the WebGPU render frame answers only a WebGPURenderer, on its WebGPU backe
 	assert.throws(() => render({ atlas: { width: 64, height: 64 }, targets: [] }), /WebGL 2 fallback/);
 	assert.equal(state.suspendConfinement, undefined);
 });
+
+test("the WebGPU render frame uses no renderer internals for its output pass", () => {
+	const renderSource = readFileSync(new URL("../threejs-webgpu-render-frame@1.js", import.meta.url), "utf8");
+	for (const internal of ["_quad", "_nodes", "_clearColor", "getOutputNode"]) {
+		assert.equal(renderSource.includes(internal), false, `uses renderer.${internal}`);
+	}
+	assert.match(renderSource, /TSL\.renderOutput\(TSL\.texture\(eyeTarget\.texture, TSL\.screenUV\)/);
+});
