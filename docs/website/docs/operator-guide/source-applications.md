@@ -8,6 +8,8 @@ description: Start, configure and stop the applications that stream content into
 
 A **source application** renders content into an app volume and streams it to the target applications (headsets, visualizers). You start and manage them from the visualizer's **Source Applications** panel.
 
+To start with Rerun, RViz (ROS 2), Blender or 3D Slicer, follow its page in [Supported Apps](../user-guide/supported-apps/index.md).
+
 ## The panel
 
 | Section | Shows |

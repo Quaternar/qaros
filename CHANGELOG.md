@@ -1992,6 +1992,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
     invitation, remote-app grant, join-as-member, device identity, target-app invite, video
     sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** a new *Supported Apps* section of the User Guide
+  (https://docs.quaternar.com/docs/user-guide/supported-apps/) has one page each for Rerun, RViz
+  (ROS 2), Blender and 3D Slicer: the supported versions, how to install the add-on or plugin
+  (from the Visualizer's **Sources** or by hand), detection and **Locate...**, the one-time
+  approval, presets for several versions, the first session with its gestures, limits and
+  troubleshooting. *Source Applications* links it.
 - **Docs:** a new *Web App Adaptations* section of the Developer Guide
   (https://docs.quaternar.com/docs/developer-guide/web-app-adaptations/) shows how to stream a
   website's 3D canvas with the adaptation kit that ships with QAROS: an overview (scripts, stages,
