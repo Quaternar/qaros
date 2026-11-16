@@ -68,7 +68,6 @@ sequenceDiagram
 - **Several distributions:** each gets its own tile. For another configuration: **...** > **Duplicate as new preset**, then change **Executable** or arguments (Developer UI mode).
 
 ![The ROS 2 Rviz (Humble) tile's dialog: the distribution's rviz2, Download state Installed with the plugin version, Launch](../../img/supported-apps/rviz-tile.png)
-<!-- Screenshot needed: RViz2 with the Qar Streaming panel, Connection tab connected. -->
 
 ## First session
 
@@ -86,8 +85,6 @@ sequenceDiagram
 4. **Pick.** Choose a mode, point in the headset, confirm. Points go to `/clicked_point`, goals to `/goal_pose`, initial poses to `/initialpose`.
 5. **AR tools.** **AR tools** tab > **Add from ROS graph...**. Publishing stays off until **Allow publishing from AR**; **Publish** and **Send goal** need a second press.
 6. **Move and scale** the scene with the usual app volume gestures ([Moving and scaling app volumes](../working-in-a-session.md#moving-and-scaling-app-volumes)).
-
-<!-- Screenshot needed: RViz scene and QAR control panel on a Display Receiver (QAROS running). -->
 
 ## Tips and limits
 

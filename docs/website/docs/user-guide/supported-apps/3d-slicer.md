@@ -59,8 +59,6 @@ sequenceDiagram
 - **Pick receivers:** under **Stream to**, check connected headsets or Visualizers (up to eight). **Start live streaming** stays disabled until one is checked.
 - **Several Slicer versions:** not supported; the module is built for one Slicer and one QAROS version.
 
-<!-- Screenshot needed: the QAROS Live Renderer module in Slicer (Stream to, Start live streaming), from the qaros-slicer docs or a live capture. -->
-
 ## First session
 
 1. **Load a scan.** In **Volume Rendering** use **VTK GPU** ray casting with **Composite** blending; the volume shows in Slicer's first 3D view.
@@ -79,8 +77,6 @@ sequenceDiagram
    - Rotating Slicer's camera changes only the desktop view.
    - Move slice planes in Slicer; the panels follow.
 6. **Stop.** **Stop live streaming** stays connected; **Disconnect** also leaves QAROS.
-
-<!-- Screenshot needed: a Slicer volume and slice panels on a Display Receiver (QAROS running). -->
 
 ## Tips and limits
 

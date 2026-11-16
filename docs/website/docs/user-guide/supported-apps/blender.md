@@ -14,9 +14,6 @@ Your open Blender scene, live in the room: edits in Blender show up within a mom
 
 *Turbofan model by [blenderbirb](https://sketchfab.com/blenderbirb), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the [demo](https://github.com/Quaternar/qaros-blender/tree/main/demo) of the add-on.*
 
-<!-- Screenshot needed: a Blender scene streamed to a Display Receiver with the Blender panel, captured on the released add-on (0.4.1). -->
-
-
 | | Version |
 |---|---|
 | **QAROS ANARI Streaming** add-on | 0.4.1 |
@@ -80,8 +77,6 @@ sequenceDiagram
   - to launch without streaming, set `QAR_BLENDER_AUTO_START=0` in a preset.
 
 ![The row's ... menu with Duplicate as new preset, beside two Blender tiles](../../img/supported-apps/sources-row-menu.png)
-
-<!-- Screenshot needed: Blender's QAROS sidebar tab (Start streaming, Streams to), from the add-on's own docs or a live capture. -->
 
 ## First session
 
