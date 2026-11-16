@@ -76,19 +76,23 @@ jobs:
           python-version: "3.x"
 
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
 
       # npm ci and npm run build in docs/website; run it locally the same way.
       - name: Build website
         run: python ci/run.py docs
 
+      # Pull requests only check that the site builds; main deploys it.
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs/website/build
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -97,5 +101,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
-        with:
-          preview: ${{ github.event_name == 'pull_request' }}
