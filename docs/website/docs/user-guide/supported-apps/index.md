@@ -40,4 +40,5 @@ flowchart LR
 
 - The Visualizer installs and updates add-ons and plugins from QAROS **0.10.0**. With an older QAROS, install them by hand as each page says.
 - Tiles, **Locate...**, presets, the **+** dialog and UI modes: [Source Applications](../../operator-guide/source-applications.md).
+- Step by step with Blender: [Tutorial: Stream a Turbine from Blender](./blender-turbine-tutorial.md).
 - To stream an app of your own: [Developer Guide](/docs/developer-guide/getting-started).
