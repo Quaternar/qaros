@@ -10,6 +10,8 @@ customers or is published at https://docs.quaternar.com.
   comments, the C header and its source, C# XML docs and comments, tests, examples, changelogs,
   feature notes.
 - Readers cannot open those records. State the rule, the reason or the behaviour itself instead.
+- This repository's own public decision records (`docs/adr/`, `ADR-0001` and on) are not internal:
+  link them freely, here and from the other QAROS repositories.
 - The public C header (`qar-streaming-c/include/qar_streaming.h`) and the generated API reference
   come from the parent repository's `qar-streaming/libs/qar-streaming-c/include/qar_streaming_c/v0/`:
   the rule applies to those sources too. Never edit the generated header or the generated API pages;
