@@ -3786,8 +3786,10 @@ static inline QarResult qar_member_hub_invitation_serialize(
  * @brief Parse an invitation from bytes qar_member_hub_invitation_serialize
  * wrote.
  *
- * Strict: an invitation with an unknown or missing field, of another kind or
- * version, out of its bounds, or over 16 KiB is refused. Its signature is not
+ * Lenient: a field a newer QAROS version added is ignored and kept, so it is
+ * serialized again with the invitation and stays covered by its signature. An
+ * invitation missing a required field, of another kind, with a mistyped
+ * field, out of its bounds, or over 16 KiB is refused. Its signature is not
  * checked here; qar_runtime_join_hub_as_member checks it.
  *
  * @param wire_data Required; the bytes.
