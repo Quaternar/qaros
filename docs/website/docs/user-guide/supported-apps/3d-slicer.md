@@ -1,6 +1,6 @@
 ---
 title: 3D Slicer
-sidebar_position: 5
+sidebar_position: 6
 description: Stream 3D Slicer volume rendering into QAROS with the QAROS Live Renderer module. Install it by hand, connect, pick receivers and start live streaming.
 ---
 

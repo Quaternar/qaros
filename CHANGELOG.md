@@ -2067,6 +2067,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.
+- **Docs:** a new *Tutorial: Stream a Turbine from Blender* in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/user-guide/supported-apps/blender-turbine-tutorial): the
+  supported Blender LTS versions, installing the add-on from the Visualizer's **Sources** or by
+  hand, the **QAROS** tab, importing a CC BY 4.0 turbofan GLB, selecting a part and editing its
+  material, streaming, viewport shading and the renderer choice, with screenshots. *Blender* and
+  *Supported Apps* link it.
 - **Docs:** a new *Supported Apps* section of the User Guide
   (https://docs.quaternar.com/docs/user-guide/supported-apps/) has one page each for Rerun, RViz
   (ROS 2), Blender and 3D Slicer: the supported versions, how to install the add-on or plugin
