@@ -286,6 +286,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Runtime:** with `QAR_ANARI_BACKEND` unset, the ANARI device tries VisRTX, VisGL, Intel
   OSPRay, then Helide (was VisRTX, OSPRay, VisGL, Helide). A PC with OSPRay installed and an
   OpenGL 4.3 GPU now streams on VisGL. Migration: set `QAR_ANARI_BACKEND=ospray` to keep OSPRay.
+- **Visualizer:** a web app source renders at most 30 frames per second unless its adaptation's
+  profile sets `RenderRate` (1 to 120); every web app source rendered at 60 before. Head motion in
+  the headset stays smooth (the headset warps the newest frame); animation and interaction update
+  at the lower rate, and the GPU does about half the work. The adaptations published in
+  `Quaternar/qaros-webapps` and the developer samples set 60. Migration: add `"RenderRate": 60` to
+  the `profile.json` of your own adaptation when its content moves fast.
 - **SDK:** the C++ wrapper `qar-streaming-cpp` no longer has `Runtime::Rejoin`,
   `Runtime::RejoinAsync`, `RejoinBuilder`, `Runtime::Forget`, the aliases `native::RejoinInit` /
   `native::ForgetInit`, `PeerSpec::AppState` or the enum `qaros::AppState`: they wrapped
@@ -534,9 +540,35 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   without storage usage, so it cannot be written from a compute shader. Linear values sent as they
   are look too dark. Colour scaled between your layout and the stream's is now blended in linear light, so
   scaled edges are no longer too dark.
+- **C API:** an app volume display name that is not valid UTF-8 or holds a control or
+  bidirectional formatting character (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) is now
+  refused: `qar_app_volumes_get_or_create` and the display name change fail with
+  `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` instead of storing it. The name is not limited in length.
+  Migration: pass a single-line name.
+- **SDK:** room calls answer room status codes: an unknown room is `RoomDoesNotExistLocally`
+  (was `AppVolumeDoesNotExistLocally`), the default id `RoomInvalidId`, a refused commonName or a
+  second `Build()` `RoomBuilderValidationFailed` (was `ArgumentNotSupported`), and a room display
+  name holding a control or bidirectional formatting character `RoomDisplayNameInvalid`.
+  Migration: compare against the room codes.
+- **SDK:** a media stream's allocation key must be ASCII, as every commonName:
+  `GetOrCreateStream` refuses another key with `ArgumentNotSupported`, and the hub refuses a
+  record that carries one. Migration: put non-ASCII text elsewhere.
 
 ### Added
 
+- **Runtime:** ANARI apps set how often the ANARI device renders for each headset with the device
+  parameter `qar.renderRate` (FLOAT32, frames per second, 1 to 120, default 30; environment
+  `QAR_ANARI_RENDER_RATE`). It applies from the next device commit, also while streaming;
+  unsetting it restores the default. A lower rate leaves the renderer time for more headsets but
+  shows scene changes later; head motion stays smooth. `qar.fps` and `QAR_ANARI_FPS` still work as
+  older names. The ANARI device now sends each frame as soon as the headset can take one, at that
+  rate, instead of waiting for the headset to ask for it.
+- **Runtime:** the ANARI device outlines selected objects in every headset, as Blender's viewport
+  does. An ANARI app sets `id` on its instances (or surfaces) and names the selected ones in the
+  device parameter `qar.selection` (ids as text, or one UINT32); `qar.selectionColor` (default
+  #FFA000), `qar.selectionWidth` (pixels, default 2) and `qar.selectionChannel` (`instanceId` or
+  `objectId`) style it. Works on VisRTX, OSPRay and Helide; VisGL renders no ids, so it shows no
+  outline. Without a selection nothing changes. The Blender add-on outlines its selected object.
 - **Runtime:** the ANARI device reads `QAR_ANARI_BACKEND_ORDER`, a comma-separated backend order
   used instead of its own (VisRTX, VisGL, OSPRay, Helide) when `QAR_ANARI_BACKEND` is unset; the
   candidates are probed as before. The Blender add-on's **Automatic** sets VisGL, VisRTX, OSPRay,
@@ -610,6 +642,35 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   carry the developer samples (three.js Shapes, WebGL Aquarium, WebGPU Deferred Rendering, the
   three.js reference with panels); the development ZIP keeps them. Packaging offline needs
   `--webapps-release <folder>` with a downloaded release.
+- **Packaging:** the setups and the development ZIP install the QAROS adaptation kit in
+  `share\qaros\adaptation-kit\`: the web app adaptation libraries, templates for three.js, WebGL,
+  WebGPU and the WebGPU redirect presenter, reference apps and recipe examples, and the
+  `qaros-adaptation` command line tool (Python 3: `init`, `check`, `test`, `package`, `pin`,
+  `verify`). It is versioned with QAROS; the public guide is Developer Guide > Web App Adaptations.
+- **Visualizer:** a web app adaptation's script can name a kit library instead of bundling a copy:
+  `{ "Name": "render-frame-core", "Stage": "afterLoad", "Library": "render-frame-core@1" }`. QAROS
+  injects the installed kit's file when the page loads, so library fixes in a QAROS update reach
+  every adaptation that uses it. `Library` and `File` cannot both be set in one script; the earlier
+  `"Library": "name.js"` still loads as `name@1`. An adaptation that needs a newer library than this
+  QAROS has does not load and says so: "requires `name@2`, this QAROS provides @1: update QAROS".
+  To freeze a version, bundle a copy with `qaros-adaptation pin`. MCP `webapp_library_get` takes
+  `name@major` (and the earlier `name.js`).
+- **Visualizer:** a web app adaptation's profile can set `Channel`: `public` (the default),
+  `developer` or `debug`. Developer and debug adaptations show only in Developer mode, and the
+  setups leave them out.
+- **Visualizer:** a web app adaptation's profile can set `AppScaleByAddress`, a list of
+  `{ "AddressPattern", "AppScale" }` whose first match wins over `AppScale`, so one adaptation can
+  cover pages authored in different units. A page that navigates to an address with another scale
+  rescales its app volume while it streams. The three.js examples use it: Littlest Tokyo
+  (`#webgl_animation_keyframes`) shows at the size its old tile had.
+- **Visualizer:** a web app adaptation you installed (an import, or one a newer web app release no
+  longer lists) can be removed from Sources: the row's **...** menu, **Uninstall web app
+  adaptation...**, then confirm. An installed adaptation that no tile opens gets a tile of its own
+  for this. Adaptations that ship with QAROS cannot be uninstalled.
+- **Visualizer:** three.js pages that render with `WebGPURenderer` stream, among them the
+  threejs.org `webgpu_*` examples in the **three.js examples** web app. An adaptation lists the new
+  kit library `threejs-webgpu-render-frame@1` beside `threejs-render-frame@1`, and the one for the
+  page's renderer answers.
 - **Visualizer:** Sources lists **ROS 2 Rviz** (one tile per ROS 2 distribution found on the PC)
   and **Rerun**, and installs them for the current user without administrator rights
   ([#628](https://github.com/Quaternar/Quaternar/issues/628)). Each tile shows Detected (a build
@@ -1512,6 +1573,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   this computer. The notification keeps the technical details. The setup returns to the step it
   had reached once the device answers again; a failure on a working connection is reported as
   before.
+- **SDK:** `UnansweredChangesDropped()` on `IAppVolumeControl`, `IGuiPanelControl`, `IRoomControl`
+  and `IMediaStreamControl`: how many changes this session proposed were dropped because no hub
+  answered them within 30 s (they never reached the session's stored state). A refused change is
+  not counted. Each drop is still logged.
+- **SDK:** `IAppVolumeControl::UpdatePeers(id, additions, removals)` changes several peers of a
+  volume in one proposal, accepted or refused whole.
 - **C API:** `qar_session_open_qaros_view` opens a predefined view of the QAROS Visualizer (Pair
   Headset QR code, Room Origin marker, setup of one device type: `QarOpenQarosViewInfo`,
   `QarQarosView`, `QarQarosDeviceKind`) in the QAROS whose hub a local-app session joined. The app
@@ -2134,12 +2201,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **Docs:** *Source Applications*: *Web apps QAROS provides* no longer lists the **three.js Littlest
-  Tokyo** and **three.js Shapes** tiles; Littlest Tokyo is opened from **three.js examples**.
-- **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
-  (duplicate a preset, remove your own), the four cards of the **+** dialog (QAROS supported apps
-  in every UI mode), and how
-  a running app's buttons move under its name in a narrow panel.
+- **Packaging:** a build made after a release candidate reports `X.Y.Z-rc.N.M+<sha>` (M commits
+  after `rc.N`) instead of `X.Y.Z-dev.M+<sha>`, so it sorts after the candidate it follows and
+  before the next one, and updates an installed candidate. Its Windows file version keeps the
+  candidate's `N`. Every QAROS repository now follows one versioning scheme, with `release/X.Y`
+  branches for patches of the previous minor: https://github.com/Quaternar/qaros/blob/main/docs/adr/0001-one-versioning-scheme.md
 - **Runtime:** an app you allowed to join QAROS once is admitted from any folder on this PC when it
   is validly signed by the same publisher as the same product: a second installation (another
   Blender version beside the approved one) or a moved app joins without a new prompt, where it was
@@ -2248,6 +2314,16 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Runtime:** ANARI applications streaming on VisGL or Helide deliver each stereo frame about
   3 ms sooner: the device copies the frame into GPU memory before writing it into the stream
   instead of letting the GPU read it from system memory.
+- **Visualizer:** **Source Applications** drops the two folder icons ("Add ROS installation...",
+  "Add Blender folder...") and the import icon from the **Apps** heading. Blender and ROS 2 Rviz are
+  always listed, greyed out with **Locate...** when QAROS does not find them; **Locate...** picks the
+  folder. **+** opens the add dialog with the same four cards in every UI mode: **Add OpenXR
+  app**, **Web app**, **Import app package** (same checks as before) and **Open QAROS supported
+  app**. QAROS supported apps (QAROS API apps such as Blender, Rviz, your own) are added, listed and
+  shown running from Basic mode, and their executable is set in every mode; their launch arguments
+  stay a Developer setting. The QAROS examples (Vulkan cube, ANARI cube) stay in Developer mode. Each row's **...** menu has **Duplicate as new preset** (for example a second
+  Blender with its own executable) and, for your own presets, **Remove preset...**; built-in and
+  detected apps cannot be removed, by the panel or by any other request to the Hub.
 - **Visualizer:** a web app source streams to each headset at the pace of its receiver instead of
   waiting for the headset's frame request. Its senders render free-running, the page paints on its
   own cadence, and a headset that is slow, paused or reconnecting is skipped without holding back
@@ -2763,6 +2839,31 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   moment, sends a held request when the pacer wanted it instead of up to a frame early, ignores
   latency measured across a stalled step, and moves the lead only when most recent frames agree on
   a new value.
+- **C API:** `qar_app_volumes_update_used_by_peers` sends its additions and removals as one
+  change: the hub applies all of them or none, instead of one change per peer.
+- **SDK:** the shared-object protocol is 3: a peer and a hub of earlier 0.10 builds refuse each
+  other's shared-object changes with a logged error naming both protocols. Stored state is read
+  across the change.
+- **SDK:** an app volume, panel or room brought into a new session after a hub move whose stored
+  display name holds a character display names may no longer hold is proposed with a space in its
+  place (logged) instead of being refused; a refused re-create no longer leaves its follow-ups
+  waiting.
+- **SDK:** a closed app volume, GUI panel or room is removed by the hub once nothing wrote it for
+  an hour (`StoredDataRetention::ClosedSharedObjects`), and a hub move no longer brings a closed one
+  back into the new session. `GetOrCreate*` of its commonName creates it again under the same id,
+  as it reopened a closed one; a call on a removed one answers the kind's "does not exist" code.
+- **SDK:** an update naming a commonName other than its object's (a follow-up, or a builder with an
+  id of another object) is refused with the kind's builder code instead of being accepted as a
+  no-op; the commonName is fixed at create.
+- **C API:** an app scale that is not positive is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from
+  `qar_app_volumes_get_or_create` too, as from the app scale change, and the hub refuses such a
+  scale in a proposal instead of storing it.
+- **SDK:** `IMediaStreamControl::CloseStream` of a stream never known to the session answers
+  `ArgumentNotSupported` instead of `MediaStreamingStreamIsClosed`.
+- **SDK:** `AwaitAppVolume` and `WaitForAppVolume` read the session's view only and never ask the
+  storage, so `AwaitAppVolume` no longer blocks its executor's thread for about 2 s per read; the
+  C API's app volume changes and `qar_gui_panels_set_stream` no longer wait about 2 s for a storage
+  read before they publish.
 - **SDK:** a validly signed app that onboards as a local app (`QarOnboardLocalAppExt`) after the user
   approved the same product of the same publisher is admitted from any folder on the hub's PC. A
   copy, a moved install or a second installation no longer fails with
@@ -2915,6 +3016,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   on this machine (protected by another user's, machine's or TPM's key, or altered) reports
   `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`; the slot is never deleted on read. Onboarding the same
   onboarding id with a code replaces that slot, and only that one. (#203)
+- **Docs:** *Source Applications*: *Web apps QAROS provides* no longer lists the **three.js Littlest
+  Tokyo** and **three.js Shapes** tiles; Littlest Tokyo is opened from **three.js examples**.
+- **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
+  (duplicate a preset, remove your own), the four cards of the **+** dialog (QAROS supported apps
+  in every UI mode), and how
+  a running app's buttons move under its name in a narrow panel.
 - **Docs:** *Language Bindings* shows how a C++-only CMake project adds the header-only C++ wrapper
   `qar-streaming-cpp` (no C language, no examples; `QAR_ENABLE_DYNAMIC_LOADING` comes with the
   target), joins as a local app with `OnboardBuilder::WithLocalApp`, and migrates from the removed
@@ -3176,9 +3283,40 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Visualizer:** the movement keys no longer move GUI panels: Controls > Move > Keys move has no
   **Panels** choice and Ctrl + M cycles Head / Volumes. Move a panel by dragging its title bar with
   the mouse in the Texture Grid.
+- **Visualizer:** the **three.js Littlest Tokyo** tile and the Developer sample **three.js Shapes**
+  are gone. Open **three.js examples** and pick the example in its gallery
+  (https://threejs.org/examples/#webgl_animation_keyframes for Littlest Tokyo); it shows at the
+  old tile's size. A Littlest Tokyo adaptation installed earlier is no longer updated or picked for
+  the page; its own tile removes it (**...** > **Uninstall web app adaptation...**).
 
 ### Fixed
 
+- **Visualizer:** an adaptation a newer web app release no longer lists is never picked for a page
+  by its address. A leftover Littlest Tokyo adaptation had won over the three.js examples for that
+  example's page, because its address pattern was narrower.
+- **Visualizer:** a WebGPU web app streamed with the redirect presenter (WebGPU Deferred Rendering)
+  no longer shows its clear colour as a fringe at the edge of objects: an empty pixel beside an
+  edge takes the object's colour, as the three.js and WebGL adaptations already did.
+- **Visualizer:** thin lines and edges of a web app (a map's 1-px lines, wireframes) reach users
+  whole instead of dashed, at full brightness: each half-resolution depth sample keeps the nearest
+  depth of the pixels it stands for, and alpha their largest coverage. A custom adaptation's depth
+  packer must do the same (Developer Guide > Web App Adaptations > Recipes, and the
+  `webapp-authoring` skill).
+- **Mixer:** an object's edge against empty background no longer stretches into a spike when the
+  warp moves the view far from the pose the source rendered for: mesh vertices beside empty
+  background take the object's depth. Applies to the headset's own warp too.
+- **Visualizer:** the **three.js examples** web app streams the example you pick on
+  https://threejs.org/examples/: the example opens as the page itself (Back returns to the
+  gallery), and a web app source checks every page it navigates to for a renderer, so it starts
+  streaming without pressing **Probe**. The WebGPU examples (`webgpu_*`) stream too.
+- **Visualizer:** a running app's card in a narrow **Source Applications** panel no longer squeezes
+  its name and status into a column a character or two wide: the name keeps a minimum width and at
+  most two lines, text that does not fit is cut with "..." (hover for all of it), and the buttons
+  move to a line under the name, as icons when even that is too narrow. Every row in the panel
+  follows the same rule.
+- **Visualizer:** importing the same web app package again, or one whose app already has a row,
+  no longer adds another preset to **Source Applications**; picking an already located Blender or
+  ROS 2 folder again adds nothing.
 - **Visualizer:** a source app QAROS started and the hub refused without asking you (it does not
   match its approval, its file was replaced or is no longer validly signed, its runtime differs)
   shows **Not joined** at once with the hub's reason ("refused by the hub: ..."), in Source
@@ -3716,6 +3854,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Mixer:** no longer crashes when an app that shows a website panel (the RViz plugin, for
   one) restarts and creates its panels again. The mixer restarted and the headset lost its view
   for a moment.
+- **SDK:** a GUI panel created or brought into a new session Hidden or Minimized keeps that state;
+  the hub stored every new panel Visible, so the creator saw it hidden and then shown. What a change
+  means is now applied by one rule on the writer and on the hub, so no field reverts once stored.
 - **SDK:** closing a session no longer logs about ten `BackgroundTask: joining task created at
   ResilientMessaging.cpp:... via foreign-executor-detach` errors, nor the `ChannelIsClosed` and
   `Timeout` errors a closing video sender, its stream state and the peer list logged. The teardown
