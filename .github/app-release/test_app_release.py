@@ -111,7 +111,7 @@ class Changelog(unittest.TestCase):
 
     def test_move_without_links_and_last_section(self):
         text, _ = ar.release_changelog("# C\n\n## Unreleased\n\n- x\n", "1.0.0", "2026-01-02")
-        self.assertEqual(text, "# C\n\n## Unreleased\n\n## [1.0.0] - 2026-01-02\n\n- x\n\n")
+        self.assertEqual(text, "# C\n\n## Unreleased\n\n## [1.0.0] - 2026-01-02\n\n- x\n")
 
     def test_empty_unreleased_uses_fallback(self):
         text = "# C\n\n## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n"
@@ -339,8 +339,14 @@ class EndToEnd(unittest.TestCase):
         git(self.work, "push", "origin", ":refs/tags/v0.1.0")
         before = git(self.work, "rev-parse", "HEAD")
         self.merge("fix: one")
+        self.merge("docs: guide")
         self.merge("fix: two")
         self.assertEqual(self.release("--before", before), 0)
+        log = (self.work / "CHANGELOG.md").read_text()
+        # The empty Unreleased section is filled from the releasing pull requests only.
+        self.assertIn("- One ([#10](https://github.com/o/r/pull/10))\n", log)
+        self.assertIn("- Two ([#12](https://github.com/o/r/pull/12))\n", log)
+        self.assertNotIn("Guide", log)
         self.assertEqual(git(self.remote, "tag", "--list", "v0.*"), "v0.1.1")
         body = git(self.remote, "log", "-1", "--format=%b", "main")
         self.assertIn("fix: one", body)

@@ -209,6 +209,8 @@ class Config:
             data = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             raise ReleaseError(f"{path} is missing: it lists the files that carry the version")
+        except json.JSONDecodeError as error:
+            raise ReleaseError(f"{path} is not valid JSON: {error}")
         files = [VersionFile(**entry) for entry in data.get("version_files", [])]
         if not files:
             raise ReleaseError(f"{path}: version_files is empty")
@@ -300,9 +302,7 @@ def release_changelog(text: str, version: str, date: str, repo_url: str = "",
         new_links = (f"[Unreleased]: {repo_url}/compare/v{version}...HEAD\n"
                      f"[{version}]: {repo_url}/releases/tag/v{version}")
         text = text[:link.start()] + new_links + text[link.end():]
-    if not text.endswith("\n"):
-        text += "\n"
-    return text, notes
+    return text.rstrip("\n") + "\n", notes
 
 
 # ---------------------------------------------------------------------------------------------
@@ -316,6 +316,12 @@ class Change:
     title: str
     labels: list[str]
     url: str = ""
+
+    def releases(self) -> bool:
+        try:
+            return classify(self.title, self.labels)[0] != NONE
+        except ReleaseError:
+            return False
 
     def note(self) -> str:
         desc = TITLE_RE.match(self.title)
@@ -420,8 +426,13 @@ def collect_changes(root: Path, revision_range: str, repo: str,
         sha, subject = line.split("\x1f", 1)
         if RELEASE_SUBJECT_RE.match(subject):
             continue
-        pulls = [p for p in (api(f"repos/{repo}/commits/{sha}/pulls") or [])
-                 if p.get("merged_at") and p.get("base", {}).get("ref") == "main"]
+        try:
+            found = api(f"repos/{repo}/commits/{sha}/pulls") or []
+        except ReleaseError as error:
+            if "No commit found" not in str(error):
+                raise
+            found = []  # a local commit GitHub has not seen (a dry run of a branch)
+        pulls = [p for p in found if p.get("merged_at") and p.get("base", {}).get("ref") == "main"]
         if pulls:
             for pull in pulls:
                 if pull["number"] in seen:
@@ -451,7 +462,7 @@ def apply_release(root: Path, config: Config, plan: Plan, date: str, repo_url: s
     if config.changelog:
         path = root / config.changelog
         text, notes = release_changelog(path.read_text(encoding="utf-8"), plan.version, date,
-                                        repo_url, [c.note() for c in plan.changes])
+                                        repo_url, [c.note() for c in plan.changes if c.releases()])
         _write(path, text)
     return notes
 
