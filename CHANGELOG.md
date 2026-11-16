@@ -2071,10 +2071,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a new *Web App Adaptations* section of the Developer Guide
   (https://docs.quaternar.com/docs/developer-guide/web-app-adaptations/) shows how to stream a
   website's 3D canvas with the adaptation kit that ships with QAROS: an overview (scripts, stages,
-  libraries by `name@major`, the profile fields including `RenderRate`, `Channel` and
+  libraries by `name@major`, the profile fields including `RenderRate`, `Antialias`, `Channel` and
   `AppScaleByAddress`), *Quick Start* (`qaros-adaptation init`, `check`, `test`, `package`,
   `verify`, `pin`), *Library Reference* (every kit library: stage, needs, hooks, guarantees),
-  *Recipes* (atlas packing, thin lines and `RenderScale`, depth conventions, iframes, UI
+  *Recipes* (atlas packing, thin lines with `RenderScale` and `Antialias`, depth conventions, iframes, UI
   confinement, render rate, WebGPU redirect presenter, common mistakes, each with a runnable
   example), *Develop with AI Agents* (connecting a coding agent to the Visualizer's MCP endpoint,
   the authoring skills, an example session, safety), *Contribute an Adaptation* (publishing through

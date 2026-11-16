@@ -118,6 +118,7 @@ The fields an author sets in `profile.json`:
 | `RenderScale` | (0, 1]: each eye's resolution as a fraction of the user's. Lower is cheaper; see [thin lines](recipes.md#2-thin-lines-msaa-and-renderscale) |
 | `ContinuousRendering` | Draw every user on each animation tick from the newest cameras. See [render rate](recipes.md#6-continuous-rendering-and-renderrate) |
 | `RenderRate` | Frames per second the page renders at most, 1 to 120. **Default 30** |
+| `Antialias` | Samples per pixel of the users' eye views: 2, 4, 8 or 16. Absent: no multisampling. For lines thinner than a pixel, grids and point clouds; see [thin lines](recipes.md#2-thin-lines-msaa-and-renderscale) |
 | `TransportAlpha` | Stream coverage alpha, for content meant to float in the room |
 | `Channel` | `public` (default), `developer` or `debug`. Developer and debug adaptations show only in the Visualizer's Developer mode |
 | `CommonName` | Base name of the app volume and served panels (lowercase DNS labels). Default: derived from `StartAddress` |

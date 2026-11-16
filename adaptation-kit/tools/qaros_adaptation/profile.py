@@ -26,8 +26,10 @@ KNOWN_FIELDS = {
     "_sv", "Name", "AddressPattern", "Engine", "PageRegion", "ShareBrowserProfile", "Scripts",
     "AppScale", "AppScaleByAddress", "RenderScale", "ContinuousRendering", "TransportAlpha", "Id",
     "DisplayName", "Version", "DerivedFrom", "Panels", "StartAddress", "CommonName", "Files",
-    "Signature", "Channel", "RenderRate",
+    "Signature", "Channel", "RenderRate", "Antialias",
 }
+#: Samples per pixel `Antialias` may ask for; the page takes the largest its GPU supports up to it.
+ANTIALIAS_SAMPLES = (1, 2, 4, 8, 16)
 KNOWN_SCRIPT_FIELDS = {"Name", "Stage", "JavaScript", "SourceUrl", "Url", "url", "File", "Library"}
 REQUIRED_FIELDS = {
     "Name": str,
@@ -211,6 +213,9 @@ def _check_scalars(profile: dict, report: Report) -> None:
         report.error("schema", "'RenderScale' must be a number in (0, 1]")
     if "RenderRate" in profile and not (_number(profile["RenderRate"]) and 1 <= profile["RenderRate"] <= 120):
         report.error("schema", "'RenderRate' must be frames per second in [1, 120] (absent: 30)")
+    antialias = profile.get("Antialias", 1)
+    if isinstance(antialias, bool) or antialias not in ANTIALIAS_SAMPLES:
+        report.error("schema", "'Antialias' must be samples per pixel, one of 1, 2, 4, 8, 16 (absent: 1)")
     if "Channel" in profile and profile["Channel"] not in CHANNELS:
         report.error("schema", f"'Channel' must be one of {', '.join(CHANNELS)}, not {profile['Channel']!r}")
 
