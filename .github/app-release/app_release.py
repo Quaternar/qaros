@@ -457,7 +457,9 @@ def apply_release(root: Path, config: Config, plan: Plan, date: str, repo_url: s
 
 
 def _write(path: Path, text: str) -> None:
-    with open(path, "w", encoding="utf-8", newline="") as handle:
+    """Writes `text` (read with universal newlines) with the line endings the file had."""
+    newline = "\r\n" if b"\r\n" in path.read_bytes() else "\n"
+    with open(path, "w", encoding="utf-8", newline=newline) as handle:
         handle.write(text)
 
 

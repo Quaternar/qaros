@@ -142,6 +142,17 @@ class VersionFiles(unittest.TestCase):
         with self.assertRaises(ar.ReleaseError):
             ar.rewrite_version(text, entry, "0.1.0", "0.3.0")
 
+    def test_apply_keeps_line_endings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VERSION").write_bytes(b"0.1.0\r\n")
+            (root / "CHANGELOG.md").write_bytes(b"# C\r\n\r\n## [Unreleased]\r\n\r\n- x\r\n")
+            config = ar.Config([ar.VersionFile("VERSION", r"^(?P<version>\d+\.\d+\.\d+)$")])
+            plan = ar.Plan("0.1.0", "0.1.1", ar.PATCH, [], [])
+            ar.apply_release(root, config, plan, "2026-11-16")
+            self.assertEqual((root / "VERSION").read_bytes(), b"0.1.1\r\n")
+            self.assertIn(b"## [0.1.1] - 2026-11-16\r\n\r\n- x\r\n", (root / "CHANGELOG.md").read_bytes())
+
     def test_package_xml(self):
         entry = ar.VersionFile("package.xml", r"<version>(?P<version>[^<]+)</version>")
         self.assertEqual(ar.rewrite_version("  <version>0.4.0</version>\n", entry, "0.4.0", "0.4.1"),
