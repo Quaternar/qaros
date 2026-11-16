@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+	Fixture of KitLibraries.WebGpuRedirectPresenterFillsColourAndKeepsLineDepth: a raw WebGPU page
+	with its own render loop (it calls getCurrentTexture() every frame) drawing 1-px lines at many
+	angles over a blue clear colour, depth24plus, one uniform buffer "fixture camera" with its
+	view-projection. webgpu-redirect-capture@1 redirects the loop offscreen;
+	webgpu-redirect-presenter@1 replays it per eye with the camera from webgpu-redirect-lines-site.js.
+-->
+<html>
+<body style="margin:0;overflow:hidden;background:#000">
+<canvas id="c" width="256" height="256" style="display:block;width:256px;height:256px"></canvas>
+<script>
+window.__fixtureErrors = [];
+window.addEventListener("error", (event) => window.__fixtureErrors.push(String(event.message)));
+window.addEventListener("unhandledrejection", (event) => window.__fixtureErrors.push(String(event.reason)));
+
+// Column-major, WebGPU clip z in [0, 1]: a camera at (0, 1, 3) looking down -z.
+function viewProjection() {
+	const near = 0.1, far = 20, f = 1 / Math.tan(Math.PI / 6);
+	const projection = [f, 0, 0, 0, 0, f, 0, 0, 0, 0, far / (near - far), -1, 0, 0, (far * near) / (near - far), 0];
+	const view = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -1, -3, 1];
+	const out = new Float32Array(16);
+	for (let column = 0; column < 4; ++column)
+		for (let row = 0; row < 4; ++row)
+			for (let k = 0; k < 4; ++k) out[column * 4 + row] += projection[k * 4 + row] * view[column * 4 + k];
+	return out;
+}
+
+const shader = `
+@group(0) @binding(0) var<uniform> viewProjection: mat4x4<f32>;
+@vertex fn vs(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
+	return viewProjection * vec4<f32>(position, 1.0);
+}
+@fragment fn fs() -> @location(0) vec4<f32> { return vec4<f32>(1.0, 1.0, 1.0, 1.0); }`;
+
+async function start() {
+	const adapter = await navigator.gpu.requestAdapter();
+	const device = await adapter.requestDevice();
+	const canvas = document.getElementById("c");
+	const context = canvas.getContext("webgpu");
+	const format = navigator.gpu.getPreferredCanvasFormat();
+	context.configure({ device, format, alphaMode: "opaque" });
+
+	const points = [];
+	const angles = [0, 7, 15, 30, 45, 60, 75, 90, 105, 135, 160, 172];
+	angles.forEach((angle, index) => {
+		const radians = (angle * Math.PI) / 180;
+		const x = ((index % 4) - 1.5) * 0.5 + index * 0.0031;
+		const y = 1 + (Math.floor(index / 4) - 1) * 0.6 + index * 0.0047;
+		const dx = Math.cos(radians) * 0.2, dy = Math.sin(radians) * 0.2;
+		points.push(x - dx, y - dy, 0, x + dx, y + dy, 0);
+	});
+	const vertices = device.createBuffer({ label: "fixture lines", size: points.length * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+	device.queue.writeBuffer(vertices, 0, new Float32Array(points));
+	const camera = device.createBuffer({ label: "fixture camera", size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+	device.queue.writeBuffer(camera, 0, viewProjection());
+
+	const module = device.createShaderModule({ code: shader });
+	const pipeline = device.createRenderPipeline({
+		layout: "auto",
+		vertex: { module, entryPoint: "vs", buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }] },
+		fragment: { module, entryPoint: "fs", targets: [{ format }] },
+		primitive: { topology: "line-list" },
+		depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+	});
+	const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: camera } }] });
+	const depth = device.createTexture({ size: [canvas.width, canvas.height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+
+	function frame() {
+		const encoder = device.createCommandEncoder();
+		const pass = encoder.beginRenderPass({
+			colorAttachments: [{ view: context.getCurrentTexture().createView(), clearValue: { r: 0.1, g: 0.2, b: 0.6, a: 1 }, loadOp: "clear", storeOp: "store" }],
+			depthStencilAttachment: { view: depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+		});
+		pass.setPipeline(pipeline);
+		pass.setBindGroup(0, bindGroup);
+		pass.setVertexBuffer(0, vertices);
+		pass.draw(points.length / 3);
+		pass.end();
+		device.queue.submit([encoder.finish()]);
+		requestAnimationFrame(frame);
+	}
+	requestAnimationFrame(frame);
+	window.__fixtureReady = true;
+}
+start().catch((error) => window.__fixtureErrors.push(String((error && error.stack) || error)));
+</script>
+</body>
+</html>

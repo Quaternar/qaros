@@ -1,0 +1,47 @@
+{
+	"Name": "recipe-02-thin-lines-render-scale",
+	"DisplayName": "Recipe: thin lines and RenderScale",
+	"Id": "com.quaternar.recipe-02-thin-lines-render-scale",
+	"Version": "1.0.0",
+	"Channel": "debug",
+	"AddressPattern": "*recipes/02-thin-lines-render-scale/*",
+	"Engine": "three.js",
+	"PageRegion": {
+		"Width": 640,
+		"Height": 480
+	},
+	"AppScale": 0.5,
+	"RenderScale": 1.0,
+	"ContinuousRendering": true,
+	"RenderRate": 60,
+	"TransportAlpha": false,
+	"ShareBrowserProfile": true,
+	"_sv": 3,
+	"Scripts": [
+		{
+			"Name": "capture-renderer",
+			"Stage": "preDocument",
+			"Library": "threejs-capture@1"
+		},
+		{
+			"Name": "render-frame-core",
+			"Stage": "afterLoad",
+			"Library": "render-frame-core@1"
+		},
+		{
+			"Name": "webgl-atlas-pack",
+			"Stage": "afterLoad",
+			"Library": "webgl-atlas-pack@1"
+		},
+		{
+			"Name": "render-frame-webgl",
+			"Stage": "afterLoad",
+			"Library": "threejs-render-frame@1"
+		},
+		{
+			"Name": "render-frame-webgpu",
+			"Stage": "afterLoad",
+			"Library": "threejs-webgpu-render-frame@1"
+		}
+	]
+}

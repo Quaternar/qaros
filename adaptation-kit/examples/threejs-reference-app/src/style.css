@@ -1,0 +1,260 @@
+/*
+ * Ordinary application styling -- no QAR-specific hooks of any kind. The one structural choice
+ * made for the adaptation's benefit (not the app's) is that every piece of chrome is positioned
+ * with `position: absolute` against #app-ui rather than `position: fixed` against the viewport:
+ * that makes #app-ui's own box the CSS containing block for all of it, so confining #app-ui to a
+ * rectangle (which an adaptation script does from the outside, see the kit's lib/ui-confinement@1.js)
+ * clips every panel, toast, the dialog and the HUD along with it in one rule, instead of requiring
+ * the adaptation to know about each element individually.
+ */
+
+:root {
+	color-scheme: dark;
+	--chrome-bg: rgb(20, 18, 34);
+	--chrome-panel: rgba(26, 24, 46, 0.88);
+	--chrome-border: rgba(255, 255, 255, 0.12);
+	--chrome-text: rgb(232, 232, 240);
+	/* Deliberately a vivid, fully saturated magenta rather than a more conventional accent colour:
+		 every material colour in the 3D scene (src/main.js) is a warm or cool, moderately saturated
+		 hue, and this is the colour an automated check looks for to confirm the application's chrome
+		 painted where it should (and nowhere else) -- picked to be nothing any realistic lighting of
+		 that scene could plausibly produce, so a false match never happens by coincidence. */
+	--chrome-accent: rgb(255, 0, 200);
+	font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--chrome-bg);
+	color: var(--chrome-text);
+}
+
+#viewport {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	display: block;
+}
+
+#app-ui {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+#app-ui > * {
+	pointer-events: auto;
+}
+
+.panel {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 220px;
+	background: var(--chrome-panel);
+	border-color: var(--chrome-border);
+	box-sizing: border-box;
+	padding: 16px;
+	overflow-y: auto;
+}
+
+.panel h2 {
+	margin: 0 0 12px;
+	font-size: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--chrome-accent);
+}
+
+#panel-left {
+	left: 0;
+	border-right: 1px solid var(--chrome-border);
+}
+
+#panel-right {
+	right: 0;
+	border-left: 1px solid var(--chrome-border);
+}
+
+#object-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+#example-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 18px;
+}
+
+#example-list button {
+	padding: 7px 8px;
+	text-align: left;
+	background: transparent;
+	color: var(--chrome-text);
+	border: 1px solid var(--chrome-border);
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+}
+
+#example-list button:hover,
+#example-list button.active {
+	border-color: var(--chrome-accent);
+	color: var(--chrome-accent);
+}
+
+#object-list li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 12px;
+	margin-bottom: 14px;
+}
+
+.field input[type="range"] {
+	width: 100%;
+}
+
+#open-about {
+	width: 100%;
+	padding: 8px;
+	background: var(--chrome-accent);
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+#hud {
+	position: absolute;
+	top: 16px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	pointer-events: none;
+}
+
+#reticle {
+	width: 28px;
+	height: 28px;
+	border: 2px solid var(--chrome-accent);
+	border-radius: 50%;
+}
+
+#reticle::after {
+	content: "";
+	display: block;
+	width: 2px;
+	height: 2px;
+	margin: 12px auto;
+	background: var(--chrome-accent);
+}
+
+#hud-readout {
+	font-size: 12px;
+	padding: 2px 10px;
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 10px;
+}
+
+#toast-stack {
+	position: absolute;
+	right: 16px;
+	bottom: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 220px;
+	align-items: flex-end;
+}
+
+.toast {
+	background: var(--chrome-panel);
+	border: 1px solid var(--chrome-border);
+	border-left: 3px solid var(--chrome-accent);
+	color: var(--chrome-text);
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+	animation: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+#modal-backdrop {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Solid-ish: this is the rectangle an automated check samples to confirm application chrome
+		 painted somewhere (see --chrome-accent's own doc comment on the colour choice), and must never
+		 find inside a per-user rendered view. */
+	background: rgba(255, 0, 200, 0.94);
+}
+
+#modal-backdrop.hidden {
+	display: none;
+}
+
+#modal {
+	background: var(--chrome-accent);
+	color: white;
+	padding: 24px 28px;
+	border-radius: 8px;
+	max-width: 360px;
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+#modal h2 {
+	margin-top: 0;
+	font-size: 16px;
+}
+
+#modal button {
+	margin-top: 12px;
+	padding: 8px 16px;
+	background: white;
+	color: var(--chrome-accent);
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-weight: 600;
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Recipe: UI confinement</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; background: #202028; } canvas { display: block; }
+#app-ui { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+#app-ui .panel { position: absolute; top: 16px; left: 16px; padding: 12px; background: rgba(255, 0, 200, 0.9); color: white; font-family: sans-serif; pointer-events: auto; }</style>
+<script type="importmap">
+{ "imports": {
+	"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+	"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js"
+} }
+</script>
+</head>
+<body>
+<div id="app-ui"><div class="panel">Settings panel: the page shows it, users never see it.</div></div>
+<script type="module">
+const useWebGpu = new URLSearchParams(location.search).has("webgpu");
+const THREE = await import(useWebGpu ? "three/webgpu" : "three");
+const renderer = useWebGpu ? new THREE.WebGPURenderer({ antialias: false }) : new THREE.WebGLRenderer({ antialias: false });
+if (useWebGpu) await renderer.init();
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202028);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 3));
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
+camera.position.set(0, 1.2, 3);
+camera.lookAt(0, 1, 0);
+window.addEventListener("resize", () => {
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize(window.innerWidth, window.innerHeight);
+});
+const box = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0x3f8fd0 }));
+box.position.set(0, 1, -0.5);
+scene.add(box);
+function animate(time) { box.rotation.y = time / 1000; }
+
+renderer.setAnimationLoop((time) => {
+	if (typeof animate === "function") animate(time);
+	renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

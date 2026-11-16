@@ -8,14 +8,16 @@ description: Start, configure and stop the applications that stream content into
 
 A **source application** renders content into an app volume and streams it to the target applications (headsets, visualizers). You start and manage them from the visualizer's **Source Applications** panel.
 
+To start with Rerun, RViz (ROS 2), Blender or 3D Slicer, follow its page in [Supported Apps](../user-guide/supported-apps/index.md).
+
 ## The panel
 
 | Section | Shows |
 |---|---|
-| **Apps** | A tile grid: built-in apps, then detected apps, then your presets, then **+ Add source app**. The refresh icon looks for installed apps again. |
+| **Apps** | One row per app: built-in apps, detected apps and your presets. Above the list: search, filter by type, sort and **+**. The refresh icon in the heading looks for installed apps again. |
 | **Running** | One row per running app, with its status, **Streams to**, **Stop** and, where supported, **Live settings**. Web apps have their own buttons: see [Web apps](#web-apps). |
 
-Tile tags:
+Row tags:
 
 | Tag | Meaning |
 |---|---|
@@ -26,7 +28,21 @@ Tile tags:
 | **Debug** | Visible only in the Debug UI mode. |
 | **N on** | N copies of this app are running. |
 
-Built-in and detected apps cannot be edited or removed. To change one, open it and **Save as new preset**.
+Built-in and detected apps are system defaults: they cannot be edited or removed, by the panel or by any other request to the Hub. To change one, duplicate it as a preset of your own (see [Presets](#presets)).
+
+A known app that is not found on this PC (Blender, ROS 2 Rviz) stays in the list, greyed out, with **Locate...** (see [Locating an app QAROS did not find](#locating-an-app-qaros-did-not-find)).
+
+## Presets
+
+Each row's **...** menu:
+
+| Item | Shown for | Does |
+|---|---|---|
+| **Duplicate as new preset** | every app | Saves a copy named `<name> copy` and opens it, so you can rename it and set another **Executable**. Use it to keep several versions side by side, such as Blender 4.5 and Blender 5.2. |
+| **Locate...** / **Locate another folder...** | Blender, ROS 2 Rviz | Picks a folder for QAROS to search (see below). |
+| **Remove preset...** | your presets only | Asks to confirm under the row, then removes the preset. Apps already started from it keep running. |
+
+Saving a preset again updates it in place; nothing in the list is ever added twice by itself.
 
 ## Launching an app
 
@@ -40,22 +56,22 @@ Preset dialogs also offer **Save**, **Save as new preset** and **Remove**. Remov
 
 ## Adding your own app
 
-1. Click **+ Add source app**.
-2. Pick the type: **OpenXR app**, **Web app** or, in the Developer or Debug UI mode, **QAROS API app**.
+1. Click **+**.
+2. Pick a card, the same four in every UI mode: **Add OpenXR app**, **Web app**, **Import app package** (imports a package instead, see [Importing a web app package](#importing-a-web-app-package)) or **Open QAROS supported app** (an app built on the QAROS API, such as Blender, Rviz or the ANARI demo).
 3. Set **Executable** (type a path or **Browse**), or for a web app its **Address**. **Name** defaults to the executable name or the address's host.
 4. Press **Add app**. This saves a preset; it does not launch. Click the new tile and press **Launch**.
 
 | App type | Settings | Processes |
 |---|---|---|
 | OpenXR app | Executable, Arguments (one per line) | One process per target app |
-| QAROS API app | Executable, Arguments (one per line) | One process for all targets |
+| QAROS supported app | Executable; Arguments (one per line) in the Developer and Debug UI modes | One process for all targets |
 | Web app | Address, adaptation (see [Web apps](#web-apps)) | Runs inside this visualizer, one page for all targets |
 | StereoKit | Model, Scale, Orientation, Show gesture points | One process per target app |
 | CPU Renderer | Points, Sphere radius | One process per target app |
 
-To test your own QAROS API app: switch to Developer mode (Settings, no password), add it as above with type **QAROS API app**, then launch its tile. Check **Running** for its status and the Hub's log folder for its stdout/stderr.
+To start your own app built on the QAROS API: add it as above with **Open QAROS supported app**, then launch its row. Check **Running** for its status and the Hub's log folder for its stdout/stderr. Its launch arguments start it with QAROS (for Blender, `--addons qaros_anari`), so only the Developer and Debug UI modes show and change them; every mode sets its **Executable**.
 
-A **QAROS API app** is an application built on the QAROS C or C# API (for example the Vulkan cube example). QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Started by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros).
+A **QAROS supported app** (QAROS API app) is an application built on the QAROS C or C# API, such as Blender with the QAROS add-on, ROS 2 Rviz with the QAROS plugin, or the ANARI demo. QAROS starts it; the app joins as a local app, so it needs the same one-time approval as when a user starts it ([Approved local apps](#approved-local-apps)). QAROS restarts it with backoff if it exits within 10 s. What the app has to do is in [Developer Guide: Started by QAROS](/docs/developer-guide/onboarding-and-sessions#started-by-qaros).
 
 ## Approved local apps
 
@@ -118,10 +134,9 @@ QAROS comes with ready-made adaptations for some public web apps, each a tile in
 | Tile | Website | Shown from |
 |---|---|---|
 | **Foxglove** | `https://app.foxglove.dev/`: the largest 3D panel of any project and layout, after you sign in | Basic |
-| **three.js Littlest Tokyo** | the three.js animated glTF example | Basic |
-| **three.js examples** | any official three.js example (`https://threejs.org/examples/`) | Basic |
+| **three.js examples** | any official three.js example (`https://threejs.org/examples/`): pick it in the gallery, for instance Littlest Tokyo (`#webgl_animation_keyframes`) | Basic |
 | **three.js Shinjuku Station** | the Shinjuku Station indoor map demo, as a table model | Basic |
-| three.js Shapes, WebGL Aquarium, WebGPU Deferred Rendering | developer samples, only in development builds | Developer |
+| WebGL Aquarium, WebGPU Deferred Rendering | developer samples, only in development builds | Developer |
 
 These adaptations are published in the public repository
 [Quaternar/qaros-webapps](https://github.com/Quaternar/qaros-webapps), each with its own version.
@@ -149,6 +164,13 @@ them up to date by itself:
 To change one of these adaptations, contribute to the repository, or duplicate it in the
 visualizer under a new id: an update never changes your own copy.
 
+- An adaptation a newer release no longer lists stays installed but is never picked by address,
+  so it cannot override the adaptation that replaced it.
+- An adaptation you installed (an import, or such a leftover) is removed with the row's **...**
+  menu, **Uninstall web app adaptation...**. One that no tile opens gets a tile of its own for
+  this. Adaptations that ship with QAROS cannot be uninstalled.
+- To write your own adaptation, see [Web App Adaptations](../developer-guide/web-app-adaptations/index.md).
+
 ### Logging in
 
 When the address opens on a login page, there is no renderer yet and the row shows **Waiting for a renderer - log in on Page, then Probe**:
@@ -169,6 +191,8 @@ The login is kept: all web apps in a visualizer share one browser profile, cooki
 | **Stop** | streaming or starting | Stops streaming. The page stays loaded. |
 | **Start** | stopped | Streams again. After a failure or a visualizer restart, reloads the page first. |
 | **Remove** | always | Closes the page and removes the app from the list. |
+
+In a narrow panel the buttons move to a line under the app's name, and become icons (their name on hover) when even that line is too narrow. A name too long for two lines is cut with "..."; hover it to read it whole.
 
 **Details** shows the address, what the probe found (engine, canvases, depth), the adaptation profile in use, active targets, frame counters, the last error and the event log (**Clear**, **Copy**). **Probe again** probes now; **Reload** loads the page again without streaming. In the Developer and Debug UI modes, **Profile** switches the live app to another stored profile and reloads the page.
 
@@ -206,13 +230,27 @@ Changing it re-routes a running app without a restart. For a QAROS API app, **St
 
 Everything else (Show gesture points, executable, arguments) applies at launch: stop the app and launch it again. Live changes affect only the running app and are not written back to its preset.
 
+## Locating an app QAROS did not find
+
+QAROS looks for Blender (4.5 or newer) and ROS 2 distributions with rviz2 in their usual places. When it finds none, the app's row stays greyed out with **Locate...**:
+
+1. Press **Locate...** on the row.
+2. Pick the folder: for Blender the folder with `blender.exe` (an unzipped blender.org download works), for ROS 2 Rviz the distribution folder with its setup script and rviz2.
+3. The row becomes usable. Every **Refresh** searches that folder from then on; picking the same folder again adds nothing.
+
+To add another Blender version while one is already found, use **Locate another folder...** in the row's **...** menu, or duplicate the row and set its **Executable**.
+
+## Importing a web app package
+
+A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then the **Import app package** card, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
+
 ## Detected apps
 
 On start, and when you press refresh, the visualizer looks in its own folder for known applications:
 
 | File | Tile |
 |---|---|
-| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS API app, Developer mode and up) |
+| `qar-vulkan-source.exe` | **Vulkan cube** (QAROS supported app, Developer mode and up) |
 
 ## UI modes and mode-gated apps
 
@@ -220,8 +258,8 @@ The visualizer has three UI modes: **Basic**, **Developer** and **Debug** (Debug
 
 | Apps | Shown from |
 |---|---|
-| StereoKit, your OpenXR presets, the web apps QAROS provides | Basic |
-| QAROS API apps (yours and the Vulkan cube), the web app developer samples | Developer |
+| StereoKit, your OpenXR presets, the web apps QAROS provides, QAROS supported apps (Blender, Rviz, your own) | Basic |
+| The QAROS examples (Vulkan cube, ANARI cube), the web app developer samples | Developer |
 | CPU Renderer, Test OpenXR | Debug |
 
 In a lower mode their tiles and running rows are hidden, but apps already running keep running.
