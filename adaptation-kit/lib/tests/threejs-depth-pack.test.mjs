@@ -20,7 +20,7 @@ function shaderBlockFunctions() {
 			`function ${name}(${parameters.replace(/\b(?:float|int|bool)\s+/g, "")}) {`)
 		.replace(/\b(?:float|int|bool)\s+(\w+)\s*=/g, "let $1 =")
 		.replace(/\b(min|max)\(/g, "Math.$1(");
-	const build = new Function("eyeSize", "eyeDepth", "eyeAlpha", `${javascript}\nreturn { blockDepth, blockAlpha };`);
+	const build = new Function("eyeSize", "eyeDepth", "eyeAlpha", `${javascript}\nreturn { blockDepth, blockAlpha, coveredBlockDepth };`);
 	return (image) => build(
 		{ x: image.width, y: image.height },
 		(x, y) => image.depth[y * image.width + x],
@@ -116,4 +116,47 @@ test("alpha of a block below the eye's last row is empty", () => {
 	const { blockAlpha } = blockFunctionsFor(image);
 	assert.equal(blockAlpha(0, 1), 1);
 	assert.equal(blockAlpha(0, 2), 0);
+});
+
+// Multisampled: a line thinner than a texel colours (covers) every texel it crosses, but the one
+// depth sample kept per texel hits only some of them.
+function sparseDepthLineImage(width, height, everyNth) {
+	const depth = new Float32Array(width * height).fill(1);
+	const alpha = new Float32Array(width * height);
+	const y = Math.floor(height / 2);
+	for (let x = 4; x < width - 4; ++x) {
+		alpha[y * width + x] = 0.3;
+		if (x % everyNth === 0) depth[y * width + x] = LineDepth;
+	}
+	return { width, height, depth, alpha };
+}
+
+test("the multisampled pack shader takes the covered block depth", () => {
+	assert.match(renderSource, /if \(coverageDepth != 0\) rawDepth = coveredBlockDepth\(column, row\);/);
+	assert.match(renderSource, /gl\.uniform1i\(pack\.uniforms\.coverageDepth, target\.samples > 1 \? 1 : 0\);/);
+});
+
+test("a covered block whose texels missed the depth sample takes the nearest depth around it", () => {
+	// Within reach: a depth sample at most three texels beside the block (the 8x8 search).
+	for (const everyNth of [2, 3, 4, 5]) {
+		const image = sparseDepthLineImage(64, 16, everyNth);
+		const { blockDepth, coveredBlockDepth } = blockFunctionsFor(image);
+		const plain = packAndUnpack(image, blockDepth);
+		const covered = packAndUnpack(image, coveredBlockDepth);
+		let plainMissing = 0;
+		for (let index = 0; index < covered.length; ++index) {
+			if (image.alpha[index] === 0) continue;
+			if (plain[index] === 1) ++plainMissing;
+			assert.equal(covered[index], LineDepth, `every ${everyNth}, texel ${index}`);
+		}
+		if (everyNth > 2) assert.ok(plainMissing > 0, "the single-sample reduction should miss some covered blocks");
+	}
+});
+
+test("an uncovered block stays empty and a block with depth keeps its own nearest", () => {
+	const image = { width: 6, height: 2, depth: Float32Array.from([1, 1, 0.3, 1, 0.8, 1, 1, 1, 1, 1, 1, 1]), alpha: new Float32Array(12) };
+	image.alpha[4] = 1;
+	const { coveredBlockDepth } = blockFunctionsFor(image);
+	assert.equal(coveredBlockDepth(0, 0), 1, "no coverage: no depth borrowed from a neighbour");
+	assert.equal(coveredBlockDepth(2, 0), Math.fround(0.8), "own depth: not the nearer neighbour's");
 });

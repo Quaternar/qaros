@@ -1,4 +1,4 @@
-// @qaros-library threejs-render-frame@1.1
+// @qaros-library threejs-render-frame@1.2
 // @stage afterLoad
 // @needs render-frame-core@1 threejs-capture@1 webgl-atlas-pack@1
 //
@@ -35,10 +35,14 @@
 // webgl-atlas-pack@1. Native code is told the projection convention per camera and reconstructs
 // from it. A logarithmic depth buffer is not linear post-projection depth and is not supported.
 //
-// Not covered: post-processing (EffectComposer passes run on the application's own frame only),
-// a `WebGPURenderer` (threejs-webgpu-render-frame@1), and multisampling of the eye views (they
-// render below the receiver's resolution and the sender upsamples them; a resolve per request
-// costs more than the edges gain).
+// Multisampling (since 1.2): a request carrying `antialias` (the profile's `Antialias`, samples per
+// pixel) renders the eyes multisampled (webgl-atlas-pack@1.1): thin lines, point clouds and dense
+// grids antialiased as on the page's own canvas, which three.js draws with the context's MSAA. The
+// pass is cleared to alpha 0 so its alpha is coverage, its colour still the page's clear colour.
+// Without `antialias` the eyes render single-sampled, as before.
+//
+// Not covered: post-processing (EffectComposer passes run on the application's own frame only) and
+// a `WebGPURenderer` (threejs-webgpu-render-frame@1).
 (() => {
 	const core = window.__qarAdaptationCore;
 	const state = window.__qarAdaptationState;
@@ -217,7 +221,8 @@
 	}
 
 	// three.js thinks it draws to the canvas; the context binds the eye framebuffer instead.
-	function renderIntoPass(renderer, gl, scene, camera, framebuffer) {
+	function renderIntoPass(renderer, gl, scene, camera, target) {
+		const framebuffer = target.framebuffer;
 		const bindFramebuffer = gl.bindFramebuffer;
 		const drawBuffers = gl.drawBuffers;
 		const ownBindFramebuffer = Object.hasOwn(gl, "bindFramebuffer");
@@ -239,12 +244,19 @@
 		const background = scene.background;
 		scene.background = null;
 		const restoreDepthWrite = writeDepthForOpaqueMaterials(scene);
+		const autoClear = renderer.autoClear;
 		try {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			renderer.setScissorTest(false);
 			renderer.clear(true, true, true);
+			if (target.samples > 1) {
+				atlasPacker().clearAlphaForCoverage(gl);
+				// Cleared above; three.js clearing again would put the page's clear alpha back.
+				renderer.autoClear = false;
+			}
 			renderer.render(scene, camera);
 		} finally {
+			renderer.autoClear = autoClear;
 			restoreDepthWrite();
 			scene.background = background;
 			if (ownBindFramebuffer) gl.bindFramebuffer = bindFramebuffer;
@@ -255,15 +267,15 @@
 		}
 	}
 
-	function renderAllEyes(classes, renderer, gl, scene, eyes, layersMask) {
+	function renderAllEyes(classes, renderer, gl, scene, eyes, layersMask, samples) {
 		const size = layoutEyes(eyes);
-		const target = atlasPacker().ensurePass(gl, size.width, size.height);
+		const target = atlasPacker().ensurePass(gl, size.width, size.height, { samples });
 		const camera = ensureArrayCamera(classes);
 		camera.cameras = eyes.map((eye) => eye.camera);
 		camera.layers.mask = layersMask;
 		// Only the transparent objects' draw order uses the array camera's pose (in scene space).
 		eyes[0].camera.matrixWorld.decompose(camera.position, camera.quaternion, camera.scale);
-		renderIntoPass(renderer, gl, scene, camera, target.framebuffer);
+		renderIntoPass(renderer, gl, scene, camera, target);
 		return target;
 	}
 
@@ -309,7 +321,7 @@
 		try {
 			const eyes = collectEyes(classes, detail.targets, layersMask);
 			if (eyes.length > 0) {
-				const target = renderAllEyes(classes, renderer, gl, scene, eyes, layersMask);
+				const target = renderAllEyes(classes, renderer, gl, scene, eyes, layersMask, detail.antialias);
 				atlasPacker().copyEyesToAtlas(gl, target, atlasHeight, eyes);
 			}
 		} finally {

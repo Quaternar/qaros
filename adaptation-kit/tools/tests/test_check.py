@@ -99,6 +99,8 @@ class CheckTests(Scratch):
             "render scale": ({"RenderScale": 1.5}, "'RenderScale' must be a number in (0, 1]"),
             "render rate high": ({"RenderRate": 240}, "'RenderRate' must be frames per second in [1, 120]"),
             "render rate type": ({"RenderRate": "fast"}, "'RenderRate' must be frames per second in [1, 120]"),
+            "antialias count": ({"Antialias": 3}, "'Antialias' must be samples per pixel"),
+            "antialias type": ({"Antialias": True}, "'Antialias' must be samples per pixel"),
             "by address type": ({"AppScaleByAddress": {"x": 1}}, "must be a list"),
             "by address entry": ({"AppScaleByAddress": [{"AddressPattern": "", "AppScale": "big"}]},
                                  "AppScaleByAddress[0].AddressPattern must be a non-empty string"),
@@ -123,6 +125,7 @@ class CheckTests(Scratch):
         profile = adaptation_profile(
             Channel="developer",
             RenderRate=15,
+            Antialias=4,
             AppScaleByAddress=[{"AddressPattern": "https://example.com/big/*", "AppScale": 0.01}],
             PageRegion={"Width": 512, "Height": 512},  # a third-party page may use less than 1024
         )

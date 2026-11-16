@@ -87,6 +87,13 @@ Packs WebGL2 eye images into the atlas by the [shared contract](#contracts-every
   depth cleared to 1), then `copyEyesToAtlas` writes colour, depth and alpha into each view's
   rectangle.
 - Engine-agnostic: use it for a raw WebGL handler instead of writing a packer.
+- Multisampling (1.1): `ensurePass(gl, width, height, { samples: 4 })` renders into multisampled
+  colour and depth renderbuffers (`pass.samples` is the count the GPU gave, the largest it supports
+  up to the one asked for; 1 is none). `copyEyesToAtlas` resolves them first: colour is the average
+  of each pixel's samples, depth one sample per pixel, never averaged. Clear the pass's alpha with
+  `clearAlphaForCoverage(gl)` before drawing so alpha is coverage: a covered pixel whose depth
+  sample missed keeps its own colour, and a covered block without depth takes the nearest depth
+  of the pixels up to three around it.
 
 ## threejs-render-frame@1
 
@@ -101,8 +108,10 @@ scene.
 - Publishes the atlas to the stream surface; the page's own canvas and view stay as they were.
 - List [`threejs-webgpu-render-frame@1`](#threejs-webgpu-render-frame1) too and one profile covers
   both renderers.
+- Multisampling (1.2): with the profile's `Antialias` (the request's `detail.antialias`) the eyes
+  render multisampled (`webgl-atlas-pack@1.1`), antialiased like the page's own canvas.
 - Not covered: post-processing (`EffectComposer` passes run on the page's own frame only), a
-  logarithmic depth buffer, multisampling of the eye views.
+  logarithmic depth buffer.
 
 ## threejs-webgpu-render-frame@1
 

@@ -41,17 +41,26 @@ flowchart LR
 
 Example: [`02-thin-lines-render-scale`](https://github.com/Quaternar/qaros/tree/main/adaptation-kit/examples/recipes/02-thin-lines-render-scale).
 
-- Users' eye views render without multisampling: the page's `antialias: true` applies to its own
-  canvas only.
+- Users' eye views render without multisampling unless the profile sets `Antialias`: the page's
+  `antialias: true` applies to its own canvas only.
 - `RenderScale` sets each eye's resolution as a fraction of the user's. At 0.5 a line one page
   pixel wide still rasterizes (lines are at least one pixel wide) but every pixel of it is a full
   eye pixel, twice as wide in the headset.
+- Lines drawn as triangles thinner than an eye pixel (three.js `LineMaterial` with a width in
+  pixels, measured against the page's canvas, not the eye) show only where they cover a pixel
+  centre: without multisampling they stream dotted, and a dense grid shows moire rings at a
+  distance. `RenderScale` 1 alone does not fix that; `Antialias` does.
+- `Antialias` (samples per pixel: 2, 4, 8 or 16; absent: none) renders the eye views multisampled,
+  as the page's own canvas: colour is the average of each pixel's samples, depth keeps one sample
+  per pixel (an edge pixel is in front or behind, never between). It needs
+  `threejs-render-frame@1.2` and costs about 1 ms of GPU time per frame at 1920 x 1080.
 - Depth stays correct at any scale: each depth sample keeps the nearest depth of its block.
 
-| Content | `RenderScale` |
-|---|---|
-| Lines, CAD, maps, charts, text in the scene | 1.0 |
-| Shaded scenes where cost matters more than edges | 0.5 to 0.75 |
+| Content | `RenderScale` | `Antialias` |
+|---|---|---|
+| Sub-pixel lines, dense grids, point clouds (robotics viewers, Foxglove) | 1.0 | 4 |
+| Lines, CAD, maps, charts, text in the scene | 1.0 | absent, or 4 when edges matter |
+| Shaded scenes where cost matters more than edges | 0.5 to 0.75 | absent |
 
 ## 3. Depth conventions
 
