@@ -14,6 +14,8 @@ Your open Blender scene, live in the room: edits in Blender show up within a mom
 
 *Turbofan model by [blenderbirb](https://sketchfab.com/blenderbirb), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the [demo](https://github.com/Quaternar/qaros-blender/tree/main/demo) of the add-on.*
 
+**New to it?** Follow [Tutorial: Stream a Turbine from Blender](./blender-turbine-tutorial.md): import a GLB, stream it, edit it live, choose the renderer.
+
 | | Version |
 |---|---|
 | **QAROS ANARI Streaming** add-on | 0.4.1 |
