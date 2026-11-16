@@ -1,0 +1,41 @@
+name: App release tests
+
+# Unit and end-to-end tests of .github/app-release/app_release.py, the release-on-merge logic the
+# QAROS app repositories call through app-release.yml. Run locally the same way:
+#   python -m unittest discover -s .github/app-release -v
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/app-release/**"
+      - ".github/workflows/app-release*.yml"
+  pull_request:
+    paths:
+      - ".github/app-release/**"
+      - ".github/workflows/app-release*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: "3.9"
+          - os: ubuntu-24.04
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests
+        run: python -m unittest discover -s .github/app-release -v

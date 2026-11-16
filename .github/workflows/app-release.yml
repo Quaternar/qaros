@@ -1,0 +1,130 @@
+name: App release
+
+# Reusable workflow of the QAROS app repositories (qaros-blender, qaros-rerun, qaros-ros-rviz,
+# qaros-ogre, qaros-qt, qaros-slicer): every merge to main that changes behaviour is a release.
+# The rules are in docs/adr/0002-app-release-on-merge.md; the logic is
+# .github/app-release/app_release.py, which reads the app repository's .github/app-release.json.
+#
+# - On a pull request (job "bump"): checks that the title is a Conventional Commit or that one
+#   release:major|minor|patch|none label is set, and shows the version merging it releases.
+# - On a push to main or workflow_dispatch (job "release"): decides the bump from the pull
+#   requests merged since the last release tag, writes the new version into every file that
+#   carries it, moves the changelog's Unreleased section under it, commits
+#   "chore(release): vX.Y.Z" as github-actions[bot], tags vX.Y.Z, pushes both atomically and
+#   starts the repository's release build for the tag. Runs one at a time per repository; when
+#   main moves meanwhile it starts again from the new main. A run on a released HEAD does nothing.
+#
+# The caller (an app repository's .github/workflows/app-release.yml):
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#       branches: [main]
+#       types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+#     workflow_dispatch:
+#   jobs:
+#     app-release:
+#       uses: Quaternar/qaros/.github/workflows/app-release.yml@main
+#       permissions:
+#         contents: write
+#         actions: write
+#         pull-requests: read
+#       secrets:
+#         release_token: ${{ secrets.QAROS_RELEASE_TOKEN }}
+#
+# Secret QAROS_RELEASE_TOKEN (optional): needed only when main is protected against the workflow's
+# own token. A GitHub App installation token or a fine-grained personal access token with
+# Contents read and write that may bypass main's rules. With it, the tag push starts the
+# release workflow by itself; without it the run dispatches the release workflow on the tag.
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: The app repository's release configuration
+        type: string
+        default: .github/app-release.json
+      tools-ref:
+        description: The Quaternar/qaros ref app_release.py is taken from
+        type: string
+        default: main
+    secrets:
+      release_token:
+        description: A token that may push to main (only when the workflow token may not)
+        required: false
+
+jobs:
+  bump:
+    name: Release bump
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tags give the last release; the base branch shows whether the changelog changed.
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: Quaternar/qaros
+          ref: ${{ inputs.tools-ref }}
+          path: .qaros-app-release
+          sparse-checkout: .github/app-release
+          persist-credentials: false
+      - name: Title and labels define the bump
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          python3 .qaros-app-release/.github/app-release/app_release.py --config "$CONFIG" \
+            check --title "$TITLE" --labels "$LABELS" --base-ref "origin/$BASE"
+
+  release:
+    name: Release
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+      && !startsWith(github.event.head_commit.message, 'chore(release): v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: app-release-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.release_token || github.token }}
+      - uses: actions/checkout@v4
+        with:
+          repository: Quaternar/qaros
+          ref: ${{ inputs.tools-ref }}
+          path: .qaros-app-release
+          sparse-checkout: .github/app-release
+          persist-credentials: false
+      - name: Release what merged since the last release
+        env:
+          # The API and the release build use the workflow token; the push uses the checkout's.
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          CONFIG: ${{ inputs.config }}
+          OWN_TOKEN: ${{ secrets.release_token != '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898579+github-actions[bot]@users.noreply.github.com"
+          # Keep the tools out of the release commit.
+          echo ".qaros-app-release/" >> .git/info/exclude
+          flags=()
+          if [ "$OWN_TOKEN" = true ]; then flags+=(--tag-push-triggers); fi
+          python3 .qaros-app-release/.github/app-release/app_release.py --config "$CONFIG" \
+            release --before "$BEFORE" "${flags[@]}"
