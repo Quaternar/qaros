@@ -174,7 +174,11 @@ impl<'session> AppVolumes<'session> {
 
     volume_setter!(
         /// Moves the box (pose of its center, room space).
-        set_pose, qar_impl_app_volumes_change_pose, Pose, |pose| pose.to_raw(), by_pointer
+        set_pose,
+        qar_impl_app_volumes_change_pose,
+        Pose,
+        |pose| pose.to_raw(),
+        by_pointer
     );
     volume_setter!(
         /// Resizes the box.
@@ -186,11 +190,19 @@ impl<'session> AppVolumes<'session> {
     );
     volume_setter!(
         /// Moves the content inside the box (volume meters).
-        set_app_pose, qar_impl_app_volumes_change_app_pose, Pose, |app_pose| app_pose.to_raw(), by_pointer
+        set_app_pose,
+        qar_impl_app_volumes_change_app_pose,
+        Pose,
+        |app_pose| app_pose.to_raw(),
+        by_pointer
     );
     volume_setter!(
         /// Room meters per app meter.
-        set_app_scale, qar_impl_app_volumes_change_app_scale, f32, |app_scale| app_scale, by_value
+        set_app_scale,
+        qar_impl_app_volumes_change_app_scale,
+        f32,
+        |app_scale| app_scale,
+        by_value
     );
 
     /// Renames the volume (UTF-8).
@@ -225,7 +237,11 @@ impl<'session> AppVolumes<'session> {
 
     volume_latest_getter!(
         /// Latest locally known pose, including changes by other peers and gestures.
-        latest_pose, qar_impl_app_volume_get_latest_pose, Pose, defaults::qar_pose_default(), |raw| Pose::from_raw(raw)
+        latest_pose,
+        qar_impl_app_volume_get_latest_pose,
+        Pose,
+        defaults::qar_pose_default(),
+        |raw| Pose::from_raw(raw)
     );
     volume_latest_getter!(
         /// Latest locally known size.
