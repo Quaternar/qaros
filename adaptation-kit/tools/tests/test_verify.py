@@ -177,8 +177,11 @@ class ShaderTests(Scratch):
 class FakeVisualizer:
     """A stand-in for the Visualizer's MCP endpoint: one source, one request, one atlas."""
 
-    def __init__(self, atlas: Atlas, readback=verify.PACK_EXPECTED) -> None:
+    def __init__(self, atlas: Atlas, readback=verify.PACK_EXPECTED, empty_polls: int = 0, timeouts: int = 0) -> None:
         self.atlas, self.readback, self.calls = atlas, readback, []
+        # The first `empty_polls` layout reads find no request yet (None: never one); the first
+        # `timeouts` DevTools calls time out the way the Visualizer's gateway reports it.
+        self.empty_polls, self.timeouts = empty_polls, timeouts
         visualizer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -205,8 +208,19 @@ class FakeVisualizer:
         if name == "viz_webapp_list":
             return {"structuredContent": {"sources": [{"instance_id": "web-1", "address": "https://example.com/app.html"}]}}
         if name == "devtools_send":
+            assert not arguments["params"].get("awaitPromise"), "verify never waits in the page"
+            if self.timeouts:
+                self.timeouts -= 1
+                return {"isError": True, "content": [{"type": "text", "text": "Code: 6 Desc: Timeout Msg: DevTools call timed out"}]}
             expression = arguments["params"]["expression"]
-            value = Atlas.detail() if "qaros-render-frame" in expression else self.readback
+            if "__qarVerifyRequest" in expression:
+                if self.empty_polls is None or self.empty_polls > 0:
+                    self.empty_polls = None if self.empty_polls is None else self.empty_polls - 1
+                    value = None
+                else:
+                    value = Atlas.detail()
+            else:
+                value = self.readback
             return {"structuredContent": {"success": True, "payload": {"result": {"value": value}}}}
         if name == "capture_surface":
             return {"content": [{"type": "image", "mimeType": "image/png", "data": base64.b64encode(self.atlas.png()).decode()}]}
@@ -218,15 +232,32 @@ class FakeVisualizer:
 
 
 class VerifyCommandTests(Scratch):
-    def run_verify(self, nearest: bool, readback=verify.PACK_EXPECTED, engine_profile=None):
+    def run_verify(self, nearest: bool, *extra: str, empty_polls=0, timeouts=0):
         atlas = Atlas()
         thin_line(atlas, nearest)
-        visualizer = FakeVisualizer(atlas, readback)
+        visualizer = FakeVisualizer(atlas, empty_polls=empty_polls, timeouts=timeouts)
         self.addCleanup(visualizer.close)
         kit = make_kit(self.dir)
-        profile = engine_profile or adaptation_profile()
-        folder = make_adaptation(self.dir, "a", profile)
-        return run_cli("verify", folder, "--kit", kit, "--port", visualizer.port), visualizer
+        folder = make_adaptation(self.dir, "a", adaptation_profile())
+        return run_cli("verify", folder, "--kit", kit, "--port", visualizer.port, *extra), visualizer
+
+    def test_layout_polled_until_a_request_arrives(self) -> None:
+        completed, visualizer = self.run_verify(True, empty_polls=2)
+        self.assertRuns(completed)
+        self.assertEqual(visualizer.calls.count("devtools_send"), 3)
+        self.assertIn("depth 100.00%", completed.stdout)
+
+    def test_devtools_timeout_is_retried(self) -> None:
+        completed, visualizer = self.run_verify(True, timeouts=1)
+        self.assertRuns(completed)
+        self.assertEqual(visualizer.calls.count("devtools_send"), 2)
+
+    def test_no_request_is_reported_as_not_checked(self) -> None:
+        completed, visualizer = self.run_verify(True, "--layout-wait", "1", empty_polls=None)
+        self.assertRuns(completed, 2)
+        self.assertIn("coverage not checked: no render-frame request reached the page within 1 s", completed.stdout)
+        self.assertEqual(completed.stderr, "")
+        self.assertNotIn("capture_surface", visualizer.calls)
 
     def test_good_atlas_passes(self) -> None:
         completed, visualizer = self.run_verify(nearest=True)

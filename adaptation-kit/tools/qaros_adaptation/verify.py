@@ -15,9 +15,13 @@ Checks:
    pack shader, compiled in the page's own WebGL2, writes near/mid/far depth as the expected bytes
    (`verify-depth.py`).
 
-The layout comes from the page's next `qaros-render-frame` request, the pixels from `capture_surface`
-(the atlas the page painted). "Coloured" means farther than `--threshold` from `--background` in
-any channel: users' views have no page background, so their empty pixels are the clear colour.
+The layout comes from the page's latest `qaros-render-frame` request, the pixels from
+`capture_surface` (the atlas the page painted). The request is read with short evaluations that
+never wait in the page: a listener keeps the latest one, and the tool polls it with backoff for up
+to `--layout-wait` seconds. A DevTools call that times out on a busy page is retried. When no
+request comes, coverage is reported as not checked (exit 2), not as a failure. "Coloured" means
+farther than `--threshold` from `--background` in any channel: users' views have no page
+background, so their empty pixels are the clear colour.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ import json
 import os
 import re
 import struct
+import time
 import urllib.request
 import zlib
 from dataclasses import dataclass, field
@@ -55,6 +60,10 @@ class Mcp:
     host: str = "127.0.0.1"
     port: int = DEFAULT_PORT
     timeout: float = 30.0
+
+    @staticmethod
+    def sleep(seconds: float) -> None:
+        time.sleep(seconds)
 
     def call(self, name: str, arguments: dict) -> dict:
         """The tool's full `result` (structuredContent and content items)."""
@@ -90,12 +99,24 @@ class Mcp:
                 return base64.b64decode(item["data"])
         raise VerifyError(f"MCP {name} answered no image")
 
-    def evaluate(self, instance: str, expression: str, await_promise: bool = False):
-        result = self.structured("devtools_send", {
+    def evaluate(self, instance: str, expression: str, attempts: int = 4, backoff: float = 0.5):
+        """Evaluates a short, non-blocking expression in the page. The Visualizer gives a DevTools
+        call 10 s; a busy page can still miss that, so a timeout is retried with backoff."""
+        arguments = {
             "instance_id": instance,
             "method": "Runtime.evaluate",
-            "params": {"expression": expression, "returnByValue": True, "awaitPromise": await_promise},
-        })
+            "params": {"expression": expression, "returnByValue": True},
+        }
+        delay = backoff
+        for attempt in range(attempts):
+            try:
+                result = self.structured("devtools_send", arguments)
+                break
+            except VerifyError as error:
+                if "timed out" not in str(error).lower() or attempt + 1 == attempts:
+                    raise
+                self.sleep(delay)
+                delay *= 2
         payload = result.get("payload", {})
         if not result.get("success") or "exceptionDetails" in payload:
             raise VerifyError(f"page evaluation failed: {json.dumps(payload.get('exceptionDetails') or result)[:400]}")
@@ -331,20 +352,46 @@ def analyse(
 # The live checks
 # --------------------------------------------------------------------------------------------------
 
-_NEXT_REQUEST = r"""new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('no qaros-render-frame request within 10 s: is a user streaming?')), 10000);
-    window.addEventListener('qaros-render-frame', ({ detail }) => {
-        clearTimeout(timer);
-        resolve(JSON.parse(JSON.stringify(detail)));
-    }, { once: true });
-})"""
+# Installs (once per document) a listener that keeps the page's latest render-frame request, and
+# returns the one kept so far, or null. It never waits: waiting in the page for the next request
+# could outlast the Visualizer's DevTools call timeout on a busy page, and under continuous pacing a
+# new request only comes when the users' views change.
+_LATEST_REQUEST = r"""(() => {
+    if (!window.__qarVerifyRequest) {
+        window.__qarVerifyRequest = { detail: null, seen: 0 };
+        window.addEventListener('qaros-render-frame', ({ detail }) => {
+            window.__qarVerifyRequest.detail = JSON.parse(JSON.stringify(detail));
+            window.__qarVerifyRequest.seen++;
+        });
+    }
+    return window.__qarVerifyRequest.detail;
+})()"""
 
 
-def next_request(mcp: Mcp, instance: str) -> dict:
-    detail = mcp.evaluate(instance, _NEXT_REQUEST, await_promise=True)
-    if not isinstance(detail, dict) or not detail.get("targets"):
-        raise VerifyError("the render-frame request names no target: connect a user (headset or streamed receiver)")
-    return detail
+class LayoutUnavailable(VerifyError):
+    """No render-frame request was seen, so the atlas layout is unknown and coverage not checked."""
+
+
+def latest_request(mcp: Mcp, instance: str, wait: float = 20.0, poll: float = 0.5) -> dict:
+    """The page's latest render-frame request: polled with short, non-blocking evaluations (backoff
+    from `poll` up to 4 s) for up to `wait` seconds."""
+    deadline = time.monotonic() + wait
+    delay = poll
+    while True:
+        detail = mcp.evaluate(instance, _LATEST_REQUEST)
+        if isinstance(detail, dict) and detail.get("targets"):
+            return detail
+        if time.monotonic() + delay > deadline:
+            break
+        mcp.sleep(delay)
+        delay = min(delay * 2, 4.0)
+    if isinstance(detail, dict):
+        raise LayoutUnavailable("the latest render-frame request names no user: connect one (a headset or a streamed receiver)")
+    raise LayoutUnavailable(
+        f"no render-frame request reached the page within {wait:g} s, so the atlas layout is unknown. Connect a user "
+        "(a headset or a streamed receiver) and move its camera (under continuous rendering a request comes when a "
+        "view changes), or raise --layout-wait"
+    )
 
 
 def capture_atlas(mcp: Mcp, instance: str) -> Image:

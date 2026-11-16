@@ -45,7 +45,7 @@ after the command) picks another kit.
 | `test <dir>` | the adaptation's `test/*.test.mjs` and the kit tests of the libraries it uses (`node --test`) |
 | `package <dir> [--out --unpacked --version --sign key.pem --key-vault --key-name --public-key --signer]` | the `.qarapp` (or its unpacked folder): file manifest, optional signature, verified as QAROS imports it |
 | `pin <dir> <library>` | replaces a `Library` reference with a copy at `scripts/<name>@<major>.js` |
-| `verify <dir> [--instance --address --host --port]` | against a running web app source (Visualizer MCP endpoint, Developer mode): depth coverage of the coloured pixels, thin-line coverage, alpha coverage, depth pack readback |
+| `verify <dir> [--instance --address --host --port --layout-wait]` | against a running web app source (Visualizer MCP endpoint, Developer mode): depth coverage of the coloured pixels, thin-line coverage, alpha coverage, depth pack readback; exit 2 when no render-frame request came, so coverage was not checked |
 | `index <kit> [--version --out --check]` | writes or checks `lib/index.json` |
 
 A typical loop:

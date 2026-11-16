@@ -296,7 +296,14 @@ def run_verify(args: argparse.Namespace) -> int:
                 print(f"depth pack readback OK: {verify.pack_readback(mcp, instance, library)}")
             except verify.VerifyError as error:
                 failures.append(f"depth pack readback: {error}")
-    detail = verify.next_request(mcp, instance)
+    try:
+        detail = verify.latest_request(mcp, instance, args.layout_wait)
+    except verify.LayoutUnavailable as reason:
+        # Nothing was measured: say so plainly, and exit 2 (not checked) unless a check failed.
+        print(f"coverage not checked: {reason}")
+        for failure in failures:
+            print(f"error: {failure}", file=sys.stderr)
+        return 1 if failures else 2
     image = verify.capture_atlas(mcp, instance)
     background = tuple(int(part) for part in args.background.split(","))
     for coverage in verify.analyse(image, detail, background, args.threshold):
@@ -380,6 +387,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--threshold", type=int, default=16, help="channel distance from --background that counts as colour")
     sub.add_argument("--min-coverage", type=float, default=0.99)
     sub.add_argument("--no-readback", action="store_true", help="skip the depth pack shader readback")
+    sub.add_argument("--layout-wait", type=float, default=20.0, metavar="SECONDS",
+                     help="how long to wait for a render-frame request (the atlas layout); exit 2 when none comes")
 
     sub = command("index", "write or check the kit's lib/index.json")
     sub.add_argument("kit_dir", metavar="kit")
