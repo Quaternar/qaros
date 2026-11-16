@@ -128,6 +128,9 @@ def rust(args: argparse.Namespace) -> None:
     }
     for step in steps:
         print(f"== rust {step}", flush=True)
+        if step == "test":
+            # A dev-dependency builds only the rlib of qaros-stub; the tests load its cdylib.
+            run(["cargo", "build", "-p", "qaros-stub"], cwd=RUST_DIR)
         run(commands[step], cwd=RUST_DIR)
     print(f"Rust: {', '.join(steps)} passed.", flush=True)
 

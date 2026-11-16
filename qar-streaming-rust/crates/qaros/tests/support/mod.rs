@@ -47,16 +47,17 @@ pub(crate) fn stub_path() -> PathBuf {
         std::env::consts::DLL_PREFIX,
         std::env::consts::DLL_SUFFIX
     );
+    // The test executable sits in the profile directory's `deps` folder, or, with a separate
+    // build directory (`build/<package>/<hash>/out`), deeper below it: look in every ancestor.
     let executable = std::env::current_exe().expect("test executable path");
-    let deps_directory = executable.parent().expect("deps directory");
-    [
-        deps_directory,
-        deps_directory.parent().expect("profile directory"),
-    ]
-    .iter()
-    .map(|directory| directory.join(&file_name))
-    .find(|candidate| candidate.exists())
-    .unwrap_or_else(|| panic!("{file_name} not found; build it with `cargo build -p qaros-stub`"))
+    executable
+        .ancestors()
+        .skip(1)
+        .map(|directory| directory.join(&file_name))
+        .find(|candidate| candidate.exists())
+        .unwrap_or_else(|| {
+            panic!("{file_name} not found; build it with `cargo build -p qaros-stub`")
+        })
 }
 
 /// The stub's `qar_stub_*` control exports, opened from the same file as the
