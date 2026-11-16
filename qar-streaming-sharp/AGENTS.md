@@ -711,3 +711,10 @@ tests/
     AsyncTests.cs
     SubscriptionTests.cs
 ```
+
+## Compatibility (hard rule)
+
+- `Compatibility (hard rule)` in `../AGENTS.md` holds here: any QAROS header with any QAROS
+  runtime, older or newer; C API append-only; no version compared for equality; fields only
+  added. Public page: `docs/website/docs/developer-guide/compatibility.mdx`.
+- **This binding:** a missing native entry point of an optional function surfaces as `StatusCode.NotImplemented` for that call, never an exception that takes the app down, and the binding never refuses a runtime by its version.

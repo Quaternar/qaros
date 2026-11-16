@@ -1705,9 +1705,12 @@ typedef struct QarRuntimeInit
  *   expires (30 minutes for a co-process).
  * - QarOnboardLocalAppExt is stateless already and is unaffected.
  * - A runtime older than this extension skips it like any unknown chained
- *   struct and stores the identity on disk. Before relying on it, check
- *   QarRuntimeInfo::version (qar_runtime_info) against the version whose
- *   changelog introduces it. The same holds for QarOnboardLocalAppTagExt.
+ *   struct and stores the identity on disk. A chained struct cannot report
+ *   QAR_STATUS_NOT_IMPLEMENTED, so this is the one case for a version check:
+ *   before relying on it, check that QarRuntimeInfo::version
+ *   (qar_runtime_info) is at least the release whose changelog introduces it,
+ *   comparing the numeric major.minor.patch only. Never compare for equality
+ *   or by the -rc/-dev suffix. The same holds for QarOnboardLocalAppTagExt.
  */
 typedef struct QarRuntimeEphemeralStorageExt
 {
@@ -3091,8 +3094,14 @@ static inline QarResult qar_library_destroy(void);
  * @brief Version, flavor and C API generation of the loaded qar-streaming-c.
  *
  * Works before qar_library_init(). With one QAROS installation per PC, this
- * is the installed runtime's identity; use it in diagnostics. The strings are
- * static and stay valid until the library is unloaded.
+ * is the installed runtime's identity. The strings are static and stay valid
+ * until the library is unloaded.
+ *
+ * For logs and messages to the user only. Never compare the version for
+ * equality and never decide from it which functions to call: any header works
+ * with any runtime, older or newer. A function appended after a release
+ * returns QAR_STATUS_NOT_IMPLEMENTED on a runtime that lacks it; call it and
+ * handle that status instead.
  *
  * @param out_info Receives the info; must not be NULL.
  * @return QarResult Success, or QAR_STATUS_LOGIC_ERROR for a NULL out_info.

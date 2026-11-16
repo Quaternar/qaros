@@ -1992,6 +1992,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
     invitation, remote-app grant, join-as-member, device identity, target-app invite, video
     sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
+  together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
+  function a runtime may not have yet. *API conventions* and *Getting started* link to it.
 - **Docs:** *Source Applications*: a new *Web apps QAROS provides* section lists the ready-made web
   app adaptations, where they are published, how the visualizer keeps them up to date (tile states,
   **Update ready**, the **Web app updates** settings) and how unsigned releases are handled.

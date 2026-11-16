@@ -153,7 +153,7 @@ int main(int argc, char** argv)
 }
 ```
 
-Functions are loaded *by symbol name* into tables your application owns, so newer runtimes keep working with older applications. Linking the import library also works, but then the whole runtime `bin/` has to sit next to your executable. Walkthrough: [Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading).
+Functions are loaded *by symbol name* into tables your application owns, so newer runtimes keep working with older applications, and an application built against a newer header keeps working with an older runtime: a function that runtime lacks returns `QAR_STATUS_NOT_IMPLEMENTED`. Never pin the header or compare versions; see [Compatibility](/docs/developer-guide/compatibility). Linking the import library also works, but then the whole runtime `bin/` has to sit next to your executable. Walkthrough: [Dynamic Loading tutorial](/docs/developer-guide/tutorials/c/dynamic-loading).
 
 ### Build the other examples
 

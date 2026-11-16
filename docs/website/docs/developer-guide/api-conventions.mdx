@@ -15,6 +15,10 @@ The API is deliberately uniform: once you know these six patterns, every module
 (onboarding, panels, volumes, streams, peers) reads the same way. The concepts
 are identical across languages; the idioms differ. Pick your language above.
 
+The API also only grows: functions are appended, never changed, so any header
+works with any QAROS runtime, older or newer. How to detect a feature an older
+runtime lacks, and the mistakes to avoid: [Compatibility](/docs/developer-guide/compatibility).
+
 ## 1. Opaque handles and value IDs
 
 Two kinds of identifiers exist everywhere. **Opaque handles** are references to

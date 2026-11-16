@@ -1,0 +1,91 @@
+---
+sidebar_position: 3.5
+title: Compatibility
+description: Any QAROS header works with any QAROS runtime, older or newer. Detect features by calling them, never by comparing versions or header hashes, and load the installed runtime.
+---
+
+# Compatibility
+
+Your app and QAROS update on their own schedules. An app built against one QAROS
+release, whether it calls the C API directly or uses the C#, Rust or Unity
+packages, meets whatever runtime the PC has installed, older or newer. QAROS is
+built so that this always works:
+
+| Your app was built against | The installed runtime is | What happens |
+|---|---|---|
+| An older header | A newer runtime | Works. Every function of your header is still there with the same signature. |
+| A newer header | An older runtime | Works. Every function the older runtime has works. A function it does not have returns `QAR_STATUS_NOT_IMPLEMENTED`. |
+| The same release | The same release | Works. |
+
+## The rules QAROS keeps
+
+- **Functions are only appended.** No function is renamed, and no signature
+  changes. A function that is retired keeps loading and returns an error that
+  says so; it is deprecated for at least one minor release first, and the
+  changelog says so.
+- **A function appended after a release is optional.** On a runtime that predates
+  it, the loader leaves it out instead of failing, and calling it returns
+  `QAR_STATUS_NOT_IMPLEMENTED`.
+- **A struct never grows under its structure type.** New fields come in a new
+  extension struct with its own `QAR_STRUCTURE_TYPE_*` value
+  ([API Conventions](/docs/developer-guide/api-conventions#3-extensible-init-structs-qarstructureheader)).
+- **Data is compatible too.** From QAROS 0.10.0 every QAROS build talks to every
+  other QAROS build, older and newer, and reads every file another build wrote:
+  hubs, players, the Visualizer and your app's runtime can be updated one at a
+  time. Fields are only ever added, and a value a newer build sends is read by an
+  older one with what it knows. This holds until a release is declared
+  **breaking** in the [changelog](https://github.com/Quaternar/qaros/blob/main/CHANGELOG.md).
+
+## What your app does
+
+- **Load the installed runtime.** Call `qar_library_load(NULL)` (or let the binding
+  do it) and never ship `qar-streaming-c.dll` beside your app: the hub refuses a
+  runtime that is not its own installation's, and a bundled copy wins the lookup
+  ([Getting Started](/docs/developer-guide/getting-started#your-own-source-app)).
+- **Detect features by calling them.** Call the function and handle
+  `QAR_STATUS_NOT_IMPLEMENTED`: hide the feature, or tell the user which QAROS
+  release adds it.
+
+  ```c
+  QarResult r = qar_session_open_qaros_view(session, &info);
+  if (qar_result_has_code(r, QAR_STATUS_NOT_IMPLEMENTED)) {
+      show_message("Opening a QAROS view needs a newer QAROS. Update QAROS to use it.");
+  } else if (qar_result_is_error(r)) {
+      qar_result_log_if_error(r);
+  }
+  ```
+
+- **Use the runtime version for logs only.** `qar_runtime_info` reports the
+  loaded runtime's version, flavor and C API generation. Write it to your log and
+  into messages for the user. Never compare it for equality and never pick
+  functions by it.
+- **A chained extension struct is the one exception.** An older runtime skips an
+  extension struct it does not know, silently, so it cannot answer
+  `QAR_STATUS_NOT_IMPLEMENTED`. Where the header says a feature comes as an
+  extension struct, check that the runtime's numeric `major.minor.patch` is at
+  least the release whose changelog adds it. Never compare the `-rc` or `-dev`
+  suffix.
+
+## Common mistakes
+
+| Mistake | What goes wrong | Do instead |
+|---|---|---|
+| Pinning the header hash (refusing a runtime whose `qar_streaming.h` differs from the one you built with) | Your app stops working at every QAROS update, even a fix release | Call functions and handle `QAR_STATUS_NOT_IMPLEMENTED` |
+| Comparing the full version string, or the `rc` / `dev` suffix | A release candidate, a fix release or a development build is refused although everything works | Log the version; check features by calling them |
+| Requiring the runtime to equal the version you built with | Users must update your app and QAROS together | Nothing: any header works with any runtime |
+| Bundling `qar-streaming-c.dll` with your app | The hub refuses it; it also hides the user's installed QAROS | Load the installed runtime with `qar_library_load(NULL)` |
+| Treating an optional function as required (aborting, or failing your own start, when it returns `QAR_STATUS_NOT_IMPLEMENTED`) | Your app cannot run on an older QAROS at all | Fall back, hide the feature, or name the QAROS release that adds it |
+
+## Language bindings
+
+- **C:** as above. With `QAR_ENABLE_DYNAMIC_LOADING`, functions are loaded by name
+  into tables your app owns; optional ones may stay empty and return
+  `QAR_STATUS_NOT_IMPLEMENTED`.
+- **C# and Rust:** the bindings wrap the same functions, and the same status
+  surfaces as their status code type. The Rust binding currently loads every
+  function of the header it was generated from and needs a runtime that has them
+  all ([Getting Started](/docs/developer-guide/getting-started#your-own-source-app)).
+- **Unity:** the packages use the C# binding and carry no native runtime; the
+  Editor and every player load the runtime of the QAROS installed on the PC, so
+  the same promise holds. Update the packages when you want new features, not to
+  keep a build working ([Unity](/docs/developer-guide/unity)).

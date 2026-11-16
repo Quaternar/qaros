@@ -645,3 +645,10 @@ generated function list, C# cells against the C# sources.
 - Report what was verified and how (commands, tests, platforms), what ran only against the
   stub, and what is unknown or assumed about the C API. Never present a stub result as runtime
   behaviour.
+
+## Compatibility (hard rule)
+
+- `Compatibility (hard rule)` in `../AGENTS.md` holds here: any QAROS header with any QAROS
+  runtime, older or newer; C API append-only; no version compared for equality; fields only
+  added. Public page: `docs/website/docs/developer-guide/compatibility.mdx`.
+- **This binding:** treat a function the loaded runtime lacks as `NOT_IMPLEMENTED` for that call, never as a reason to refuse the whole library, and never refuse a runtime by its version.
