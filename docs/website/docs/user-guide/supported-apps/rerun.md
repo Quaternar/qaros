@@ -10,6 +10,8 @@ description: Stream the Rerun viewer into QAROS. Install qaros-rerun from the Vi
 
 Your Rerun data in the room, in stereo for each headset, with 2D views as panels and a timeline. Any Rerun SDK (Python, Rust, C++) logs to it unchanged.
 
+Step by step with one of Rerun's examples: [Tutorial: Stream a Rerun Example](./rerun-tutorial.md).
+
 ![Structure from motion logged to Rerun, streamed to a headset](../../img/supported-apps/rerun-headset.webp)
 
 | | Version |
@@ -92,7 +94,7 @@ sequenceDiagram
    | In the room | From Rerun |
    |---|---|
    | App volume *rerun* (1.5 m), content fitted to about 0.7 of it | The 3D view |
-   | View-only panels (needs `--panels`) | Each visible 2D view |
+   | View-only panels (`--panels`, which the Rerun tile passes) | Each visible 2D view |
    | Timeline panel: drag the track to scrub, tap **Play** | The time bar, synced both ways |
 
 4. Gestures: one-hand grab moves the scene, two-hand spread scales it. The placement is kept for the next run.
@@ -115,7 +117,7 @@ sequenceDiagram
 |---|---|
 | The viewer waits at start | Click **Allow** in the QAROS prompt (tray window, or **Sources** > **Waiting for approval**). |
 | Nothing in the headset | Check the headset player is running and joined, or open the Visualizer. Start with `--reset-placement` if the scene was moved away. |
-| No panels | Start with `--panels`; keep the views visible (not in a hidden tab); QAROS 0.9.0-dev.3177 or newer. |
+| No panels | Start with `--panels` (a Rerun tile that does not pass it: add it in a preset); keep the views visible (not in a hidden tab); QAROS 0.9.0-dev.3177 or newer. |
 | `QAROS handed back app volume "rerun" closed` | Another viewer has that volume: use a different `--volume-name`. |
 | SDK on another PC cannot connect | Allow TCP 9876 in the Hub PC's firewall, use its LAN address. |
 
