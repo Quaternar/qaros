@@ -63,8 +63,8 @@ built so that this always works:
   extension struct it does not know, silently, so it cannot answer
   `QAR_STATUS_NOT_IMPLEMENTED`. Where the header says a feature comes as an
   extension struct, check that the runtime's numeric `major.minor.patch` is at
-  least the release whose changelog adds it. Never compare the `-rc` or `-dev`
-  suffix.
+  least the release whose changelog adds it. Never compare the pre-release
+  suffix (`-rc.N`, or the commit count of a build between releases, `-34+1a2b3c4d`).
 
 ## Common mistakes
 

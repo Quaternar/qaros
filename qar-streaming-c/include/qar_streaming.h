@@ -1710,7 +1710,7 @@ typedef struct QarRuntimeInit
  *   before relying on it, check that QarRuntimeInfo::version
  *   (qar_runtime_info) is at least the release whose changelog introduces it,
  *   comparing the numeric major.minor.patch only. Never compare for equality
- *   or by the -rc/-dev suffix. The same holds for QarOnboardLocalAppTagExt.
+ *   or by the pre-release suffix. The same holds for QarOnboardLocalAppTagExt.
  */
 typedef struct QarRuntimeEphemeralStorageExt
 {
