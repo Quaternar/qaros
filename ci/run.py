@@ -6,6 +6,7 @@
     python ci/run.py c [--filter <gtest filter>] [--timeout <s>]
     python ci/run.py capi                    # c, csharp and the Rust e2e tests on one native folder
     python ci/run.py vulkan-cube [--strict]
+    python ci/run.py cpp                     # qar-streaming-cpp compile matrix and a C++-only CMake consumer
     python ci/run.py docs
 
 Native files (C API runtime, test counterparts, the C test executable) come from environment
@@ -14,11 +15,16 @@ variables, never from a build this script starts:
     QAROS_NATIVE_BIN        qar-streaming-c, qar-streaming-c-ext and every library they load
     QAROS_HUB_TEST_EXT_BIN  qar-hub-test-ext (C# hub follow tests; optional, skipped without it)
     QAROS_C_TESTS_BIN       qar-streaming-c_dynamic_gtests, from the same build as QAROS_NATIVE_BIN
+                            (a local build only: no package ships it)
 
 They are read from the environment first, then from an env file (``--env-file``; default: the
 ``ci.env`` of a repository embedding qaros, else ``ci/ci.env``). Without ``QAROS_NATIVE_BIN`` the
 native commands download the C API runtime of ``--release`` / ``QAROS_RUNTIME_RELEASE`` with gh
-(``QAROS-CApi-*-RelWithDebInfo.zip``: ``bin/`` and ``tests/``). ``--release`` always downloads.
+(``QAROS-CApi-*-RelWithDebInfo.zip``: ``bin/`` only). ``--release`` always downloads.
+
+``c`` needs ``QAROS_C_TESTS_BIN`` and fails without it, so it cannot run on a downloaded runtime:
+with a download due it refuses before downloading. ``capi`` then skips ``c``, runs ``csharp`` and
+the Rust e2e tests, and reports ``c`` as skipped.
 """
 
 from __future__ import annotations
@@ -75,12 +81,20 @@ def results_dir(args: argparse.Namespace, name: str) -> Path:
 # Native folders: given, or downloaded
 
 
+def runtime_release(args: argparse.Namespace) -> str | None:
+    """The C API runtime release provide_natives will download, if any: ``--release``; otherwise
+    ``QAROS_RUNTIME_RELEASE`` when ``QAROS_NATIVE_BIN`` is not set."""
+    if getattr(args, "natives_ready", False):
+        return None
+    return args.release or (None if env("QAROS_NATIVE_BIN") else env("QAROS_RUNTIME_RELEASE"))
+
+
 def provide_natives(args: argparse.Namespace) -> None:
     """``--release`` downloads; otherwise a set ``QAROS_NATIVE_BIN`` is used as it is; otherwise
     ``QAROS_RUNTIME_RELEASE`` is downloaded."""
     if getattr(args, "natives_ready", False):
         return
-    release = args.release or (None if env("QAROS_NATIVE_BIN") else env("QAROS_RUNTIME_RELEASE"))
+    release = runtime_release(args)
     if release:
         repository = env("QAROS_RUNTIME_REPOSITORY") or "Quaternar/Quaternar"
         directory = Path(env("QAROS_RUNTIME_DIR") or QAROS_ROOT / "build" / "qaros-capi-runtime") / release
@@ -152,7 +166,24 @@ def csharp(args: argparse.Namespace) -> None:
 # c
 
 
+C_TESTS_MISSING = ("QAROS_C_TESTS_BIN is not set: the C API suite needs a local build of "
+                   f"{C_TEST_EXECUTABLE.removesuffix('.exe')} from the same build as QAROS_NATIVE_BIN "
+                   "(a downloaded C API runtime has no tests); set QAROS_C_TESTS_BIN to its output folder")
+
+
+def c_tests_with_download(release: str) -> str:
+    return (f"QAROS_C_TESTS_BIN cannot run against the downloaded C API runtime {release}: the suite "
+            "and its natives must come from one build; set QAROS_NATIVE_BIN to that build's output "
+            "folder instead of downloading")
+
+
 def c_tests(args: argparse.Namespace) -> None:
+    # Checked before provide_natives: a download unsets QAROS_C_TESTS_BIN.
+    if not env("QAROS_C_TESTS_BIN"):
+        raise CiError(C_TESTS_MISSING)
+    release = runtime_release(args)
+    if release:
+        raise CiError(c_tests_with_download(release))
     provide_natives(args)
     tests = native_folder("QAROS_C_TESTS_BIN", (C_TEST_EXECUTABLE,))
     results = results_dir(args, "c")
@@ -171,9 +202,22 @@ def c_tests(args: argparse.Namespace) -> None:
 
 
 def capi(args: argparse.Namespace) -> None:
+    # Decided before provide_natives: a download unsets QAROS_C_TESTS_BIN.
+    release = runtime_release(args)
+    c_skip_reason = None
+    if not env("QAROS_C_TESTS_BIN"):
+        c_skip_reason = C_TESTS_MISSING
+    elif release:
+        c_skip_reason = c_tests_with_download(release)
     provide_natives(args)
     failed = []
-    suites = [("c", c_tests), ("csharp", csharp), ("rust e2e", rust)]
+    suites = [("csharp", csharp), ("rust e2e", rust)]
+    skipped = []
+    if c_skip_reason:
+        print(f"SKIPPED c: {c_skip_reason}", flush=True)
+        skipped.append("c")
+    else:
+        suites.insert(0, ("c", c_tests))
     args.e2e = True
     for name, suite in suites:
         try:
@@ -183,7 +227,8 @@ def capi(args: argparse.Namespace) -> None:
             failed.append(name)
     if failed:
         raise CiError(f"native tests failed: {', '.join(failed)}")
-    print("Native tests (c, csharp, rust e2e) passed.", flush=True)
+    ran = ", ".join(name for name, _ in suites)
+    print(f"Native tests ({ran}) passed" + (f"; skipped: {', '.join(skipped)}." if skipped else "."), flush=True)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -232,6 +277,74 @@ def vulkan_cube(args: argparse.Namespace) -> None:
         raise CiError(f"{CUBE_EXE} missing after the build")
     run([str(CUBE_EXE), "--help"])
     print("Vulkan cube build passed.", flush=True)
+
+
+# ---------------------------------------------------------------------------------------------
+# cpp: the header-only C++ wrapper
+
+
+CPP_DIR = QAROS_ROOT / "qar-streaming-cpp"
+CPP_HEADERS = CPP_DIR / "include" / "qar_streaming_cpp"
+CPP_CHECK = CPP_DIR / "tests" / "compile_check.cpp"
+C_INCLUDE = QAROS_ROOT / "qar-streaming-c" / "include"
+CPP_STANDARDS = ("c++17", "c++20")
+CPP_CONSUMER = """cmake_minimum_required(VERSION 3.29)
+project(QarosCppConsumer LANGUAGES CXX)
+add_subdirectory("{c}" qar-streaming-c)
+add_subdirectory("{cpp}" qar-streaming-cpp)
+add_executable(consumer "{check}")
+target_link_libraries(consumer PRIVATE qar-streaming-cpp)
+target_compile_options(consumer PRIVATE /W4 /WX)
+get_property(languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if("C" IN_LIST languages)
+  message(FATAL_ERROR "linking qar-streaming-cpp enabled the C language")
+endif()
+if(TARGET dynamic_loading)
+  message(FATAL_ERROR "add_subdirectory(qar-streaming-c) added the C examples")
+endif()
+"""
+
+
+def cpp_check_covers_every_header() -> None:
+    text = CPP_CHECK.read_text(encoding="utf-8")
+    missing = [header.name for header in sorted(CPP_HEADERS.glob("*.hpp"))
+               if f"<qar_streaming_cpp/{header.name}>" not in text]
+    if missing:
+        raise CiError(f"{CPP_CHECK.relative_to(QAROS_ROOT)} does not include {', '.join(missing)}")
+
+
+def cpp(args: argparse.Namespace) -> None:
+    """Every header of qar-streaming-cpp in one translation unit with the dynamic-loading
+    implementation, MSVC /W4 /WX in C++17 and C++20, with and without /permissive- (no alternative
+    tokens, no deprecated C call), then a C++-only CMake project that adds qar-streaming-c and
+    qar-streaming-cpp with add_subdirectory (no C language, no examples)."""
+    if not WINDOWS:
+        raise CiError("the wrapper check compiles with MSVC: Windows only")
+    cpp_check_covers_every_header()
+    environment = visual_studio_environment(dict(os.environ))
+    for tool in ("cl", "cmake", "ninja"):
+        if not shutil.which(tool, path=environment.get("PATH")):
+            raise CiError(f"'{tool}' is not on PATH in the Visual Studio developer environment")
+    out = QAROS_ROOT / "build" / "cpp-check"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for standard in CPP_STANDARDS:
+        for conformance in ([], ["/permissive-"]):
+            label = " ".join([standard, *conformance]) or standard
+            print(f"== cpp {label}", flush=True)
+            run(["cl", "/nologo", "/c", "/EHsc", "/W4", "/WX", f"/std:{standard}", *conformance,
+                 "/DQAR_ENABLE_DYNAMIC_LOADING", f"/I{C_INCLUDE}", f"/I{CPP_DIR / 'include'}",
+                 f"/Fo{out / 'compile_check.obj'}", str(CPP_CHECK)], cwd=out, environment=environment)
+    print("== cpp CMake consumer (CXX only)", flush=True)
+    consumer = out / "consumer"
+    consumer.mkdir()
+    (consumer / "CMakeLists.txt").write_text(CPP_CONSUMER.format(
+        c=(QAROS_ROOT / "qar-streaming-c").as_posix(), cpp=CPP_DIR.as_posix(), check=CPP_CHECK.as_posix()))
+    run(["cmake", "-S", str(consumer), "-B", str(consumer / "build"), "-G", "Ninja",
+         "-DCMAKE_BUILD_TYPE=Release"], environment=environment)
+    run(["cmake", "--build", str(consumer / "build"), "--parallel", "2"], environment=environment)
+    print("C++ wrapper: compile matrix and CMake consumer passed.", flush=True)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -307,6 +420,10 @@ def parser() -> argparse.ArgumentParser:
     cube_parser = commands.add_parser("vulkan-cube", parents=[common], help="Vulkan cube build as documented")
     cube_parser.add_argument("--strict", action="store_true", help="fail on a Vulkan SDK on the host (CI)")
     cube_parser.set_defaults(handler=vulkan_cube)
+
+    cpp_parser = commands.add_parser("cpp", parents=[common],
+                                     help="qar-streaming-cpp compile matrix (MSVC) and a C++-only CMake consumer")
+    cpp_parser.set_defaults(handler=cpp)
 
     docs_parser = commands.add_parser("docs", parents=[common], help="documentation website build")
     docs_parser.set_defaults(handler=docs)

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Facet Lab</title>
+		<link rel="stylesheet" href="./src/style.css" />
+	</head>
+	<body>
+		<!--
+			A self-contained demo application: a hand-written WebGL2 viewer with its own chrome (side
+			panels, notifications, a dialog, and a canvas overlay). It has no knowledge of QAR,
+			streaming, or multi-user rendering, and imports no rendering engine or matrix library of any
+			kind -- every shape, shader and matrix in src/ is written out by hand. It stands in for the
+			harder of the two cases a web app source has to adapt: an application with no recognisable
+			framework global to detect, so an adaptation script has to find its renderer by intercepting
+			the standard Canvas/WebGL API rather than recognising a known library.
+
+			Everything a user would ever see -- panels, toasts, the dialog, the HUD -- lives inside
+			#app-ui, a single container, exactly like the three.js reference application alongside this
+			one. That is deliberate scaffolding for the *adaptation*, not for the app: an adaptation
+			script confines exactly one element to the reserved page region, and keeping every piece of
+			chrome under one root is what makes that a one-line CSS change instead of hunting down every
+			fixed-position element in the document.
+		-->
+		<canvas id="viewport"></canvas>
+
+		<div id="app-ui">
+			<aside id="panel-left" class="panel">
+				<h2>Scene Objects</h2>
+				<ul id="object-list"></ul>
+			</aside>
+
+			<aside id="panel-right" class="panel">
+				<h2>Render Settings</h2>
+				<label class="field">
+					<span>Rotation speed</span>
+					<input id="rotation-speed" type="range" min="0" max="100" value="30" />
+				</label>
+				<label class="field">
+					<span>Light intensity</span>
+					<input id="light-intensity" type="range" min="0" max="100" value="65" />
+				</label>
+				<button id="open-about" type="button">About this viewer</button>
+			</aside>
+
+			<div id="hud">
+				<div id="reticle"></div>
+				<div id="hud-readout">FPS <span id="hud-fps">--</span></div>
+			</div>
+
+			<div id="toast-stack"></div>
+
+			<div id="modal-backdrop" class="hidden">
+				<div id="modal" role="dialog" aria-labelledby="modal-title">
+					<h2 id="modal-title">Welcome to Facet Lab</h2>
+					<p>
+						Toggle objects in the scene list, or tweak rotation and lighting on the right. This
+						preview build renders continuously in the background.
+					</p>
+					<button id="modal-close" type="button">Got it</button>
+				</div>
+			</div>
+		</div>
+
+		<script type="module" src="./src/main.js"></script>
+	</body>
+</html>

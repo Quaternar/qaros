@@ -29,7 +29,7 @@ cmake --build --preset x64-windows-release --target qar-vulkan-source
 .\build\x64-windows\qar-streaming-c\examples\vulkan_cube\Release\qar-vulkan-source.exe
 ```
 
-1. The app loads the runtime with `qar_library_load(NULL)`, the default lookup: a `qar-streaming-c.dll` beside the executable, else the runtime of the QAROS instance `QAR_INSTANCE` names, else the installed QAROS, else one on `PATH` (Developer Guide, *Authoring a Language Binding*). Do not ship a copy of the runtime beside the app: it would win over the installed one. It then joins the Hub on this machine as a local app (`QarOnboardLocalAppExt`) with the app tag `vulkan-cube.examples.qaros` (`QarOnboardLocalAppTagExt`). When the Hub does not run, the join starts it. The app takes no arguments and looks for no file itself.
+1. The app loads the runtime with `qar_library_load(NULL)`, the default lookup: a `qar-streaming-c.dll` beside the executable, else the runtime of the QAROS instance `QAR_INSTANCE` names, else the installed QAROS, else one on `PATH` (Developer Guide, *Authoring a Language Binding*). Do not ship a copy of the runtime beside the app: it would win over the installed one. It then joins the Hub on this machine as a local app (`QarOnboardLocalAppExt`) with the app tag `vulkan-cube.examples.qaros` (`QarOnboardLocalAppTagExt`). When the Hub does not run, the join starts it. The app looks for no file itself; its options are in [Render loop](#render-loop).
 2. The console shows `Joining the QAROS on this machine...`, then `Waiting for approval in QAROS hub`.
 3. First run: QAROS asks **"Allow qar-vulkan-source to join QAROS?"** in a window in front of all others (an open Visualizer asks the same; answer either). Publisher reads "Unknown publisher": your build is not signed. Click **Allow** within 120 s.
 4. The console shows `Joined QAROS as peer <id>`, then `Connected. Waiting for rendering targets.`
@@ -50,6 +50,21 @@ cmake --build --preset x64-windows-release --target qar-vulkan-source
 | `This app no longer matches what QAROS approved...` | 1808 | 7 | revoke it in the Visualizer (Source Applications, Approved apps), run again |
 
 Exit code 0 follows a stop. Exit code 1 is a bad argument, a failed `qar_library_init` or `qar_runtime_create`, or any other failure (the GPU, the app volume, the peer list).
+
+## Render loop
+
+One render loop on the main thread serves every viewer. Each pass renders a frame only for the viewers that can take one now, so a slow, paused or reconnecting viewer gets no render and holds back no other.
+
+| Option | Meaning |
+|---|---|
+| `--fps <n>` | render passes on a fixed schedule of n per second (default 60) |
+| `--uncapped` | same as `--fps 0`: as fast as the viewers take frames |
+| `--render-loop free-running` | default: the cube renders on its own schedule; per pass and viewer `qar_render_sender_is_ready_for_next_frame`, then `qar_render_sender_next_render_pose`, `qar_render_sender_begin_frame` (returns at once), render, show |
+| `--render-loop request-driven` | each frame answers the viewer's render request; per pass and viewer `qar_render_sender_try_begin_frame`, render, show, then `qar_render_sender_try_begin_frame` once more so the next wait runs while the loop is idle |
+
+- **Fixed schedule:** pass k starts at start + k / fps; each wait is the time left until that point, on a high-resolution waitable timer. A pass that ran long, for example a show the Latency Simulator held up, does not move the passes after it. A pass that ran past a slot is not repeated; the loop takes the next slot still ahead and prints how many it skipped, every 5 s.
+- **Uncapped:** no schedule. Readiness gates each viewer; a pass that rendered nothing waits 1 ms instead of spinning.
+- **Debug latency and jitter:** run the cube `--uncapped` (or at any rate) and add latency and jitter to its senders in the Visualizer's Latency Simulator (debug mode, **Tools** → **Latency**).
 
 ## GPU
 
@@ -80,6 +95,7 @@ Details: Operator Guide, *Source Applications*, "Adding your own app".
 
 ## Notes
 
-- The cube renders for every running target app in the peer list (`qar_peer_subscribe_updates()` plus `qar_peer_spec_get_role()` == `QAR_PEER_ROLE_TARGET`): which targets to serve is a source app's own choice, and the cube serves them all. Each target gets an independent sender and stereo camera on a thread of its own, including viewers arriving after rendering starts. The sender attaches its target to the cube's app volume, which is what makes the target ask for the content.
-- Each frame keeps its frame info from `qar_render_sender_begin_frame()` until `qar_render_sender_show_frame()`. A begun frame is always shown, as the other C samples do; when rendering fails, the cube first discards it by signaling its semaphore. Only a frame whose record could not be read is not shown: the show would wait for a semaphore nothing signals. A stop request waits for the frame.
+- The cube renders for every running target app in the peer list (`qar_peer_subscribe_updates()` plus `qar_peer_spec_get_role()` == `QAR_PEER_ROLE_TARGET`): which targets to serve is a source app's own choice, and the cube serves them all. Each target gets an independent sender and stereo camera, including viewers arriving after rendering starts. A sender is created on a thread of its own, because `qar_render_sender_create()` blocks until the viewer answers; the one render loop then renders for it. The sender attaches its target to the cube's app volume, which is what makes the target ask for the content.
+- Each frame keeps its frame info from the begin until `qar_render_sender_show_frame()`. A begun frame is always shown, as the other C samples do; when rendering fails, the cube first discards it by signaling its semaphore. Only a frame whose record could not be read is not shown: the show would wait for a semaphore nothing signals.
+- Stream states: closed ends the viewer's sender, and the cube serves the viewer again when the peer list offers it; paused, reconnecting, no head pose yet or an app volume that does not resolve yet keep the sender and skip the viewer until the next pass.
 - Known gaps: [01-improvements.md](01-improvements.md).

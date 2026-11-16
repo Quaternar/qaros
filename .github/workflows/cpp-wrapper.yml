@@ -1,0 +1,46 @@
+name: C++ wrapper check
+
+# Compiles every header of the header-only C++ wrapper qar-streaming-cpp in one translation unit
+# with the dynamic-loading implementation of the C header: MSVC /W4 /WX, C++17 and C++20, with and
+# without /permissive-. Then a C++-only CMake project adds qar-streaming-c and qar-streaming-cpp
+# with add_subdirectory and builds: it must not enable C or build the examples. The checks are
+# `python ci/run.py cpp`; run it locally the same way.
+
+on:
+  pull_request:
+    paths:
+      - "qar-streaming-c/**"
+      - "qar-streaming-cpp/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/cpp-wrapper.yml"
+      - "ci/**"
+  push:
+    branches: [main]
+    paths:
+      - "qar-streaming-c/**"
+      - "qar-streaming-cpp/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/cpp-wrapper.yml"
+      - "ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpp-wrapper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Compile matrix and C++-only CMake consumer
+        run: python ci/run.py cpp

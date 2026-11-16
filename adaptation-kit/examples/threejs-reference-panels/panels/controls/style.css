@@ -1,0 +1,5 @@
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { font: 13px/1.35 sans-serif; background: #12202e; color: #e8f0f8; padding: 6px 8px; box-sizing: border-box; }
+h1 { font-size: 16px; margin: 0 0 6px; }
+p { margin: 4px 0; }
+button { font-size: 14px; min-height: 28px; padding: 4px 12px; border-radius: 6px; border: 0; background: #3a7bd5; color: white; }

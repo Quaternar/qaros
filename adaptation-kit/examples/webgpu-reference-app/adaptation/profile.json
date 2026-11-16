@@ -1,0 +1,20 @@
+{
+	"Name": "webgpu-reference-app",
+	"DisplayName": "Raw WebGPU reference app",
+	"Id": "com.quaternar.webgpu-reference-app",
+	"Version": "1.0.0",
+	"Channel": "debug",
+	"AddressPattern": "*webgpu-reference-app*",
+	"Engine": "webgpu",
+	"PageRegion": { "Width": 360, "Height": 210 },
+	"ContinuousRendering": false,
+	"TransportAlpha": false,
+	"ShareBrowserProfile": true,
+	"_sv": 3,
+	"Scripts": [
+		{ "Name": "capture-context", "Stage": "preDocument", "Library": "webgpu-capture-context@1" },
+		{ "Name": "render-frame-core", "Stage": "afterLoad", "Library": "render-frame-core@1" },
+		{ "Name": "ui-confinement", "Stage": "afterLoad", "Library": "ui-confinement@1" },
+		{ "Name": "render-frame-handler", "Stage": "afterLoad", "Library": "webgpu-render-frame-handler@1" }
+	]
+}

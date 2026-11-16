@@ -613,6 +613,15 @@ pub fn qar_render_sender_color_encoding_ext_default() -> QarRenderSenderColorEnc
     }
 }
 
+pub fn qar_render_sender_render_loop_ext_default() -> QarRenderSenderRenderLoopExt {
+    QarRenderSenderRenderLoopExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_RENDER_SENDER_RENDER_LOOP_EXT,
+        ),
+        render_loop: QarRenderLoop::QAR_RENDER_LOOP_REQUEST_DRIVEN,
+    }
+}
+
 /// The zero stream id; the caller sets it.
 pub fn qar_gui_panel_stream_id_ext_default() -> QarGuiPanelStreamIdExt {
     QarGuiPanelStreamIdExt {
@@ -625,6 +634,18 @@ pub fn qar_gui_panel_url_ext_default() -> QarGuiPanelUrlExt {
     QarGuiPanelUrlExt {
         header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_URL_EXT),
         url: ptr::null(),
+    }
+}
+
+/// No bundle and no entry: the caller sets both before chaining it.
+pub fn qar_gui_panel_served_content_ext_default() -> QarGuiPanelServedContentExt {
+    QarGuiPanelServedContentExt {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_GUI_PANEL_SERVED_CONTENT_EXT),
+        bundle: QarPanelContentBundleId {
+            publisher: QarPeerId { data: [0; 16] },
+            name: [0; QAR_PANEL_CONTENT_BUNDLE_NAME_MAX as usize + 1],
+        },
+        entry: ptr::null(),
     }
 }
 
@@ -701,6 +722,14 @@ pub fn qar_session_lifecycle_info_default() -> QarSessionLifecycleInfo {
     }
 }
 
+pub fn qar_open_qaros_view_info_default() -> QarOpenQarosViewInfo {
+    QarOpenQarosViewInfo {
+        header: structure_header(QarStructureType::QAR_STRUCTURE_TYPE_SESSION_OPEN_QAROS_VIEW_INFO),
+        view: QarQarosView::QAR_QAROS_VIEW_PAIR_HEADSET_QR,
+        device_kind: QarQarosDeviceKind::QAR_QAROS_DEVICE_KIND_NONE,
+    }
+}
+
 /// The header leaves the id empty and picks the id type by platform: LUID on
 /// Windows, UUID elsewhere.
 pub fn qar_graphics_device_id_default() -> QarGraphicsDeviceId {
@@ -713,6 +742,14 @@ pub fn qar_graphics_device_id_default() -> QarGraphicsDeviceId {
         },
         luid: zeroed(),
         uuid: ZERO_ID,
+    }
+}
+
+pub fn qar_graphics_device_disabled_ext_default() -> QarGraphicsDeviceDisabledExt {
+    QarGraphicsDeviceDisabledExt {
+        header: structure_header(
+            QarStructureType::QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT,
+        ),
     }
 }
 

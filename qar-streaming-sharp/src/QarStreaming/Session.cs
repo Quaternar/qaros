@@ -27,6 +27,7 @@ namespace Quaternar.Qaros
             _context = new SessionNativeContext(handle);
             Peers = new PeerControl(_context);
             GuiPanels = new GuiPanelControl(_context);
+            PanelContent = new PanelContentControl(_context);
             AppVolumes = new AppVolumeControl(_context);
             RenderSenders = new RenderSenderControl(_context);
             PrimarylessVideoSenders = new PrimarylessVideoSenderControl(_context);
@@ -34,6 +35,8 @@ namespace Quaternar.Qaros
 
         public PeerControl Peers { get; }
         public GuiPanelControl GuiPanels { get; }
+        /// <summary>Web pages this session serves to served GUI panels, and their messages.</summary>
+        public PanelContentControl PanelContent { get; }
         public AppVolumeControl AppVolumes { get; }
         public RenderSenderControl RenderSenders { get; }
 
@@ -86,6 +89,53 @@ namespace Quaternar.Qaros
             return info.IsSuccess
                 ? Result<SessionLifecycleChangedEventArgs>.Success(info, SessionLifecycleChangedEventArgs.FromNative(native))
                 : Result<SessionLifecycleChangedEventArgs>.Failure(info);
+        }
+
+        /// <summary>
+        /// Opens a predefined view of the QAROS Visualizer in this session's QAROS: the Pair Headset
+        /// QR code, the Room Origin marker or the setup of one device type. The app needs neither a
+        /// qaros:// link nor a registered qaros:// handler, and never looks for QAROS itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// An installed QAROS opens the view through its own qaros.exe. In a developer setup (a
+        /// QAROS run from a build folder, the app started with its <c>QAR_INSTANCE</c>) the
+        /// qaros.exe of the instance's runtime folder does, else the one beside the loaded runtime;
+        /// the registered qaros:// handler, which may belong to another build, is never used.
+        /// That qaros.exe hands the view to its running QAROS, or starts it.
+        /// </para>
+        /// <para>
+        /// Only a session onboarded as a local app can open a view. Returns once the view was
+        /// handed over, not when it shows. Windows only.
+        /// </para>
+        /// <para>
+        /// Failures: <see cref="StatusCode.ArgumentNotSupported"/> for an unknown view or kind, a
+        /// <paramref name="deviceKind"/> missing for <see cref="QarosView.DeviceSetup"/> or given for
+        /// another view, or a session not onboarded as a local app;
+        /// <see cref="StatusCode.OnboardingHubUnreachable"/> when this session's QAROS has no
+        /// qaros.exe where it should be or it could not be started;
+        /// <see cref="StatusCode.NotImplemented"/> off Windows or with a runtime older than this call.
+        /// </para>
+        /// </remarks>
+        /// <param name="view">The view to open.</param>
+        /// <param name="deviceKind">
+        /// The device type for <see cref="QarosView.DeviceSetup"/>; <see cref="QarosDeviceKind.None"/>
+        /// for every other view.
+        /// </param>
+        public Result<Unit> OpenQarosView(QarosView view, QarosDeviceKind deviceKind = QarosDeviceKind.None)
+        {
+            _context.ThrowIfDisposed();
+            var native = OpenQarosViewInfoNative.Create(view, deviceKind);
+            using var session = _context.Borrow();
+            try
+            {
+                return Results.FromNative(NativeMethods.qar_impl_session_open_qaros_view(session.Handle, ref native));
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return Result<Unit>.Failure(new ResultInfo(
+                    StatusCode.NotImplemented, 0, "The QAROS runtime is older than Session.OpenQarosView; update QAROS."));
+            }
         }
 
         /// <summary>
@@ -317,9 +367,12 @@ namespace Quaternar.Qaros
         /// Asks this machine's hub to start the target app for one AR device and
         /// returns the target app's peer id once its peer joined the session - the
         /// id a render sender renders for. Build <paramref name="connectionString"/>
-        /// with <see cref="TargetAppConnectionString"/>; a malformed one or a device
-        /// kind that cannot be invited fails with
-        /// <see cref="StatusCode.ArgumentNotSupported"/>.
+        /// with <see cref="TargetAppConnectionString.HoloLens"/>; a malformed one fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>. An Android headset (a
+        /// <see cref="TargetAppConnectionString.Quest"/> or
+        /// <see cref="TargetAppConnectionString.Android"/> string) is never invited and fails with
+        /// <see cref="StatusCode.HubTargetAppDeviceNotInvitable"/>: it is paired by the operator,
+        /// joins the session by itself, and <see cref="FindRenderTarget"/> finds it.
         /// </summary>
         public Result<PeerId> InviteTargetApp(string connectionString, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -456,7 +509,8 @@ namespace Quaternar.Qaros
     }
 
     /// <summary>
-    /// Builds the connection strings <see cref="Session.InviteTargetApp"/> accepts.
+    /// Builds target app connection strings: <see cref="Session.InviteTargetApp"/> invites only a
+    /// <see cref="HoloLens"/> one; <see cref="Session.FindRenderTarget"/> takes all of them.
     /// A host is a hostname or an IP address; it must not be empty.
     /// </summary>
     public static class TargetAppConnectionString

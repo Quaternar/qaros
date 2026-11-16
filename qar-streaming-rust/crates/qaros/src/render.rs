@@ -98,6 +98,22 @@ pub enum ColorEncoding {
     Linear,
 }
 
+/// When a render sender's application renders its frames (`QarRenderLoop`),
+/// declared through `QarRenderSenderRenderLoopExt`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum RenderLoop {
+    /// The application renders a frame when the receiver asks: begin-frame
+    /// waits for the receiver's render request and renders for the display
+    /// time it names. The sender chains no extension.
+    #[default]
+    RequestDriven,
+    /// The application renders from a loop of its own, at its own rate, and
+    /// polls [`RenderSender::try_begin_owned_frame`]: begin-frame waits only
+    /// for the receiver to have a destination ready, and the view poses are
+    /// predicted from the newest head pose for when the frame will be shown.
+    FreeRunning,
+}
+
 impl ColorAlphaMode {
     fn to_raw(self) -> sys::QarColorAlphaMode {
         match self {
@@ -114,6 +130,15 @@ impl ColorEncoding {
         match self {
             Self::Srgb => sys::QarColorEncoding::QAR_COLOR_ENCODING_SRGB,
             Self::Linear => sys::QarColorEncoding::QAR_COLOR_ENCODING_LINEAR,
+        }
+    }
+}
+
+impl RenderLoop {
+    fn to_raw(self) -> sys::QarRenderLoop {
+        match self {
+            Self::RequestDriven => sys::QarRenderLoop::QAR_RENDER_LOOP_REQUEST_DRIVEN,
+            Self::FreeRunning => sys::QarRenderLoop::QAR_RENDER_LOOP_FREE_RUNNING,
         }
     }
 }
@@ -143,12 +168,16 @@ pub struct RenderSenderConfig {
     /// Chains `QarRenderSenderColorEncodingExt` unless
     /// [`ColorEncoding::Srgb`].
     pub color_encoding: ColorEncoding,
+    /// Chains `QarRenderSenderRenderLoopExt` unless
+    /// [`RenderLoop::RequestDriven`].
+    pub render_loop: RenderLoop,
 }
 
 impl RenderSenderConfig {
     /// The values of `qar_render_sender_init_default()`: auto-reconnect,
-    /// side-by-side, no views, BGRA8 color, D32 depth; no colour extension,
-    /// so the alpha mode is unspecified and the colour sRGB.
+    /// side-by-side, no views, BGRA8 color, D32 depth; no colour or render
+    /// loop extension, so the alpha mode is unspecified, the colour sRGB and
+    /// the loop request-driven.
     pub fn new(target_peer: PeerId) -> Self {
         Self {
             target_peer,
@@ -160,6 +189,7 @@ impl RenderSenderConfig {
             depth_format: PixelFormat::D32Float,
             alpha_mode: ColorAlphaMode::Unspecified,
             color_encoding: ColorEncoding::Srgb,
+            render_loop: RenderLoop::RequestDriven,
         }
     }
 }
@@ -340,6 +370,7 @@ pub(crate) struct RenderSenderInitStorage {
     d3d11_params: Option<sys::QarStreamParamsD3D11>,
     alpha_mode: Option<sys::QarRenderSenderAlphaModeExt>,
     color_encoding: Option<sys::QarRenderSenderColorEncodingExt>,
+    render_loop: Option<sys::QarRenderSenderRenderLoopExt>,
 }
 
 impl RenderSenderInitStorage {
@@ -372,6 +403,7 @@ impl RenderSenderInitStorage {
             d3d11_params: None,
             alpha_mode: alpha_mode_extension(config.alpha_mode),
             color_encoding: color_encoding_extension(config.color_encoding),
+            render_loop: render_loop_extension(config.render_loop),
         });
         match graphics {
             SenderGraphics::Cpu => {
@@ -396,8 +428,8 @@ impl RenderSenderInitStorage {
     }
 
     /// Points the init at the app volume id and the extensions stored beside
-    /// it, chained as alpha mode, colour encoding, graphics extension (the
-    /// header allows any order). The returned pointer, and those inside it,
+    /// it, chained as alpha mode, colour encoding, render loop, graphics
+    /// extension (the header allows any order). The returned pointer, and those inside it,
     /// stay valid while the storage is neither moved nor accessed in any other
     /// way.
     pub(crate) fn wired_init(&mut self) -> *mut sys::QarRenderSenderInit {
@@ -416,9 +448,19 @@ impl RenderSenderInitStorage {
         let graphics_extension = vulkan_extension
             .or(d3d11_extension)
             .unwrap_or(ptr::null_mut());
-        let graphics_extension = self.chain_color_extensions_before(graphics_extension);
-        self.init.header.next = graphics_extension;
+        let render_loop_extension = self.chain_render_loop_extension_before(graphics_extension);
+        self.init.header.next = self.chain_color_extensions_before(render_loop_extension);
         &raw mut self.init
+    }
+
+    /// Chains the render loop extension, if set, in front of `next` and
+    /// returns the start of the chain.
+    fn chain_render_loop_extension_before(&mut self, next: *mut c_void) -> *mut c_void {
+        let Some(extension) = self.render_loop.as_mut() else {
+            return next;
+        };
+        extension.header.next = next;
+        ptr::from_mut(&mut extension.header).cast::<c_void>()
     }
 
     /// Chains the colour extensions that are set in front of `next` and
@@ -450,6 +492,14 @@ fn color_encoding_extension(
     (color_encoding != ColorEncoding::Srgb).then(|| {
         let mut extension = defaults::qar_render_sender_color_encoding_ext_default();
         extension.color_encoding = color_encoding.to_raw();
+        extension
+    })
+}
+
+fn render_loop_extension(render_loop: RenderLoop) -> Option<sys::QarRenderSenderRenderLoopExt> {
+    (render_loop != RenderLoop::RequestDriven).then(|| {
+        let mut extension = defaults::qar_render_sender_render_loop_ext_default();
+        extension.render_loop = render_loop.to_raw();
         extension
     })
 }
@@ -567,6 +617,73 @@ impl RenderSender {
                 .map(TextureSize::from_raw)
                 .collect(),
         })
+    }
+
+    /// For a sender created with [`RenderLoop::FreeRunning`]: the poses and
+    /// fields of view to render the next frame with, taken before begin-frame
+    /// (`qar_render_sender_next_render_pose`). Predicted now from the newest
+    /// head pose for when the frame is shown, in the same app content space as
+    /// a frame's views. The next begin-frame opens its frame with exactly these
+    /// poses: render into your own target, then begin the frame, copy into it
+    /// and show it. A second call before that begin-frame replaces the poses.
+    ///
+    /// `view_count` is at most the number of views the sender was created
+    /// with; the result is in the frame's view order, as [`OwnedFrame::view`]
+    /// indexes it. Fails with [`crate::StatusCode::RENDERING_MISSING_POSE_DATA`]
+    /// before the viewer's first head pose,
+    /// [`crate::StatusCode::RENDERING_APP_VOLUME_UNRESOLVED`] while the app volume
+    /// does not resolve, and [`crate::StatusCode::LOGIC_ERROR`] for a
+    /// request-driven sender or too many views.
+    pub fn next_render_pose(&self, view_count: usize) -> Result<Vec<ViewPose>> {
+        let api = self.inner.session.api();
+        let mut poses = vec![defaults::qar_pose_default(); view_count];
+        let mut fovs = vec![defaults::qar_fov_default(); view_count];
+        // SAFETY: live sender; both out-arrays hold `view_count` elements.
+        let result = unsafe {
+            (api.qar_impl_render_sender_next_render_pose)(
+                self.inner.handle.as_ptr(),
+                view_count,
+                poses.as_mut_ptr(),
+                fovs.as_mut_ptr(),
+            )
+        };
+        check(api, "qar_render_sender_next_render_pose", result)?;
+        Ok(poses
+            .into_iter()
+            .zip(fovs)
+            .map(|(pose, fov)| ViewPose {
+                pose: Pose::from_raw(pose),
+                fov: Fov::from_raw(fov),
+            })
+            .collect())
+    }
+
+    /// For a sender created with [`RenderLoop::FreeRunning`]: whether a frame
+    /// rendered now can be sent without waiting
+    /// (`qar_render_sender_is_ready_for_next_frame`). Never blocks.
+    ///
+    /// True once the receiver has handed back the previous frame's
+    /// destination: it is then reserved for this sender's next frame, and the
+    /// next begin-frame takes it without waiting. False while it is still out,
+    /// and while the stream is paused, reconnecting or has no receiver yet. A
+    /// loop serving several senders checks each one first and takes
+    /// [`Self::next_render_pose`], renders and begins only for those that are
+    /// ready, so a slower receiver or a reconnecting stream holds back no
+    /// other. Fails with [`crate::StatusCode::RENDERING_STREAM_IS_CLOSED`] once
+    /// the stream closed, and with [`crate::StatusCode::LOGIC_ERROR`] for a
+    /// request-driven sender or while a begin-frame is waiting.
+    pub fn is_ready_for_next_frame(&self) -> Result<bool> {
+        let api = self.inner.session.api();
+        let mut ready = false;
+        // SAFETY: live sender; `ready` outlives the call.
+        let result = unsafe {
+            (api.qar_impl_render_sender_is_ready_for_next_frame)(
+                self.inner.handle.as_ptr(),
+                &raw mut ready,
+            )
+        };
+        check(api, "qar_render_sender_is_ready_for_next_frame", result)?;
+        Ok(ready)
     }
 
     /// Begins a frame (`qar_render_sender_begin_frame`). Render with the

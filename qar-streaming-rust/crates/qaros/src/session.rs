@@ -13,6 +13,7 @@ use crate::cancel::CancelTokenInner;
 use crate::error::{Result, check};
 use crate::invite::OnboardingInvite;
 use crate::library::{Library, require_handle};
+use crate::panel_content::PanelContent;
 use crate::panels::GuiPanels;
 use crate::peers::{PeerInfo, read_peer_info};
 use crate::pending::{self, AbandonedCall, CallSpec, Destroy, Keep, PendingCall, RawOutcome};
@@ -22,7 +23,7 @@ use crate::render::{
 };
 use crate::runtime::RuntimeInner;
 use crate::strings;
-use crate::types::{PeerId, SessionId, SessionLifecycle};
+use crate::types::{PeerId, QarosView, SessionId, SessionLifecycle};
 use crate::volumes::AppVolumes;
 
 /// A `QarSession`, obtained by [`crate::Runtime::rejoin`] or
@@ -209,7 +210,9 @@ impl Session {
     /// sender's frame textures, live on (`qar_session_get_graphics_device_id`):
     /// the one chained at onboard or rejoin, else the one QAROS or the library
     /// selected. Create the renderer's device on it. `None` when the session
-    /// knows no adapter.
+    /// knows no adapter. A session created
+    /// [without a graphics device](crate::OnboardExtensions::without_graphics_device) fails
+    /// with [`crate::StatusCode::GRAPHICS_DEVICE_NOT_INITIALIZED`].
     pub fn graphics_adapter(&self) -> Result<Option<GraphicsAdapter>> {
         let api = self.inner.api();
         let mut device_id = defaults::qar_graphics_device_id_default();
@@ -314,6 +317,28 @@ impl Session {
         };
         check(api, "qar_session_get_lifecycle_state", result)?;
         Ok(SessionLifecycle::from_raw(&info))
+    }
+
+    /// Opens a predefined view of the QAROS Visualizer in this session's QAROS
+    /// (`qar_session_open_qaros_view`): the Pair Headset QR code, the Room Origin marker or the
+    /// setup of one device type. The app needs no `qaros://` link, no registered handler, and
+    /// never looks for QAROS itself: an installed QAROS opens it through its own `qaros.exe`, a
+    /// developer setup through the `qaros.exe` of the instance's runtime folder, else the one
+    /// beside the loaded runtime.
+    ///
+    /// Only a session onboarded as a local app can open a view (`ARGUMENT_NOT_SUPPORTED`
+    /// otherwise); `ONBOARDING_HUB_UNREACHABLE` when this session's QAROS has no `qaros.exe`
+    /// where it should be or it could not be started; `NOT_IMPLEMENTED` off Windows. Returns
+    /// once the view was handed over, not when it shows.
+    pub fn open_qaros_view(&self, view: QarosView) -> Result<()> {
+        let api = self.inner.api();
+        let mut info = defaults::qar_open_qaros_view_info_default();
+        (info.view, info.device_kind) = view.to_raw();
+        // SAFETY: live session handle; info is stamped and outlives the call.
+        let result = unsafe {
+            (api.qar_impl_session_open_qaros_view)(self.inner.handle.as_ptr(), &raw const info)
+        };
+        check(api, "qar_session_open_qaros_view", result)
     }
 
     /// Calls `callback` with each lifecycle state of the session
@@ -531,6 +556,11 @@ impl Session {
         GuiPanels::new(&self.inner)
     }
 
+    /// Web pages this session serves to served GUI panels, and their messages.
+    pub fn panel_content(&self) -> PanelContent<'_> {
+        PanelContent::new(&self.inner)
+    }
+
     /// Replaces the device this application describes itself as
     /// (`qar_peer_update_device_identity`), as [`crate::PeerPresentation::device_identity`] sets
     /// it at onboard or rejoin. A category other than the [`crate::SourceDeviceCategory`] values
@@ -605,8 +635,12 @@ impl Session {
     /// Asks this machine's hub to start the target app for one AR device
     /// (`qar_session_invite_target_app`) and returns its peer id once the target app's peer
     /// has joined the session. `connection` names the device kind and address:
-    /// `"hololens:<host>"`, `"headset:<host>"` (`"quest:"` and `"android:"` are aliases), or a
-    /// bare host, as `hololens:<host>`; [`crate::Library::target_app_connection_string`] builds it.
+    /// `"hololens:<host>"`, or a bare host, as `hololens:<host>`;
+    /// [`crate::Library::target_app_connection_string`] builds it. An Android headset
+    /// (`"headset:<host>"`, `"quest:"`, `"android:"`) is never invited: it pairs itself and joins
+    /// the session on its own, and this call fails with
+    /// [`crate::StatusCode::HUB_TARGET_APP_DEVICE_NOT_INVITABLE`] for it; find it with
+    /// [`Session::find_render_target`].
     ///
     /// Only this machine's hub answers, and the invite is one-time: the hub remembers the device
     /// but never re-invites it by itself. A device another hub serves is stopped there first.

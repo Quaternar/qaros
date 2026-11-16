@@ -1,0 +1,41 @@
+{
+  "_sv": 3,
+  "Id": "{{ID}}",
+  "Name": "{{NAME}}",
+  "DisplayName": "{{DISPLAY_NAME}}",
+  "Version": "1.0.0",
+  "Channel": "public",
+  "AddressPattern": "{{ADDRESS_PATTERN}}",
+  "Engine": "webgpu",
+  "PageRegion": {
+    "Width": 1024,
+    "Height": 1024
+  },
+  "ShareBrowserProfile": true,
+  "ContinuousRendering": true,
+  "AppScale": 1,
+  "RenderScale": 0.75,
+  "Panels": "panels",
+  "Scripts": [
+    {
+      "Name": "redirect-capture",
+      "Stage": "preDocument",
+      "Library": "webgpu-redirect-capture@1"
+    },
+    {
+      "Name": "render-frame-core",
+      "Stage": "afterLoad",
+      "Library": "render-frame-core@1"
+    },
+    {
+      "Name": "redirect-presenter",
+      "Stage": "afterLoad",
+      "Library": "webgpu-redirect-presenter@1"
+    },
+    {
+      "Name": "site-camera",
+      "Stage": "afterLoad",
+      "File": "scripts/site-camera.js"
+    }
+  ]
+}

@@ -53,7 +53,7 @@ Several PCs share one session by making one Hub the **primary** and joining the 
 
 1. On the Hub that should become a member, choose *Join hub…* (Visualizer Connection panel, **Hubs** area, or tray menu).
 2. Pick the primary from the nearby list, or enter its address as **`host:port`** (there is no default port). Hubs run by your own user account on this PC are listed first and marked *(yours)*.
-3. Either wait for the primary's operator to click **Allow** on the pending request in the primary's *Members* list (up to 10 minutes), or type the primary's 8-digit **join code** (shown on the primary; valid briefly, no click on the primary).
+3. Either wait for the primary's operator to click **Allow** on the pending request in the primary's *Members* list (up to 10 minutes), or type the primary's 8-digit **join code** (shown on the primary; valid 60 s, no click on the primary).
 4. The member restarts into the primary's session; the tray shows "Member of *primary*".
 
 Apps that link several PCs themselves (for example a simulation) can bring a Hub in without any click: approve the app on the primary with **may bring in member hubs** and a quota.

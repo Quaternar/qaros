@@ -898,6 +898,11 @@ namespace Quaternar.Qaros.Interop
                     });
                 case GraphicsDeviceId graphicsDeviceId:
                     return scope.AllocStruct(graphicsDeviceId.ToNative());
+                case GraphicsDeviceDisabled _:
+                    return scope.AllocStruct(new GraphicsDeviceDisabledExtNative
+                    {
+                        Header = NativeDefaults.Header(StructureType.SessionGraphicsDeviceDisabledExt)
+                    });
                 case PeerDeviceIdentity identity:
                     return scope.AllocStruct(new PeerDeviceIdentityNative
                     {

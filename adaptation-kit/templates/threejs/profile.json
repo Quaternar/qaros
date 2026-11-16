@@ -1,0 +1,51 @@
+{
+  "_sv": 3,
+  "Id": "{{ID}}",
+  "Name": "{{NAME}}",
+  "DisplayName": "{{DISPLAY_NAME}}",
+  "Version": "1.0.0",
+  "Channel": "public",
+  "AddressPattern": "{{ADDRESS_PATTERN}}",
+  "Engine": "three.js",
+  "PageRegion": {
+    "Width": 1024,
+    "Height": 1024
+  },
+  "ShareBrowserProfile": true,
+  "ContinuousRendering": true,
+  "AppScale": 1,
+  "RenderScale": 0.75,
+  "Panels": "panels",
+  "Scripts": [
+    {
+      "Name": "capture-renderer",
+      "Stage": "preDocument",
+      "Library": "threejs-capture@1"
+    },
+    {
+      "Name": "scene-selection",
+      "Stage": "preDocument",
+      "File": "scripts/scene-selection.js"
+    },
+    {
+      "Name": "render-frame-core",
+      "Stage": "afterLoad",
+      "Library": "render-frame-core@1"
+    },
+    {
+      "Name": "atlas-pack",
+      "Stage": "afterLoad",
+      "Library": "webgl-atlas-pack@1"
+    },
+    {
+      "Name": "render-frame-handler",
+      "Stage": "afterLoad",
+      "Library": "threejs-render-frame@1"
+    },
+    {
+      "Name": "render-frame-handler-webgpu",
+      "Stage": "afterLoad",
+      "Library": "threejs-webgpu-render-frame@1"
+    }
+  ]
+}

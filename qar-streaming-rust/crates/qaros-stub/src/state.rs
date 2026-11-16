@@ -15,6 +15,7 @@ pub enum SubscriptionKind {
     GuiPanels,
     AppVolumes,
     SessionLifecycle,
+    PanelContentMessages,
 }
 
 /// A registered C callback. Pointers are stored as addresses so the state is
@@ -38,7 +39,23 @@ pub struct StubPanel {
     pub size: qaros_sys::QarGuiPanelSize,
     pub state: qaros_sys::QarGuiPanelState,
     pub content_uri: String,
+    /// A served panel's bundle (publisher, name) and entry; `None` for a website panel.
+    pub served: Option<StubServedContent>,
     pub visible_to: Vec<[u8; 16]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StubServedContent {
+    pub publisher: [u8; 16],
+    pub name: String,
+    pub entry: String,
+}
+
+/// A content bundle a stub session published: its publisher and name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StubBundle {
+    pub publisher: [u8; 16],
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -71,6 +88,8 @@ pub struct StubState {
     pub injected_failures: HashMap<String, i64>,
     pub disable_auto_render_request: bool,
     pub panels: Vec<StubPanel>,
+    /// Content bundles stub sessions published.
+    pub bundles: Vec<StubBundle>,
     pub volumes: Vec<StubVolume>,
     pub next_identity: u64,
     /// Peers that joined through `qar_stub_peer_join`, in join order.

@@ -53,10 +53,11 @@ pub struct RuntimeInfo {
 pub enum TargetDevice {
     /// `"hololens:<host>"`.
     HoloLens,
-    /// `"quest:<host>"`, an alias of `"headset:<host>"`: the headset reports its exact model
-    /// itself.
+    /// `"quest:<host>"`. An Android headset is never invited: use it with
+    /// [`crate::Session::find_render_target`]; [`crate::Session::invite_target_app`] fails with
+    /// [`crate::StatusCode::HUB_TARGET_APP_DEVICE_NOT_INVITABLE`].
     Quest,
-    /// `"android:<host>"`, an alias of `"headset:<host>"`.
+    /// `"android:<host>"`. Like [`TargetDevice::Quest`], for finding a joined headset only.
     Android,
 }
 
@@ -199,7 +200,8 @@ impl Library {
 
     /// The connection string for a target app on `host`, a hostname or IP address
     /// (`qar_target_app_connection_string_hololens`, `_quest`, `_android`), for
-    /// [`crate::Session::invite_target_app`]. An empty host fails in the library.
+    /// [`crate::Session::invite_target_app`] (HoloLens only) or
+    /// [`crate::Session::find_render_target`]. An empty host fails in the library.
     pub fn target_app_connection_string(&self, device: TargetDevice, host: &str) -> Result<String> {
         let api = &self.inner.api;
         let (builder, function) = match device {

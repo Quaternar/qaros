@@ -1,0 +1,20 @@
+{
+	"Name": "webgl-reference-app",
+	"DisplayName": "Raw WebGL reference app",
+	"Id": "com.quaternar.webgl-reference-app",
+	"Version": "1.0.0",
+	"Channel": "debug",
+	"AddressPattern": "*webgl-reference-app*",
+	"Engine": "webgl",
+	"PageRegion": { "Width": 400, "Height": 240 },
+	"ContinuousRendering": false,
+	"TransportAlpha": false,
+	"ShareBrowserProfile": true,
+	"_sv": 3,
+	"Scripts": [
+		{ "Name": "capture-context", "Stage": "preDocument", "Library": "webgl-capture-context@1" },
+		{ "Name": "render-frame-core", "Stage": "afterLoad", "Library": "render-frame-core@1" },
+		{ "Name": "ui-confinement", "Stage": "afterLoad", "Library": "ui-confinement@1" },
+		{ "Name": "render-frame-handler", "Stage": "afterLoad", "Library": "webgl-render-frame-handler@1" }
+	]
+}

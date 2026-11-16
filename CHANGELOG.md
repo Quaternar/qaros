@@ -16,16 +16,2130 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ## [Unreleased]
 
+### Breaking
+
+- **Device apps:** every Android headset now streams with depth on (`depth.enable`; it was off), so the
+  player reprojects with real depth, and takes its stream size and bitrate from a preset scaled to
+  its display (Quest 2, 3, 3S and Pro, Samsung Galaxy XR, XREAL Project Aura; METALENSE 2 and any
+  other headset keep today's 1272x720 per eye at 90 fps and 60 Mbit/s, now with depth). A Quest
+  streams 1600x1600 per eye at 90 fps and 100 Mbit/s (Quest 2, 3S and Pro scaled from it): more
+  than METALENSE for the wider field of view, and no more than the player's warp holds on a Quest 3
+  (2000x2000 dropped it to about 61 fps, 1600x1600 holds about 71 of 72); its bitrate is still to
+  be confirmed on the device. Depth adds a strip below the colour rows. Presets are capped to the decoder (METALENSE
+  and the Android XR devices H.264 level 5.2, Quests level 6.0) and 100 Mbit/s: the Galaxy XR
+  preset streams 1776x1920 per eye at 60 fps and 100 Mbit/s (not yet tried on a device). To change a value for one headset, set `stream.*`, `depth.enable`
+  or `encoder.bitrateKbps` in the Visualizer (Debug mode, Tools, Streamer) or in a drop-in of
+  `android-streamer-presets.d`.
+- **Packaging:** upgrading an installation older than 0.10 with a 0.10 or newer setup starts QAROS
+  clean, interactive and silent alike: the protected service storage is made new, the installing
+  user's QAROS data is reset (their web app adaptations are backed up first; the setup log
+  `%TEMP%\QAROS-Setup-clean-start.log` names the folder), and every other user's QAROS data is
+  reset at their next start. Pair devices, approve apps and enter the licence again afterwards.
+- **Packaging:** the setup installs the ANARI device (`anari\` on the system PATH, needed by Blender
+  with QAROS) by default; before, it was off unless chosen. An upgrade keeps an earlier "off". To
+  leave it out, untick it or pass `/NoANARI`. The OSPRay backend now asks you to accept Intel's
+  OSPRay binary licence; a silent install needs `/OSPRay /AcceptIntelTerms`, and an upgrade keeps
+  OSPRay only when you accepted the same terms before.
+- **Runtime:** QAROS of this version speaks a new session protocol and does not mix with an earlier
+  one ([#575](https://github.com/Quaternar/Quaternar/issues/575)): hubs, launchers, the Visualizer
+  and device apps of the two versions refuse each other's shared-object changes (panels, app
+  volumes, rooms) with a logged error, hands sent by one cannot be read by the other, and panels,
+  app volumes and rooms stored by an earlier hub are not restored. Every PC now stamps its own
+  messages: one whose clock runs more than 500 ms ahead of another's has its messages restamped and
+  logged. Migration: update every QAROS install and device player of a session together, keep the
+  PCs' clocks synchronised (NTP); apps create their panels and volumes again.
+- **Runtime:** the hub no longer mints a new pairing code every `codeRotationSec` (8 s by
+  default). It mints one only when the Visualizer shows a code, and asks for none otherwise: while
+  no code is on screen, LAN discovery offers no device code to type and the launcher logs none.
+  `codeRotationSec` now only sets the shortest lifetime of a code the hub mints without one of
+  its own. To pair a device by a typed code, open the code in the Visualizer first.
+- **Visualizer:** Android headsets (Meta Quest, METALENSE, Android XR) can no longer be invited
+  by IP address. The Invite device card offers only HoloLens and refuses a `headset:`, `android:`
+  or `quest:` address, and the Devices tab ends Quest and METALENSE setup with **Pair headset**
+  (adb push or **Show QR code**) instead of the invite at the Wi-Fi address. Pair each headset
+  once; it then joins the session itself. HoloLens invites are unchanged.
+- **Runtime:** a `targetApps` entry for an Android headset (`deviceType` `Headset`, `Android`,
+  `AndroidStreamer` or a headset model) is skipped with a warning instead of starting
+  `qar-android-streamer` for it, and `targetAppOverride: "AndroidStreamer"` is ignored. Remove the
+  entry and pair the headset with **Pair headset** in the Visualizer; it joins the session itself.
+- **Device apps:** the Android player streams only while it is joined to its session. A stream
+  offered to a player that is not paired, or still joining, is ignored: pair the headset first.
+- **Device apps:** the Android player is version 0.10.0 and speaks a new protocol with
+  `qar-android-streamer`: a player older than 0.10.0 cannot stream with this QAROS, and this player
+  cannot stream with an older QAROS. Update every Quest, METALENSE and Android XR headset from the
+  Visualizer's Devices tab, which offers the update.
+- **Device apps:** an Android headset's head pose is the centre between its eyes (was its left
+  eye), in the render requests a source app receives for it and in the poses the headset
+  publishes. Content placed relative to the head pose moves about 3 cm towards the centre. Remove
+  any offset you added to compensate.
+- **Runtime:** the Blender ANARI add-on requires Blender 4.5 LTS or newer (was 4.2). Migration:
+  install Blender 4.5 or newer.
+- **Runtime:** lights in a Blender scene now stream as bright as Cycles renders them: the add-on
+  reads a light's **Exposure** and **Normalize**, spot lights keep their cone, and area lights
+  shine only in front of them at their real strength (they were 4 times too dark). The VisGL
+  backend now lights surfaces in ANARI's units: lit coloured surfaces get brighter (a 0.5 grey
+  twice as bright) and matte ones darker (by π), and its spot lights light what they point at, so
+  all backends agree. USD files, whose lights
+  Blender imports with Normalize off, no longer stream far too bright or too dark. Migration: a
+  scene whose light strengths were tuned to look right in the stream needs them set to what looks
+  right in Blender's own render.
+- **Runtime:** ANARI apps on OSPRay or Helide render at half resolution per side by default
+  (about twice the frame rate, softer image); VisRTX and VisGL are unchanged. Migration: set
+  `qar.renderScale` to 1, or the Blender add-on's **Render scale** to 1, for full resolution.
+- **Visualizer:** a source application started from the **Source Applications** panel is no
+  longer started again when its process ends. Closing it (Blender's window, for example) ends it
+  in the Hub, and its card disappears once none of its processes runs; a crash ends it too. The
+  app editor gains **Restart when it exits** (saved with the preset) for apps that should come back
+  after a crash. It is on for the built-in **StereoKit** and **CPU Renderer** tiles and off for
+  every other app. Migration: turn it on in your saved presets that relied on the restart,
+  including presets saved from the StereoKit or CPU Renderer tile.
+- **Runtime:** the hub signs up to 40 certificate requests and renewals at once (was 8), and a
+  request counts against that limit only while its certificate is being signed, not while it is
+  recorded and answered. Many services enrolling or renewing together (a Visualizer's receivers,
+  their mixers, the launcher's children) no longer fail with `CaGatewayOverloaded`. Migration:
+  none; the per-device limit (20 signings per 10 minutes) is unchanged.
+- **Unity:** `QarMultiUserStreamingBehaviour` joins only as a local app on the QAROS hub of this
+  PC, with nothing saved. The **Onboarding** settings lose **Mode** (and the `QarOnboardingMode`
+  enum), **Code**, **Hub Host**, **Hub Port**, **Onboarding Id Key** and **Planned Peer Id**, and
+  `ForgetOnboarding()` is removed: no pairing code, no remote hub, no saved onboarding id to rejoin
+  or forget. Scenes and prefabs saved with those fields still load. An app QAROS launched, and an
+  app on a PC whose hub is a member of another PC's hub, join the same way. Migration: drop
+  scripts that set those fields or call `ForgetOnboarding()`; to shut an app out, revoke its
+  approval in the QAROS hub. The onboarding id an older version saved in `PlayerPrefs` is no
+  longer read.
+- **Visualizer:** the MCP endpoint (Settings > General > **Enable MCP endpoint**) is on by default
+  in every UI mode, Basic included, and a UI mode change no longer turns it on or off. Any program
+  you run can then drive the Visualizer over `http://127.0.0.1:17872/mcp`. A settings file that
+  saved the switch keeps its value; turn it off in Settings to close the endpoint.
+- **Device apps:** every player shows as **QAROS Player** in the headset's app menu (was *QAR
+  Player Vulkan* on Quest and METALENSE, *QuaternAR Player* on HoloLens) under a new package ID:
+  `com.quaternar.qaros.player` on Meta Quest and HoloLens 2, and
+  `com.metalense.com.quaternar.qaros.player` on METALENSE 2, which requires its `com.metalense`
+  prefix. A new ID is a new app: the old player's saved scene origin and permissions do not carry
+  over. Scan the scene origin code again on each headset. The Visualizer's Devices tab removes the
+  old Android player (`com.metalense.quaternar.vulkan`) after installing the new one; on HoloLens
+  uninstall *QuaternAR Player* yourself.
+- **Packaging:** the setup starts QAROS at sign-in only for the user who runs it, no longer for
+  every user of the PC. An upgrade removes the all-users start an earlier version wrote. Other
+  users turn it on with **Start QAROS at login** in the tray menu; to keep starting it for everyone,
+  check **Start QAROS when anyone signs in to this PC** on the setup's last page, or pass
+  `/AutostartAllUsers` to a silent setup (needed when it runs as SYSTEM or a deployment account).
+- **Packaging:** the QAROS program you start is now `qaros.exe` (Linux: `qaros`) instead of
+  `qaros-hub-service.exe`. The setup replaces the old file, its sign-in entry, Start menu shortcut,
+  `qaros://` link and firewall rules. Change scripts, shortcuts and scheduled tasks that start
+  `qaros-hub-service.exe` to start `bin\qaros.exe`. Log folders keep their names.
+- **Packaging:** an installed hub keeps its secrets (CA keys, hub identity, trust-authority key,
+  stored-data key, app approvals, licence) in the protected store of the QAROS System Service
+  instead of the user's profile; only the installed hub and `qaros-license.exe` can reach them.
+  The first start after the upgrade does not carry the old secrets over: the hub starts with a new
+  CA, so pair every headset, camera and member hub again, approve local apps again and activate
+  the licence again. The hub no longer starts while the `QAROS.SystemService` service is stopped.
+- **Runtime:** the launcher config's `runtimeStorageRoot` must be a non-empty absolute path. An
+  empty, relative or non-string value now stops the launcher at start with an error instead of
+  resolving against its working directory (or throwing). Write the full path, for example
+  `"C:/ProgramData/Quaternar/hub-runtime"`, or remove the key to use the data folder.
+- **Runtime:** stopping and starting the hub no longer starts the source applications that were
+  running before, and the Hub Display no longer reopens the web apps it had open. Start them again
+  from their tiles; saved presets are kept. While the hub runs, a source application that crashes
+  is still restarted.
+- **Visualizer:** a camera's blending receiver is called "<camera> observer" instead of
+  "<camera> blending", in its tab, its stereo window and the Stream Graph, and it shows as an
+  **Observer** of that camera rather than as a second camera. Nothing to do; a view still titled
+  "... blending" keeps its title until renamed.
+- **Device apps:** the scene a scanned QR code anchors is always level, on HoloLens and on Android
+  headsets (METALENSE) alike: a code on a table, a wall or the ceiling places the origin at the
+  code with gravity up, never a scene lying on the wall or upside down. A flat code faces the
+  scene toward its bottom edge, a wall code out of the wall, toward the viewer. A scene anchored
+  to a wall or ceiling code now stands upright: author content with +Y up. A saved Android anchor
+  is leveled when restored; scan the code again on a HoloLens to level its saved anchor.
+- **Runtime:** a device's type is a device id from the device catalog
+  (`bin/device-catalog.jsonc`). Launcher `targetApps` take `"deviceType": "HoloLens"` or
+  `"Headset"` (any headset the Android streamer serves; it reports its exact model itself); the
+  old names `HoloLensARHeadset`, `Android` and `AndroidStreamer` still resolve. An entry naming a
+  model (`MetaQuest`, `MetaQuestHeadset`, `Metalens`, ...) is skipped with a warning: change it to
+  `"Headset"`. An unknown or non-invitable id is skipped with a warning instead of failing the
+  launcher. Without the catalog file no device can be invited.
+- **Visualizer:** a device remembered as Meta Quest or Metalens is no longer invited: forget it and
+  add it again as a **Headset**.
+- **Unity:** `QarStreamTarget.DeviceType` is replaced by `Category`, `DeviceId`, `DeviceFamily` and
+  `DeviceName`; `DeviceTypeLabel` is `DeviceLabel` and shows the device's name.
+- **Unity:** `QarMultiUserStreamingBehaviour` no longer has endpoints: the IP connection targets
+  (`visualizer`, `hololens:<host>`, `quest:<host>`, `android:<host>`) and the invites and player
+  starts behind them are gone, and so are `ConnectAll`, `InitAndConnectAll`, `ConnectEndpoint`,
+  `SetEndpoints` and the other endpoint members. The app joins the Hub (as a local app by default)
+  and lists the target apps already in its session; **Stream To All Targets** (on by default)
+  streams to every running one, or the user picks targets in the list. Call `Join()` where you
+  called `InitAndConnectAll()`; start players and Visualizer receivers on their own.
+- **Device apps:** `qar-vulkan-source` (the bundled Vulkan cube) takes no options: `--code`,
+  `--host` and `--runtime` are gone, and it no longer reads a code from stdin or asks to retry. It
+  always joins the QAROS on this PC as a local app and finds the runtime through
+  `qar_library_load(NULL)`. Start it again after an approval timeout.
+- **Unity:** the package loads the runtime only through the C# binding's lookup (beside the
+  binding, else the instance `QAR_INSTANCE` names, else the installed QAROS, else `PATH`) and no
+  longer calls `SetDllDirectory` or prepends the runtime folder to `PATH`. A project that relied on
+  the runtime folder being on the process search path must load those libraries by path. With no
+  QAROS Hub installed and no `QAR_INSTANCE` set, joining fails with "QAROS Hub is not installed on
+  this PC" and a link to the installation guide, and the Editor offers to open it: install QAROS Hub,
+  or start Unity with `QAR_INSTANCE` naming a running development hub.
+- **Unity:** `QarMultiUserStreamingBehaviour.DllFolder` is removed; the runtime comes only from
+  QAROS Hub or the instance `QAR_INSTANCE` names. Unity drops the serialized value from a scene or
+  prefab that still sets it; a script that reads or writes the field must stop using it.
+- **Device apps:** Meta Quest is no longer driven through OpenXR desktop (Virtual Desktop): a Quest
+  invite (`Headset`) starts `qar-android-streamer`, like an Android device; the peer joins as
+  a `Headset` and reports its exact model. `qar-openxr-desktop` serves
+  HoloLens only, and the launcher's `targetAppOverride` no longer accepts `MetaQuest`.
+- **Packaging:** the code-signing certificate variables are `QAR_SIGNING_CERT_PATH`,
+  `QAR_SIGNING_CERT_PASSWORD`, `QAR_SIGNING_CERT_THUMBPRINT` (and their `_FILE` forms) instead of
+  `QAR_MSIX_CERT_*`, which are no longer read. The signer moved to `packaging/sign_artifacts.py`
+  (was `qar-streaming/cmake/sign_msix.py`).
+- **Packaging:** QAROS is installed only with the Windows x64 setup exes `QAROS-Setup-<version>.exe`
+  (release) and `QAROS-Demo-Setup-<version>.exe` (demo); the runtime ZIPs `QAROS [Demo] <version>.zip`
+  and the `QAROS Hub [Demo] <version>.msixbundle` are gone. The setup installs for all users of the
+  PC into `%ProgramFiles%\Quaternar\QAROS` and needs administrator rights once; silent with `/S`. It
+  adds the `QAROS.SystemService` service, the firewall rules LAN headsets need (`/NoFirewall` skips
+  them; TCP and UDP 7440-7499 and 19120-19199 for each QAROS executable; an Android headset
+  (Quest, METALENSE) sends its poses to one UDP port of 7461-7499) and starts the QAROS tray at every login (`/NoAutostart` skips it). Every install, silent
+  and upgrades included, ends with the tray running for each signed-in user, without a restart or
+  sign-in and without an opt-out; the finish page's "Start QAROS" box is gone. To upgrade, run a newer
+  setup: approved apps, paired devices and settings are kept. An older setup asks first (default
+  No); silent it exits with code 6 unless `/AllowDowngrade`. A PC holds one installation: the
+  release setup upgrades a demo installation and keeps its data, while the demo setup refuses while
+  the licensed QAROS is installed (exit code 8): uninstall QAROS first, and the demo then removes
+  the QAROS data it left. The
+  installation is recorded in `HKLM\SOFTWARE\Quaternar\QAROS` (`InstallFolder`, `Version`, `Flavor`,
+  `Scope`, `CApi`). It installs `bin/`, `include/` and `devices/` (the device player APKs and the
+  HoloLens 2 package), `CHANGELOG.md`, `third_party_licenses.md` and `README-Licensing.md` (how to
+  replace a library in an installed QAROS). Uninstalling removes everything but the QAROS data,
+  which it offers to delete (silent: `/PurgeData`).
+- **Packaging:** the C# NuGet is one binding-only package, `Quaternar.Qaros`, for both flavors;
+  `Quaternar.Qaros.Demo` is gone. It no longer copies a runtime next to the application: the
+  application runs against the QAROS installed on the PC.
+- **Unity:** one `QAROS Unity <version>.zip`, binding only, for both flavors (`QAROS Unity Demo` is
+  gone); install QAROS on the PC first. The Editor and every player load the runtime of the
+  installed QAROS instead of the package's `lib/windows-x64`; without an installation connecting
+  fails with "QAROS is not installed". Player builds no longer get a runtime copied next to them.
+- **Unity:** by default (`QarMultiUserStreamingBehaviour > Onboarding > Mode = LocalApp`) the
+  package joins the hub on this PC without a code: the hub asks once to allow the app (the Editor
+  once for every project opened in it, an unsigned player after each build), later connects join
+  silently. For a remote hub set `Hub Host` (or `Mode = Code`) and fill `Code` with the pairing code
+  as before.
+- **Runtime:** on Windows, a QAROS API app the launcher starts no longer gets a launch invite on
+  stdin. It joins by local enrollment like a user-started source app: call `qar_runtime_onboard`
+  with `QarOnboardLocalAppExt` (C# `OnboardOptions.UseLocalApp()`) instead of reading the stdin
+  line. It is approved once like any local app and still gets its planned peer id. Its session is
+  still created on the target's GPU; read it with `qar_session_get_graphics_device_id`. To keep
+  the stdin invite, set the definition's `onboardingCodeDelivery` to `"Stdin"`.
+- **Runtime:** after this update every device and app paired with an earlier QAROS is paired again
+  once with a code (launcher-started apps re-enrol on their own), and all PCs and devices of a
+  session must run the same version. (#209)
+- **Runtime:** the CA gateway rejection `device_revoked_manual_pake_required` is renamed
+  `device_revoked_operator_allow_required`: a revoked device comes back only after an operator
+  clicks *Allow*, never through a new pairing alone. Update scripts or log filters that match the
+  old code. (#214)
+- **Runtime:** the hub's certificate authority is new. After this update every device, app and
+  member hub is paired again once with a code (launcher-started apps re-enrol on their own). (#253)
+- **Runtime:** the old certificate-authority files in the hub's data folder (`hub-ca/`:
+  `config/ca.json`, `config/defaults.json`, `certs/root_ca.crt`, `certs/intermediate_ca.crt`,
+  `secrets/*_ca_key`, `ca-password.txt`, `provisioner-password.txt`, `ca-db.bolt`, `step-ca.pid`,
+  `db/`, `logs/local-smallstep-ca*`) are deleted at the first successful start. Back them up
+  before updating if you need them; the new CA lives in `hub-ca/ca/`. (#253)
+- **Runtime:** hubs connected with *Connect to other hub* (hub-connect) start on their own after
+  the update. The visualizer shows the former hub once with *Join it again*: join it as a member
+  hub to share a session again. (#245)
+- **Runtime:** `hub-state.json` (schema 3) and `app-trust-records.json` (schema 2) cannot be read
+  by an older build. To downgrade, restore the files from before the update. (#245, #241)
+- **Runtime:** every secret QAROS keeps now lives in one encrypted store, `secure-store` in the
+  data folder (`%LOCALAPPDATA%\Quaternar\Qaros`, or the launcher's `runtimeStorageRoot`). The
+  plain files of earlier builds are deleted at the first start, never imported: the hub's CA keys
+  (`hub-ca/ca/secrets/`), its own identity (`hub-ca/hub-identity/`), the revoked-device list and
+  issued-certificate records (`hub-ca/security-service/`), the approved apps
+  (`hub-ca/app-trust-records.json`), the hub key (`trust-authority/`), the stored-data key
+  `zenoh-storage.key` together with the stored panels, app volumes and rooms it encrypted, device
+  identities (`identities/`) and `launcher-session-state.json`. After the update the hub has a new
+  CA and starts without stored data: pair every device and app again with a code, approve local
+  apps again and join member hubs to their primary again. Back up the data folder before updating
+  if you need the old files. (#198, #203, #204)
+- **Runtime:** the licence moves into the encrypted store; the DPAPI file
+  `license/credential.dpapi` of earlier builds is deleted. Activate the licence again with
+  `qaros-license.exe` (`--request`, then `--import`). (#204)
+- **Runtime:** the encrypted store is bound to this PC and Windows user (TPM or DPAPI). A data
+  folder copied or restored onto another PC, for another user or after the TPM was cleared cannot
+  be read: the hub reports it and does not start until that folder's `secure-store` is deleted,
+  which means a new CA and pairing every device again. Back up for the same PC and user only.
+  (#198)
+- **Runtime:** an installed QAROS runs one hub session per PC. While one Windows user's hub runs,
+  the hub of another user on the same PC (fast user switching, a second session) does not start:
+  its tray shows "QAROS is active for another user on this PC (...)" and starts it once the first
+  hub has stopped, also while the QAROS System Service restarts. The installed hub now also gets
+  its session from the QAROS System Service, so it does not start while that service is stopped.
+  Devices keep their session and the stored panels, app volumes and rooms stay, those of a member
+  hub's own session after it leaves its primary included. (#222)
+- **Mixer:** a finger on a website GUI panel is a touch screen's finger: the page receives touch
+  events (`touchstart`, `touchmove`, `touchend`, `touchcancel`) instead of a mouse press, drag and
+  release, and the browser turns them into taps, pans of whatever scrolls under the finger,
+  flings and long presses. A tap still clicks; a drag pans the page instead of selecting text. A
+  page that implements its own dragging on mouse events only (canvases, drag and drop) no longer
+  receives a mouse drag: handle Pointer Events or touch events, and set `touch-action: none` on
+  elements that must not pan the page. Standard controls such as sliders follow a touch drag. A
+  long press selects text between two handles, as on a phone: drag a handle to adjust the
+  selection, tap elsewhere to clear it.
+- **Runtime:** with `QAR_ANARI_BACKEND` unset, the ANARI device tries VisRTX, VisGL, Intel
+  OSPRay, then Helide (was VisRTX, OSPRay, VisGL, Helide). A PC with OSPRay installed and an
+  OpenGL 4.3 GPU now streams on VisGL. Migration: set `QAR_ANARI_BACKEND=ospray` to keep OSPRay.
+- **Visualizer:** a web app source renders at most 30 frames per second unless its adaptation's
+  profile sets `RenderRate` (1 to 120); every web app source rendered at 60 before. Head motion in
+  the headset stays smooth (the headset warps the newest frame); animation and interaction update
+  at the lower rate, and the GPU does about half the work. The adaptations published in
+  `Quaternar/qaros-webapps` and the developer samples set 60. Migration: add `"RenderRate": 60` to
+  the `profile.json` of your own adaptation when its content moves fast.
+- **SDK:** the C++ wrapper `qar-streaming-cpp` no longer has `Runtime::Rejoin`,
+  `Runtime::RejoinAsync`, `RejoinBuilder`, `Runtime::Forget`, the aliases `native::RejoinInit` /
+  `native::ForgetInit`, `PeerSpec::AppState` or the enum `qaros::AppState`: they wrapped
+  `qar_runtime_rejoin`, `qar_runtime_rejoin_async`, `qar_runtime_forget` and
+  `qar_peer_spec_get_app_state`, which the C API marks deprecated. Migration: join with
+  `OnboardBuilder::WithLocalApp()` on every start (a local app stores nothing, so there is nothing
+  to rejoin or forget) or as a co-process with `WithInvite`; read `PeerSpec::Presence` instead of
+  `AppState`. The wrapper's README has the full table.
+- **C API:** `QarGuiPanelInit::display_name` is applied and checked; it used to be ignored. A
+  name of more than 64 characters (Unicode code points), not valid UTF-8, or holding a control
+  character or a bidirectional formatting character (U+200E, U+200F, U+202A to U+202E, U+2066 to
+  U+2069) now makes `qar_gui_panels_get_or_create` fail with
+  `QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID` instead of creating the panel. Migration: pass a
+  single-line name of at most 64 characters, or NULL for none.
+- **SDK:** the HoloLens serving app's peer (`qar-openxr-desktop`) no longer puts a plain host in
+  its `AppCustomPeerInfo`: it is a JSON object `{"v":1,"deviceIp":"<host>","remoting":
+  "connecting|connected|disconnected"}`. Read the HoloLens address from `deviceIp` instead of the
+  whole string; `remoting` says whether the headset is connected to it.
+- **C API:** inviting an Android headset (`qar_session_invite_target_app` or
+  `qar_session_invite_target_app_async` with `"headset:<host>"`, `"quest:<host>"` or
+  `"android:<host>"`) returns `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE` before the hub is
+  asked; the async call returns it and never fires its callback. A headset pairs itself (Pair
+  headset in the Visualizer, or its QR code) and joins the session on its own: find it with
+  `qar_session_find_render_target` and the same connection string instead. HoloLens invites are
+  unchanged.
+- **SDK:** head poses (`DeviceRenderPose`) and hands (`DeviceHandsJoints`) are sent in a new
+  compact binary format. Peers of this version still read the old format, but peers of earlier
+  versions cannot read poses or hands from this one: update every app and device player in a
+  session together.
+- **SDK:** sessions of this version speak a new messaging protocol and do not mix with earlier ones
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575)). Migration: update every app, device
+  player and hub of a session together.
+  - Shared objects (panels, app volumes, rooms, peer specs, media streams) are stored field by field
+    (shared-object protocol 2, a clean cut): a peer and a hub of different versions refuse each
+    other's changes with a logged error, and nothing is converted. Shared objects stored by an
+    earlier version are not read; their owners create them again. A session created without a hub
+    keeps them in memory.
+  - Hand joints travel in a packed format: two tracked hands with velocities fit one best-effort
+    sample (joints within 0.25 mm / 0.2°). A peer of an earlier version cannot read them, and its
+    own hand samples are refused with an error.
+  - Every session timestamps its own messages (hybrid logical clock), not only the hub. A receiver
+    restamps, and logs, a message from a peer whose clock runs more than 500 ms ahead of its own:
+    keep the clocks of hubs and PCs synchronised (NTP) well within 0.5 s. A headset player stamps
+    on its hub's clock instead (its own clock plus the hub's offset, learnt when it joins, within
+    250 ms); until it knows that offset it sends its messages unstamped, and the hub or PC that
+    receives one first stamps it. A new reliable subscriber receives every message published from
+    its subscription on, also from or to a headset whose clock runs minutes off.
+- **SDK:** a co-process invite (`qar_session_request_onboarding_invite`,
+  `Session.RequestOnboardingInvite`) no longer is the hub's single-use 60 s invite. It names the
+  requesting app on this PC (a named pipe on Windows, a Unix socket of this user on Linux) and
+  works for every start of the co-process while the app's session lives: onboarding with it
+  fetches a fresh one-time hub invite from the app on each attempt and retries (250 ms doubling
+  to 5 s) while the app or the hub is away, failing at once only for a forged invite, a denied
+  approval or the app's session gone. Migration: mint it once per app session and reuse it;
+  bound the co-process's onboarding with a cancel token.
+- **C API:** `qar_onboarding_invite_get_method`, `qar_onboarding_invite_get_expires_unix`,
+  `qar_onboarding_invite_get_code` and `QarOnboardingMethod` are removed. An app gets no invite
+  with a method, expiry or code it could use: a co-process invite has none, and pairing codes are
+  minted only for the hub's operators. The DLL still exports the three `qar_impl_*` symbols as
+  stubs that refuse, so an app built against an older header still loads. Migration: drop the
+  calls.
+- **C#:** `OnboardingInvite.GetMethod`, `GetExpiresUnix`, `GetCode` and `OnboardingMethod` are
+  removed. Migration: drop the calls.
+- **SDK:** the Rust binding's `OnboardingInvite::method`, `expires_unix`, `code` and `OnboardingMethod` are removed.
+  Migration: drop the calls.
+- **C API:** `qar_library_load(NULL)` no longer reads `QAROS_RUNTIME_DIR`; `QAR_RUNTIME_DIR_ENV_NAME`
+  and `qar_runtime_env_folder` are removed. `QAR_INSTANCE` alone selects the runtime: an app given
+  `QAR_INSTANCE=<name>` loads that instance's runtime, and an instance with no runtime recorded
+  fails the load instead of falling back to the installed QAROS. Migration: unset
+  `QAROS_RUNTIME_DIR`; to run against a development hub's runtime set `QAR_INSTANCE` to its
+  instance name (its log names it), or load the library by path.
+- **C#:** `InstalledRuntime.RuntimeDirEnvironmentVariable` and
+  `InstalledRuntime.TryGetRuntimeDirFromEnvironment` are removed, and `InstalledRuntime.Load()`
+  no longer reads `QAROS_RUNTIME_DIR`. Migration: as for the C API; use
+  `InstalledRuntime.TryGetRequestedInstance` and `TryGetInstanceRuntimeFolder` for diagnostics.
+- **SDK:** a session move carries its cause (`SessionChangeCause`, reported in
+  `SessionStateInfo::Cause`) as a parameter, so a concurrent move never takes its label:
+  `ISessionLifecycle::Migrate(invite, tls, cause)` is the only form (the two-argument overload is
+  gone), `ISessionFollowerHost::Migrate(renewal, cause)` receives it from the follower, and
+  `SessionRuntime::MigrateTo(invite, tls, cause)` requires it. Migration:
+  - a caller of `ISessionLifecycle::Migrate(invite, tls)` or `SessionRuntime::MigrateTo(invite, tls)`
+    passes `SessionChangeCause::Rotated`;
+  - an implementer of `ISessionLifecycle` overrides only the three-argument `Migrate` and labels
+    the move's states with `cause`;
+  - an implementer of `ISessionFollowerHost` adds the `SessionChangeCause cause` parameter to
+    `Migrate` and passes it on to `ISessionLifecycle::Migrate` (or `SessionRuntime::MigrateTo`).
+- **SDK:** a peer whose liveliness token vanishes without announcing its leave (a crash, a kill, a
+  network loss) is reported `Disconnected` 3 s (`QAR_TIME_SCALE`-scaled) later than before, and not
+  at all when its token is back within those 3 s. A restart of a router hub no longer
+  makes its remote peers, member hubs included, see every routed peer leave and return. A peer that
+  closes its session or withdraws its presence announces its leave and is still reported at once
+  (a peer of an older release does not announce it). Code that treated a liveliness flap as a process restart
+  must read the peer's `PeerSpec` instead; budgets that waited for a killed peer's departure must
+  allow the extra 3 s.
+- **SDK:** `ISession::AddSourceApp`, `ISession::RemoveSourceApp` and
+  `SessionRuntime::StartRemoteMonadoRuntime` sign their request with the session's own
+  certificate, and a hub's launcher serves them only for the hub's own visualizer (#221). Any other
+  session - an application, a device, another hub's visualizer - is refused and nothing starts or
+  stops; a session without an mTLS identity sends it unsigned and is refused. Ask the operator's visualizer
+  to launch or stop the source instead, or define it in the hub's source-application registry
+  from that visualizer. Removing a source app the launcher does not run now fails at once with
+  `SourceAppNotRunning` instead of timing out.
+- **C API:** pairing codes are minted only for the hub's operators (#221), and
+  `qar_session_request_onboarding_codes`, `QarRequestOnboardingCodesInit` and
+  `qar_request_onboarding_codes_init_default` are removed, without a deprecation cycle
+  by explicit decision in #268: the hub refuses every application's request anyway. An app built
+  against an older header still loads and gets `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from the call.
+  `qar::RequestOnboardingCodes`, which now takes the session id and signs, fails for an
+  application; a code planned for a peer is minted only for the hub's own visualizer. Hand devices
+  a code from the visualizer's onboarding screen instead.
+- **C#:** `Session.RequestOnboardingCodes` and `RequestOnboardingCodesOptions` are removed, without a
+  deprecation cycle by explicit decision in #268, as in the C API. Hand devices a code
+  from the visualizer's onboarding screen instead.
+- **C API:** `qar_session_request_onboarding_invite` mints only a **co-process invite**: a one-time
+  invite for a process your app starts on the same PC. `QarRequestInviteInit` has a
+  required `app_tag` and a new structure type value; a struct built from an older header is
+  refused with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`, "app tag required". Only a session joined as a
+  local app (`QarOnboardLocalAppExt`) or an app the QAROS launcher started may request one; it is
+  bound to the peer id the hub remembers for the app's approval and tag, valid once for 60 s (set
+  by the hub), redeemable only from the hub's PC, and the co-process's certificate renews only
+  while the requesting app is in the session. Rebuild, set `app_tag`, and create the co-process's
+  runtime with `QarRuntimeEphemeralStorageExt`. Invites for another PC or a new device are minted
+  only for the hub's operators; there is no replacement for apps: pair such a device with an
+  operator's code.
+- **C#:** `Session.RequestOnboardingInvite` (and `RequestOnboardingInviteAsync`)
+  takes the co-process's app tag (`RequestOnboardingInvite(string appTag)` or
+  `new RequestOnboardingInviteOptions(appTag)`), with the rules of the C API. Pass a tag and create
+  the co-process's runtime with `RuntimeOptions.EphemeralStorage`.
+- **SDK:** a local app (local enrollment) keeps its peer id across restarts: the hub remembers a
+  peer id per approval and app tag and gives it back while no other live process holds it;
+  a second live instance with the same tag gets a one-off id. Before, every start got
+  a fresh peer id. Code that treated a new peer id as a new process must compare the peer's
+  `PeerSpec` or watch its leave instead; run instances that live together with distinct tags.
+- **C API:** `qar_session_invite_target_app`, `qar_session_kill_target_app` (and their async forms),
+  `ISession::InvitePeer` / `InviteTargetApp` and `ISession::ShutdownPeer` sign with the session's
+  certificate, and a hub serves them only to applications on its machine that it admitted itself:
+  its operators, local source apps enrolled through local enrollment, and processes its launcher
+  started (#221). Any other session - a device, or an app on the hub's PC that paired with a code -
+  is refused. Run such an app as a local source app or from the hub's launcher.
+- **SDK:** a Visualizer camera's receiver joins as `DeviceCategory::Observer`, a target that sees
+  the scene through a camera, instead of `DeviceCategory::Camera`; `Camera` now means a camera's
+  capture process only. Its device id, family and name are still the camera's. Code that
+  looked for a target of the Camera category must use `qar::IsObserverApp(identity)`, which also
+  accepts a peer from an older build.
+- **C API:** `qar_runtime_destroy` is removed. Call `qar_runtime_handle_destroy`,
+  which behaves the same; no public call shuts down the QAROS hub.
+- **SDK:** A render sender delivers a target peer's poses (head, views, hands, hand joints, pointer
+  fingers) in the default-room world when the peer is a member of a Room. `Room::Offset` is the
+  pose of the room's content in the device's own space (+X moves the content +X for the wearer):
+  world = offset⁻¹ × device pose, applied before the app content conversion, and rendered poses go
+  back as offset × world pose. An offset written by an earlier development build is inverted once
+  when read, so a saved room keeps its look. A peer that is a member of no other room takes the offset of room 0, the default
+  room (CommonName `0`, display name `Default`), an ordinary room created on demand with
+  `GetOrCreateRoom`; membership in another room wins, and the offset is identity only while room 0
+  does not exist yet. An app that applied a room offset itself must stop doing so.
+- **SDK:** `PeerSpec` describes a peer by `Identity` (role, category, device id, family, name)
+  instead of one `DeviceType` value, and `DeviceType` is gone. Use `IsTargetApp(identity)`
+  or the role where code tested `>= 150`, and `SetPeerDetails(PeerDeviceIdentity)` /
+  `InvitePeer(host, deviceId)` with `HoloLens` or `Headset`.
+  Stored specs migrate (schema v5); a peer on an older build cannot share a session with this one.
+- **SDK:** a target app is invited as `HoloLens` or `Headset` only; the headset reports its exact
+  model itself. `InvitePeer` / `InviteTargetApp` with `MetaQuest`, `MetaQuestHeadset`
+  or `Metalens` is refused with `HubTargetAppDeviceNotInvitable`: invite `Headset` instead.
+  `Android` and `AndroidStreamer` still resolve to `Headset`.
+- **SDK:** `Session::InviteTargetApp` no longer checks the device on the caller's side: the hub
+  decides from its device catalog and refuses a device it cannot serve.
+- **C API:** `qar_library_load(NULL)` takes the first of: a runtime already loaded in the process
+  (nothing is loaded), the `qar-streaming-c.dll` beside the module that calls it (the executable or
+  your plug-in DLL), the runtime of the QAROS instance the `QAR_INSTANCE` environment variable
+  names (Windows: `default` is the installed QAROS, another name the `RuntimeFolder` a QAROS
+  development hub records under `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>`, else that
+  record's `InstallFolder\bin`), the installed
+  QAROS, then each folder on `PATH` (Linux: the dynamic linker's search). **A copy beside your app
+  now wins over the installed QAROS:** remove any `qar-streaming-c.dll` you ship beside your app,
+  or it runs instead of the installed one. A set `QAR_INSTANCE` that names no usable runtime
+  (invalid name, nothing recorded, no loadable library there) or an installed QAROS that does not
+  load fails the call instead of falling through, so an app started by a development hub never
+  runs the installed release runtime, which would refuse that hub. The current directory is never searched. An
+  explicit path resolves the library's dependencies from its own folder and System32 only (no
+  longer from the application's folder): keep a development runtime's DLLs together in one folder.
+- **C#:** `InstalledRuntime.Load()` and `Library.Init` follow the same lookup as the C header:
+  already loaded, beside the `Quaternar.Qaros` assembly or the app's base directory, the
+  instance `QAR_INSTANCE` names, the installed QAROS, `PATH`. A runtime beside your app wins over the
+  installation; the current directory is no longer searched.
+- **SDK:** the default near plane of a frame's depth (`qar::NearFar`) is 10 cm instead of 1 cm,
+  for finer 24-bit depth at room distances. Geometry closer than 10 cm to a camera that relies on the
+  default is now clipped. Senders that set their own near/far, and the C API's
+  `qar_near_far_default`, are unchanged; set `Near = 0.01f` to keep the old range.
+- **SDK:** on Windows, an API app QAROS starts no longer reads an invite or code from stdin.
+  Onboard it like a user-started source app with `QarOnboardLocalAppExt` (C#
+  `OnboardOptions.UseLocalApp()`); the hub still gives it its planned peer id. Apps that read the
+  stdin line and passed it to `QarOnboardInviteExt` or `QarOnboardCodeExt` must switch.
+- **C#:** the binding loads the `qar-streaming-c.dll` of the QAROS installed on the PC
+  (`HKLM\SOFTWARE\Quaternar\QAROS`, `InstallFolder\bin`; never HKCU) before its first native call,
+  not a copy beside the application. Without an installation `Library.Init` fails with "QAROS is not
+  installed". Remove any `qar-streaming-c.dll` or runtime `bin/` you ship with the app and leave
+  `RuntimeOptions.RuntimeBinariesFolderPath` null.
+- **SDK:** session certificates name their session: devices get `<sessionId>.session.qaros.local`,
+  hubs `hub.<sessionId>.session.qaros.local`, and every process of a session admits only those two.
+  A device or app enrolled by an earlier QAROS is paired again once with a code after the update, and
+  every process of a session must run this version: a newer runtime refuses an older hub's
+  enrolment offer, and newer peers refuse an older hub's certificate. (#209, #207)
+- **SDK:** a revoked device is refused on every channel, a fresh pairing code included, until an
+  operator allows it again; pairing no longer clears a revocation. (#214)
+- **SDK:** the hub's certificate authority is new (it now runs inside the hub), so a device or app
+  holding a certificate from an earlier hub cannot renew it: `JoinOrOnboard` /
+  `qar_runtime_onboard` with a stored identity reports `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`
+  until it is paired once more with a code. Local apps re-enrol on their own. (#253)
+- **SDK:** a runtime no longer writes identity files. Persisted identities and sessions
+  (certificate, private key, invite) are encrypted in `<storage folder>/secure-store` (C API
+  `QarRuntimeInit::storage_folder_path`, C++ `qar::Runtime(storageRoot)`), under a key of this
+  user on this machine: the TPM or DPAPI on Windows, TPM2, the login keyring or a file key on
+  Linux, the Android Keystore on Android. The plain `<storage folder>/identities/` files of earlier
+  versions are deleted when the runtime is created, never imported: every device or app that
+  persisted an onboarding id pairs once more with a code. A storage folder copied to another PC or
+  user does not carry its identities. The store is opened only when an identity is persisted
+  (code or invite onboarding, rejoin, forget); local-app onboarding writes nothing. (#198, #203)
+- **SDK:** shared-object processors run only on a session's primary hub. `CreateSharedObjectProcessors`,
+  and a `SessionRuntime` created, joined or restored with `SharedObjectProcessorValidators`, fail
+  with `SecurityError` when the session's certificate is a device or member certificate. A session
+  without TLS, or with a certificate not bound to a session, is unaffected. Do not pass validators
+  from device or application sessions; host processors only in the hub. A custom `IMessaging`
+  implements the new virtual `OwnCertificateChainPem()`, which returns the session's own
+  certificate chain. (#258)
+- **SDK:** every certificate renewal must prove it holds the key of the certificate it renews: the
+  request carries a signature by that key over its CSR, and every hub path verifies it before
+  signing, so a stolen certificate without its key renews nothing (#262). Devices and
+  apps on an older SDK cannot renew at an updated hub and must be updated; pairing again is not
+  enough, their next renewal fails the same way. Migration: update the SDK of every app and device
+  player (runtime library, `Quaternar.Qaros`, Unity package) to this release, then the hub; an app
+  that still reports the status afterwards pairs again with a new code. The hub refuses them with
+  `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (C#
+  `StatusCode.OnboardingRenewalPossessionUnproven`, 1810). This SDK signs every renewal itself,
+  local source apps included. A local source app whose renewal reply was lost renews once more
+  with its previous key, and a session's renewals run one at a time, so neither forces a new
+  onboarding.
+- **SDK:** `IMessaging::Publish(topic)` takes the writer's queue capacity, `Publish(topic, capacity)`;
+  pass `qar::PublishChannelDefaultCapacity` (3, what every writer had) to keep the old behaviour. An
+  `IMessaging` implementation overrides the new signature. The gesture input and mapped app-volume
+  gesture writers now queue 256 events, so a burst of gesture events is no longer dropped.
+- **SDK:** a stream's 8-bit colour is sRGB-encoded, and premultiplied colour is premultiplied in
+  linear light before encoding. Every QAROS device already displayed it that way; now it is the
+  contract. The sender's textures are UNORM: if you shade in linear light, encode in your last
+  shader pass or declare `QAR_COLOR_ENCODING_LINEAR`. A Vulkan application on its own device can
+  instead render through an `_SRGB` view: its 8-bit colour texture is created mutable-format and
+  without storage usage, so it cannot be written from a compute shader. Linear values sent as they
+  are look too dark. Colour scaled between your layout and the stream's is now blended in linear light, so
+  scaled edges are no longer too dark.
+- **C API:** an app volume display name that is not valid UTF-8 or holds a control or
+  bidirectional formatting character (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) is now
+  refused: `qar_app_volumes_get_or_create` and the display name change fail with
+  `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` instead of storing it. The name is not limited in length.
+  Migration: pass a single-line name.
+- **SDK:** room calls answer room status codes: an unknown room is `RoomDoesNotExistLocally`
+  (was `AppVolumeDoesNotExistLocally`), the default id `RoomInvalidId`, a refused commonName or a
+  second `Build()` `RoomBuilderValidationFailed` (was `ArgumentNotSupported`), and a room display
+  name holding a control or bidirectional formatting character `RoomDisplayNameInvalid`.
+  Migration: compare against the room codes.
+- **SDK:** a media stream's allocation key must be ASCII, as every commonName:
+  `GetOrCreateStream` refuses another key with `ArgumentNotSupported`, and the hub refuses a
+  record that carries one. Migration: put non-ASCII text elsewhere.
+
 ### Added
 
+- **Runtime:** ANARI apps set how often the ANARI device renders for each headset with the device
+  parameter `qar.renderRate` (FLOAT32, frames per second, 1 to 120, default 30; environment
+  `QAR_ANARI_RENDER_RATE`). It applies from the next device commit, also while streaming;
+  unsetting it restores the default. A lower rate leaves the renderer time for more headsets but
+  shows scene changes later; head motion stays smooth. `qar.fps` and `QAR_ANARI_FPS` still work as
+  older names. The ANARI device now sends each frame as soon as the headset can take one, at that
+  rate, instead of waiting for the headset to ask for it.
+- **Runtime:** the ANARI device outlines selected objects in every headset, as Blender's viewport
+  does. An ANARI app sets `id` on its instances (or surfaces) and names the selected ones in the
+  device parameter `qar.selection` (ids as text, or one UINT32); `qar.selectionColor` (default
+  #FFA000), `qar.selectionWidth` (pixels, default 2) and `qar.selectionChannel` (`instanceId` or
+  `objectId`) style it. Works on VisRTX, OSPRay and Helide; VisGL renders no ids, so it shows no
+  outline. Without a selection nothing changes. The Blender add-on outlines its selected object.
+- **Runtime:** the ANARI device reads `QAR_ANARI_BACKEND_ORDER`, a comma-separated backend order
+  used instead of its own (VisRTX, VisGL, OSPRay, Helide) when `QAR_ANARI_BACKEND` is unset; the
+  candidates are probed as before. The Blender add-on's **Automatic** sets VisGL, VisRTX, OSPRay,
+  Helide, so Blender streams VisGL's physically based materials on a PC with an OpenGL 4.3 GPU
+  also where VisRTX is installed. Other ANARI applications keep the device's order.
+- **Device apps:** the Android player takes its refresh-rate preference, blend mode and passthrough
+  from a preset chosen at start by device (manufacturer, model, device codename, OpenXR system and
+  runtime name): Quest 2, 3, 3S and Pro, METALENSE 2, Samsung Galaxy XR, XREAL Project Aura and a
+  generic Android XR fallback, from `player-presets.jsonc` inside the APK. The chosen preset is
+  logged (`[Preset]`) and named in the headset's answer to the relay's hello. To try another
+  preset, launch with `--es qar.preset <id>` or set `debug.qar.preset`. Behaviour on known
+  devices is unchanged.
+- **Visualizer:** MCP tool `viz_hub_list` (Basic tier, read-only): the session's hubs as
+  Session > Hubs lists them (label, hub peer id, this PC's or another, online, address, room,
+  app and device counts) and whether this PC's hub is the primary or a member, and of which
+  primary.
+- **Visualizer:** Sources lists **Blender**, one tile per Blender version found on the PC
+  ("Blender 4.5"), for every UI mode. **Install QAROS add-on** downloads the QAROS add-on from its
+  latest `qaros-blender` release, checks its SHA-256, copies it into that Blender version's add-ons
+  folder for you and enables it in that Blender's preferences, also for a Blender never started yet
+  or a portable one, so Blender started any way (Start menu, double click) has the **QAROS** tab
+  and **Start streaming**. No other add-on or Blender setting changes; a Blender version QAROS
+  enabled the add-on in before its first start no longer offers to load an older version's
+  settings. If Blender cannot enable it, the install reports it; an add-on copied but not yet
+  enabled reads Needs update, and **Update QAROS add-on** enables it. Adding that `blender.exe`
+  with **+** as a QAROS API app is not needed: the dialog points at its tile. The tile shows Installed,
+  Needs update (**Update QAROS add-on**, when a newer release runs with this QAROS), Installable,
+  Detected (an add-on you installed yourself, which QAROS leaves alone), or Not available with the
+  reason (a Blender older than the release needs, a release for a newer QAROS, or no release
+  reachable). Launch starts that Blender with the add-on loaded and
+  QAROS's ANARI device, and the add-on starts streaming by itself; allow Blender in QAROS at the
+  first join. To launch without streaming, save the tile as a preset with
+  `QAR_BLENDER_AUTO_START=0`. **Add Blender folder...** (beside **Add ROS installation...**) adds a
+  Blender QAROS does not find by itself, such as an unzipped blender.org download; it is remembered
+  and takes the tile of its version. **Refresh** also reads the latest release again.
+- **Runtime:** the Blender ANARI add-on shows a **Blender** GUI panel to every user, to the right
+  of its app volume, while it streams; Stop closes it. It edits Blender's active object (location,
+  rotation, scale), its material's colour, roughness and metallic, and the frame, with undo and
+  redo; a released slider drag is one undo step. Its **Panels** tab shows Blender's own Object
+  Transform, Relations and Visibility panels with their settings; the object's name, its Parent
+  and Parent Bone are typed on the mixer's virtual keyboard. The add-on's preferences choose
+  which tabs the panel shows and which of Blender's Object, Object Data, Material and Physics
+  panels its Panels tab replays. A click on an object in the app
+  volume selects it, and a one-hand drag then moves that object instead of the scene; a click on
+  empty space gives the drag back to the scene. ANARI apps can
+  call the QAR C API on the device's own session: once streaming, the device answers
+  `qar.session`, `qar.appVolumeId` and `qar.runtimeLibrary`; load the runtime from that path and end
+  every call before releasing the device.
+- **Packaging:** the setup offers NVIDIA VisRTX, the ray tracer for NVIDIA RTX GPUs, as an optional
+  ANARI backend after you accept NVIDIA's OptiX SDK licence and CUDA EULA on its terms page; silent:
+  `/VisRTX /AcceptNvidiaTerms` (the accept switch accepts the terms on behalf of the user). The
+  licence texts are installed in `anari\licenses\`. The setup's component page describes the ANARI
+  sections.
+- **Visualizer:** web app adaptations (Foxglove, three.js examples, three.js Littlest Tokyo, three.js
+  Shinjuku Station) update by themselves from their own GitHub releases (`Quaternar/qaros-webapps`)
+  ([#629](https://github.com/Quaternar/Quaternar/issues/629)). At start and every hour while online,
+  QAROS downloads a newer version that runs with this QAROS, checks its SHA-256 and installs it for
+  the current user, keeping each app's settings. A web app that is running keeps its version: its
+  tile shows **Update ready** and the update applies when it starts next. Each tile shows
+  Installed, Needs update (**Update**) or Installable (**Install**); an adaptation the release adds
+  gets a tile of its own. Settings > General > **Web app updates** turns automatic updates off (on
+  by default) and has **Check now**. The releases are unsigned for now and install without asking.
+- **Visualizer:** three.js Shinjuku Station shows in every UI mode. The developer samples (three.js
+  Shapes, WebGL Aquarium, WebGPU Deferred Rendering) need Developer mode and are listed only where
+  they are installed (the development build).
+- **Packaging:** the setups and the development ZIP ship the newest release of the web app
+  adaptations from `Quaternar/qaros-webapps` (Foxglove, three.js examples, Littlest Tokyo, Shinjuku
+  Station) instead of the copies the build generated
+  ([#629](https://github.com/Quaternar/Quaternar/issues/629)); each package's SHA-256 is checked
+  and the release tag is written to `webapps-release.json` beside the packages. The setups no longer
+  carry the developer samples (three.js Shapes, WebGL Aquarium, WebGPU Deferred Rendering, the
+  three.js reference with panels); the development ZIP keeps them. Packaging offline needs
+  `--webapps-release <folder>` with a downloaded release.
+- **Packaging:** the setups and the development ZIP install the QAROS adaptation kit in
+  `share\qaros\adaptation-kit\`: the web app adaptation libraries, templates for three.js, WebGL,
+  WebGPU and the WebGPU redirect presenter, reference apps and recipe examples, and the
+  `qaros-adaptation` command line tool (Python 3: `init`, `check`, `test`, `package`, `pin`,
+  `verify`). It is versioned with QAROS; the public guide is Developer Guide > Web App Adaptations.
+- **Visualizer:** a web app adaptation's script can name a kit library instead of bundling a copy:
+  `{ "Name": "render-frame-core", "Stage": "afterLoad", "Library": "render-frame-core@1" }`. QAROS
+  injects the installed kit's file when the page loads, so library fixes in a QAROS update reach
+  every adaptation that uses it. `Library` and `File` cannot both be set in one script; the earlier
+  `"Library": "name.js"` still loads as `name@1`. An adaptation that needs a newer library than this
+  QAROS has does not load and says so: "requires `name@2`, this QAROS provides @1: update QAROS".
+  To freeze a version, bundle a copy with `qaros-adaptation pin`. MCP `webapp_library_get` takes
+  `name@major` (and the earlier `name.js`).
+- **Visualizer:** a web app adaptation's profile can set `Channel`: `public` (the default),
+  `developer` or `debug`. Developer and debug adaptations show only in Developer mode, and the
+  setups leave them out.
+- **Visualizer:** a web app adaptation's profile can set `AppScaleByAddress`, a list of
+  `{ "AddressPattern", "AppScale" }` whose first match wins over `AppScale`, so one adaptation can
+  cover pages authored in different units. A page that navigates to an address with another scale
+  rescales its app volume while it streams. The three.js examples use it: Littlest Tokyo
+  (`#webgl_animation_keyframes`) shows at the size its old tile had.
+- **Visualizer:** a web app adaptation you installed (an import, or one a newer web app release no
+  longer lists) can be removed from Sources: the row's **...** menu, **Uninstall web app
+  adaptation...**, then confirm. An installed adaptation that no tile opens gets a tile of its own
+  for this. Adaptations that ship with QAROS cannot be uninstalled.
+- **Visualizer:** three.js pages that render with `WebGPURenderer` stream, among them the
+  threejs.org `webgpu_*` examples in the **three.js examples** web app. An adaptation lists the new
+  kit library `threejs-webgpu-render-frame@1` beside `threejs-render-frame@1`, and the one for the
+  page's renderer answers.
+- **Visualizer:** Sources lists **ROS 2 Rviz** (one tile per ROS 2 distribution found on the PC)
+  and **Rerun**, and installs them for the current user without administrator rights
+  ([#628](https://github.com/Quaternar/Quaternar/issues/628)). Each tile shows Detected (a build
+  you registered with the app's `register` script), Installed, Needs update, Installable or Not
+  available with the reason (also in the MCP's `viz_source_app_list`); the tile's editor has **Install** / **Update** with progress and
+  Cancel. QAROS takes the latest release of `qaros-ros-rviz` / `qaros-rerun` from GitHub through the
+  system proxy, installs it when this QAROS is at least the release's minimum QAROS version (a
+  release built against an older QAROS C API still installs and runs: the C API only grows),
+  checks its SHA-256, and leaves nothing behind when a download fails or is cancelled. ROS 2 Rviz starts that
+  distribution's `rviz2` with the QAROS panel in live mode (Z-up world, window-space depth) and the
+  distribution's sourced environment; on Windows, where the distribution ships no Qt, it adds the Qt
+  `rviz2` imports (from `QAR_QT_ROOT` or `Qt5_DIR`, a `qt` folder beside the distribution, its pixi
+  environment, or `C:\Qt`), and a tile with no Qt found cannot launch and says so. The panel joins
+  QAROS on start (`QAR_PANEL_AUTO_CONNECT=1`; an older plugin still needs **Connect to QarOS**). Rerun starts with its QAROS sink as an app QAROS launched
+  (`--sink qaros --launched-by-qaros --window`); allow it in the QAROS tray prompt on its first start. Offline, a tile keeps the last state it showed. Distributions in
+  other folders are added with **Add ROS installation...** in the Apps heading.
+- **Packaging:** the setup installs the Microsoft Visual C++ 2015-2022 Redistributable (x64) for
+  the whole PC when it is missing or older than the one in the setup; a newer one is kept. Programs
+  QAROS starts from their own folders (downloaded apps, ROS 2 plugins) then find the runtime
+  without bundling it. QAROS keeps its own copies in its `bin` folder, and uninstalling QAROS
+  leaves the redistributable installed. If it cannot be installed the setup stops with exit code
+  10 and changes nothing; the details are in `%TEMP%\QAROS-Setup-vc-redist.log` and
+  `%TEMP%\QAROS-vc_redist.x64.log`. No restart is asked for.
+- **Runtime:** OpenXR and QAROS API app presets in the Source Applications catalog can carry
+  environment variables (name to value) that the launcher gives the app's process when it starts
+  it ([#628](https://github.com/Quaternar/Quaternar/issues/628)). A value replaces the inherited one
+  whole (a `PATH` is not merged); an empty value removes the variable. The variables the launcher
+  sets itself (`QAR_INSTANCE`, `QAR_LOCAL_ENROLLMENT_PIPE`, `QAR_GPU_ADAPTER_ID`,
+  `XR_RUNTIME_JSON`, `XDG_RUNTIME_DIR`, `QAR_CRASH_DUMP_DIR`) cannot be set and a preset naming one
+  is refused. Every operator of the hub can read a preset's environment: never put a secret there.
+- **Visualizer:** when the GPU hangs and the Vulkan device is lost, the crash report now also names the
+  GPU work that was running last (on the first lines, so the crash dialog shows it): the queue, the
+  stage (display graph pass number, OpenWarp, DepthWarp, a probe, a GPU-memory transfer, a web app
+  source's texture conversion, ImGui) and whether it had finished. It also holds the driver's fault
+  data (addresses, vendor codes) and, where the driver gives one, a `*.gpu-fault.bin` driver dump
+  beside the report, which the crash report ZIP includes. Needs a driver with `VK_EXT_device_fault`
+  and `VK_NV_device_diagnostic_checkpoints` (NVIDIA) or `VK_AMD_buffer_marker` (AMD); without them the
+  report says so. The mixer's own device gets the same record.
+- **Visualizer:** Debug and RelWithDebInfo builds (never Release), in Developer UI mode, have two MCP tools that simulate
+  any user action without a mouse or keyboard: `viz_app_message_types {filter?}` lists every app message
+  (name, domain, fields and their JSON types, whether it can be sent) and `viz_app_message_send {type, fields, count?}`
+  (or `messages: [...]`, dispatched in order in one frame) queues one as a view would, so its reducer and effects run.
+  A missing or ill-typed field is refused naming the field. `utils/live-checks/LiveCheck.psm1` adds `Get-AppMessageTypes`,
+  `Send-AppMessage` and `Send-AppMessages`; prefer the `/input` routes and use messages where input cannot reach.
+- **Runtime:** QAROS data can always be reset, also when QAROS does not start or its stored data cannot
+  be opened ([#611](https://github.com/Quaternar/Quaternar/issues/611)). `qaros.exe --reset-data`
+  (`--yes` to skip the question) closes the running QAROS of this Windows user, deletes its data,
+  settings and start-at-sign-in entry and starts nothing; the tray menu always has "Reset QAROS data...";
+  the Start menu has "Reset QAROS data"; the setup takes `/ResetData`. Only this Windows user's data is
+  reset.
+- **Visualizer:** MCP `viz_gui_panel_tap {panel_id, selector | x, y, slot_id?}` taps a website or
+  served panel's page: the element a CSS selector names (scrolled into view, tapped at its centre)
+  or a point in page (CSS) pixels. The mixer rendering for a receiver presses and releases a touch
+  through the page's touch input, so the page gets real touch, pointer and click events, and the
+  tool answers the point and element rectangle it tapped, or why it could not. Needs a receiver
+  (`viz_receiver_add`).
+- **Visualizer:** web app adaptations move between PCs as versioned `.qarapp` packages. A web app
+  tile's editor in Source Applications shows its adaptation's version and whether it is signed, and
+  offers **Export** (saves a `<id>-<version>.qarapp` package where you choose) and **Duplicate as new
+  adaptation** (your own copy with a new id, version 1.0.0 and its own tile; the original stays as
+  it is). The import button beside **Look for installed apps again** installs a package for this
+  user under `<AppDataRoot>/streaming-viz/web-app-adaptations`, with a tile: a newer version
+  upgrades and keeps the tile and its settings, the same version changes nothing, an older one
+  asks first. Editing an exported adaptation through the authoring tools raises its patch version;
+  export refuses files changed without a new version. MCP: `adaptation_list`, `adaptation_export`,
+  `adaptation_import`, `adaptation_derive`.
+- **Visualizer:** adaptations signed by Quaternar are verified on import and every time they load.
+  A package or an installed adaptation whose files changed, a path outside the package, or a
+  package of a newer format or an unknown kind is refused, and the message names the file, format
+  or kind. A signed adaptation is never edited in place: duplicate it and edit the copy.
+- **Visualizer:** the adaptations QAROS ships (three.js Littlest Tokyo, Shapes and Shinjuku, Foxglove,
+  WebGL Aquarium, WebGPU Deferred Rendering) are adaptation folders with ids
+  (`com.quaternar.<name>`), the product version and their tile's address, so they can be exported
+  and duplicated like any other; release setups show them as **Signed by Quaternar**. An imported
+  copy replaces a shipped adaptation only when it is not older. A build without the release key
+  shows a signed adaptation as **Signature not verified** instead of refusing it.
+- **Packaging:** the setups sign the web app adaptations they ship with the QAROS release key:
+  `build_release.py --release-public-key <pem> --release-key-vault <vault>` (Key Vault signs,
+  the key never leaves it; `--release-private-key` for test runs). Without the key the run warns
+  and ships them unsigned.
+- **Visualizer:** a web app source serves its adaptation's `panels/` folder as AR panels. The page
+  opens them with `qaros.panels.open({ name, displayName, entry, sizeMeters, offset })` and talks
+  to them with `qaros.panels.post` / `onMessage` (also `setEntry`, `setDisplayName`, `close`); MCP
+  agents write panel files (`panel_file_write`, `panel_file_read`, `panel_file_list`), open and
+  rename panels (`panel_create`, `panel_set_entry`, `panel_set_display_name`, `panel_close`) and
+  exchange messages (`panel_post`, `panel_messages_tail`). Editing a panel file reloads it on every
+  headset.
+- **Visualizer:** an adaptation profile is now one folder of plain files: `<stem>/profile.json`
+  names its scripts (`scripts/*.js`) and its served panel pages (`panels/`), and carries an id, a
+  display name and a version. Existing single-file profiles keep loading; saving one again writes
+  the folder and removes the old file.
+- **Visualizer:** the GUI Panels panel lists a served panel with a `served` tag and shows its entry
+  page, bundle and publishing app read-only (only that app changes them); its display name stays
+  editable. MCP `viz_gui_panel_list` reports it as `"type": "served"` with `entry`, `bundle` and
+  `publisher`.
+- **Mixer:** served GUI panels: a panel can show a web page its app serves over the session
+  (C API `qar_panel_content_*`, C# `Session.PanelContent`, Rust `Session::panel_content`). The
+  mixer loads it in the panel's browser under its own origin, with no network access and no inline
+  script, reloads it when the app publishes new files, and carries `qaros.panel.send` /
+  `qaros.panel.onMessage` messages between the page and the app, stamped with the panel and the
+  user.
+- **Mixer:** a served panel whose app is gone (its files no longer served for 10 s, or removed)
+  shows "Page not available" instead of a black or stale page; the page comes back when the app
+  serves it again. The mixer never closes such a panel: its app re-opens it, or a user closes it.
+- **Visualizer:** a served panel that still shows "Page not available" a minute later (its app did
+  not come back, for example after a QAROS restart) is hidden for every user, not closed: it keeps
+  its place, size and content, and shows again where it was as soon as its app serves it again. A
+  panel a user hid stays hidden; one a user shows again stays shown. One Visualizer of the session
+  does this; without a running Visualizer the panel keeps showing "Page not available".
+- **Visualizer:** served panels get a small call and state helper: in the panel
+  `qaros.app.call(name, ...args)` and `qaros.app.subscribe(key, callback)`, in the web app page
+  `qaros.app.expose({ name: fn })` and `qaros.app.setState(key, value)`. Plain JSON over the panel
+  messages, so a native app can answer the same calls.
+- **Visualizer:** a web app page's `qaros.panels.post` without a name reaches only the page's own
+  panels, no longer the agent's (MCP) panels, and the page cannot open a panel on a page an agent
+  panel shows.
+- **Visualizer:** third-party adaptation publishers: an operator trusts a publisher's key on this
+  hub from the import card of a package it signed ("Trust <publisher> on this hub") and revokes it
+  under Source Applications > Adaptation publishers; Quaternar can also certify a publisher's key
+  (`qar-adaptation-tool certificate-digest` / `certificate-attach` / `attach-certificate`). Tiles
+  show "Signed by X (Quaternar certificate)", "Signed by X (trusted on this hub)", "Unknown
+  signer X" or "Unsigned". MCP: `adaptation_list` reports `trust` and `key_id`, new
+  `adaptation_publisher_list`.
+- **Unity:** `QarSession.Current` gives scripts the session the components joined, so a Unity app
+  creates GUI panels and serves its own panel pages (`session.GuiPanels`, `session.PanelContent`).
+  The bundled `Quaternar.Qaros.dll` now carries the served panel API.
+- **Runtime:** every data reset (the tray's reset dialog, `qaros.exe --reset-data`, a reset the
+  setup leaves pending for another Windows user) first saves your own web app adaptations as
+  `.qarapp` packages in `Documents\QAROS\Adaptation backups\<date time>\`. Shipped adaptations are
+  not copied; an adaptation that cannot be saved is named and the reset still runs. QAROS never
+  deletes that folder.
+- **Visualizer:** after a reset, a Visualizer with none of your adaptations offers the newest backup:
+  **Restore** installs them all again (one confirmation for unsigned ones), **Not now** stops asking
+  for that backup, **Open folder** shows it.
+- **Runtime:** the tray and the launcher act only on `qaros://oauth` sign-in and
+  `qaros://visualizer` links; every other `qaros://` link (for example a served panel's
+  `qaros://<name>.<peer>.www/...`) is ignored instead of reaching the Visualizer.
+- **Visualizer:** importing an unsigned adaptation package asks first (what it is, that it is
+  unsigned, the file it comes from); a package signed by a key nobody trusts installs only in
+  Developer mode after the same confirmation. MCP `adaptation_import` answers
+  `needs_confirmation: "untrusted"`; repeat it with `confirm_untrusted: true` to install.
+- **Mixer:** a GUI panel's title bar shows the panel's display name between its buttons, on one
+  line, its letters 80 % of the bar's height. A name too wide for the panel is cut at a whole
+  character and ends in "…".
+- **Visualizer:** the GUI Panels panel shows and edits a panel's **Display name**, in the Create
+  card and the panel's editor, and lists a panel by its display name when it has one. A name that
+  breaks the rules (more than 64 characters, control or text-direction characters) is not sent.
+  The MCP takes `display_name` in `viz_gui_panel_create` and `viz_gui_panel_update`, lists it in
+  `viz_gui_panel_list`, and new tool `viz_gui_panel_close` closes a panel.
+- **Visualizer:** MCP skill `gui-panel-authoring` (`webapp_skill_list`, `webapp_skill_get`): how
+  to create, name, place, change and close GUI panels through the MCP or from a source app's code,
+  pages written as `data:` URLs, and what a panel can and cannot share with a web app source.
+- **Visualizer:** environment variable `QAR_MCP_SERVER_PORT` sets the port of the MCP endpoint
+  (and the GUI automation on the same port) instead of `17872` or the port in Settings; `0` or
+  `off` turns it off. Set it before starting QAROS to run a second Visualizer on one PC. The older
+  name `QAR_VIZ_AUTOMATION_PORT` still works when `QAR_MCP_SERVER_PORT` is unset.
+- **Visualizer:** the sidebar can be arranged like the dock area: drag the sidebar's right edge to
+  widen it (never narrower than before), and agents can move any panel into or out of a sidebar
+  group, create a group with its own name and icon, rename a group or change its icon, and set the
+  width through the Visualizer MCP (`viz_sidebar_list`, `viz_sidebar_move_panel`,
+  `viz_sidebar_create_group`, `viz_sidebar_update_group`, `viz_sidebar_width`). Panels are named by
+  the `window_id` or panel key `viz_panel_list` shows, icons by the names `viz_sidebar_list` lists.
+  A panel moved out of the sidebar docks in the right panel area, which opens beside the view when
+  there is none. The arrangement is saved with the layout; Reset layout restores the default
+  sidebar.
+- **Visualizer:** in Debug mode the Devices tab's setup of an Android headset has a **Debug** card
+  with **Clear all player data** (`adb shell pm clear`, as after a fresh install) and **Forget
+  stored anchor** (only the anchor and its room, also from the headset's own anchor store). Both
+  restart the player. Forgetting the anchor needs a debug or relWithDebInfo player.
+- **Visualizer:** `qaros://visualizer/v1/...` links open one dialog of QAROS from any app or web
+  page: `devices/pair-qr` (Pair Headset QR code), `scene-origin/qr` (Room Origin marker) and
+  `devices/setup?kind=quest|metalens|android-xr|hololens` (the Devices tab's setup in a dialog of
+  its own). QAROS starts if it is not running. While the Visualizer is hidden only the dialog comes
+  up, in a window of its size, and hides again when it is closed; while it is open the dialog opens
+  on top of it. Any other `qaros://visualizer` link is ignored and logged.
+- **Runtime:** a `qaros://` link reaches the QAROS that runs, whichever `qaros.exe` is registered
+  for the scheme: a QAROS started from a build or install folder gets the links while the
+  installed one owns the registration. With several running, a Visualizer link goes to the one
+  started last; a sign-in link still prefers the registered QAROS while it runs.
+- **Runtime:** a revoked Android headset whose shown code the operator types (or whose QR code it
+  scans) rejoins under its old peer id: typing the code allows it again, no separate Allow. This
+  works while the headset still holds the identity it was paired with; after a reinstall or an
+  app-data clear it pairs as a new headset.
+- **Runtime:** the hub keeps a record of every headset paired with a code (name, model, hardware
+  id, onboarded or revoked) and offers **Forget** (revoke, drop the record, keep only its old
+  certificates refused until they expire) and **Remove** (drop a revoked entry) to the Visualizer.
+  Revoked entries whose certificates have all expired past the 7-day renewal grace are dropped by
+  the hub on their own.
+- **Visualizer:** the top bar shows the NVIDIA GPU's health: green `GPU ok`, amber `GPU hot` or
+  `GPU power limited`, red `GPU slowed down` when heat or a power brake slows the GPU and every
+  stream runs slower. Hover for temperature, clock, load, power and what holds it back. Without an
+  NVIDIA GPU no indicator is shown.
+- **Runtime:** cross-network mode of a hub (finding and linking to hubs in other networks,
+  [#579](https://github.com/Quaternar/Quaternar/issues/579)) runs only while the operator's
+  Visualizer, signed in to the Quaternar server, hands its hub an access token. The hub keeps the
+  token in memory only, stops registering when it runs out and turns the mode off at a sign-out;
+  each hub, a member hub included, needs its own signed-in Visualizer. The Visualizer sign-in is
+  not in this build, so cross-network mode stays off. New launcher config keys:
+  `"crossNetwork": false` refuses it on a hub whoever signs in; `"siteId"` names the network a hub
+  is in, so hubs with the same site id never punch or relay between each other.
+- **Device apps:** a headset whose hub goes down, or which loses only its path to that hub, keeps
+  working through another hub of its session
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575),
+  [#579](https://github.com/Quaternar/Quaternar/issues/579)): it holds one connection, to its own
+  hub, and dials the other hubs every hub publishes in the session's hub list once that connection
+  is lost. Its stream to the other hubs resumes about 4 s after its hub died when it knew the list
+  at its start (a restart or rejoin), about 5.5 s when it learnt it after joining, and edits, fast
+  panel and volume moves and stored state continue there. It does not show itself as reconnecting
+  while it works through another hub, only once no hub of the session answers. It stays on that hub
+  when its own comes back, returns to its own once that hub is lost too, and tries its own first at
+  its next start. It keeps the list with its pairing, so it also rejoins through another hub when
+  its own is down at startup; a headset downgraded to an earlier player version must be paired
+  again.
+- **Visualizer:** the Stream Graph (Developer and Debug) shows the session's network links in a
+  **Links** section under the graph, collapsed until you open it: every peer by name and one line per linked pair with its RTT
+  (µs below 1 ms), green / amber / red by the worse direction's RTT and loss, dotted when it
+  stopped reporting and dashed when it closed. A busy mesh labels only the link under the pointer.
+  A stream's hover and popup list the links it travels over (direct or through the hub) with RTT,
+  loss, congestion window and throughput, light them up split into their two directions, and its
+  chip carries a dot in their colour. Click a link for its RTT, loss and throughput over the last
+  hour or 24 h; drag the line above the section to resize it. A peer whose every link has been
+  silent or closed for 2 minutes (a stopped or crashed process) is hidden with its links;
+  **Show N offline peers** in the section header shows them again
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575)).
+- **Visualizer:** a link between two hubs names its current path in the **Links** section (hover
+  and link details): **LAN**, **punched** or **TURN**
+  ([#579](https://github.com/Quaternar/Quaternar/issues/579)).
+- **Visualizer:** the Stream Graph's **Links** section names in red every pair of hubs that hold
+  no direct link to each other: their traffic is routed over a third hub
+  ([#579](https://github.com/Quaternar/Quaternar/issues/579)).
+- **Visualizer:** every Stream Graph arrow (Developer and Debug) shows the measured round-trip time
+  of the links its stream travels before its delay (`RTT 4.2 ms . 18.4 ms (90 fps)`; `RTT --` when
+  not measured, `local` without a network hop), and its line shows the connection: solid green
+  connected, solid amber degraded (RTT from 50 ms or loss from 1 %), moving dashes reconnecting,
+  red dots disconnected. Hover an arrow for the reason. The graph spreads its columns to the
+  panel's width, so arrows stay long enough to read in a wide panel and chips never cover a stream
+  in a narrow one; hover a peer for its full name.
+- **Device apps:** the Android player greets its wearer with "Welcome to QAROS" and the device
+  name for up to 4 s once its stream plays, in place of "Loading...". Afterwards, while no app
+  volume is shown to that headset, it says which headset to allow, by the same name: *Enable
+  streaming to "METALENSE 2" in your applications* ("this headset" while it has no name), until
+  one appears. Both are on the player's own panel, one message at a time; the mixer no longer
+  draws them into the stream, so a headset without the Android player (HoloLens, OpenXR desktop)
+  shows neither.
+- **Visualizer:** the Invite device card gains **By code**, next to **By QR code**: type the
+  pairing code and address an Android headset shows, or pick the headset from the list of those
+  showing a code on the network, and click **Pair**. Progress and success show as for **Pair
+  headset**. A code that is no headset code (a hub join code, a typo of the wrong shape) is refused
+  before anything is sent; spaces, dots and dashes in a typed code are ignored. Use it when the
+  headset cannot scan the QR code.
+- **Device apps:** the Android player's messages (the connect panel with its pairing code,
+  the anchoring prompt, connection status, the welcome) use the headset text design shared with
+  the mixer's labels: white text on a rounded dark-blue plate, readable on see-through glasses
+  such as METALENSE 2, at a comfortable size 2 m ahead, the message's title a little larger. The
+  code's countdown bar is light teal blue instead of yellow. The panel sits in the centre of view
+  (no looking down to read it) and follows the head as the mixer's watermark does: it stays put
+  for head movements within 10° and comes back in front after a larger turn, also when you look
+  up or down.
+- **Mixer:** name tags over avatars and tables turn toward you with the same gentle
+  delay as an app volume's status label instead of at once, the two-hand gesture readout stays
+  upright and turns with the same delay instead of tilting toward your head, labels and the
+  watermark face the middle between your eyes instead of your left eye, and every label wraps its text at the same width as
+  the headset's own panel.
+- **Device apps:** an Android headset that is not connected to a hub (not paired yet, or its hub
+  is away) asks to scan the connection QR code shown in the Visualizer, or to enter the pairing code
+  (`123 456`, 6 digits) and network address it shows, with a countdown. The code changes every 30 s and
+  after every pairing attempt; type the one shown now. Pairing by code works for a headset paired
+  with another hub too, and moves it to yours. While it shows a code, the headset announces itself
+  on the local network, so the Visualizer can list it. A headset connected to its hub shows no
+  code and ignores pairing requests from the network: scan a QR code to move it. A headset its hub
+  revoked keeps offering itself while it shows a code: **Allow** in the Visualizer brings it back
+  within 30 s, without pairing again. The headset's panel uses the system font and short texts.
+- **Visualizer:** in the Debug interface mode, **Tools → Streamer** shows the streamer settings
+  each paired Android headset runs with and where each value comes from (default, headset model or
+  this headset's own value). Change values and **Apply**, reset one field, or **Reset to preset**
+  to drop all of the headset's own values. Every change restarts that headset's stream, so its
+  video pauses briefly.
+- **Device apps:** Android headset streaming settings can differ per headset: QAROS ships a preset
+  per headset model (none changes a setting yet), and a headset's own values, set in the
+  Visualizer, apply over its preset and are kept across QAROS restarts. A changed preset is picked
+  up while QAROS runs and restarts the stream of every headset it affects.
+- **Device apps:** the Android player pairs itself with the session. Scan the pairing QR code the
+  Visualizer shows, or let **Pair headset** send it over USB; the headset then appears as a session
+  peer under its own name and stays paired across restarts (its identity is kept under the Android
+  Keystore). The name is the first line of `qar-display-name.txt` in the player's Documents folder
+  (`Android/data/<package>/files/Documents/`, writable with `adb push`), else the device name. The
+  player sends its head pose and hands to the session itself; the PC renders for it as before.
+- **Device apps:** a QAROS Player for Android XR headsets (Samsung Galaxy XR) and the Android XR
+  emulator, with passthrough.
+- **Visualizer:** the Devices tab pairs an Android headset: **Pair headset** sends a fresh,
+  single-use code to the headset over its USB (adb) connection, never over the network, and
+  **Show QR code** shows one to scan. A new **Android XR** device type lists the steps to sideload
+  the player (developer options, USB debugging, install), to join Wi-Fi and to pair it. The Wi-Fi
+  step lists the networks the headset sees and joins one with its password over USB; the headset
+  remembers it, so a saved network rejoins without the password.
+- **Visualizer:** Meta Quest setup in the Devices tab gains the **Wi-Fi on the headset** step,
+  the same as on Android XR headsets and Metalens glasses: join a network over USB before pairing.
+  On every device type the step says to use a 5 GHz network only, since 2.4 GHz is too slow and
+  unstable for streaming. Networks the device sees only on 2.4 GHz are marked **2.4 GHz**, and
+  picking or being connected to one shows a warning.
+- **Visualizer:** every device type's setup steps in the Devices tab (Meta Quest, Android XR,
+  Metalens, HoloLens) end with **Anchor: look at the anchoring QR code**. **Show anchoring QR
+  code** opens the same room origin marker as **Show** in the Room Origin panel, for the room
+  picked there, also while that panel is hidden. For Quest, Android XR and Metalens the step
+  completes by itself once the headset reports it is anchored, shows the room it took, and warns
+  when that is not the room the code shows; HoloLens is marked done by hand.
+- **Device apps:** the Android player reports to the session whether its scene is anchored and
+  the room of the anchoring QR code it looked at, also for an anchor it restored at start-up.
+  While connected to a hub and not anchored it shows "Look at the anchoring QR code", also over a
+  playing stream. The HoloLens player's not-anchored message now names the
+  anchoring QR code.
+- **Runtime:** a headset that paired itself gets its pipeline without an invite from the launcher:
+  the launcher starts a mixer for it and `qar-android-streamer` to send it the video.
+- **Packaging:** the release contains the Android XR player,
+  `devices/android/QAROS Player AndroidXR <version>.apk`.
+- **Device apps:** the OpenXR desktop player streams the headset's tracked pose at ~200 Hz between
+  frames (with a runtime that converts its clock to the PC's), so content rendered through the
+  mixer is predicted from a pose a few milliseconds old. Its render requests now ask for the
+  frame's predicted display time.
+- **Visualizer:** a receiver slot sends its camera pose at ~200 Hz, also while its stream is hidden
+  or paused, so a source behind the mixer predicts from a fresh pose and other views can show the
+  head move. Blends are unchanged.
+- **Mixer:** an app volume whose source has nothing to show displays a small status label in its
+  middle, facing you: **Connecting...** before the first frame, **Not responding** after the hold
+  time (in Legacy mode also on a frame the source did not render for the drawn pose, which is left
+  out), **Reconnecting...** while the stream is replaced, **Disconnected** when it closed. It is
+  drawn in the headset text design, like the headset's own messages, with a light teal-blue
+  spinner while the source is awaited, and its text keeps the same apparent size however far the
+  volume is. The label stays at the centre of its volume, also while the volume is moved, and
+  turns after you when you walk around it. It disappears with the source's next frame.
+- **Mixer:** the name tags over other users' avatars and over tables, and the scale or turn shown
+  beside the hands during a two-hand gesture, use the headset text design too (white text on the
+  rounded dark-blue plate), at the same apparent size at any distance.
+- **Mixer:** with a room offset, the hands, the hand menu, the hand rays and the other users'
+  avatars stay where they are relative to the head instead of floating away by the offset; each
+  other user is placed with their own room's offset. App volume and panel gestures are recognised
+  in the same place, so a drag, scale or turn acts where you see your hands.
+- **Visualizer:** following a headset with the camera (Controls › Paths) shows the scene from
+  where the headset sees it in its room, including the room's offset.
+- **Runtime:** **Fit scene to volume** in the Blender ANARI add-on's panel scales and centres the
+  streamed scene so every visible object fits its app volume, for every user; use it after importing
+  a scene in other units. ANARI apps request the same with the device parameter `qar.fitBox` (scene
+  bounds); a fit replaces the placement users set with gestures.
+- **Runtime:** **Streams to** in the Blender ANARI add-on's QAROS tab chooses which devices the
+  scene streams to: **All devices** (the default, as before) or a checkbox per headset and
+  Visualizer receiver, applied at once and saved with the `.blend`. ANARI apps choose with the
+  device parameter `qar.targets` (peer ids; unset streams to every target, an empty list to none),
+  applied on the device's next commit while streaming, and list the session's targets from the
+  device property `qar.sessionTargets` (JSON with name, online and streaming state).
+- **Runtime:** the Blender ANARI add-on streams USD primitive shapes (spheres, cubes, cylinders,
+  cones, capsules, planes) with the materials bound to them; Blender's own USD import leaves them
+  without one, so they streamed white. Import USD files with **File > Import > USD for QAROS**.
+  Blender's standard USD import binds them too when *Import All Materials* is on; otherwise the
+  console names the materials it did not import. UsdPreviewSurface opacity below 1 now streams as
+  transparency: the add-on imports it as Principled **Alpha** instead of the Transmission Blender
+  uses, so Blender also shows such a material blended rather than as glass.
+- **Runtime:** the Blender ANARI add-on streams faces that have no material in the mesh's colour
+  attribute instead of grey: a USD file's `displayColor` and Blender vertex paint now show, one
+  colour per face. An object with more than 16 face colours (a gradient) streams in its mean
+  colour, and the add-on's material status says so.
+- **Runtime:** the Blender ANARI add-on no longer renders objects outside its app volume, so objects
+  outside the volume no longer cut gaps into what the volume shows. They come back when the volume
+  is moved or scaled to them. ANARI apps can read where the volume is from the new device property
+  `qar.volumeCube` (scene point to the volume's unit cube) and cull for themselves.
+- **Runtime:** ANARI render scale: `qar.renderScale` (0.25 to 1, 0 automatic), also
+  `QAR_ANARI_RENDER_SCALE`, `qar-anari-demo --render-scale` and the Blender add-on's **Render
+  scale** preference. The add-on's status line shows a reduced scale.
+- **Packaging:** the setups offer **OSPRay backend (CPU)** in the ANARI applications group: Intel
+  OSPRay, a CPU path tracer for PCs without a usable GPU, installed beside the ANARI device
+  (about 135 MB). It is only available together with the ANARI device. Silent: `/OSPRay` (also
+  installs the ANARI device), `/NoOSPRay`. An upgrade keeps the previous choice.
+- **Visualizer:** MCP tool `viz_source_app_add` proposes a custom source app (OpenXR, QAROS API or
+  web app): it opens Source Applications' **+ Add** dialog filled in and marked as proposed over the
+  MCP. Nothing is saved until you click **Add app**.
+- **Visualizer:** the left mouse button works in the Texture Grid without the hand key, directly on
+  what is under the cursor. In an app volume a drag moves the content so the grabbed point stays
+  under the cursor (the wheel while dragging pushes or pulls it), Shift + drag turns it (left /
+  right about the vertical, up / down tips it), Ctrl + drag or Ctrl + wheel scales it, Shift + wheel
+  turns it 15° per notch, all about the grabbed point (the point of the content under the cursor,
+  which stays where it is), and the press focuses that volume for the receiver; Ctrl + Shift + drag
+  or wheel moves the app volume itself. On a GUI panel, also one standing inside an app volume, a
+  click, a drag (sliders) and the wheel
+  (scrolling) reach the page as touch: the receiver's hand reaches to the page under the cursor
+  and touches it, as a headset user's finger does, so the click lands exactly where it is drawn.
+  A title bar drag moves the panel and a title bar
+  double-click opens it in a window of the Visualizer. On the scene a drag orbits the camera and a
+  click sets the orbit pivot. No hand is drawn for the mouse: the Visualizer marks the hit point and
+  names the volume under it, and its own streamed view shows no ray or glow for the pointer. Every
+  other user sees the pointer's ray, hand and the Visualizer camera's head (see Mixer).
+- **Visualizer:** with the mouse over a website GUI panel in the Texture Grid whose text field has
+  focus (tap it first), the keyboard types into that page, IME input included; the camera keys
+  pause meanwhile and work again once the mouse leaves the panel or the field loses focus.
+- **Mixer:** tapping a text field on a website panel opens a virtual keyboard in front of the user
+  (a number pad for number fields), whose keys type into that page; it closes when the field loses
+  focus or with its own close key. Not in a Visualizer's view, where the PC keyboard types instead.
+- **Mixer:** every other user's hand rays are drawn, in the styles of your own (white / green on a
+  panel, the volume's gesture style in an app volume, the glow where they land), so you see where
+  other headset users and the Visualizer operator point. Hands and head are drawn only for a user
+  in another room or a Visualizer; a headset user in your room shows only rays.
+- **Packaging:** `qar-anari-demo` (the setup's optional **ANARI device** component, the
+  Visualizer's ANARI cube tile) streams one of the ANARI SDK's test scenes instead of the cube with
+  `--scene CATEGORY/NAME`: volumes, textures, PBR, instancing, up to tens of thousands of objects,
+  animated scenes animating. `--list-scenes` lists them, and with `--scene` that scene's
+  parameters; `--scene-param NAME=VALUE` sets one. The scene is centred in the app volume and
+  scaled to about 0.6 m unless `--app-scale` is given, in an app volume of its own (**ANARI NAME**)
+  unless `--volume` or `--name` is given, and turned so its front faces the viewer (`--yaw DEG`;
+  the Cornell box shows its open side). The component now also installs
+  `anari_test_scenes.dll`.
+- **Runtime:** the `qaros` ANARI device takes `qar.origin` (`FLOAT32_VEC3`, app units): the scene
+  point placed at the app volume's origin. An application whose scene does not sit around its
+  origin sets it to the scene's centre instead of moving its objects.
+- **Runtime:** the `qaros` ANARI device takes `qar.appOrientation` (`FLOAT32_QUAT_IJKW`): the
+  content's rotation in a new app volume, so an application turns its scene's front towards a
+  viewer facing the volume. A volume reopened from an earlier run keeps its rotation.
+- **Runtime:** two Blenders (or other ANARI applications) on one PC no longer share an app volume
+  where only the first is ever shown. The Blender add-on's QAROS panel has an **App volume** field:
+  empty streams as "Blender", or "Blender 2", "Blender 3", ... when another Blender shows it; a
+  typed name streams into that volume only and reports when another Blender already shows it. The
+  `qaros` device takes `qar.volumeNumbering` and reports `qar.volume`, `qar.volumeDisplayName` and
+  `qar.streamError`; `qar-anari-demo` takes `--fixed-volume`.
+- **Runtime:** the Blender ANARI add-on follows the active **All** Material Output and exports
+  constant Principled colour, metallic, roughness, alpha and emission to supporting backends.
+  The QAROS panel shows backend limitations and material approximations; the console identifies unsupported
+  shaders and linked inputs. Matte backends retain colour with explicit feedback for unsupported
+  effects. VisGL applies emission, refreshes shading when a material model changes and removes
+  shadows from constant zero-opacity blend materials. VisGL waits for queued rendering before
+  reporting frame completion or reusing frame state. VisGL also finishes pending array uploads
+  before releasing them, preventing crashes when a scene is stopped before rendering.
+  Alpha edits explicitly switch opaque/blend
+  modes; devices without blend support show an opaque approximation.
+  VisRTX's default renderer skips zero-opacity surfaces when choosing depth, so invisible
+  foreground geometry no longer hides the rear surface's depth.
+  Helide advertises opaque-only surface rendering. ANARI streams declare premultiplied coverage
+  so receivers can preserve and composite their alpha. Use unlinked constants on the connected
+  Principled shader; textures and advanced Principled lobes remain outside this increment.
+- **Runtime:** the Blender ANARI add-on's QAROS panel shows the backend actually streaming
+  (VisRTX, VisGL, OSPRay or Helide) and asks for a Blender restart when the **Backend** preference
+  names another one. **Backend** offers Automatic and each of the four. The `qaros` ANARI device reports it as the `qar.backend` device property.
+- **Visualizer:** **Settings > About** shows the QAROS version and edition, with a button that
+  copies them for a support request, and opens the licence agreement, the third-party licences,
+  the LGPL notes and sources, the release notes, the documentation and the data folder.
+- **Device apps:** the Meta Quest player anchors the scene at a scanned scene origin code, as
+  HoloLens and METALENSE already do, through the OpenXR QR detection Meta ships on recent Horizon
+  OS (`XR_EXT_spatial_marker_tracking`, which Meta calls experimental). The player asks for the
+  spatial data permission (`com.oculus.permission.USE_SCENE`) on its first start; allow it, and
+  update a headset whose Horizon OS does not detect codes yet.
+- **Visualizer:** HoloLens 2 installs from the Devices tab without Developer Mode or the Device
+  Portal. **Set up or update a device** › **HoloLens · Install code** › **Show install code** serves
+  the player, its certificate and its framework package on the network and shows a QR code that
+  opens the install page in Edge, whose **Install QAROS Player** hands the player to App
+  Installer, with the adapter to serve on, a 15-minute countdown and what the HoloLens fetched.
+  Once per HoloLens, switch **Code opens** to **Certificate**, scan, and trust it (Settings ›
+  Certificates, Trusted People). **Code opens** › **App Installer link** opens App Installer
+  directly, only where `ms-appinstaller:` links are enabled; elsewhere App Installer reports an
+  error in parsing the app package. The server takes a port
+  from 7448-7460, the range the setup allows through Windows Firewall. A managed HoloLens still
+  installs through the Device Portal.
+- **Visualizer:** each stereo output window (stereo windows, interlaced, anaglyph, side by side,
+  top / bottom) has a minimize button in its top-right corner. It appears only while the pointer
+  is near that corner and is never part of the stereo picture.
+- **Visualizer:** the MCP can start the source app presets you saved in Source Applications:
+  `viz_source_app_list` shows the catalogue as the grid does (presets, detected and built-in apps,
+  executable, arguments, approval and running apps), `viz_source_app_start` starts a saved preset
+  exactly as saved, like its Launch, and `viz_source_app_stop` stops a running app like its Stop.
+  Built-in and detected apps start only once you save them as a preset, and no path, argument or
+  address can be passed. While the editor or the Add dialog is open, start is refused. The three
+  tools carry MCP annotations, so your agent can ask you before it starts or stops an app.
+- **Visualizer:** **Settings → General → Reset Hub Display state...** returns this Visualizer's
+  panel visibility, dock layout, sidebar, theme, top-bar and diagnostic toggles, stream pause
+  policy, Logs preferences, depth view and camera speeds to their defaults, at once and without a
+  restart. The hub, its pairings, approved apps and devices, the interface mode, the MCP endpoint,
+  key bindings, receivers, stereo presets, cameras and web app sources are kept. It also recovers
+  a settings file the Visualizer could not read.
+- **Visualizer:** **Settings → General → Reset to a new install...** opens the QAROS Hub reset
+  dialog, the same one the tray's problem dialog opens: it says what is deleted, lets you **Keep
+  the Hub Display presets and layout** (off by default: the Visualizer's settings, layout, stereo
+  presets, receivers, cameras and web app sources are deleted too) and, on an installed QAROS,
+  **Also remove data owned by the QAROS service (machine-wide)**, and asks you to tick "I
+  understand" before **Reset to a new install**. The Visualizer closes while the hub resets and
+  comes back with it. Every device and app pairs again. Not offered on a member hub: leave the
+  primary first.
+- **Runtime:** a reset to a new install, asked from the visualizer, makes the hub restart empty: its
+  certificate authority, sessions, paired devices and issued certificates, revocations, approved
+  apps, member-hub links, invitations and archive, audit log and `hub-state.json` are deleted under
+  the data root. Logs, `qar-runtime-launcher.jsonc` and the install flavor are kept. The tray's
+  splash says "Resetting to a new install" through the restart, and files another program holds
+  open are named to you instead of only being retried: close that program, and the next start of
+  QAROS deletes them.
+- **Visualizer:** in the Developer interface mode the **New session** confirmation has the option
+  **Also reset Visualizer state (receivers, watch streams, cameras)**, off by default. Ticked, the
+  visualizer that comes back on the new session has no receivers, cameras or watch streams and its
+  views are unbound; settings, stereo presets and the stereo views are kept.
+- **Runtime:** the hub renews its CA's signing intermediate itself, a year before it expires, with
+  no change for any device or app (nothing re-pairs, no session resets). A new CA's root now lives
+  20 years and its intermediate 10; a CA made before keeps its 10-year root, which the hub reports
+  in its audit log (`ca-expiring`) in its last year. Replacing a CA at its root's end still makes
+  every device pair again (ADR-0434).
+- **Runtime:** the operator can remove a member hub the primary still lists after an undone join,
+  through the hub's signed member-admin request (ADR-0432).
+- **Visualizer:** while the hub restores its previous session, the tray's splash says "Restoring
+  previous session..." (with the attempt after a failure), and the visualizer opens only once it
+  is done. When the previous session could not be restored, the visualizer shows one popup saying
+  so: the hub runs a new session and the devices and apps of the previous one must be paired
+  again. (ADR-0436)
+- **Packaging:** the setup exes install `lgpl-sources/<library>/` beside the licence files. For each
+  (L)GPL library QAROS modifies it holds every patch we apply (in order, in its `README.md`), the exact
+  upstream source and version, and the build recipe (`portfile.cmake`, `vcpkg.json`), so the shipped
+  DLL can be rebuilt with or without your own changes. `README-Licensing.md` says so.
+- **Visualizer:** Source Applications detects Skyline TerraExplorer for the user who runs the
+  Visualizer, in the user's own install places first and then in the PC's (Program Files, the
+  Uninstall entries), and lists it as a Detected tile in every UI mode, not only Developer. When
+  TerraExplorer is not installed, its tile is still listed, greyed out and tagged **Not
+  installed**, and cannot be launched; so is any QAROS API app preset whose executable is missing.
+  Launched from there, it enrols with the hub that started it: the hub's launcher hands every
+  application it starts `QAR_INSTANCE`, naming the instance the development hub also serves.
+- **Runtime:** a member hub runs its own message router, linked to its primary's. Its devices, apps,
+  mixer and target apps connect to it first, then to the primary, so their traffic stays on the
+  member PC and keeps flowing while the primary is down (nothing renews and no new device is
+  admitted until it is back). New launcher setting `memberRouterPort`: `0` or unset takes the first
+  free port of the router range and reuses it at the next start while it is free, a nonzero value
+  pins it; a pinned port outside `routerPortRangeStart`-`routerPortRangeEnd` needs its own firewall
+  rule. On a member, `sessionEndpoints` name this router. The router keeps its port when the member
+  follows its primary's new session.
+- **Runtime:** a primary hub whose certificates come from an administrator's EST server admits
+  member hubs in two steps (docs/hub-topology D22): it answers a join with the subject its CA will
+  certify, and the joining hub sends a second request with a CSR for exactly that subject. Joins by
+  Allow and by code (both requests on the one PAKE channel) work under EST, and a join by
+  member-hub invitation is certified in one round. A device or local app paired at a member hub of
+  an EST primary is certified and renewed too: the member assigns its member SAN.
+- **Visualizer:** a join by request shows a 6-digit code while it waits for Allow, and the primary
+  shows the same code beside the pending request (docs/hub-topology D25). Allow only when both
+  match; a different code means the request was tampered with on the way.
+- **Visualizer:** the discovered-hubs list takes a hub's primary/member role from its signed
+  discovery announcement; the unsigned beacon role is used only for hubs that serve the older
+  version 2 announcement or do not answer.
+- **Visualizer:** *Join it again* for a former interconnect fills in the hub's onboarding port:
+  from its record, else from its discovery beacon (up to 3 s), else the range default 19121.
+- **Runtime:** the hub renews its own session certificate on the same schedule as its devices
+  (three quarters of the lifetime), so a hub that runs longer than one certificate lifetime
+  without a session rotation stays reachable. Each renewal restarts the hub's router once;
+  connected devices reconnect on their own. (#210)
+- **Packaging:** the runtime ZIP carries the ANARI device `anari_library_qaros.dll` with `anari.dll`.
+  An ANARI application (ParaView, Blender's ANARI add-on, your own) selects it with
+  `ANARI_LIBRARY=qaros` and streams its scene to every QAROS target, rendered from each target's eyes.
+  It ships no rendering backend: install one (NVIDIA VisRTX, Intel OSPRay, VisGL, Helide) next to
+  the application or next to `anari_library_qaros.dll`, or name it with `QAR_ANARI_BACKEND`.
+  Streaming is configured with `QAR_ANARI_*` environment variables or `qar.*` device parameters
+  (`docs/anari-device/README.md`). With no onboarding code or launch invite (`qar.onboarding`,
+  `QAR_ANARI_ONBOARDING_FILE`) it joins the QAROS on this PC: the first start asks you to allow the
+  application in the visualizer's Source Applications, later starts join without asking.
+- **Visualizer:** rail buttons can be dragged up or down to reorder the left rail; the order is
+  saved with the rest of the rail. **Sources** has its own rail button by default (Content keeps
+  Volumes and Panels), and **Settings** is the rail's bottom button instead of the gear in the top
+  bar. A saved rail keeps its arrangement: Settings › Panels › Reset Layout gives the new default.
+- **Runtime:** every peer the launcher or the Visualizer starts joins under a name that says what it
+  is: a source by the app volume it shows, a mixer as "<target> mixer", the Visualizer as
+  "Visualizer", a receiver by its name ("Receiver 1"), a camera by its name and its observer as
+  "<camera> observer". The Stream Graph and peer lists show these instead of generated names.
+- **Unity:** `QarStreamTarget.DeviceLabel` reads "Observer" for a Visualizer camera's observer.
+- **Runtime:** `qaros-hub-service --ensure-running` starts the tray only when none runs for its
+  data root and otherwise exits, never replacing the running hub (ADR-0366).
+- **Unity:** `QarStreamTarget.Presence`, `IsOnline` and `IsReachable` (online, or unknown with an
+  older hub). Stream To All and the target picker offer reachable targets.
+- **Visualizer:** Rooms panel (Session › Rooms): create a room (its number is its identity), rename
+  and close it, and set its pose offset (position, Yaw / Pitch / Roll), which moves everything its
+  devices see the way you type it: +X moves the content +X for the wearer, a yaw turns it about
+  the room's origin code. A room saved by an earlier development build keeps its look; its offset
+  numbers show inverted once. Every device row has a room picker, and a device can be dragged onto any room card.
+  Room 0 · Default is a real room with its own offset, rename and origin code; it holds every device
+  not moved elsewhere and cannot be closed. New rooms start at 1. Room Origin picks from these
+  rooms, room 0 included.
+- **Visualizer:** right-click a sidebar rail button to rename its group and pick its icon from a
+  list. The rail arrangement (groups, panels, names, icons) is saved with the visualizer settings
+  and survives a restart; Reset layout restores the default rail.
+- **Visualizer:** rename a receiver in place: double-click its name in the Stream Graph strip or in
+  Stereo Display (or use the pen there); Enter or clicking away saves, Escape cancels.
+- **Visualizer:** a saved Source Applications preset records when it was added; presets saved
+  before this have no date and sort last.
+- **Visualizer:** a **Foxglove** tile in Source Applications, in every UI mode. It opens
+  app.foxglove.dev; after you sign in, any project and layout streams its main 3D panel (the
+  largest one) to every target, upright and centred on what the panel looks at. Image panels and
+  the page's own UI stay in the page preview.
+- **Visualizer:** web app tiles and presets show their site's own icon once a page of that site has
+  loaded on this PC (cached in the Visualizer's app data); until then, or if the download fails,
+  they show the monogram.
+- **Visualizer:** the bundled OpenXR test app tile shows the OpenXR logo instead of a placeholder.
+- **Visualizer:** three.js web app adaptations can stream one renderer of a page that has several
+  (`chooseRenderer`) and place the room in a Z-up scene (`sceneFromRoom`); see the
+  `webapp-threejs` authoring skill.
+- **Visualizer:** the scene origin marker has a **Room** (1-255) in its Show, true-size and Print
+  dialogs. The code on screen, on paper and in the PDF carries that room, the printed sheet names
+  it in its title, and the Visualizer remembers it. A HoloLens that scans the code joins that room.
+- **Device apps:** a headset served by the Android streamer reports its model when it connects;
+  the Visualizer and the mixer show it (Meta Quest 3, METALENS, ...).
+- **Runtime:** the device catalog (`device-catalog.jsonc` in `bin`, plus files in a
+  `device-catalog.d` folder beside it) lists every headset and camera model: name, family, how to
+  recognise it, which app serves it, icon and avatar. Adding a model is a row; nothing is rebuilt.
+- **Device apps:** `qar-openxr-desktop` reports the exact HoloLens model it connected to, and
+  `qar-zed-source` the exact ZED model; the ZED and test camera sources join as cameras.
+- **Visualizer:** peers show their device's name and icon from the catalog; the tooltip lists
+  device, id, family, category and role. *Add device* offers **HoloLens** and **Headset**; a
+  headset reports its exact model itself once it runs. The Devices tab names a USB device by its
+  catalog model and invites it over Wi-Fi as a Headset.
+- **Mixer:** avatars come from the catalog (by model, then family, then kind); camera receiver
+  slots show the camera model again (ZED 2i), whatever room they are in.
+- **Unity:** a target list for picking where to stream, in the game view (`QarTargetPickerOverlay`,
+  on the `QarStreaming` prefab) and in the Inspector in Play mode: each target's display name,
+  device type and state, its peer ID on hover, a Stream toggle each and **Stream to all targets
+  automatically**. Scripts use `Targets`, `TargetsChanged`, `SetTargetSelected` and
+  `StreamToAllTargets`. All targets share one app volume (**App Volume Common Name**).
+- **Visualizer:** a Devices tab installs the QAROS player on Meta Quest and Metalens over USB (adb
+  is found on the PC or downloaded once, after its licence), and shows the 10 cm scene-origin marker
+  at true size or prints it at 100 %.
+  - The package field lists every QAROS Player APK found, with its version: next to the
+    Visualizer, in `..\devices\android` (an unpacked ZIP), in the installed QAROS, in a development
+    build, and one picked with **Browse…**. The choice is remembered.
+  - **Set up or update a device** follows the USB device plugged in when the type shown has none
+    connected: a Quest selects Meta Quest, METALENSE 2 glasses select Metalens, each with that
+    device as the target. With several devices plugged in it stays on the one shown, and while
+    HoloLens is chosen it never switches.
+  - The last step, **Invite the headset** / **Invite the glasses**, invites the device at the
+    Wi-Fi address it reports over USB with one click, as does **Invite at this address** in the
+    Wi-Fi step. Without an address (HoloLens, a device on no network) it opens **Invite device**
+    to type one.
+  - Metalens glasses join a Wi-Fi network over adb. **Networks the glasses see** lists the ten
+    strongest networks the glasses themselves see, plus every network already saved on them, with
+    security and signal (**Scan again** refreshes it); clicking one picks it and its security. A
+    network saved on the glasses joins without a password: Join turns Wi-Fi off and on and the
+    glasses rejoin it; when they pick another saved network instead, Join asks for the password.
+    A network that hides its name is typed under **Hidden**, folded by default. The card shows
+    when Wi-Fi is off and turns it
+    on (Join turns it on too), and offers **Disconnect** (forgets the network on the glasses;
+    joining it again needs the password) and **Turn Wi-Fi off**.
+- **Visualizer:** the "This PC watches" strip lists watched streams in their own section, apart
+  from the receivers, each with Show and Stop.
+- **Visualizer:** three Developer-level Source Applications samples stream public web apps never
+  made for XR, each user's eyes rendered from their own camera: **WebGPU Deferred Rendering**
+  (webgpu-samples: per-view G-buffer and lighting, 128 moving lights, transparent background),
+  **WebGL Aquarium** (webglsamples.org) and **three.js Shinjuku Station** (indoor map,
+  transparent background). Screen-space and single-camera effects are turned off in their
+  adaptations. The adaptations ship with the Visualizer in `bin/assets/web-app-source-profiles`
+  (was `bin/web-app-source-profiles`), generated at build time from readable scripts.
+- **Visualizer:** the web app authoring skills offer two more shared WebGPU libraries,
+  `webgpu-redirect-capture.js` and `webgpu-redirect-presenter.js`, which stream WebGPU apps that
+  keep their own render loop, multi-pass deferred renderers included.
+- **Runtime:** Linux development builds include an SDL tray companion that starts the QAROS
+  launcher and opens the visualizer. Vulkan source, mixer, browser and ANARI components can be
+  built on Linux; GPU-PV drivers without exportable binary semaphores cannot complete the
+  mixer-to-visualizer cross-device frame handoff yet.
+- **Visualizer:** on Linux, web app sources and GUI panel pages render on the GPU (Chromium through
+  ANGLE on Vulkan) instead of in software.
+- **Runtime:** the Linux QAROS tray icon shows the QAROS mark on a navy tile, without the wordmark,
+  so it stays readable at panel size.
+- **Packaging:** QAROS for Ubuntu 24.04 and 26.04 (desktop, amd64) as a `.deb` package, `qaros` or
+  `qaros-demo`, from the signed Quaternar APT repository. Install `quaternar-archive-keyring` once;
+  it adds the repository for your Ubuntu release, then `sudo apt install qaros`. Installs into
+  `/opt/quaternar/qaros`, adds a desktop entry and starts the tray at sign-in. The installed hub
+  keeps its secrets (CA keys, hub identity, licence, app approvals) in the `qaros-host` system
+  service, out of reach of the user's account, in `/var/lib/qaros`; `sudo apt purge qaros` deletes
+  them, `apt remove` keeps them for a reinstall. A build you run from a folder keeps them in your
+  user account instead.
+- **Runtime:** on a PC without a Vulkan graphics driver the QAROS tray says "QAROS needs a graphics
+  card with a Vulkan driver" once and does not start the hub, instead of restarting it until
+  "QAROS Hub keeps stopping". Install or update the GPU driver (NVIDIA, AMD or Intel, Vulkan 1.2),
+  then start QAROS again.
+- **Visualizer:** on Linux, **Download platform tools** in the Devices tab downloads Google's
+  platform tools into `~/.local/share/QAROS/platform-tools` (or `$XDG_DATA_HOME/QAROS`) with the
+  system's `curl` and `unzip`, as on Windows. adb from Android Studio's `~/Android/Sdk` is found too.
+- **Packaging:** the setup offers an optional **ANARI device** component (silent: `/ANARI`). It
+  installs `anari_library_qaros.dll` with `anari.dll` and the VisGL (OpenGL) and Helide (CPU)
+  backends into `%ProgramFiles%\Quaternar\QAROS\anari` and adds that folder to the system PATH. An
+  ANARI application (ParaView, Blender's ANARI add-on, your own) started afterwards selects it with
+  `ANARI_LIBRARY=qaros` and streams its scene to every QAROS target, rendered from each target's
+  eyes. Other backends (Intel OSPRay, NVIDIA VisRTX you install yourself) are used when installed
+  next to the application or on PATH; `QAR_ANARI_BACKEND` names one. A backend chosen
+  automatically is first tried in a separate process (`qar-anari-backend-probe.exe`, in the same
+  folder), so one that crashes on this PC's GPU driver is skipped instead of closing the
+  application. Streaming is configured with
+  `QAR_ANARI_*` environment variables or `qar.*` device parameters (`docs/anari-device/README.md`).
+  An upgrade keeps the component; `/NoANARI` removes it, and uninstalling removes the PATH entry.
+- **Packaging:** the setup and the uninstaller wear the QAROS look (the logo, the hub splash
+  screen's navy and the visualizer's dark theme, a "DEMO" badge for the demo), show the QAROS
+  licence agreement (installed as `EULA.txt`; `/S` accepts it) and link to support on the finish
+  page and in Settings > Apps.
+- **Visualizer:** an **ANARI cube** tile in Source Applications (Developer UI mode) when
+  `qar-anari-demo.exe` sits next to the visualizer: a QAROS API app that streams a cube through the
+  ANARI device. Launch it from the tile, or add it as your own preset to pass options such as
+  `--backend visgl`. Started from a console, it asks for an onboarding code; Enter joins the QAROS
+  on this PC instead.
+- **Visualizer:** signing in on a web app source page opens the sign-in in your default
+  browser, where you are usually already signed in, and returns to the page through a `qaros://`
+  link. Sites whose OAuth client can redirect to `qaros://oauth/callback` complete automatically.
+  For other sites, open `qaros://oauth/return?url=<the page you land on>` (a bookmarklet works) or
+  paste that address into the page's address bar.
+- **Packaging:** the QAROS setup registers the `qaros://` URL scheme for the PC; opening such a
+  link hands it to the running Hub. Development builds register it for the current user.
+- **Visualizer:** shared three.js profiles automatically match official examples and the bundled
+  Shinjuku indoor demo, retaining the same adaptation scripts across sites.
+- **Visualizer:** built-in online three.js Littlest Tokyo and Shapes samples with shared adaptation
+  profiles shipped in the runtime payload.
+- **Visualizer:** Controls > Paths, in every interface mode, drives a receiver you pick (never the
+  focused view). **Follow headset** makes its camera follow a headset's head, smoothed so small
+  head movements do not distract viewers; its list offers only connected headsets, each with its
+  device id beside its name; Advanced tunes the smoothing, keeps the horizon level (on
+  by default) and can place the view behind or above the head. **Simulate** walks a ground orbit or
+  sideways with head nodding. **Record** records the receiver's camera in any mode, so you can
+  follow and record at once: the path appears in Saved paths straight away, is saved every second,
+  and can be paused, resumed and stopped at any time. Saved paths can be played (once or looped),
+  renamed, deleted, previewed as green splines in the receiver's texture grid, and exported as TUM.
+- **Visualizer:** the texture grid can show a readout strip under its images (toolbar crosshair;
+  on by default in Developer mode): source, eye and pixel under the pointer, its colour as the
+  receiver sent it (swatch, hex and RGBA), depth in metres with the raw value, and the world point
+  in room coordinates, or **No depth** / **Off image**. Right-click copies the line, or the world
+  point as camera pose JSON that the Controls camera **Paste** reads.
+- **Visualizer:** Settings > Keybindings > Mouse Navigation picks a navigation scheme: **Quaternar**
+  (default: middle drag orbits the point under the cursor, Shift + middle pans, Ctrl + middle
+  dollies, middle double-click fixes the orbit pivot, the wheel dollies toward the cursor point
+  without passing it, right drag looks),
+  **Blender**, **Autodesk Fusion**, **Unity** and **VBS4 editor**. A scheme sets the mouse gestures
+  and the keys (Unity: F frames, Q / E down / up, arrows turn; VBS4: Q up, Z down, arrows turn). The
+  plain left button stays the grid's. Gestures use the scene depth under the cursor; without depth
+  they pivot on a point along the cursor ray (Map style: the floor) and say so once. A running path
+  still locks the camera. A saved Visualizer or Orbit choice loads as Quaternar.
+- **Visualizer:** the Keybindings page shows the scheme's keyboard (keys coloured by what they do,
+  a dot on keys that differ) and its mouse gestures. Rebinding a key makes the keys **Custom**;
+  picking another scheme then asks before replacing them, and **Reset to scheme keys** returns to
+  the scheme's. New key **Frame Point** (`.` by default) turns the camera to the point under the
+  cursor.
+- **Visualizer:** shared three.js adaptation profiles discover bundled WebGL renderers and scenes
+  without application globals. Build a site's profile with `build-threejs-profile.mjs`; all users'
+  stereo views share one render pass. The engine probe recognises bundled three.js too.
+- **Visualizer:** web app source adaptation profiles take an optional `TransportAlpha`. When set,
+  the page's alpha is streamed at half resolution into each user's colour alpha channel, for
+  scenes meant to be composited with the mixer's source alpha (`mixerSourceAlpha`). Shared
+  three.js profiles support it; other profiles stream opaque colour as before.
+- **Visualizer:** web app source adaptation profiles take an optional `RenderScale` in (0, 1]:
+  the page renders every user's eyes at that fraction of the receiver's resolution and the stream
+  upsamples them, and the browser surface shrinks with it. The three.js reference profile uses
+  0.75 and renders all eyes of all users in one pass.
+- **Visualizer:** Settings → General → Streams → **Pause streams** chooses when a receiver's
+  stream pauses on its own: Never, When not visible, or When window minimized (the default). By
+  default a receiver now keeps streaming while its panel is merely hidden behind another tab, so
+  several receivers run without arranging their panels; pick When not visible for the earlier
+  behaviour. A manual Pause still applies under every choice.
+- **Visualizer:** an MCP endpoint at `http://127.0.0.1:<port>/mcp` for agents and scripts. It
+  answers only while Settings → General → "Enable MCP endpoint" is on, in every build (on by default
+  in Developer and Debug mode, off in Basic). Every tool is tagged `basic` or `developer`:
+  - Basic: receiver slots (list, add, rename, start, stop, pause, show, remove) and their cameras;
+    streams with each route's latest timing; app volumes and GUI panels (list, create, change pose,
+    size, name, state, address); target apps' head and hand poses in room, world or app volume
+    content space; what the targets' hands point at (hover, click, tap, drag on app volumes and
+    panels, hand-ray hits), waiting up to 10 s for the next event; dock panels, layout, window
+    layout and screenshots (single or a timed burst).
+  - Developer (Developer UI mode or higher): the whole stream graph and stream watching, web app
+    sources and their authoring tools, and the shipped web app authoring skills: the Visualizer
+    probes a page and serves the matching skill (three.js, WebGPU, WebGL or other) plus the shared
+    adaptation libraries (render-frame loop, depth and alpha packing, atlas copy). Skills ship in
+    `bin/assets/skills`; a skill or library changed outside the installation is refused.
+    An agent registers a finished web app as a Source Applications tile on this hub
+    (`viz_webapp_register`); its scripts are kept in the hub's store under the user's app data; web app presets now also keep
+    `RenderScale`, `ContinuousRendering` and `TransportAlpha`.
+  - Only the user changes the UI mode, in the Settings GUI; no tool changes it, the MCP setting,
+    the hub connection, onboarding or pairing.
+  `POST /mcp` is the only control and web app authoring surface; only window control (`/viz/window/`) and `/screenshot` stay plain HTTP. GUI
+  automation (synthetic input, widget dumps) stays in debug and RelWithDebInfo builds. See
+  `docs/visualizer-mcp.md`.
+- **Visualizer:** web apps are a Source Applications type. A built-in Web app tile and web app
+  presets (Add source app > Web app) launch a web app source in this Visualizer, listed under
+  Running with Streams to, Page, Probe, Start, Stop and Remove. Stop ends streaming and keeps the
+  page; Remove closes it. Details shows the probe, profile, frame counters, errors and the event
+  log, with Reload and, in Developer mode, a profile switch. A preset keeps the address and what is
+  injected into the page: a stored profile, page region and app scale, and the adaptation scripts an
+  agent registered through the MCP (the tile shows them but does not edit them).
+  A launched source starts streaming once a probe finds a renderer, so log in on Page first. The
+  launcher stores the presets; it never runs a web app itself.
+  - The Web App Sources panel is gone; web app sources live in Source Applications.
+- **Runtime:** a source app on the hub's own PC joins QAROS without a code (local enrollment,
+  Windows, the installed per-machine QAROS). The first time, the hub asks "Allow <app> to join
+  QAROS?" with the app's publisher, path and signature; later starts join silently while the app
+  still matches what was approved (a signed app across updates, an unsigned one until it is
+  rebuilt). The app holds a 30-minute certificate the runtime renews; nothing is stored on disk.
+  Each user's QAROS Hub tray (its launcher) serves the apps of that user. The runtime talks only to
+  the installed launcher signed with the QAROS signing key, with no certificate to import on the PC.
+  `QAR_INSTANCE` selects another registered QAROS instance (`HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>`),
+  and the C API, C# and Unity load that instance's runtime.
+- **Runtime:** the QAROS Hub tray shows the approval as a window (Allow / Deny, countdown) in front
+  of every other window, whether or not the visualizer is open. The first answer, from the tray or
+  the visualizer, wins and closes the other.
+- **Runtime:** an installed QAROS Hub tray has a "Start QAROS at login" menu item for the current
+  user; the setup already starts the tray at login for every user.
+  Its launcher config is `%LOCALAPPDATA%\Quaternar\Qaros\qar-runtime-launcher.jsonc`, copied from
+  the installed default on first start; edit that copy, the install folder is read-only.
+- **Runtime:** the hub can have its certificates signed by the organisation's own CA over EST
+  (RFC 7030): launcher config `"ca": {"kind": "est", "url": "https://...", "label",
+  "trustAnchorFile", ...}`. QAROS still decides every certificate's names and lifetime and refuses
+  anything the CA issues differently. The hub needs the EST server reachable for every certificate.
+  The same CA choice applies when the hub has joined another hub (multi-hub).
+- **Visualizer:** an "Allow <app> to join QAROS?" modal for a local source app waiting for
+  approval, and an approved-apps list in the Connection panel. Revoke removes an app's approval:
+  it must be approved again, its certificate is not renewed and peers that read the hub's
+  revocation list refuse it at once.
+- **Packaging:** every shipped `.exe` and `.dll`, the setup exe and its uninstaller are
+  Authenticode-signed. Until the release certificate exists they use a temporary self-signed one,
+  which test machines must trust.
+- **Packaging:** the TerraExplorer adapter ships alone as a signed `QuaternarRemoting.dll`; the PC
+  also needs QAROS installed.
+- **Packaging:** the release flavor is licensed. Without a valid licence the hub starts no
+  pipelines and admits no source apps; demo runs unlicensed. `qaros-license.exe` in `bin/`
+  activates offline (`--request <file> --key <licence key>`, then `--import <response>`), shows
+  the licence (`--status`) and verifies an offline update package (`--verify-update
+  <file>.qaros-update`). Licences are bound to the PC, not the user; a wrong system clock is
+  refused.
+- **Visualizer:** Connection panel ▸ *New session…* retires the hub's current session and starts a
+  new one, after a confirmation; devices follow without a code for two rotations. Only the hub's
+  own visualizer can ask. (#212)
+- **Runtime:** tray ▸ *New session…* does the same from the QAROS tray, with a confirmation, and
+  reports the outcome in a notification. It works without a visualizer. (#212)
+- **Visualizer:** confirming *New session…* or a pairing with another hub closes the visualizer
+  at once and the QAROS splash takes over, naming the step it is at ("Starting a new session:
+  stopping the current session", "Connecting to 192.168.1.20:19121: pairing and joining its
+  session", …). It stays until the visualizer is back and connected to the hub, then hands over.
+  A failure closes the splash with the reason; a failed pairing brings the visualizer back. (#212)
+- **Runtime:** the tray shows the same splash for its own *New session…* when a visualizer was
+  open; without one, only the outcome notification, as before. (#212)
+- **Visualizer:** Connection panel ▸ *Devices* can **Revoke** and **Allow** a remembered device,
+  and lists revoked devices with *Allow*. Only the hub's own visualizer can revoke or allow;
+  both lists load when the panel opens and whenever the
+  control session connects, reconnects or moves to a rotated session. (#216)
+- **Visualizer:** Connection panel ▸ Hubs ▸ *Let another hub join us* shows the single-use join
+  code another hub enters to join this one as a member. (#212, #214, #245)
+- **Runtime:** launcher setting `operatorPeers` lists further peers allowed to list revoked
+  devices and edit remembered devices. (#216)
+- **Visualizer:** member hubs. Connection panel ▸ Hubs ▸ *Join another hub* makes this hub a
+  member of a hub on another PC: pick it or type its address, then send a request its operator
+  allows (no code) or type the join code it shows. On the primary, *Members* lists pending joins
+  (*Allow* / *Deny*) and members with their machine, status, *Remove* and policy (may pair
+  headsets, may approve local apps, primary may launch here). A member shows "Member of *P*" and
+  *Leave session*; session-wide actions are disabled there. (#245, #249)
+- **Visualizer:** an app approval can apply on member hubs ("Admit this app on every member
+  hub") and may bring in member hubs without a click, up to a quota: such an app creates
+  member-hub invitations, and each hub one admits uses one of the quota, given back when that
+  member leaves or is removed. Approvals asked on a member show which member PC asked; one an
+  existing approval already covers, where the member has the app installed, is answered without
+  asking. (#241, #248, #262)
+- **Visualizer:** *Member invitations* on a primary lists the invitations its apps created (label,
+  app, created, expires, uses, permissions, status) with *Revoke*; hubs an invitation already
+  admitted stay members. The *Invitation policy* box shows which primaries this hub accepts an
+  invitation from: the administrator's policy (registry or file, and whether it is protected),
+  the allowed primaries, and the primary pinned by the first invitation with *Forget pinned
+  primary* (not on a member). A member joined by invitation says so in its banner ("Joined by
+  invitation from *app*"), and how many of its devices must pair again because the primary
+  already uses their peer id. (#262)
+- **Visualizer:** an *Audit log* panel (hidden by default) lists what the hub and its members
+  recorded, with filters and export. Operators only. (#252)
+- **Runtime:** the tray tooltip shows the hub's role ("Primary hub", "Member of *P*", unreachable
+  or removed); on a member the tray menu has *Leave and start own session…*, which works even while
+  the primary is unreachable. (#245, #262)
+- **Runtime:** a hub that joins another primary keeps its own session, and *Leave and start own
+  session…* brings it back: the same session, CA, approved apps and paired devices. Devices that
+  stayed off while the hub was a member reconnect without a code; devices that moved into the
+  other primary's session stay there and must be paired again to come back. A hub that never had
+  a session of its own starts a new one. When the hub cannot archive its session at the restart
+  after a join, it does not become a member: it stays the primary of its session and logs why, and
+  the operator joins again once that is fixed; the same holds when the hub's member certificate is
+  unreadable at that restart. A restore of the previous session that fails is undone and tried
+  again at once, three times in all with short pauses; when all fail, the hub starts a new session
+  and keeps the previous one's files in `primary-archive.failed-<UTC time>` beside its CA for
+  support (the crash report includes why it failed); nothing restores them again. When even
+  undoing fails, the hub does not start and logs what to fix; the next start restores the previous
+  session whole. (#262, ADR-0436)
+- **Runtime:** administrator policy for member-hub invitations (#262), in
+  `HKLM\SOFTWARE\Policies\Quaternar\QAROS\MemberInvitations` or
+  `%ProgramData%\Quaternar\QAROS\policy\member-invitations.json` (Linux
+  `/etc/qaros/policy/member-invitations.json`; the registry wins when both exist):
+  `AllowedPrimaryKeys` lists the trust-authority key fingerprints of the primaries this PC's hub may
+  join by invitation; `AllowPinnedFirstPrimary` (default on without a list, off with one) also lets
+  it join the first primary it is invited to, and pins it. The key
+  or file, and the keys or folders above it, must be writable by administrators only; otherwise
+  the hub refuses every invitation. Without any policy, a hub accepts the first primary it is invited
+  to and afterwards only that one.
+- **Runtime:** the hub keeps a tamper-evident audit log of enrolments, issued and refused
+  certificates, operator actions and trust changes in `hub-ca/audit/`, one file per day, kept
+  90 days or 256 MB. Member hubs send theirs to the primary. (#252)
+- **Runtime:** TPM-protected secret storage. The hub's keys, device identities, approvals and the
+  licence are encrypted under a key held in the PC's TPM 2.0 (Microsoft Platform Crypto Provider),
+  or under Windows DPAPI where no TPM works; no PIN is asked and nothing is bound to the boot
+  state. The first start after the update can take a few seconds while Windows creates the TPM
+  key. The launcher log names the protection in use (`win-cng-pcp.v1` for the TPM,
+  `win-dpapi-user.v1` for DPAPI). (#199, #200)
+- **Packaging:** the setup's storage step (`qaros-system-service.exe --provision-storage`) also
+  creates the QAROS service's storage key `QAROS-storage-kek-v1-system` on the TPM (in the
+  software key store when the PC has no usable TPM), usable only by SYSTEM and the QAROS service.
+  If neither can create it the setup stops with exit code 2. Nothing uses the key yet; the hub
+  keeps its secrets under the signed-in user's key. (#200, #222)
+- **Visualizer:** the Devices tab checks the USB connection of the device being set up. When an
+  install fails, the Wi-Fi networks cannot be read, or the device stops answering while the tab is
+  open (a dropped or charging-only cable, a loose port, a locked device, the USB debugging prompt
+  not accepted), the setup goes back to its first step, opens it and says what to do: plug the
+  cable back in, use the cable that came with the device or another port, unlock the device, allow
+  this computer. The notification keeps the technical details. The setup returns to the step it
+  had reached once the device answers again; a failure on a working connection is reported as
+  before.
+- **SDK:** `UnansweredChangesDropped()` on `IAppVolumeControl`, `IGuiPanelControl`, `IRoomControl`
+  and `IMediaStreamControl`: how many changes this session proposed were dropped because no hub
+  answered them within 30 s (they never reached the session's stored state). A refused change is
+  not counted. Each drop is still logged.
+- **SDK:** `IAppVolumeControl::UpdatePeers(id, additions, removals)` changes several peers of a
+  volume in one proposal, accepted or refused whole.
+- **C API:** `qar_session_open_qaros_view` opens a predefined view of the QAROS Visualizer (Pair
+  Headset QR code, Room Origin marker, setup of one device type: `QarOpenQarosViewInfo`,
+  `QarQarosView`, `QarQarosDeviceKind`) in the QAROS whose hub a local-app session joined. The app
+  no longer opens a `qaros://` link or looks for QAROS (`QAR_INSTANCE`, the registry) itself; in a
+  developer setup the view goes through that instance's own `qaros.exe`, so the `qaros://` scheme
+  need not be registered. Returns `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` for a session that joined by
+  invite or code. An optional symbol: with an older runtime it returns
+  `QAR_STATUS_NOT_IMPLEMENTED`. The Rust binding has it as `Session::open_qaros_view`.
+- **C#:** `Session.OpenQarosView(QarosView, QarosDeviceKind)` opens a predefined view of the QAROS
+  Visualizer in this session's QAROS, as `qar_session_open_qaros_view` does; with an older runtime
+  it returns a `NotImplemented` result.
+- **SDK:** the C++ wrapper `qar-streaming-cpp` joins as a local app:
+  `OnboardBuilder::WithLocalApp(approval_timeout_ms)` chains `QarOnboardLocalAppExt` and
+  `WithAppTag` chains `QarOnboardLocalAppTagExt`. `PeerSpec::Presence` (`qaros::PeerPresence`)
+  reads `qar_peer_spec_get_presence`.
+- **SDK:** a process that hosts a streaming service and loses its Vulkan device now leaves the GPU
+  side of the crash record too: the last marked GPU work per queue and the driver's fault data
+  (`VK_EXT_device_fault`, with its binary dump written as `*.gpu-fault.bin` beside the crash report).
+  A device created by the library enables the needed driver extensions where they exist; a device
+  the host passes in is used as it is and has no GPU markers.
+- **C API:** `qar_render_sender_get_stream_state` reads, without blocking, what a render sender's
+  stream is doing: `QarRenderSenderStreamState` is `CONNECTING`, `WAITING_FOR_RECEIVER`,
+  `STREAMING`, `PAUSED`, `RECONNECTING` or `CLOSED`. `qar_render_sender_try_begin_frame` reports
+  `ready` false for a pause, a reconnect and a missing receiver alike; read the state then. A pause
+  keeps the sender and its connection.
+- **C API:** a function added after a release may be missing from an older runtime without failing
+  `qar_library_load`: that module still loads and the function returns
+  `QAR_STATUS_NOT_IMPLEMENTED`. `qar_render_sender_get_stream_state` is the first such function.
+- **C API:** served GUI panels: a panel can show a web page this session serves over the session,
+  with JSON messages between the page and the app. Publish files as a content bundle with
+  `qar_panel_content_publish_files` or `qar_panel_content_publish_directory`, put a page of it on a
+  panel with `QarGuiPanelServedContentExt` (new content type `QAR_GUI_PANEL_CONTENT_TYPE_SERVED`)
+  or `qar_gui_panels_set_served_content`, read it back with `qar_gui_panel_get_content_served`,
+  receive the panels' messages with `qar_panel_content_subscribe_messages` (each stamped with the
+  panel and the user) and answer with `qar_panel_content_post_message`; `qar_panel_content_remove`
+  stops serving. Only the publishing session may put its bundle on a panel or message it. Files are
+  copied at publish time and checked: relative paths only, an allowlist of web file types, 16 MiB
+  per file, 64 MiB and 1024 files per bundle, 64 KiB per message. New status codes
+  `QAR_STATUS_PANEL_CONTENT_*` (340-346) name each refusal. A served panel whose page nobody has
+  served for about a minute (its app did not come back) reads `QAR_GUI_PANEL_STATE_HIDDEN`, with
+  pose, size and content kept, and turns visible again once its app serves a page on it again; a
+  panel the app or a user hid is never shown that way.
+- **C#:** served GUI panels: `Session.PanelContent` (`PanelContentControl`) publishes a folder or
+  files as a content bundle (`PublishDirectory`, `PublishFiles`), removes it, receives the panels'
+  messages (`SubscribeMessages`, each a `PanelContentMessage` with panel and user) and posts to them
+  (`PostMessage`). `GuiPanelOptions.ServedContent` creates a served panel,
+  `GuiPanelControl.SetServedContent` changes its page, `GuiPanel.ServedContent` reads it, and
+  `GuiPanelContentType.Served` marks it. New `StatusCode.PanelContent*` values name each refusal.
+- **C#:** `GuiPanelControl.ChangeDisplayName` renames a panel; a refused name fails with the new
+  `StatusCode.GuiPanelDisplayNameInvalid`.
+- **SDK:** the Rust binding serves GUI panel content: `Session::panel_content()` publishes, removes,
+  subscribes to messages and posts (`PanelContent`), `GuiPanelConfig::served` creates a served
+  panel, `GuiPanels::set_served_content` changes its page, and `GuiPanelInfo` gains `content_type`
+  and `served`. `GuiPanels::list` no longer fails on a panel that is not a website panel; its
+  `content_uri` is empty then.
+- **C API:** GUI panels have a display name, shown above the panel:
+  `qar_gui_panels_change_display_name` replaces it on any panel, and
+  `qar_gui_panel_get_display_name` returns it (it always returned an empty string). At most 64
+  characters (Unicode code points), UTF-8 with emoji, no control or bidirectional formatting
+  characters; a refused name fails with the new `QAR_STATUS_GUI_PANEL_DISPLAY_NAME_INVALID` and is
+  never shortened. A 257-byte buffer always holds a whole name.
+- **SDK:** the Rust binding renames a GUI panel with `GuiPanels::set_display_name`, and reports a
+  refused name as `StatusCode::GUI_PANEL_DISPLAY_NAME_INVALID`, also from
+  `GuiPanels::get_or_create` when `GuiPanelConfig::display_name` breaks the rules.
+- **SDK:** a session without a graphics device, for a process that never streams media (a
+  companion that only drives app volumes, GUI panels or peers). It creates no Vulkan or D3D11
+  device, enumerates no adapter and loads no transfer plugin, so it is ready about 1.7 s sooner.
+  - C API: chain `QarGraphicsDeviceDisabledExt` (`qar_graphics_device_disabled_ext_default()`,
+    `QAR_STRUCTURE_TYPE_SESSION_GRAPHICS_DEVICE_DISABLED_EXT`) on `QarOnboardInit` or
+    `QarRejoinInit`. C#: `OnboardOptions.WithoutGraphicsDevice()`,
+    `RejoinOptions.WithoutGraphicsDevice()`, `GraphicsDeviceDisabled`.
+  - On such a session `qar_render_sender_create[_async]`, `qar_render_sender_subscribe_requests`,
+    `qar_video_sender_create` and `qar_session_get_graphics_device_id` return the new
+    `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED` (610; C# `StatusCode.GraphicsDeviceNotInitialized`).
+  - Chained together with `QarGraphicsDeviceId`: `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+  - Callers that do not chain it keep today's behaviour.
+- **SDK:** pairing again with a headset code claims back the peer id of the identity the runtime
+  stored for that hub: the runtime proves the stored key and the hub enrols the old peer instead of
+  the one it assigned. A hub that refuses the claim enrols the assigned peer as before.
+- **SDK:** a device off its hub's PC (a headset player) whose hub is lost keeps working through
+  another hub of its session ([#575](https://github.com/Quaternar/Quaternar/issues/575)); an app on
+  its hub's own PC stays with that hub (see Changed). Every hub publishes where devices
+  dial its router, and a device that reaches no router for 3 s reopens its session at the next hub
+  of that list, one hub at a time. A router client (`OnboardingSessionOptions::RouterClient`, the
+  headset player) also dials the other listed hubs after its own as soon as it opens with the list
+  known, so it moves within about 4 s of losing its hub without a reopen
+  ([#579](https://github.com/Quaternar/Quaternar/issues/579)). Shared-object edits, fast pose updates and stored reads continue
+  there, and the session stays `Connected`: it reports `HubUnreachable` only while no hub of the
+  list is reached. The device stays on that hub when its own comes back, returns to its own once
+  that hub is lost too, and dials its own hub first at its next start. Nothing to configure. The
+  device keeps the list with its stored session, so it also rejoins through another hub when its own
+  is down at startup. A stored session of an earlier version is read and upgraded; a build older
+  than this one cannot read the upgraded one, so a device downgraded to it pairs again.
+- **SDK:** an app can publish its own information in its `PeerSpec` from the moment it joins:
+  `OnboardingSessionOptions::AppCustomPeerInfo`, `PersistedSessionRestoreOptions::AppCustomPeerInfo`
+  and `SessionBuilder::SetAppCustomPeerInfo`.
+- **SDK:** every render sender takes part in the Visualizer's Latency Simulator, whatever language
+  or engine uses it: it announces itself every 2 s and adds the latency and jitter set for it to its
+  frames, handing each one over that much later without holding up `EndFrame`. Off by default, and
+  then free. `qar_streaming/LatencySimulator.hpp` replaces the simulator apps ran themselves.
+- **SDK:** `RenderRequestInfo::PoseTime`: the time a render request's pose is for, on the
+  device's clock (empty is now). The pose and the request are stamped with it, so a headset can ask
+  for its predicted display time while it streams its tracked pose with `SendPose`.
+- **SDK:** `IVideoRenderSender::PoseClockOffset()`: this process's clock minus the clock of the
+  poses the sender renders, the estimate its frames carry as `PoseClockOffsetSeconds`; empty
+  before the first pose. For statistics that compare a pose time with this clock.
+- **C API:** a render sender can run free: chain `QarRenderSenderRenderLoopExt` with
+  `QAR_RENDER_LOOP_FREE_RUNNING` to `QarRenderSenderInit`. Its begin-frame waits only for the
+  receiver's destination, never for a render request. Render with
+  `qar_render_sender_next_render_pose` (the poses the next frame opens with) into your own target,
+  then begin, copy in and show. `qar_render_sender_is_ready_for_next_frame` says without blocking
+  whether that sender's frame can go out now; a loop serving several viewers renders only for the
+  ready ones, so a slow, paused or reconnecting viewer holds back no other. Senders created without
+  the extension behave as before.
+- **C#:** `RenderSenderOptions.RenderLoop` (`RenderLoop.FreeRunning`), `RenderSender.NextRenderPose`
+  and `RenderSender.IsReadyForNextFrame`, as in the C API.
+- **SDK:** status code `HubRequesterBudgetExceeded` (1708): the hub refused a signed request
+  because its sender already made as many as the hub serves one sender in its replay window. The
+  proof was valid; the message says when to try again. Before, this refusal was
+  `HubRequesterNotAuthenticated`, which now means only a missing, stale, replayed or foreign proof.
+  The C API still reports a co-process invite refused this way as
+  `QAR_STATUS_ONBOARDING_INVITE_REFUSED`.
+- **C API:** local-app onboarding reports progress while it waits for a hub to serve its pipe:
+  "Waiting for the QAROS hub to start (12 s of 60 s)" after it started the hub, or "Waiting for
+  QAROS instance '<name>' to start (...)" for an instance `QAR_INSTANCE` names, at most once per
+  second through the progress callback. Before, both waits of up to a minute were silent; a GUI
+  using `qar_runtime_onboard_async` can now show them.
+- **C API:** `qar_session_subscribe_lifecycle` and `qar_session_get_lifecycle_state`
+  (`QarSessionLifecycleInfo`, `qar_session_lifecycle_info_default()`, `QarSessionLifecycleState`,
+  `QarSessionChangeCause`): an app is told when its hub starts a new session or joins another hub
+  as its member (`MIGRATING`, then `CONNECTED` with the new and the previous session id and the
+  cause `ROTATED` or `JOINED_PRIMARY`), when the hub stops answering (`HUB_UNREACHABLE`), and when
+  it no longer admits the app (`RE_PAIR_REQUIRED`, e.g. after *Reset to a new install* or a
+  revoked approval). The subscription delivers the current state first. A move keeps the same
+  `QarSession` and everything the app created in it; only `RE_PAIR_REQUIRED` asks the app to
+  onboard again and recreate what it owns. Before, a reset left the app in a dead session without
+  a word.
+- **C#:** `Session.SubscribeLifecycle` / `Session.SubscribeLifecycle(handler)` with
+  `Session.LifecycleChanged`, `Session.GetLifecycleState()`, `SessionLifecycleChangedEventArgs`,
+  `SessionLifecycleState` and `SessionChangeCause`: the same lifecycle on the C# API.
+- **C API:** `QarOnboardLocalAppTagExt` (`qar_onboard_local_app_tag_ext_default()`), chained next
+  to `QarOnboardLocalAppExt`: the app tag telling several instances of one approved app apart, each
+  with its own remembered peer id. An identity key like an app volume's common name:
+  non-empty printable ASCII, no space at either end, at most `QAR_MAX_APP_TAG_LENGTH` (256) bytes,
+  compared exactly, constant across versions; a DNS-style name such as
+  `left.terraexplorer.skyline` is recommended. The hub keeps 64 tags per approval (least recently
+  used dropped) and forgets one unused for 30 days or when the approval is revoked.
+- **C API:** `QarRuntimeEphemeralStorageExt` (`qar_runtime_ephemeral_storage_ext_default()`) on
+  `QarRuntimeInit` keeps the runtime's identities in memory: onboarding writes nothing to disk and
+  returns the zero onboarding id, and `qar_runtime_rejoin` / `qar_runtime_forget` return
+  `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. For a co-process joining with a co-process invite.
+- **SDK:** several API instances in one process share one session: a second local-app onboard with
+  the same tag returns a new handle to the same session (one approval prompt, one peer), and the
+  session ends when the last handle is released. Different tags are different peers.
+- **C#:** `OnboardLocalApp.Tag` and `RuntimeOptions.EphemeralStorage`, the C API's app tag and
+  in-memory storage.
+- **C API:** `QAR_STATUS_ONBOARDING_INVITE_REFUSED` (1812): the hub refused
+  `qar_session_request_onboarding_invite` because the session is not a local app on the hub's PC or
+  an app the QAROS launcher started. Final; nothing was minted. C#: `StatusCode.OnboardingInviteRefused`.
+- **C#:** `MemberHubInvitationOptions.AppTag` and `OnboardLocalApp.RemoteAppGrant`, the C API's
+  remote-app grant on a member-hub invitation and its redemption on the member PC.
+- **SDK:** the `QAR_ZENOH_FULL_MESH_PORTS` environment variable (`<first>-<last>`) moves the range a
+  peer's full-mesh listener is taken from (default 19120-19200) for the process and those it starts.
+  The SDK's own test binaries use 19900-19999 so they never take a port of a QAROS stack on the
+  same PC.
+- **SDK:** `IMessaging::SetPresenceWithdrawn(bool)`: withdraws or restores the peer's own
+  liveliness while the session keeps running, across reconnects and moves, and
+  `SessionFollowerConfig::PeriodicProbe` (5 min by default, zero turns it off): a session also asks
+  its hub which session it serves while the hub is visible, so it learns when it must follow or
+  pair again.
+- **SDK:** an external TLS handshake signer, so a session's key need not be handed to the
+  transport (for a key kept in a TPM later): `qar::ITlsHandshakeSigner`, the reference
+  `qar::SoftwareTlsHandshakeSigner`, `ZenohCreationParams::TlsSigner`, and the
+  `IMessaging::ReconfigureTlsIdentity(caBundlePem, certificateChainPem, signer)` overload, which
+  renews the certificates and keeps or replaces the signer in place. Also
+  `qar::sec::SessionIdentitySigningInput`, the exact bytes `SignWithSessionIdentity` signs.
+- **C API:** status codes for the encrypted store behind persisted identities and sessions,
+  returned by onboarding, rejoin and forget: `QAR_STATUS_SECURE_STORAGE_ERROR` (3500),
+  `QAR_STATUS_SECURE_STORAGE_NOT_FOUND` (3501), `QAR_STATUS_SECURE_STORAGE_TAMPERED` (3502),
+  `QAR_STATUS_SECURE_STORAGE_PROTECTOR_MISMATCH` (3503), `QAR_STATUS_SECURE_STORAGE_PROTECTOR_UNAVAILABLE`
+  (3504), `QAR_STATUS_SECURE_STORAGE_INVALID_KEY` (3505) and `QAR_STATUS_SECURE_STORAGE_LOCKED`
+  (3506, retry). (#199)
+- **C#:** the same codes as `StatusCode.SecureStorageError` … `StatusCode.SecureStorageLocked`
+  (3500-3506). (#199)
+- **C API:** `qar_platform_set_android_java_vm(void* java_vm)` (C++
+  `qar::storage::RegisterAndroidJavaVm`) hands the library the app's `JavaVM*` on Android, so
+  stored secrets are protected by an Android Keystore key. Call it before the first runtime;
+  without it the library finds the VM itself on Android 12 (API 31) and newer, and otherwise falls
+  back to a file key with a warning. Other platforms return `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`.
+- **C API:** `QAR_DEVICE_CATEGORY_OBSERVER` (6), returned by `qar_peer_spec_get_category` for an
+  observer. Never declared by an application.
+- **C#:** `DeviceCategory.Observer`.
+- **SDK:** `OnboardingSessionOptions::DisplayName` (config key `displayName`) names the peer a
+  session joins as, on onboarding and on rejoin; unset, a name is generated.
+  `SessionBuilder::SetDisplayName` does the same for a session built directly.
+- **SDK:** `OnboardingSessionOptions::SessionEndpoints` (config key `sessionEndpoints`, written by
+  the launcher for every app it starts) makes a rejoin connect to those router endpoints instead of
+  the ones saved with the session state, so an app finds a hub that came back on another port.
+- **C API:** local-app onboarding (`QarOnboardLocalAppExt`) starts the QAROS hub when it is not
+  running, from the installation or the runtime folder; a running hub is left alone and outlives
+  the app.
+- **C API:** `qar_peer_spec_get_presence()` and `QarPeerPresence` (`ONLINE`, `OFFLINE`,
+  `LEAVING`, `RETIRED`, `UNKNOWN`): whether the hub sees a peer connected and whether it announced
+  its leave. Pick targets by it. `QAR_PEER_PRESENCE_UNKNOWN` comes from an older hub
+  that does not report connections; treat it like `ONLINE`.
+- **C#:** `PeerSpec.Presence` / `PeerPresence`, and `PeerSpec.IsReachable` (online or unknown) to
+  pick targets.
+- **SDK:** `qar_streaming/RoomOffsetTransform.hpp`: `ToRoomWorld` / `FromRoomWorld` convert poses
+  between a peer's own space and the room world (`ToLocalSpace(device, offset)` and
+  `CombinePoses(offset, world)`).
+- **SDK:** `kDefaultRoomCommonName`, `kDefaultRoomDisplayName` and `RoomZeroId()` name the default
+  room 0.
+- **SDK:** status code `WebAppSourcePopupNotOpen` reports input or a close sent to a web page's
+  popup window after it closed.
+- **C API:** a peer describes what it is: `qar_peer_spec_get_role` (`QarPeerRole`: source, target,
+  runtime, control, internal), `qar_peer_spec_get_category` (`QarDeviceCategory`: headset, camera,
+  visualizer, desktop PC, server) and `qar_peer_spec_get_device_id`, `_get_device_family`,
+  `_get_device_name` (e.g. `MetaQuest3`, `MetaQuest`, "Meta Quest 3"). Ids and families are open
+  strings: show a peer by its name, pick visuals by id, else family, else category. The identity can
+  change while the peer runs (a serving app learns the exact model), so read it in the peer update
+  callback. `qar_peer_spec_is_target_app` is unchanged.
+- **C API:** a source app can describe its own device: chain `QarPeerDeviceIdentity`
+  (`qar_peer_device_identity_default()`) on `QarPeerPresentation::header.next` when onboarding or
+  rejoining, and refine it later with `qar_peer_update_device_identity`. An app is always a source
+  and may declare only `QAR_DEVICE_CATEGORY_DESKTOP_PC`, `_SERVER` or `_CAMERA`; anything else fails
+  with `QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED`. Without it the app is a desktop PC.
+- **C API:** `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE` is the hub refusing to invite a device
+  it has no target app for.
+- **C API:** the connection string `"headset:<host>"` invites any headset the Android streamer
+  serves (Meta Quest, Android glasses); it reports its exact model itself. `"quest:<host>"` and
+  `"android:<host>"` are older spellings of it and invite a `Headset` too, as do the
+  `qar_target_app_connection_string_quest` / `_android` helpers.
+- **C#:** `PeerSpec.Role`, `Category`, `DeviceId`, `DeviceFamily`, `DeviceName` (`PeerRole`,
+  `DeviceCategory`), `PeerPresentationOptions.WithDeviceIdentity(...)`,
+  `PeerControl.UpdateDeviceIdentity(...)` and the two new status codes.
+- **SDK:** `PeerSpec::LastConnectedAt` is when the PeerSpec authority last saw the peer connected,
+  kept after the peer goes offline. Only the authority sets it; a value a peer proposes is
+  ignored. Specs from older builds read it as absent (PeerSpec schema v4).
+- **C API:** `qar-streaming-c` can be built and loaded on Linux with exported C symbols, and the
+  Vulkan cube source example builds there. A Vulkan driver with external memory support is
+  required for GPU frames.
+- **SDK:** Linux GPU-memory transfer supports image-descriptor exchange and orders frame completion
+  through local timeline semaphores and control messages. Cross-process frame delivery still needs
+  validation; cross-device Vulkan handoff requires external binary-semaphore support from the driver.
+- **SDK:** local app onboarding (`QarOnboardLocalAppExt`) works on Linux with kernel 6.5 or newer
+  (Ubuntu 24.04): an app the development hub starts, or one started with `QAR_INSTANCE` naming that
+  hub, enrols over a per-user socket in `/run/user/<uid>/qaros` and asks for approval in the hub on
+  its first run. An older kernel is refused with that reason; an installed QAROS on Linux does not
+  serve local onboarding yet.
+- **SDK:** `CreateCpuToVulkanConversion` uploads CPU video frames through the Vulkan conversion
+  pipeline for sources that do not expose a GPU image.
+- **SDK:** status codes `WebAppSourceSignInNotPending` and `WebAppSourceSignInLinkInvalid`
+  report a `qaros://` sign-in link that no web page is waiting for, or that cannot be read.
+- **SDK:** `RenderingStreamRequirements::RenderScale` (default 1, range (0, 1]) lets a render
+  sender's app render below the receiver's resolution: frames from `BeginFrame` have views that
+  much smaller (`RenderScaledViewSize`), and the sender resamples them to the size the receiver
+  asked for.
+- **C API:** `QarOnboardLocalAppExt` (`qar_onboard_local_app_ext_default()`), a third
+  `qar_runtime_onboard[_async]` mode for a source app on the hub's own PC: no code, no persisted
+  state, `out_onboarding_id` is the zero id. The hub asks the user once, then admits later starts
+  silently while the app still matches.
+  `approval_timeout_ms` (0 = 120 s) bounds the first approval. Windows only. Chaining it with
+  `QarOnboardHostExt`, `QarOnboardPeerIdExt` or another mode, or a non-zero `onboarding_id`, is
+  `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`. New status codes `QAR_STATUS_ONBOARDING_APPROVAL_DENIED`
+  (1805), `_APPROVAL_TIMEOUT` (1806), `_HUB_NOT_AUTHENTIC` (1807), `_APP_IDENTITY_MISMATCH` (1808).
+  The app joins the installed QAROS (or the instance the `QAR_INSTANCE` environment variable
+  names). Without a registered instance it joins a QAROS hub started from an uninstalled build or
+  folder of the same user, on that instance's predefined pipe; none running:
+  `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE`, naming the instance as not installed. 1807 means the
+  pipe server is not that installation's launcher, signed with the QAROS signing key, as this user
+  in this Windows session (uninstalled: not a `qar-runtime-launcher.exe` of this user and session,
+  or unsigned while the runtime is signed).
+- **C#:** `OnboardOptions.UseLocalApp(OnboardLocalApp?)`, `OnboardLocalApp` (`ApprovalTimeout`),
+  and `StatusCode.OnboardingApprovalDenied`, `OnboardingApprovalTimeout`,
+  `OnboardingHubNotAuthentic`, `OnboardingAppIdentityMismatch`, the same as the C API.
+- **C API:** `qar_runtime_info` (`QarRuntimeInfo`: `version`, `flavor` `"release"`/`"demo"`,
+  `c_api` `"v0"`) reports what the loaded library is; works before `qar_library_init`.
+- **C#:** `Library.GetRuntimeInfo()` returning `RuntimeInfo`.
+- **SDK:** devices renew their session certificate online, with a new key and no code, during a
+  session and on joining after a long time offline. After a session rotation, a certificate of one
+  of the two previous sessions renews into the current one. An expired, revoked or older
+  certificate reports that the device must be paired again instead of failing silently. (#210)
+- **C API:** status code `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` (1809): the device's certificate
+  can no longer be renewed (expired, revoked, or from a session more than two rotations old); pair
+  it again with a code. (#210)
+- **C#:** `StatusCode.OnboardingRePairRequired` (1809), the same as
+  `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`. (#210)
+- **SDK:** `Runtime::RejoinLastSession` renews a certificate that is due before joining, and keeps
+  renewing it while the session runs, over the hub address recorded at the device's first join
+  with an invite. It no longer fails until the next onboarding once the certificate is due. (#210)
+- **SDK:** a device that already knows its hub accepts the hub's discovery reply only when the hub
+  signed it over the device's request nonce, otherwise
+  `QAR_STATUS_ONBOARDING_HUB_NOT_AUTHENTIC`. First contact is unchanged. (#218)
+- **C API:** member-hub invitations (#262), for an application that already links two PCs: they
+  bring the QAROS hub of one PC into the session of the hub on the other as a member, without a
+  click on either. On the primary's PC `qar_runtime_create_member_hub_invitation`
+  (`QarMemberHubInvitationInit`: `lifetime_seconds` 0 = 24 h, at most 7 days; `max_uses` 0 = 1, at
+  most 64; `permissions` 0 = `QAR_MEMBER_HUB_INVITATION_PERMISSION_JOIN | _REJOIN |
+  _BRING_DEVICES`, `_READMIT` on request; optional `label`) returns a signed
+  `QarMemberHubInvitation`; only an app the hub approved with the right to bring in member hubs
+  gets one, and each hub it admits spends one unit of that approval's quota. Send it with
+  `qar_member_hub_invitation_serialize` / `_serialized_size` over your own trusted channel: it is a
+  secret bearer credential, never log it. On the joining PC `qar_member_hub_invitation_deserialize`
+  and `qar_runtime_join_hub_as_member` (`QarJoinHubAsMemberInit`: `invitation`,
+  `hub_start_timeout_ms` 0 = 60 s, `restart_timeout_ms` 0 = 120 s) start the installed hub if
+  needed, join it to the primary and wait through its restart; calling it again returns success
+  once the hub is a member. It does not onboard your app: call `qar_runtime_onboard` with
+  `QarOnboardLocalAppExt` afterwards, which succeeds without a prompt. The joining PC accepts
+  only a primary its administrator lists in its member-invitation policy or, without a list, the
+  first primary it joined by invitation. Release handles with
+  `qar_member_hub_invitation_handle_destroy`. Windows only, `QAR_STATUS_NOT_IMPLEMENTED`
+  elsewhere. A refusal's message names what failed and what to do: the invitation's id and,
+  when it expired, the time it did (UTC), its uses, the missing permission, the issuing app's quota,
+  the policy source on the joining PC or the pinned primary; it never contains the invitation's
+  token. After the hub's restart `qar_runtime_join_hub_as_member` returns within half a second of
+  the hub being a member.
+- **C API:** remote-app grants on member-hub invitations (#268 A4): chain
+  `QarMemberHubInvitationAppGrantExt` (`app_tag`, the rules of `QarOnboardLocalAppTagExt`) into
+  `QarMemberHubInvitationInit` and the invitation also admits one app on the joining PC, bound to
+  your approval and that tag. On that PC, once its hub is a member, onboard with
+  `QarOnboardLocalAppExt` and `QarOnboardRemoteAppGrantExt` (`invitation`) chained: the first
+  executable that does so is approved there without a prompt; later starts need neither the
+  invitation nor a prompt; a different executable is refused (`QAR_STATUS_ONBOARDING_APPROVAL_DENIED`),
+  also with a later invitation of the same app and tag. With a grant your own approval is not
+  extended to the member hub. Revoking your approval, or the granted one, on the primary revokes the
+  granted app and forgets its peer id. Default inits `qar_member_hub_invitation_app_grant_ext_default`,
+  `qar_onboard_remote_app_grant_ext_default`.
+- **SDK:** a local app on a member hub keeps its peer id across restarts like one on the primary
+  (#268 A4): the primary picks and remembers it per member PC, approval and app tag (a
+  granted app: the grant's tag). The same approval on two member PCs keeps one peer id on each.
+  App tags starting with `member/` are reserved for this and refused
+  (`QAR_STATUS_ARGUMENT_NOT_SUPPORTED`).
+- **C API:** status codes for member hubs: `QAR_STATUS_MEMBER_JOIN_PENDING` (3400), `_DENIED`
+  (3401), `_REFUSED` (3402), `_REDIRECTED` (3403), `QAR_STATUS_MEMBER_REMOVED` (3404),
+  `QAR_STATUS_PRIMARY_UNREACHABLE` (3405), `QAR_STATUS_SESSION_WIDE_ACTION_ON_MEMBER` (3406),
+  `QAR_STATUS_MEMBER_SPONSOR_NOT_ALLOWED` (3407), `QAR_STATUS_MEMBER_SPONSOR_QUOTA_EXCEEDED`
+  (3408), `QAR_STATUS_AUDIT_LOG_CORRUPT` (3409).
+- **SDK:** status code `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` (1810, C#
+  `StatusCode.OnboardingRenewalPossessionUnproven`): the hub refused a renewal that did not prove
+  it holds the renewed certificate's key. Final: the renewal is not retried and a running session
+  reports `RePairRequired`; see Breaking.
+- **C API:** status codes for member-hub invitations: `QAR_STATUS_MEMBER_INVITATION_INVALID`
+  (3600), `_EXPIRED` (3601), `_USED_UP` (3602), `_REVOKED` (3603), `_PRIMARY_NOT_ALLOWED` (3604),
+  `_POLICY_NOT_PROTECTED` (3605: the joining PC's policy can be changed by a non-administrator,
+  so every invitation is refused).
+  `QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING` (3300) is now returned to C callers too: the hub is
+  in another session-wide operation (a rotation, join or leave); retry.
+- **C#:** `Runtime.CreateMemberHubInvitation(MemberHubInvitationOptions)` and
+  `Runtime.JoinHubAsMember(JoinHubAsMemberOptions, IProgress<ActionProgress>?)`,
+  `MemberHubInvitation` (`Serialize`, `Deserialize`, `IDisposable`), `MemberHubInvitationPermissions`
+  (`Join`, `Rejoin`, `Readmit`, `BringDevices`), and the `StatusCode` values `MemberJoinPending` ...
+  `AuditLogCorrupt` (3400-3409), `HubLifecycleOperationRunning` (3300), `MemberInvitationInvalid`
+  ... `MemberInvitationPolicyNotProtected` (3600-3605), the same as the C API.
+- **SDK:** `Runtime::CreateMemberHubInvitation` (`MemberHubInvitationOptions`) and
+  `Runtime::JoinHubAsMember` (`JoinHubAsMemberOptions`), the C++ calls behind the C API, returning
+  an `ActionMonitor`; dropping the monitor cancels.
+- **SDK:** a session whose hub joins another primary by invitation (with the invitation's
+  `BringDevices`) moves into the primary's session in place, like after a session rotation: the
+  hub's signed moving notice or the renewal reply tells it, it renews through the same hub address
+  with no code, trusts the new primary from then on, and keeps its peer id. Only `Id()` /
+  `qar_session_get_id` changes. A device offline for up to 180 days still moves (from a hub with
+  an EST CA only while that hub's last hub certificate is valid); later, or when the primary
+  already holds its peer id for another device, it reports that it must be paired again. A
+  renewal whose reply was lost is retried and still moves the device.
+- **SDK:** a hub's enrolment offer may assign extra URI SANs (`EnrollmentOffer::AssignedUriSans`,
+  at most 8, `qar://` only); the device puts them in its CSR, keeps them in its stored identity
+  (`StoredClientIdentity::ExtraUriSans`, identity record version 2, older records read with none)
+  and names them in every renewal CSR. A device paired at a member hub so names the member, and an
+  EST CA issues and renews its certificate (docs/hub-topology G9).
+- **SDK:** a member join reply carries `sasNonce` (Pending only): the nonce the 6-digit SAS of the
+  primary's pending entry is over, so the joining hub shows the same digits as the primary.
+- **SDK:** `qar::ca::FormatTrustAuthorityFingerprint` (the trust-authority key's SHA-256 as
+  colon-grouped upper-case hex) and `qar::member::ComputeMemberJoinSas` (the 6-digit code both
+  operators compare before Allow, D25).
+- **SDK:** `qar::discovery::AsyncFindHubOnboardingPort(host, window)` finds a hub's onboarding
+  port from its discovery beacon.
+- **SDK:** `qar::SessionFollower` (`CreateSessionFollower`, `ISessionFollowerHost`) and
+  `qar::ca::AsyncProbeHubSession`, which asks a hub over the existing-certificate channel which
+  session it serves, renewing nothing.
+- **SDK:** a session can contain member hubs. Their certificates carry the CN role `member.`
+  (`member.<sessionId>.session.qaros.local`) beside the device and hub roles; every session's
+  access control admits it and keeps it off the primary hub's authority topics. A device or app
+  paired at a member hub renews at that member: the certificate channel accepts a member hub of
+  its session as the server. (#245)
+- **C API:** `qar_library_load(NULL)` finds the runtime without code of yours, including the QAROS
+  installed on the PC (`HKLM\SOFTWARE\Quaternar\QAROS`, `<InstallFolder>\bin\qar-streaming-c.dll`,
+  Windows); with no runtime found it returns `false` and prints where it looked.
+  `qar_installed_bin_folder` returns the installed `bin` folder. A path still loads that file.
+- **C#:** `InstalledRuntime` (`TryGetBinFolder`, `TryGetRequestedInstance`,
+  `TryGetInstanceRuntimeFolder`, `IsValidInstanceName`, `InstanceEnvironmentVariable`,
+  `DefaultInstanceName`, `Load`, `LoadedLibraryPath`) finds and loads the runtime; `Library.Init`
+  uses it automatically.
+- **C API:** a render sender declares what its colour's alpha means by chaining a
+  `QarRenderSenderAlphaModeExt` (`qar_render_sender_alpha_mode_ext_default()`) on
+  `QarRenderSenderInit::header.next`: `QAR_COLOR_ALPHA_MODE_OPAQUE`,
+  `QAR_COLOR_ALPHA_MODE_PREMULTIPLIED` or `QAR_COLOR_ALPHA_MODE_STRAIGHT`. Without it the stream declares
+  `QAR_COLOR_ALPHA_MODE_UNSPECIFIED`. The chain may now hold this extension beside the graphics
+  extension, in any order; a structure type chained twice, or a chain longer than 16, is rejected.
+- **C#:** `RenderSenderOptions.AlphaMode` (`ColorAlphaMode`: `Unspecified` by default, `Opaque`,
+  `Premultiplied` or `Straight`).
+- **C API:** a render sender that renders linear light chains a `QarRenderSenderColorEncodingExt`
+  (`qar_render_sender_color_encoding_ext_default()`) with `QAR_COLOR_ENCODING_LINEAR`; the sender
+  encodes the colour to sRGB before the frame leaves the application. Without it the colour is read
+  as `QAR_COLOR_ENCODING_SRGB`. Send linear colour as `QAR_PIXEL_FORMAT_R16G16B16A16` to keep the
+  darks; a 16-bit colour through the CPU render sender now arrives at all.
+- **C#:** `RenderSenderOptions.ColorEncoding` (`ColorEncoding`: `Srgb` by default, or `Linear`).
+- **SDK:** `RenderingStreamRequirements::ColorEncoding` and `VideoSenderOptions::ColorEncoding`
+  (C++). A `Linear` colour costs one GPU pass per frame on the sender; receivers always get sRGB.
+- **SDK:** the declared alpha mode is published with the stream, and a receiver reads it from
+  `IVideoStreamReceiver::SourceAlphaMode()` (C++). The QAROS mixer composites a `Premultiplied`
+  stream with its alpha as coverage and an `Opaque` one fully covered. The frames are not changed,
+  except for `Straight`: the sender multiplies the colour by its alpha, in linear light, before the
+  frame leaves the application and publishes `Premultiplied`, so a receiver never sees `Straight`. That costs one GPU
+  pass per frame on the sender, even when the frame would otherwise be copied unchanged.
+- **SDK:** `IVideoStreamReceiver::DeliversColourAlpha()` says whether the frames carry the sender's
+  alpha, and `qar::ReceivedAlphaMode(receiver)` is the mode to act on: the declared one, or `Opaque`
+  over a transfer that drops alpha (C++).
+- **SDK:** `VideoStreamRequest::SenderAlphaMode`, filled by the sender for its transfers and never
+  sent. The transfer C ABI is version 9: `QarTransferVideoStreamRequest` gains `alpha_mode`
+  (`QarTransferColorAlphaMode`), and a transfer plugin built against version 8 no longer loads.
+  A plugin that delivers a `Premultiplied` stream's alpha advertises `QAR_TRANSFER_CAP_COLOR_ALPHA`
+  from `transfer_backend_caps`; without it, receivers read the stream as `Opaque`.
+- **C API:** `qar_render_sender_create()` checks `QarRenderSenderInit::depth_format` up front and
+  fails with `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED` unless its graphics API
+  accepts it (the depth formats below). Such a sender used to be created and
+  fail only once a receiver connected, with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` or
+  `QAR_STATUS_UNCLASSIFIED`.
+- **C#:** `StatusCode.RenderingProducerDepthFormatNotSupported`.
+- **C API:** `QAR_PIXEL_FORMAT_D16_UNORM` as a render sender's `depth_format`, on every graphics API.
+  The sender widens it to 32-bit float before sending, so receivers are unchanged. On the CPU API
+  write 2-byte texels and step rows by the frame's `pitch`.
+- **C#:** `PixelFormat.D16Unorm` for `RenderSenderOptions.DepthFormat`.
+- **C API:** `QAR_PIXEL_FORMAT_D24_UNORM_S8_UINT` and `QAR_PIXEL_FORMAT_D32_FLOAT_S8X24_UINT` as a
+  render sender's `depth_format` on OpenGL and Vulkan; CPU and D3D11 senders refuse them (D3D11
+  cannot share such a texture). Render straight into the sender's depth texture. Only the depth is
+  sent, as 32-bit float; the stencil is dropped. `qar_render_sender_create()` also fails with
+  `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED` when the GPU cannot create the format
+  (AMD has no `D24_UNORM_S8_UINT`); use `QAR_PIXEL_FORMAT_D32_FLOAT` there.
+- **C#:** `PixelFormat.D24UnormS8Uint` and `PixelFormat.D32FloatS8X24Uint`.
+- **C API:** a Vulkan render sender checks the `VkDevice` in `QarStreamParamsVulkan` up front:
+  `qar_render_sender_create()` fails with
+  `QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED`, naming what is missing, when the
+  device was created without `VK_KHR_external_memory_win32` and `VK_KHR_external_semaphore_win32`
+  (their `fd` equivalents off Windows). Enable both when you create the device. Such a sender used to
+  be created and fail, or lose the device, at its first frame.
+- **C#:** `StatusCode.RenderingProducerExternalDeviceNotSupported` (807).
+- **SDK:** Rust `StatusCode::RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED` (807).
+- **SDK:** Rust binding (`qaros` crate), safe wrappers for the rest of onboarding:
+  - **Breaking:** the binding builds only against the public header in `qaros`
+    (`qar-streaming-c/include/qar_streaming.h`) and needs a runtime that exports all of it; the
+    support for the header of runtime 0.9.0-dev.2916 is gone (its cfgs, by-value constants,
+    fallbacks and `qaros_sys::RUNTIME_RELEASE_SYMBOL`). `CANCELLED_CREATION_WAIT` is gone too: a
+    session's destroy now settles its pending render sender creations, as the header says.
+    `PeerInfo::identity` is a `PeerIdentity`, no longer an `Option`. Migration: build against the
+    current header with a matching runtime.
+  - `Runtime::onboard_with` and `OnboardExtensions` chain the adapter, a planned peer id
+    (`QarOnboardPeerIdExt`), a re-enrolled slot (`onboarding_id`) and a member hub's remote-app
+    grant (`QarOnboardRemoteAppGrantExt`, with the local-app mode).
+  - Every async call is wrapped as a `PendingCall` to `poll`, `wait` or cancel from any thread
+    (`cancel_handle`): `Runtime::start_onboard` and `start_rejoin` (`PendingOnboard`),
+    `Session::start_onboarding_invite`, `start_invite_target_app`, `start_kill_target_app`, and
+    `RenderSender::start_owned_frame` (`qar_render_sender_begin_frame_async`, a `PendingFrame` that
+    counts as the sender's open frame). Dropping one cancels the call; its owner destroys a handle
+    the call still delivers.
+  - Target apps: `Session::invite_target_app`, `kill_target_app`, `find_render_target` and
+    `Library::target_app_connection_string` (`TargetDevice`).
+  - `PeerInfo::identity` (`PeerIdentity`: `PeerPresence`, `PeerRole`, `DeviceCategory`, device id,
+    family and name) reads back a peer's presence and declared device.
+  - `PeerPresentation::device_identity` (`DeviceIdentity`, `SourceDeviceCategory`) declares the
+    device at onboard and rejoin; `Session::update_device_identity` changes it later.
+  - Member hubs: `Runtime::create_member_hub_invitation` (`MemberHubInvitationConfig`, with
+    `MemberHubPermissions` and the remote-app grant's `app_grant_tag`),
+    `Runtime::join_hub_as_member`, `MemberHubInvitation::serialize` and
+    `Library::deserialize_member_hub_invitation`.
+  - `OnboardingInvite::code` reads a pairing-code invite's code text
+    (`qar_onboarding_invite_get_code`); `StatusCode` names every status code of the header, the
+    member-hub, secure-storage and `PEER_DEVICE_CATEGORY_NOT_ALLOWED` codes included.
+  - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
+    invitation, remote-app grant, join-as-member, device identity, target-app invite, video
+    sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** a new *Supported Apps* section of the User Guide
+  (https://docs.quaternar.com/docs/user-guide/supported-apps/) has one page each for Rerun, RViz
+  (ROS 2), Blender and 3D Slicer: the supported versions, how to install the add-on or plugin
+  (from the Visualizer's **Sources** or by hand), detection and **Locate...**, the one-time
+  approval, presets for several versions, the first session with its gestures, limits and
+  troubleshooting. *Source Applications* links it.
+- **Docs:** a new *Web App Adaptations* section of the Developer Guide
+  (https://docs.quaternar.com/docs/developer-guide/web-app-adaptations/) shows how to stream a
+  website's 3D canvas with the adaptation kit that ships with QAROS: an overview (scripts, stages,
+  libraries by `name@major`, the profile fields including `RenderRate`, `Channel` and
+  `AppScaleByAddress`), *Quick Start* (`qaros-adaptation init`, `check`, `test`, `package`,
+  `verify`, `pin`), *Library Reference* (every kit library: stage, needs, hooks, guarantees),
+  *Recipes* (atlas packing, thin lines and `RenderScale`, depth conventions, iframes, UI
+  confinement, render rate, WebGPU redirect presenter, common mistakes, each with a runnable
+  example), *Develop with AI Agents* (connecting a coding agent to the Visualizer's MCP endpoint,
+  the authoring skills, an example session, safety), *Contribute an Adaptation* (publishing through
+  `Quaternar/qaros-webapps`: layout, versions, changelog, checks, release) and *Troubleshooting* (the "update QAROS" and kit hash errors, leftover adaptations,
+  blank or dashed views).
+- **Docs:** *Source Applications*: *Web apps QAROS provides* says that an adaptation a newer release
+  no longer lists is never picked by address, how **Uninstall web app adaptation...** removes an
+  adaptation you installed, and links the new adaptation guide.
+- **Docs:** *Source Applications*: a new *Web apps QAROS provides* section lists the ready-made web
+  app adaptations, where they are published, how the visualizer keeps them up to date (tile states,
+  **Update ready**, the **Web app updates** settings) and how unsigned releases are handled.
+- **Docs:** *qaros:// Links*: a new *Opening a view from a session* section shows
+  `qar_session_open_qaros_view` (C, C#, Rust), which opens the pairing QR code, the anchoring QR
+  code or a device setup in the session's own QAROS without a link.
+- **Docs:** *Unity*: a new *GUI panels and served panels* section shows how a Unity app reaches
+  GUI panels and serves its own panel pages through `QarSession.Current`.
+- **Docs:** *Scene Origin* and *QAROS World* describe the one **Room Origin** dialog that shows the
+  anchoring QR code and prints it (or saves it as PDF), opened from **Tools** › **Origin** or a
+  room's QR icon in **Rooms**. *qaros:// Links*: a dialog a link opens while the Visualizer is
+  hidden is a window of its own, with the dialog's title, that can be resized.
+- **Docs:** *Scene Origin*: a screen is calibrated inside the **Room Origin** dialog, by dragging
+  **Bar for 10 cm** until the bar under the code measures 10 cm; the **Print** section is folded
+  until opened, and the paper you pick is kept.
+- **Docs:** *Scene Origin* and *QAROS World*: the **Room Origin** dialog draws the code at true
+  size whenever the monitor's size is known or calibrated; there is no **Show at true size**
+  switch. **Calibrate...** is always there.
+- **Docs:** the Visualizer's **Invite device** card has two tabs, **All devices** and **HoloLens (legacy)**.
+  *Connecting to the Hub*, *Managing Devices*, *Pair a Headset*, the HoloLens 2 and headset tutorials
+  and the player installation pages describe them: **All devices** has **Pair headset**, which opens
+  the **Pair Headset** dialog (QR code and the field for the code a device shows); **HoloLens (legacy)**
+  invites by address. The old **By address**, **By QR code** and **By code** picks are gone.
+- **Docs:** *GUI Panels* has a section on served panels: publishing a folder or files as a content
+  bundle, putting a page of it on a panel, the page's `qaros.panel.send` / `onMessage`, the
+  messages your app receives and posts, and the rules and limits, with C, C# and Rust code.
+- **Docs:** *GUI Panels* states the display-name rules (at most 64 characters, one line, no
+  bidirectional formatting characters) and how to rename a panel.
+- **Docs:** *Onboarding and Sessions* has a section *A session without a graphics device*: how a
+  companion that never streams chains `QarGraphicsDeviceDisabledExt` (C#
+  `WithoutGraphicsDevice()`, Rust `OnboardExtensions::without_graphics_device`), what still works and the status media calls return.
+  *Troubleshooting* lists `QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED`.
+- **Docs:** *qaros:// Links* in the Developer Guide: the links that open the Pair Headset QR code,
+  the Room Origin marker or the setup of one device type in QAROS, their exact grammar and rules,
+  and how to open one from C, C# and Rust.
+- **Docs:** *Pair a Headset* has a section *Pair by the code the headset shows*: while not
+  connected to a hub, an Android headset shows the connection prompt with its address and an
+  6-digit code (`123 456`) that changes every 30 s; type both (or pick the headset from those found on the
+  network) into **Invite device** › **By code** and click **Pair**. *Connecting to the Hub*,
+  *Managing Devices*, *Meta Quest and METALENSE 2 - Install and Pair*, the player installation
+  pages and *Security Deep Dive* name this way too.
+- **Docs:** a Visualizer tutorial, *Pair a headset*: pairing an Android headset (Meta Quest,
+  METALENSE 2, Android XR) by **Pair headset** over USB or by scanning **Show QR code**, how long a
+  code stays valid, the Android XR install steps, and its Wi-Fi step (join a network the headset
+  sees from the Visualizer over USB; the headset remembers the password).
+- **Docs:** the Vulkan cube example and its *Vulkan Rendering* tutorial serve every viewer from one
+  render loop: free-running senders by default, request-driven with `--render-loop request-driven`,
+  on a fixed 60 fps schedule (`--fps <n>`) that a slow frame does not shift, or as fast as the
+  viewers take frames (`--uncapped`). *Getting Started* and *Render Loops* point at it.
+- **Docs:** *Render Loops* in the Developer Guide: the request-driven and free-running modes, how to
+  create a sender in each, and how to drive senders for several viewers — blocking with a thread per
+  viewer, non-blocking from one loop, free-running with the readiness check — in C, C# and Rust,
+  with the stream states each loop handles, what each renders for a slow, paused or departed
+  viewer, and which to choose.
 - **Docs:** *Networking and Federation* lists the outbound hosts the embedded browser of website
   panels uses for certificate data updates (`update.googleapis.com` and `*.gvt1.com`, TCP 443),
   why to allow them, and what happens on an offline PC; *Maintenance and Updates* links to it.
-
 - **Docs:** a Rust API reference, generated with rustdoc from the binding's `qaros` and `qaros-sys`
   crates, under the new *Rust API* menu, beside the Rust tutorials;
   versioned like the docs, with a version bar on every page.
-
 - **Docs:** *HoloLens 2* installation and the *HoloLens 2* Visualizer tutorial describe installing
   the player from the Visualizer by code (the code opens App Installer, the certificate goes into
   Trusted People once per HoloLens, an install page as the fallback); the Device Portal steps remain
@@ -33,7 +2147,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   the ports an Android headset sends to (one UDP and one TCP port from 7461-7499) and the firewall
   range 7440-7499,
   and *Maintenance and Updates* how to update the HoloLens player.
-
 - **Docs:** a Developer Guide page, *Choosing an Onboarding Mode*: which mode an app uses (same PC,
   several API instances, co-process, remote app through a member hub, code pairing on a PC without
   a hub, launched by QAROS), what each stores, how long its credentials and bootstrap secrets live,
@@ -49,7 +2162,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   updated first (*Onboarding and Sessions*, *Maintenance & Updates*, *Security Deep Dive*), and the
   status table lists `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED` and
   `QAR_STATUS_ONBOARDING_RENEWAL_POSSESSION_UNPROVEN` with what to tell the user.
-
 - **Docs:** *Rendering Streams* has a *Choosing a depth format* section: the depth formats each
   graphics API takes (D16 everywhere, D24S8 and D32S8 on OpenGL and Vulkan only), falling back to
   D32 on `QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED`, and rendering into a
@@ -89,6 +2201,872 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Packaging:** a build made after a release candidate reports `X.Y.Z-rc.N.M+<sha>` (M commits
+  after `rc.N`) instead of `X.Y.Z-dev.M+<sha>`, so it sorts after the candidate it follows and
+  before the next one, and updates an installed candidate. Its Windows file version keeps the
+  candidate's `N`. Every QAROS repository now follows one versioning scheme, with `release/X.Y`
+  branches for patches of the previous minor: https://github.com/Quaternar/qaros/blob/main/docs/adr/0001-one-versioning-scheme.md
+- **Runtime:** an app you allowed to join QAROS once is admitted from any folder on this PC when it
+  is validly signed by the same publisher as the same product: a second installation (another
+  Blender version beside the approved one) or a moved app joins without a new prompt, where it was
+  refused before ("not at the location its approval names"). Revoking the approval stops every
+  installation. An unsigned app copied to another folder now asks to be allowed there instead of
+  being refused, and a rebuild asks again; member hubs still admit signed
+  apps only from folders only administrators can write.
+- **Visualizer:** a running source app in **Source Applications** (and `healthy` in the MCP's
+  `viz_source_app_list`) is healthy only while its own connection to the hub is up, not just because
+  its process runs ([#628](https://github.com/Quaternar/Quaternar/issues/628)). The row reads
+  **Starting**, **Joining the hub**, **Waiting for approval** while the QAROS tray asks to allow it,
+  **Connected** (green) once it joined, and **Not joined** (red) with the reason, such as "started
+  45 s ago, has not joined the hub", when it has not joined within 30 s; a refused app reads **Not
+  approved**. "Streaming" is no longer shown for a source app: the healthy word is **Connected**,
+  and several processes read "2 connected" or "1 of 2 connected". In the MCP, an instance's `phase`
+  is now that state (`joining`, `awaiting_approval`, `connected`, `not_joined`, ...; the launcher's
+  own phase is `process_phase`), and a running app also has `problem` and `reason`. On Linux, a
+  QAROS API app QAROS starts now joins as a local app (allowed once in the tray), as on Windows, and
+  gets no launch invite on stdin; an app that waits for one must join as a local app, as the
+  "Started by QAROS" contract says. A Linux preset saved earlier reads "Running, join not tracked"
+  until it is added again.
+- **Runtime:** the Blender ANARI add-on (`qaros_anari`) is developed and released in its own
+  repository, `qaros-blender`, with its own changelog; the setup no longer carries it. The
+  Visualizer's Blender tiles install it from the latest `qaros-blender` release, or install its ZIP
+  from there by hand. It streams through the QAROS ANARI device as before.
+- **Visualizer:** one **Room Origin** dialog shows the anchoring QR code and prints it. The code is
+  drawn at true size (black area 10 cm) whenever the screen's size is known, from the monitor or
+  a calibration; there is no **Show at true size** switch any more. Otherwise it is drawn as large
+  as the dialog allows, with an *Unknown screen size* warning. **Calibrate...** is always there,
+  above that line, and opens a section in the same dialog: drag **Bar for 10 cm** until the bar
+  under the code measures 10 cm with a ruler, and the code resizes with it; **Save calibration**
+  keeps it and folds the section. The **Print** section is folded until you open it (printer,
+  paper, the sheet options beside a preview of the sheet, **Printer properties...**, **Save as
+  PDF...**, **Print**). No second dialog opens from it. The separate print dialog and the
+  panel's **Print...** button are gone; the printed sheet is unchanged (black area exactly 10 cm,
+  actual size). The paper you pick is kept for the next time; until then it is your Windows
+  region's (Letter in the US, Canada, Mexico and a few more, A4 elsewhere). The QR icon of a room
+  in **Rooms** opens this dialog directly for that room, no longer the Room Origin panel.
+- **Visualizer:** a dialog opened by a `qaros://visualizer` link while the Visualizer is hidden
+  fills its window: the window has the regular title bar with the dialog's title ("Set up a
+  device", "Pair Headset", "Room Origin"), resizes by its frame, and its close button closes the
+  dialog. No inner title bar, border or dark margin. The whole window, title bar included, opens
+  inside the screen's work area, smaller when the dialog's size does not fit. With the Visualizer
+  open, these dialogs stay as before.
+- **Visualizer:** Warping Timing is hidden by default, also in Debug mode (a local build starts in
+  Debug): turn it on in Settings > Panels. A fresh start, and Reset Layout, open on the Stream
+  Graph tab; a layout restored from `imgui.ini` keeps the tab you had selected.
+- **Visualizer:** the Devices invite card has two tabs, **All devices** and **HoloLens (legacy)**.
+  **All devices** is the default: its **Pair headset** button opens the Pair Headset dialog (QR code
+  and the field for the code a device shows), the way every device except a HoloLens joins. **HoloLens
+  (legacy)** invites by address (Address, **Invite automatically**, **Clear**, **Invite HoloLens**).
+  The old **By address** and **Headset** tabs and the HoloLens tile are gone.
+- **Visualizer:** a watched stream and a blended camera output are shown in the Stereo Display by
+  an image transform derived from the projection they were rendered with and from your screen:
+  each eye image is shifted, and scaled when its field of view differs from what the screen
+  subtends, so content at the Convergence distance has no parallax and everything keeps its
+  apparent size. The camera blending no longer uses the depth-driven shift, so its depth edges are
+  no longer drawn twice, and its Calibration, Manual frustum and Pop-out fix cards are hidden like a
+  watched stream's. **Stereo shift** (Depth strength) is now a trim on the derived shift, 1 as
+  derived. A stream whose frames carry no projection assumes the field of view the screen
+  subtends. Debug mode: Settings > Debug > Stereo of fixed content picks the image transform or
+  the depth warp as the default, to compare them. The depth warp reprojects each eye through the
+  stream's depth with OpenWarp, from the rendered projection and eye position to the screen's
+  projection at your IPD, so depth edges are not drawn twice; it applies only to streams with
+  depth.
+- **Visualizer:** the Stereo Display editor of a watched stream no longer shows controls that cannot
+  act on it. A watched stream is not re-rendered, so its stereo is adjusted by moving the left and
+  right eye images: the Calibration, Pop-out fix and Manual frustum cards are hidden, and Depth
+  strength is called **Stereo shift** (with a (?) explaining it). IPD, Screen distance,
+  Convergence, the Screen card, Swap eyes, the output choices and Presets are unchanged, and
+  hidden values stay in layouts and presets. A pop-out fix saved on a watched view no longer warps
+  its image.
+- **Visualizer:** The Pair Headset dialog is one modal with both ways to onboard a headset: the
+  one-time QR code, and beside it (under it when the dialog is narrow) a field for the address and
+  code the headset shows, with inline progress and failure. It opens the same from the Devices tab
+  and from the `qaros://visualizer/v1/devices/pair-qr` link, so a source app such as TerraExplorer
+  gets both. The Invite device card's By QR code and By code picks became one Headset pick that
+  opens it.
+- **Device apps:** a headset that loaded a saved anchor at start no longer asks to scan the
+  anchoring QR code while it relocalizes it. It says "Localizing anchor. Look in the direction where
+  the anchoring QR code was placed" until the anchor is tracked. With no saved anchor, or one that
+  cannot be loaded, it still says "Look at the anchoring QR code".
+- **Runtime:** the Blender ANARI add-on streams matte materials on VisRTX: VisRTX showed grain in a
+  headset on faces turned away from the light. Metallic, roughness and emission are ignored on
+  VisRTX; use VisGL for physically based materials.
+- **Runtime:** the Blender ANARI add-on and `qar-anari-demo` render on OSPRay with its SciVis
+  renderer instead of the path tracer: no grain in a headset and about five times the frame rate.
+  Shading is flat and materials are matte on OSPRay (metallic, roughness and emission are ignored);
+  use VisGL or VisRTX for physically based materials.
+- **Runtime:** the Blender ANARI add-on streams scenes with many objects much faster on VisGL:
+  from 16 static objects of one material it merges them into shared surfaces, including objects
+  with several materials or with both smooth and flat faces, and edits move the
+  existing objects instead of recreating the scene. At 3 000 objects one user's stereo frame took
+  13 ms instead of 38 ms. An object you move or edit is drawn on its own while it changes and is
+  merged back 2 s after it stops. Blender's interface no longer waits for a headset's render to
+  update the QAROS panel.
+- **Runtime:** the Blender ANARI add-on sends meshes with shared vertices instead of one per face
+  corner, so VisGL renders them 2.5 to 3.5 times faster (10 000 objects: 14 ms per stereo frame
+  smooth-shaded and 10 ms flat-shaded, instead of 37 ms). Flat-shaded faces are sent without
+  normals and shaded with their face normal; they and sharp edges look the same as before.
+- **Runtime:** ANARI applications streaming on VisGL keep their frames on the GPU on Windows: the
+  bundled VisGL writes colour and depth straight into the stream's Vulkan memory instead of reading
+  them back to the CPU, when its OpenGL driver supports `GL_EXT_memory_object_win32` and
+  `GL_EXT_semaphore_win32` and runs on the hub's GPU. The log shows
+  `GPU frame path: OpenGL -> Vulkan`; otherwise frames take the CPU path as before.
+- **Runtime:** ANARI applications streaming on VisGL or Helide deliver each stereo frame about
+  3 ms sooner: the device copies the frame into GPU memory before writing it into the stream
+  instead of letting the GPU read it from system memory.
+- **Visualizer:** **Source Applications** drops the two folder icons ("Add ROS installation...",
+  "Add Blender folder...") and the import icon from the **Apps** heading. Blender and ROS 2 Rviz are
+  always listed, greyed out with **Locate...** when QAROS does not find them; **Locate...** picks the
+  folder. **+** opens the add dialog with the same four cards in every UI mode: **Add OpenXR
+  app**, **Web app**, **Import app package** (same checks as before) and **Open QAROS supported
+  app**. QAROS supported apps (QAROS API apps such as Blender, Rviz, your own) are added, listed and
+  shown running from Basic mode, and their executable is set in every mode; their launch arguments
+  stay a Developer setting. The QAROS examples (Vulkan cube, ANARI cube) stay in Developer mode. Each row's **...** menu has **Duplicate as new preset** (for example a second
+  Blender with its own executable) and, for your own presets, **Remove preset...**; built-in and
+  detected apps cannot be removed, by the panel or by any other request to the Hub.
+- **Visualizer:** a web app source streams to each headset at the pace of its receiver instead of
+  waiting for the headset's frame request. Its senders render free-running, the page paints on its
+  own cadence, and a headset that is slow, paused or reconnecting is skipped without holding back
+  the others. A paused stream costs no copy, and a continuous page stops painting once every
+  headset is paused. Web apps and profiles need no change.
+- **Visualizer:** the "Enabled" switch of the simulated hand is gone from Controls > Hand: hand mode
+  is always ready from Developer mode up and is entered by holding Space or toggling it with H. A
+  stored setting for it is dropped on load. "Render hand in mixer" is a separate switch and stays
+  ([#601](https://github.com/Quaternar/Quaternar/issues/601)).
+- **Visualizer:** in the Quaternar mouse navigation scheme the middle button (wheel click) drag now
+  pans the camera instead of orbiting; the left button drag on free space (not over a volume, a
+  panel or another target) orbits it, as before. Ctrl + middle drag still dollies, the wheel still
+  zooms, and the other schemes are unchanged. Your saved scheme picks up the new mapping, no action
+  needed.
+- **Visualizer:** a web app source keeps one app volume and one set of served panels across
+  launches: starting the same web app again reopens them (with their pose and scale) instead of
+  creating new ones. The volume is named after the site or page, not the launch: the adaptation's
+  common name (a new `CommonName` field of the adaptation profile, exported with the package; set
+  it through the Visualizer MCP's `profile_save`), else one derived from its address, such as
+  `threejs.org` or `webgl-animation-keyframes.threejs.org`. A web preset's new Instance field (in
+  the preset editor and the Add dialog; `instance_name` on `viz_webapp_create`,
+  `viz_webapp_register` and `viz_source_app_add`) runs a separate copy as
+  `<instance>.<common name>`. The volume shows the preset's name instead of the address. Volumes
+  created per launch by earlier versions stay until closed.
+- **Mixer:** a hand ray pointing into an app volume you are focused on no longer disappears
+  when it misses the content: it reaches on to where it leaves the volume (the far wall), without
+  the glow, and stops at the content with the glow when it hits, so you see the aim close in on a
+  small object. Pointing at no app volume, the ray is drawn 1.5 m long, also without the glow,
+  unless the hand points at a GUI panel or a button in front of it. What the hand acts on is
+  unchanged.
+- **Visualizer:** MCP `profile_list`, `profile_get`, `profile_save` and `profile_finalize` answer
+  each script with its file, size and SHA-256 (`JavaScriptBytes`, `JavaScriptSha256`) instead of
+  its source; pass `include_sources: true` to get the source back.
+- **Visualizer:** every parameter of every Visualizer MCP tool now has a description, including
+  nested ones, the screenshot, target and skill tools, and the profile fields of the web app source
+  tools. `adaptation_derive` takes an optional `address_pattern` for the copy: without it the copy
+  matches the original's addresses and the answer says so. A duplicate's id is also its profile name
+  and folder; its display name is free text.
+- **Visualizer:** `adaptation_list` reports an adaptation you saved yourself (`profile_save`,
+  `profile_finalize`) as `installed`, not `shipped`: both write your adaptations folder, never the
+  shipped ones beside the executable.
+- **Visualizer:** a sample web app adaptation with AR panels ships in the build:
+  `threejs-reference-panels` (the three.js reference app with a model-controls panel and an agent
+  panel, its own app volume name), the starting point for authoring panels. The skills now carry the
+  end-to-end recipe, the title width guide and when the version bump after an export happens.
+- **Visualizer:** an idle window redraws about once a second instead of about four times: the
+  Devices tab looks for USB devices only while it is on screen and the window is neither
+  minimized nor covered, a hub that announces itself unchanged no longer redraws the window, and
+  device lists and hub role answers redraw it at most once a second. Minimized or covered, the
+  Visualizer uses less CPU, and a receiver nobody sees sends its camera pose 10 times a second
+  instead of 200 (200 again as soon as its view is shown, in Debug mode, or while a camera path or
+  follow moves it).
+- **Visualizer:** the window and the receivers it shows run at one frame rate, set in Settings >
+  Frame rate: Auto (default) runs at 60 with a visible receiver and drops to 30 while the PC misses
+  frames or the receivers cannot deliver 60, stepping back up once there is headroom again; Smooth
+  is 60 and Efficient 30. Debug UI mode is uncapped. Panels alone draw at most 30 frames a second
+  and only while something changes (input, a state change, a notification or text cursor);
+  otherwise the window presents nothing but one refresh a second, also while other windows cover
+  it. A receiver whose view is closed or in a hidden tab no longer makes the window draw at its
+  stream's rate (it drew about 94 frames a second on a 60 Hz display). Measured with one visible
+  receiver: 60 frames a second, 15 % GPU 3D and 14 % copy engine, one CPU core (was 94 frames,
+  21 % / 15 %, 1.75 cores); Efficient 30 frames, 6 % / 4 %; a receiver in a hidden tab or a paused
+  one about 4 frames and under 1 % GPU; a covered window one frame a second. The top bar's GUI
+  FPS reads about 4 while idle.
+- **Visualizer:** streams no visible view shows now pause by default (Settings > Streams > Pause
+  streams: When not visible). Settings saved by an earlier version that hold the old default "When
+  window minimized" switch to it once; an older Visualizer no longer reads the new settings file and
+  starts from defaults. A camera's blending pauses only when no view of that camera is shown. Debug
+  UI mode keeps every stream running. Panels whose tab is hidden no longer prepare their content
+  every frame.
+- **Visualizer:** a receiver asks its sender for video only at the window's frame rate; the camera
+  pose goes to the sender at 200 Hz in every mode, so remote views follow camera moves smoothly
+  (it went out at about 156 Hz before). Link statistics, stream statistics and GPU health in the
+  panels update once a second. A minimized Visualizer uses about half a CPU core (was three
+  quarters). A blend is paced by its camera, as before.
+- **Device apps:** an Android headset its operator revoked and then allowed again rejoins within
+  about a second (was up to 30 s); it asks every second for two minutes, then every 5 s, then every
+  30 s while it stays revoked. The hub logs those repeated refusals once every ten minutes.
+- **Device apps:** the OpenXR desktop app serving a HoloLens publishes the state of its
+  Holographic Remoting connection in its peer's `AppCustomPeerInfo`:
+  `{"v":1,"deviceIp":"<address>","remoting":"connecting|connected|disconnected"}` instead of the
+  plain address, updated on every change. The Visualizer can show whether the HoloLens is really
+  connected instead of "Streaming" as soon as the app runs. A reader of the address takes
+  `deviceIp`; connect-by-host still finds the HoloLens by its address.
+- **Visualizer:** in a headset's Wi-Fi step a click on a saved network joins it at once, with no
+  password; a click on another network asks for its password only then. A saved network can be
+  forgotten from its row. **Disconnect** is gone: it forgot the network and its password. Leave a
+  network with **Turn Wi-Fi off**, which keeps every saved password, or click another network.
+  Wi-Fi turned on or off, or a network joined, on the headset itself shows in the step within a
+  few seconds.
+- **Visualizer:** putting an Android headset on Wi-Fi also turns its internet check off
+  (`captive_portal_mode 0`), so it rejoins a network without internet after a restart instead of
+  skipping it. Saved networks out of range are listed too, so they can be forgotten. A saved
+  network Android stopped joining reads `needs its password`, and a click asks for it.
+- **Visualizer:** streams also pause while the window is covered by other windows for a second,
+  not only while it is minimized.
+- **Visualizer:** a receiver that fails to be created three times in a row leaves its session and
+  joins again by itself, as removing and adding it back did.
+- **Visualizer:** a card never holds another card: a notice or confirmation inside a card is a
+  section of it, and buttons at the end of a card wrap instead of running past its edge.
+- **Runtime:** QAROS started at sign-in shows only its tray icon: no startup splash, and the
+  Visualizer stays hidden until you open it from the tray icon.
+- **Visualizer:** the Devices tab is one device list with a section per kind: **HoloLens**
+  (invited by address; Stop, Invite automatically, Forget; its status is the HoloLens' remoting
+  connection: *Connecting to the HoloLens*, *HoloLens not connected* or *Streaming*), **Android
+  headsets** (every headset the hub paired with a code, onboarded or revoked, its status from the
+  headset itself; **Revoke**, **Allow**, **Forget**) and **Cameras** (empty until a camera can join
+  by QR code). A revoked headset stays in the list as *Revoked*: the **Revoked peers** section is
+  gone, and denylist entries no row shows are listed only in the Debug interface mode, each with
+  **Remove**. **Forget** on an Android headset makes the hub forget it, for every Visualizer: pair
+  it again to bring it back. A paired headset's row offers no invite. PC receivers and apps are
+  not devices: the Hubs tab lists them under a hub's **Apps**. The list updates on its own when a
+  headset joins, leaves, reconnects or finishes pairing, a forgotten headset paired again
+  included; there is no **Refresh** button.
+- **Visualizer:** the invite for an Android headset (**Pair headset**, **By code**, the QR code
+  dialog) uses the PC's address on the headset's own network, picked automatically when the PC
+  has several networks.
+- **Runtime:** a headset paired with **Pair headset** (its pushed code, its QR code, or the code
+  the headset shows) now gets a session certificate valid for 30 days instead of 24 hours, and
+  renews it in the session or at its next join after about 22 days. A headset left off for up to
+  37 days rejoins without being paired again (was 8 days). Every other device keeps 24 hours. A
+  headset paired before this update gets 30 days at its next pairing. Cut off a lost headset
+  with **Revoke** in the Devices tab; do not rely on its certificate expiring. With your own
+  certificate authority (EST), its policy must allow 30-day certificates and issue the
+  `qar://device-class/headset` URI name the request carries; a shorter certificate is accepted,
+  and the headset then renews sooner.
+- **Visualizer:** every pairing code the Visualizer shows lives 60 s and appears as soon as its
+  card or dialog opens, without waiting for the hub: the join code under **Let another hub join
+  us** (was valid 10 minutes) and Pair headset's pushed code (was 30 s) and QR code (was 2
+  minutes). While the card or dialog stays open, a new code replaces the shown one a few seconds
+  before it expires; closing it stops the codes. A headset that acknowledged a pushed code now
+  has 90 s to join (was 60 s).
+- **Device apps:** the Android player starts about half a second faster: its video library no
+  longer lists every codec of the headset at each start.
+- **Device apps:** an Android headset's stream no longer needs a network port of its own on the
+  PC to set up its video: the headset and its streamer set it up over the session they both
+  joined, so the streamer opens one UDP port (for the poses) instead of a UDP and a TCP port.
+- **Packaging:** the C API ZIP (`QAROS-CApi-<version>-RelWithDebInfo.zip`) no longer contains
+  `tests/` with the C API test suite; it carries the runtime (`bin/`, `include/`) only.
+- **Device apps:** the Android player installs only on Android 12 (API 31) or newer. On older
+  Android it already failed to start; it is now refused at install.
+- **Runtime:** a child process that keeps exiting within 30 s of its start (a mixer, a streamer)
+  is restarted after a growing delay, 2 s doubling up to 30 s, instead of once a second. A run of
+  30 s or more resets the delay.
+- **Visualizer:** Warping Timing (debug) plots, per source and per mixer step, how old the shown
+  pose is (display time minus the frame's pose time) and how far each frame's first draw missed the
+  tick it was asked for, with p10 / p50 / p90 and on tick / early / late shares, instead of the
+  predicted vs requested timestamps. Needs a mixer of this version; an older one shows a note.
+- **Mixer:** a source that stops delivering is shown from its last frame only for a hold time
+  (500 ms by default), then left out of the picture until its next frame; before, its last frame was
+  shown indefinitely. Set `mixerSourceHoldTimeMs` in the mixer configuration, or
+  `QAR_MIXER_SOURCE_HOLD_MS`, to change the hold time.
+- **Runtime:** a hub's session storage aligns every second with any other hub of the same
+  session, and the hub deletes stored data that is gone once it is 24 h old: removed panels,
+  volumes, rooms, peers and streams, link-statistics history and closed links
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575)).
+- **Device apps:** the Android player sends its poses, hands and hellos straight to every PC of its
+  session instead of through the hub, wherever the headset can reach a PC or a PC the headset (same
+  Wi-Fi, a routed network, a VPN) ([#575](https://github.com/Quaternar/Quaternar/issues/575)). Where
+  neither can reach the other, it falls back to going through the hub about 15 s after joining, and
+  stays so until the player restarts. Allow the PCs' QAROS mesh ports through firewalls between them
+  and the headset. It stamps its messages on its hub's clock, so a headset without network time
+  needs no clock setting.
+- **Visualizer:** `viz_source_app_start` starts any app Source Applications lists, built-in and
+  detected apps included (the Vulkan cube, the StereoKit source), with its defaults, instead of
+  only presets you saved. It still takes no path, arguments or address.
+- **Runtime:** **Exit** in the tray menu shows a "Stopping QAROS Hub…" card at once and the Hub
+  Display window closes right away, instead of staying on screen, unresponsive, while the hub stops.
+- **Runtime:** when the hub stops three times in a row right after starting, the tray offers
+  **Reset to a new install...** then, instead of after ten restarts.
+- **Visualizer:** the mouse drives a GUI panel's title bar the way a headset finger does: a click
+  presses the edit or minimise button under it, and a drag grabs the bar so the panel follows the
+  cursor. A double-click on the title bar still opens the panel in a Visualizer window (on a button it
+  also presses the button twice). A minimised panel can be clicked (its maximise button), and while
+  its size is being edited a drag on a resize handle beside or just inside its edges resizes it.
+- **Visualizer:** the StereoKit source app centres every model it shows and scales it to fit its
+  app volume, also a model file given by its full path, which could be too small, too large or
+  off to the side to see. The fit is the app volume's app scale, so App Volumes shows it and you
+  can change it from there. The StereoKit Scale is now relative to that fit and starts at x1;
+  StereoKit apps and presets saved before this version start at x1 too.
+- **Visualizer:** choosing a built-in StereoKit model (Lion, Engine, Turbine) that the install does
+  not contain now says so in a notification instead of showing an empty or red app volume.
+  Installs leave these large test models out; pick a model file by its full path instead.
+- **Visualizer:** the left mouse button does the same in every mouse scheme. Dragging an app
+  volume's name tag moves the volume itself (the rest of its box, edges included, moves its
+  content); Shift turns it and Ctrl scales
+  the whole volume with its content, about the point you grabbed; the wheel while dragging pushes
+  or pulls it. Ctrl + Shift + left drag on the scene looks around. Shift, Ctrl or Ctrl + Shift with
+  the left button on a GUI panel now pan, zoom or look instead of doing nothing. Shift, Ctrl and
+  Ctrl + Shift + wheel over an app volume no longer turn, scale or push it: they do what the
+  scheme's wheel does.
+- **Visualizer:** Controls > Move offers **Head** and **Content**. Content moves the content of one
+  app volume (the one whose content you last clicked, or the one picked in the App Volumes list or
+  Controls > Move) as if the camera moved through it: the movement keys and the mouse scheme's
+  orbit, pan and zoom move it the opposite way, orbit turns it about its own centre, zoom scales it,
+  right drag still looks around with the camera, and the Frame key frames it. The top bar's `Keys:`
+  status names the mode and switches it with a click, as Ctrl + M does. Moving several app volumes
+  with the keys and the App / World switch are gone.
+- **Visualizer:** the Blender and Unity mouse schemes orbit around and zoom toward the view centre,
+  as those programs do, instead of the point under the cursor; a pan carries the view centre with
+  the view. Unity's wheel now zooms toward the view centre. In Blender, Alt + middle click centres
+  the view on the point under the cursor. Settings describes where each scheme orbits.
+- **Runtime:** the hub refuses a signed request over its per-sender request budget with
+  `HubRequesterBudgetExceeded`, saying when to try again, instead of *HubRequesterNotAuthenticated*.
+- **Visualizer:** a GUI panel's window shows the page as the headset does: laid out at the panel's
+  content size, density and zoom (content scale), and scaled to fit the window, so a responsive
+  page shows the same layout and text size in both. Like the headset's panel, it draws no browser
+  scrollbar.
+- **Visualizer:** a GUI panel's window takes the mouse and a touch screen at once: the mouse
+  clicks, drags (selects text, moves sliders) and wheels, a finger taps and pans. The **Mouse /
+  Touch** and **Mobile / Desktop** switches are gone; the page is always the desktop site, as in
+  the headset.
+- **Runtime:** website panels in the mixer and the Visualizer's browsers keep their certificate
+  data (Chrome Root Store, Certificate Transparency logs, key pins, revoked certificates) current
+  from Google's update service instead of only what the browser shipped with, sharing one copy
+  under the data folder (`cef-components`). Allow outbound HTTPS to `update.googleapis.com` and
+  `*.gvt1.com` for updates; without them the built-in data stays in use and the log says so.
+- **Mixer:** dragging a website panel's page with a hand pointing from out of reach pans it as a
+  finger on the glass does, up / down and sideways, instead of selecting text. A far tap still
+  clicks, a far pinch on the title bar still moves the panel, and a slider still follows the drag.
+  Stream panels and the panel gesture events applications receive are unchanged.
+- **Visualizer:** the plain mouse wheel over a GUI panel in the Texture Grid scrolls the panel's
+  page (horizontal wheel sideways) instead of moving the camera. Over the title bar the wheel does
+  nothing; elsewhere it still moves the camera.
+- **Visualizer:** letting go of **Space** (or toggling **H** off) no longer leaves the simulated
+  hand standing where it was: over a Texture Grid it becomes the mouse's pointer, elsewhere it is
+  removed from the mixer's scene.
+- **Visualizer:** the simulated hand takes the mouse while **Space** is held, or until **H** is
+  pressed again, in every navigation scheme (was: hold Alt). Alt is free in the Quaternar scheme
+  and a camera key in the Maya, 3ds Max, Cinema 4D, Houdini, Unity and Unreal schemes. Backspace
+  cancels the hand's gesture while it has the mouse. Both keys are rebindable in Settings >
+  Keybindings; the Controls panel help follows the bindings.
+- **Packaging:** the setup no longer starts QAROS during the install. Its last page asks:
+  **Start QAROS now** (checked), **Start QAROS when I sign in** (checked; only the user running
+  the setup) and **Start QAROS when anyone signs in to this PC** (unchecked; an upgrade keeps the
+  previous choice). Nothing starts after a failed install. Silent installs start the hub and
+  register the sign-in start for the account running the setup; `/NoStart` and `/NoAutostart` turn
+  either off, `/AutostartAllUsers` adds every user.
+- **Packaging:** the setup checks that the QAROS System Service can open its protected storage
+  before anything starts. A storage the service cannot use, as an upgrade could leave behind, is
+  repaired, or reset as by uninstalling with the data deleted (the licence has to be activated
+  again and devices paired again); if it still cannot be used, the setup stops with a message
+  naming the logs in `%ProgramData%\Quaternar\Qaros\logs`.
+- **Packaging:** the QAROS problem dialog offers **Restart hub** and **Reset to a new install...**
+  (the reset dialog). Ticking **Also remove data owned by the QAROS service (machine-wide)** there
+  resets the protected storage of an installed QAROS, as reinstalling does: Windows asks for an
+  administrator, and the hub secrets of every user on the PC and the licence are deleted; if you
+  decline, the rest of the reset still runs. Without the tick no administrator is needed. A crash
+  report now includes the QAROS System Service's logs.
+- **Device apps:** the Meta Quest and METALENSE player anchors only to a scene origin code (text
+  `qar-remoting:<address>;<placement>[;<room>]`, the code the Visualizer shows and prints), as the
+  HoloLens player does. Any other QR code in view, the Visualizer's pairing code included, no longer
+  moves the scene. A home-made code still works when it encodes `qar-remoting:0_0_0_0;S`.
+- **Visualizer:** stereo output windows open on a monitor other than the one the Visualizer is on,
+  so they no longer cover it. A display you pick for an output is remembered and kept while it is
+  connected, even the Visualizer's own. With a single monitor the output opens behind the
+  Visualizer and its taskbar button flashes briefly. If an output's display is disconnected, the
+  output moves to another screen and returns when the display is back, instead of closing.
+- **Visualizer:** after a hub restart (QAROS started again, or a role or licence change) the
+  Visualizer opens on Session ▸ Devices. Closing and reopening the Visualizer while the hub keeps
+  running brings it back on the sidebar group and tab you left, collapsed or not.
+- **Visualizer:** QR codes (pairing and the scene origin marker) open at half brightness, which a
+  phone or headset camera scans without over-exposing a bright monitor; the slider still goes to
+  full.
+- **Runtime:** **Start QAROS at login** in the tray menu turns the start at sign-in on or off for
+  that user only, also where the setup starts QAROS for every user. The choice stays across
+  sign-ins, upgrades and reinstalls. Development builds never start at sign-in.
+- **Visualizer:** the Session button opens on **Devices**; its tabs are now Devices, Rooms, Hubs.
+  The Devices tab shows the **Invite device** form without a click; **Clear** (was Cancel) empties
+  it and **Invite device** in the title folds it. **HoloLens** is now tagged *Legacy* and
+  **Headset** is the kind selected by default: pick HoloLens explicitly to invite one. Revoked
+  peers are folded under **Revoked peers (N)**, each with its name, device, reason, PC and when it
+  was last seen instead of a bare id.
+- **Visualizer:** the Devices tab's invite form has no **Label**: the address and the device kind
+  identify a device. A device row shows the name its player reports, else its address; a name
+  stored with an older entry is no longer shown. **Forget** also stops the device's player, on
+  whichever hub runs it.
+- **Runtime:** crash dumps of every QAROS program (hub, launcher, visualizer, sources) are a
+  few MB: the crashing stacks and the QAROS memory they point at, without other libraries' memory
+  or a host application's data. On Linux the dump is `<stem>.core` next to the report instead of
+  a kernel core of the whole process. Only Debug and RelWithDebInfo builds write the whole
+  process. `QAR_CRASH_DUMPER` is no longer read. Each program keeps its newest 10 dumps.
+- **Runtime:** the QAROS tray (`qaros-hub-service`) is one program on Windows and Linux, drawn
+  with SDL3 and Dear ImGui: the splash, the "Allow <app> to join QAROS?" prompt, the problem
+  dialog and the confirmations look like the Hub Display and no longer block the tray while open.
+  The tray menu, balloons and left-click to open the Hub Display stay as they were on Windows.
+  The approval prompt's **Allow** button can be clicked one second after the prompt appears, so a
+  click meant for another window cannot approve an app; closing the prompt still denies. On
+  Windows the prompt works with screen readers: **Deny** and **Allow** are real buttons that
+  Narrator, NVDA and UI Automation can press (Invoke). Deny has the keyboard focus and answers
+  Space, Enter or Escape; Allow is never pressed by a key. On Linux
+  the tray gains the splash, the problem dialog with crash reports, the member-hub options,
+  notices in a corner window, "Start QAROS at login", and replacing a running tray; the "App
+  approvals" submenu is gone, the prompt opens by itself.
+- **Packaging:** an installed hub's certificate authority keys now live in the QAROS System
+  Service, in the TPM where one works, and never enter the hub's process: the service signs each
+  certificate after checking it is a short device or app certificate (or the CA's own). A key in
+  the TPM signs only with a secret the service keeps in its own store, so no other Windows service
+  on the PC can sign with it. An
+  existing hub's keys move there at its first start after the upgrade; its CA, its devices and
+  their certificates stay as they are. Without a usable TPM the keys are kept in the Windows
+  software key store, and the service log says "CA key not hardware-protected". Keys the hub no
+  longer uses (a replaced intermediate, a discarded previous session) are deleted about an hour
+  later, and uninstalling with the data deleted also deletes the hub's CA keys.
+- **Visualizer:** when the hub's certificate authority keys are not hardware-protected (no usable
+  TPM), the tray shows a warning balloon and the Hub Display a popup saying so, once per hub
+  start. The hub works as before; use a PC with a TPM 2.0 where an administrator of the PC must
+  not be able to copy the keys.
+- **Runtime:** an installed QAROS has one licence per PC. Users of a shared PC no longer activate
+  per user: the licence activated by any user (or by `qaros-license.exe` run by any user, without
+  administrator rights) serves every Windows user and every hub data root of the PC. A licence
+  already activated by a user moves to the PC at that user's next hub start; when several users
+  had one, the PC keeps the newest valid one. A user's factory reset no longer removes the
+  licence; uninstalling with the data deleted does. Development hubs keep their licence per user.
+- **Device apps:** `qar-vulkan-source` (the bundled Vulkan cube) joins with the app tag
+  `vulkan-cube.examples.qaros`: a restarted cube gets its previous peer id back instead of showing
+  as a new app; it prints `Joined QAROS as peer <id>`. Its "no longer matches" message points to
+  Source Applications > Approved apps.
+- **Runtime:** the services and apps the launcher starts (sources, the mixer, device desktops,
+  the OpenXR runtime) keep their identities in memory: each start joins with a fresh invite under
+  its planned peer and nothing is written to the secure store. Identities earlier versions stored
+  for them are no longer read. The visualizer's own sessions still keep theirs.
+- **Visualizer:** a StereoKit source app's model is picked only with Browse, which lists the model
+  formats the app loads (glb, gltf, obj, stl, ply); the list of built-in models is gone. The panel
+  shows the model's file name, its full path on hover.
+- **Visualizer:** the app is now called Hub Display, with window title `QAROS Hub`. The default
+  rail is Session, View, Sources, Controls, Content (Panels, Volumes), and Tools (Origin, Observer).
+  Camera Sources is labelled Observer; unnamed receivers are numbered (`Display Receiver 1`,
+  `Display Receiver 2`, ...), reusing the lowest free number. Existing names and custom layouts
+  remain; use Settings > Panels > Reset Layout to apply the new arrangement.
+- **Visualizer:** receivers and 3D cameras are kept when the hub starts a new session
+  (Connection panel, **New session**): they reconnect on their own, each joining the new session
+  with a new code, and their views stay bound. Before, the visualizer came back with no receivers.
+  Watch streams still close, as on any restart. Nothing to do.
+- **Runtime:** a device or app whose certificate expired renews it inside the 7-day grace only
+  while it is the newest certificate the hub issued to it. An older expired copy, for example a
+  restored backup, is refused and pairs again; a device that renewed in time never notices
+  (ADR-0435).
+- **Device apps:** the OpenXR desktop runtime, the Android streamer and the HoloLens desktop app
+  stay running while their session follows the hub into a new session, and log each state. When the
+  hub no longer renews the device they log that it must be paired again; started by the launcher,
+  they exit so the launcher starts them again with a fresh launch secret, which is not reported as
+  a crash loop.
+- **Runtime:** *New session…* no longer stops what the hub's launcher runs: the mixer, target
+  apps, pipelines and launched apps keep running and move into the new session themselves, as
+  paired devices do, and a device the hub hosts stays claimed by it. Only the visualizer is still
+  closed and reopened under the tray's splash.
+  A member hub follows its primary's new session in place instead of restarting: its devices and
+  apps stay up, and the tray's tooltip reads "Following <primary>'s new session" meanwhile (no
+  splash). It restarts only when the in-place move fails. A member its primary removed does not
+  follow, and its devices and apps say they must be paired again. (#239, #240)
+- **Runtime:** joining another hub always makes this hub a **member** of it (*Join hub*, formerly
+  hub-connect): the other hub becomes the primary and keeps the security (certificates,
+  approvals, revocation, new sessions); the member runs its own apps, mixer, targets and headsets
+  and has no certificate authority of its own. It is admitted once, by *Allow* on the primary, by
+  the primary's 8-digit join code, or by a member-hub invitation an approved app hands over, and
+  rejoins by itself afterwards, also when the primary starts a new session. A hub that joins by
+  invitation takes its paired headsets, launcher children and approved local apps into the
+  primary's session without new codes or prompts; a hub whose certificates came from EST cannot,
+  and its devices are paired again. A device code typed into *Join hub* is refused without
+  spending the join code. (#208, #245, #249)
+- **Runtime:** the hub's certificate authority runs inside the hub (no separate CA process or
+  port). (#253)
+- **Visualizer:** the Connection panel shows the session the hub hosts and its generation under
+  the Session title. (#212)
+- **Visualizer:** Cameras: Motion is one block (Static / Walk with Pause walk / Resume walk and
+  Restart walk); Reset placement sits under the placement rows; the stream button reads Pause
+  stream / Resume stream. RGB-D image and Point-cloud scene are independent outputs and can both be
+  on.
+- **Visualizer:** App Volumes and GUI Panels rows no longer show a status dot. Removing an app
+  volume or closing a GUI panel takes it out of the list; the Create card lists removed ones with
+  when they were closed, and Restore brings one back with its placement, size, devices or
+  visibility, and gestures.
+- **Visualizer:** A GUI panel's web page loads in the Visualizer only when its eye is clicked;
+  selecting, creating or restoring a panel, or a restart, no longer opens a browser.
+- **Visualizer:** the simulated hand (hold **Space** or press **H**, Controls > Hand) is offered
+  only in Developer mode and up; below that the keys do nothing, the Hand tab is gone and the
+  keyboard map and Keybindings do not list them. The mouse ray's hit marker is hidden while the
+  hand has the mouse.
+- **Visualizer:** the GUI panel editor no longer offers Pitch / Yaw / Roll: the mixer turns every
+  panel to face the user, so a rotation set there never held. Position, size and content scale
+  stay.
+- **Visualizer:** who an app volume or GUI panel is shown to is edited in Basic mode too: the app
+  volume editor's Devices list (Renders; Focused stays Developer) and the GUI panel editor's
+  Visible to. Both list only connected target apps. The gesture Allowed picker offers connected
+  devices and keeps an allowed one that left listed, marked Not connected, so it can be removed.
+- **Visualizer:** App Volume editor: Gesture modes is one flat card: allowed peers as checkboxes,
+  modes as summary rows, presets (Move / Move+scale / Full / Custom), rules as compact rows with
+  their form inline, and new effect, axis and rule-order controls. The Gesture recognition card is
+  shown only in Debug mode.
+- **Visualizer:** Every scale and multiplier field (app, content and model scale, navigation speed,
+  SpaceMouse speed and sensitivity, gesture precision, point-cloud diameter scale, depth strength,
+  stereo calibration scales, pop-out strength, depth display scale) is a logarithmic number field:
+  drag to scale, double-click to type an exact value, no slider range. Depth strength replaces the
+  coarse + fine pair.
+- **Visualizer:** Hubs tab: a hub's Room is picked from the session's rooms (Room 0 is the default
+  and the room of a hub with none); an older free-text room shows as an unknown room until a real
+  one is chosen.
+- **Visualizer:** The window is a sidebar and a workspace. Panels open from a rail of groups
+  (Session, Content, Cameras, View, Tools) as tabs; drag a tab onto the rail to move it into
+  another group or onto a button of its own (Reset layout restores the default). The right and
+  bottom docks are gone: Stream Graph and Logs (now shown by default) are tabs beside the 3D view,
+  Warping Timing only in Debug mode, and GUI panel viewers open beside it. The room origin code moved from Devices to its own Room Origin
+  panel in Tools. A saved layout from an older version is rebuilt once.
+- **Visualizer:** App Volumes and GUI Panels are lists: one row per item with a select box, trash
+  and ⋯ menu; click a row to edit it below, and use the selection bar to remove, show, minimize,
+  hide or close several at once. App volume angles are Yaw / Pitch / Roll in degrees; World or App
+  placement is available to everyone, with App scale (0.1–10) in App. Gesture recognition moved from
+  the App Volume Gestures panel into App Volumes (Developer). Every GUI panel opens in a window of
+  its own beside the 3D view.
+- **Visualizer:** Stereo Display lists Receivers and Views: Add receiver creates, starts and shows a
+  receiver; a view's stream, output and every stereo parameter are in its editor, grouped in cards.
+  Every new receiver opens as a texture grid tab in the workspace. The Stream Graph's receivers are a
+  collapsible strip at the bottom with play/pause, show and remove on each, beside the watched
+  streams.
+- **Visualizer:** Controls has Move / Hand / Paths tabs. Keys move (Head / Volumes) is the
+  one place to choose what the movement keys move, and the top bar shows it. Move speed, rotate
+  speed and speed step are Developer only; Basic keeps Speed ×.
+- **Visualizer:** Camera Sources is a list; a camera's editor sets what it streams as (RGB-D image,
+  point-cloud scene, or both), its placement in Yaw / Pitch / Roll and, in Developer, its capture
+  and tracking.
+- **Visualizer:** Connection shows the session only (hubs, their apps and devices). Remembered
+  devices, inviting by address and setting up or updating a device are in the Devices tab, with
+  steps per device type.
+- **Visualizer:** the sidebar's tabs and the workspace's tabs look the same, with an accent line
+  under the selected tab and muted labels on the others.
+- **Visualizer:** a camera's blending receiver is named after the camera ("<camera> blending")
+  unless you rename it; your name is kept across restarts.
+- **Visualizer:** Source Applications lists apps as compact rows with one toolbar: search by name,
+  address or path; filter by type (OpenXR / Web / Native) and sort by name or date added from icon
+  buttons; pages of 20.
+- **Visualizer:** the Settings window sizes itself to the application window and follows resizes;
+  drag its corner to resize it. The General section fits on a laptop screen without scrolling.
+- **Visualizer:** **Remove** on a receiver no longer asks for confirmation and no longer deletes
+  its identity: the next receiver you add reuses it and rejoins as the same peer, so adding and
+  removing receivers no longer piles up peers, mixers and source apps on the hub (ADR-0457).
+- **Visualizer:** the web app source's target list and its streaming skip receivers that are no
+  longer connected (ADR-0455).
+- **Runtime:** the hub deletes a peer it has not seen for 7 days, and a removed one as soon as it is
+  gone, so long-lived sessions stop accumulating peers (ADR-0456).
+- **Visualizer:** web app source pages reserve at least 1024x1024 pixels for the page's own view,
+  so its text is sharp in the page panel: the bundled three.js, WebGL aquarium and WebGPU samples
+  now use 1024x1024 (were 640x360 and 600x600). Saving an adaptation profile through the
+  Visualizer MCP with a smaller page region is refused; 0x0 (no region) still works. Profiles
+  already saved keep their region.
+- **Packaging:** the Android and HoloLens players have versions of their own, raised only when
+  the player changes, so a new QAROS release no longer offers every headset an update. The APK and
+  msix names, the Android app version and the HoloLens package version carry the player's version
+  (`QAROS Player MetaLens 0.10.0.apk` in a QAROS 0.10.0 setup, kept by a later QAROS release whose
+  player did not change); the devices README lists both.
+- **Device apps:** a QAROS hub started from an uninstalled build or folder serves local source-app
+  enrollment on its instance's predefined pipe (`QAR_INSTANCE`, else `default`), release builds
+  included. `qar-vulkan-source` loads the runtime beside its executable when QAROS is not
+  installed, so it joins such a hub.
+- **Visualizer:** the Connection panel is split into **Hubs** (the session, *New session*,
+  *Leave session* on a member hub, member hubs, joining another hub or letting one join) and
+  **Devices** (HoloLens, plus Meta Quest and Metalens marked Legacy, invited by address).
+  Approving and revoking source apps moved to the Source Applications panel. Reset stored data is
+  gone: *New session* retires the hub's session instead. An offline hub says when it was last
+  seen, as recorded by the hub.
+- **Visualizer:** Stream Graph nodes show their device type with an icon, and a receiver of this
+  Visualizer goes by its receiver name. Clicking a stream's eye button watches or stops watching
+  it; its receivers list moved to right-click.
+- **Visualizer:** panels share one look: icon-only dock tabs, 30 px controls, confirmations inside
+  the card, and light/dark is a switch next to Settings.
+- **Runtime:** a new hub is named after the PC's host name instead of a generated name such as
+  "clever_darwin". A hub that already saved a name keeps it; rename it in Connection › Hubs › Edit.
+- **Visualizer:** a web app source whose adaptation profile sets a `PageRegion` keeps that size
+  instead of the 2048x2048 responsive preview reservation. The streamed atlas is sized to the page
+  region plus the connected users' views, so a 640x360 page region no longer adds a 2048x2048 block
+  to every frame.
+- **Packaging:** setup exes come only from `packaging/build_release.py` and the Windows release
+  workflow (`packaging/ci_release.py`): the moving `dev` pre-release built on every merge to `main`
+  and the CPack presets `installer_x64-release[-demo]`, `win64-release-packages[-demo]` and
+  `win64-rel-nuget` are gone. The workflow publishes tag releases and `dev-<branch>` pre-releases.
+- **Visualizer:** web app previews resize responsively with their panel, provide browser navigation and
+  URL controls, and open new-window links in the system browser. Launch focuses the local preview.
+  Three.js previews retain the complete website HTML and controls in their original layout,
+  with ordinary page mouse coordinates and drag sensitivity; streamed user views contain only the
+  3D scene, rendered on a separate surface.
+- **Visualizer:** web app sources render at most 60 FPS (was 120), so streaming to a receiver does
+  not push the page past a comfortable frame budget. Mixer reprojection keeps its own cadence.
+  A source stops rendering after 2 s without any receiver asking for frames, resuming on the
+  next request. Shared three.js sources render each receiver's newest head pose rather than the
+  pose of its last frame request, render each eye at half resolution (`RenderScale` 0.5; set it
+  in a profile for more), and size the stream surface to the connected receivers instead of
+  8000x4096. The page preview no longer slows down and lags behind input once a receiver
+  connects.
+- **Visualizer:** shared three.js profiles render all users on every Chromium animation tick
+  using their latest known cameras. Sending a completed texture no longer waits for its next
+  camera update to paint; each texture retains its original pose and depth for mixer warping.
+  Custom profiles retain request-based pacing unless they opt into `ContinuousRendering`.
+- **Runtime:** `hub-state.json` is version 2 and holds the session record (id, generation, retired
+  sessions). Session data (stored shared objects, the visualizer's receivers) moves once to
+  `sessions/<sessionId>/` under the data root; a retired session is deleted as one directory.
+  Retired launcher log folders are deleted after 14 days. (#211)
+- **Visualizer:** an app that asks to join QAROS is asked once, by the tray's "Allow <app> to join
+  QAROS?" prompt. The Visualizer no longer opens a second prompt of its own; its Source
+  Applications panel still lists the app under *Waiting for approval* with Deny / Approve. On a
+  primary hub the tray's prompt offers the member-hub options: *Applies to member hubs*, *May bring
+  in member hubs* and how many (1-100, default 5). A member hub's prompt shows Allow / Deny only and
+  approves for its own PC.
+- **Mixer:** website GUI panels are rendered by Chromium (CEF) instead of Ultralight, so pages
+  render as in a desktop Chrome, and the panel shows the newest paint instead of holding the
+  mixer until a page has loaded. The panel's content scale is Chromium's page zoom: every
+  control, font and image grows and the page reflows, as Ctrl+ does in a desktop browser.
+  Select lists, date pickers and colour pickers open where they are tapped and take the finger.
+  Opening and closing website panels no longer stalls the mixer. `target=_blank` links and
+  `window.open` do nothing yet, and website panels take no keyboard input.
+- **Mixer:** frames from a paced source app (Warping mode) are drawn on the display tick they were
+  rendered for more often, and the pose a source predicts follows its real latency steadily: the
+  mixer measures a source's latency from the moment it sends the request, asks for the pose of that
+  moment, sends a held request when the pacer wanted it instead of up to a frame early, ignores
+  latency measured across a stalled step, and moves the lead only when most recent frames agree on
+  a new value.
+- **C API:** `qar_app_volumes_update_used_by_peers` sends its additions and removals as one
+  change: the hub applies all of them or none, instead of one change per peer.
+- **SDK:** the shared-object protocol is 3: a peer and a hub of earlier 0.10 builds refuse each
+  other's shared-object changes with a logged error naming both protocols. Stored state is read
+  across the change.
+- **SDK:** an app volume, panel or room brought into a new session after a hub move whose stored
+  display name holds a character display names may no longer hold is proposed with a space in its
+  place (logged) instead of being refused; a refused re-create no longer leaves its follow-ups
+  waiting.
+- **SDK:** a closed app volume, GUI panel or room is removed by the hub once nothing wrote it for
+  an hour (`StoredDataRetention::ClosedSharedObjects`), and a hub move no longer brings a closed one
+  back into the new session. `GetOrCreate*` of its commonName creates it again under the same id,
+  as it reopened a closed one; a call on a removed one answers the kind's "does not exist" code.
+- **SDK:** an update naming a commonName other than its object's (a follow-up, or a builder with an
+  id of another object) is refused with the kind's builder code instead of being accepted as a
+  no-op; the commonName is fixed at create.
+- **C API:** an app scale that is not positive is `QAR_STATUS_ARGUMENT_NOT_SUPPORTED` from
+  `qar_app_volumes_get_or_create` too, as from the app scale change, and the hub refuses such a
+  scale in a proposal instead of storing it.
+- **SDK:** `IMediaStreamControl::CloseStream` of a stream never known to the session answers
+  `ArgumentNotSupported` instead of `MediaStreamingStreamIsClosed`.
+- **SDK:** `AwaitAppVolume` and `WaitForAppVolume` read the session's view only and never ask the
+  storage, so `AwaitAppVolume` no longer blocks its executor's thread for about 2 s per read; the
+  C API's app volume changes and `qar_gui_panels_set_stream` no longer wait about 2 s for a storage
+  read before they publish.
+- **SDK:** a validly signed app that onboards as a local app (`QarOnboardLocalAppExt`) after the user
+  approved the same product of the same publisher is admitted from any folder on the hub's PC. A
+  copy, a moved install or a second installation no longer fails with
+  `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH` (1808); it stays for a file at the approved location
+  that was replaced or is no longer validly signed. An unsigned app copied to another folder is
+  no longer refused either: the user is asked to approve that copy.
+- **C API:** `qar_gui_panels_get_or_create` on a served panel that is already open now applies a
+  `QarGuiPanelServedContentExt` naming a bundle this session published: the panel shows that page.
+  An app that restarts under a new peer id reopens its panel on its new bundle instead of the
+  earlier run's, which stayed blank. Pose, size, display name and visibility of the open panel
+  still stay as they are. Drop a `qar_gui_panels_set_served_content` call made only for this.
+- **C#:** `GuiPanelControl.GetOrCreate` on an open panel applies `GuiPanelOptions.ServedContent`
+  the same way.
+- **SDK:** the C++ wrapper `qar-streaming-cpp` compiles with MSVC without `/permissive-` (no
+  alternative tokens such as `not` in its headers) and warning-free at `/W4`. The CMake target
+  `qar-streaming-c-headers` no longer requires `c_std_11`, so a C++-only project links it without
+  enabling C; it still adds `QAR_ENABLE_DYNAMIC_LOADING` to every consumer. Adding
+  `qaros/qar-streaming-c` with `add_subdirectory` builds no C examples unless
+  `QAROS_BUILD_EXAMPLES` is on; it defaults ON only when qaros is the top-level project, and
+  `BUILD_CORE_EXAMPLES` still sets its default.
+- **SDK:** an app on a hub's PC links only to that hub, over loopback
+  ([#579](https://github.com/Quaternar/Quaternar/issues/579)): it dials the hub's router at
+  `127.0.0.1` as a client of that router (no peer-to-peer mesh with the other apps of the PC:
+  a full mesh stalled from ~35-40 QUIC sessions, client mode ran 80 fine), and reaches the apps of
+  another hub through its own hub and that hub (one hop between hubs). An app on a member hub's PC no longer
+  reaches the primary while its member hub is down: its reliable messages wait in its outbox until
+  the hub is back. Hubs link to every hub of the session they know, and a hub starts and serves its
+  own PC while no other hub answers. Nothing to configure.
+- **SDK:** links, storage and receive path of every session
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575)):
+  - Every secured (QUIC) link uses the BBR congestion controller instead of Cubic: on lossy Wi-Fi,
+    reliable traffic keeps a few milliseconds of latency where it reached hundreds.
+  - Every session, hub and relay stores the statistics of its zenoh links once a second (RTT,
+    congestion window, loss, throughput per priority), stamped and aged on the session clock, so a
+    headset whose own clock runs off still sees fresh links. `IMessaging::LinkHistory` returns at
+    most the last 24 h.
+  - Several hubs of one session converge: a network split leaves each side editing shared objects,
+    and after it heals every field shows its last edit, also when the network splits and heals
+    several times within seconds. A hub deletes a removed shared object from its storage 24 h after
+    the removal, and link-statistics history and closed links after 24 h.
+  - Poses and hands are decoded on the receive thread without a copy, and a pose or hands sample
+    larger than its format allows is dropped. A received sample builds no Trace log line while Trace
+    is off, and a polled `TryRead` allocates nothing (~0.8 µs less per queued sample).
+- **SDK:** a render sender renders a target app's own lock-step request with exactly the pose sent
+  with it, also while the app streams tracking poses between requests: a pose newer than the last
+  frame's no longer ends the wait unless it is at or after the requested time. The wait for that
+  pose lasts at most 20 ms; a pose that comes later is not waited for, and the frame is rendered
+  with the newest tracking pose predicted to the requested time. Requests from another consumer,
+  and every paced request (`RenderForWhenShown`, which the warping mixer sends under the target's
+  id), are paired as before: any newer tracking pose ends the wait.
+- **C API:** a sender or receiver given the application's own graphics device on another GPU than
+  the session's (`QarStreamParamsVulkan`, or the D3D11 device in `QarStreamParamsD3D11`) is refused
+  when it is created, with the new `QAR_STATUS_MEDIA_STREAMING_DEVICE_ON_ANOTHER_ADAPTER` (609)
+  naming both adapters. Before, it failed later with `QAR_STATUS_VULKAN_ERROR` "Physical device
+  mismatch". Create the device on the adapter `qar_session_get_graphics_device_id` reports.
+- **C#:** `StatusCode.MediaStreamingDeviceOnAnotherAdapter` (609), as in the C API.
+- **SDK:** a render sender predicts a frame's pose when the application first reads it (a view's
+  pose or FOV, the frame's pose time), from the newest head pose then, and, when the mixer asks for
+  it, for when the frame is shown: the requested time plus how long the request waited for the
+  application. The shift is bounded by the request's own lead or twice the application's usual
+  wait, so a stalled application gets no pose predicted into its stall. Read the pose when you
+  start rendering, and report it unchanged; `FramePoseTimestamp` may differ from the requested
+  time.
+- **C API:** `qar_render_sender_try_begin_frame` documents its loop pattern: a loop polling once per
+  frame calls it again right after `qar_render_sender_show_frame`, so the wait runs while the loop
+  is idle. Started only at the next frame, it served the stream every other frame.
+- **C API:** frame calls on one render or video sender (begin, frame-get, show) no longer have to
+  come from one thread. They must still be serialized: each returns, or for an asynchronous begin
+  completes, before the next starts. Code that keeps them on one thread is unaffected.
+- **SDK:** a local app onboarding starts the hub as `qaros.exe` (falling back to
+  `qaros-hub-service.exe` on an older installation).
+- **C API:** a crash in an application using `qar-streaming-c` leaves a small dump of the
+  crashing stacks, without the application's own data or other libraries' memory: `<stem>.dmp` on
+  Windows, `<stem>.core` on Linux.
+- **SDK:** a certificate renewal no longer reconnects: the session takes the renewed certificate
+  in place, and no peer sees it leave. A certificate's expiry no longer closes an
+  established link; it is checked at every new connection instead. A device a hub revoked is cut
+  off on the transport as soon as a session reads the hub's revocation list, every unexpired
+  certificate of that device included, not only refused by the application.
+- **SDK:** a device whose certificate expired less than 7 days ago renews it with no code, as the
+  same peer, when it rejoins or while it runs; past 7 days it is paired again
+  (`QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`). A trust bundle that only adds a CA no longer
+  reconnects the session either.
+- **SDK:** a session follows its hub's session rotations in place (docs/hub-topology D11, #239):
+  on the hub's signed rotation notice, or when the hub's liveliness has been gone 6 s and a probe
+  names another session, it renews its certificate into the next session (a local app enrolls
+  again over the pipe) and moves there. The `ISession` / `QarSession` and every handle stay valid
+  and only `Id()` / `qar_session_get_id` changes. Applications no longer need to rejoin after a
+  rotation; an application paired through a member hub moves once its member has. A device offline
+  across more than two rotations, or one the hub revoked, must be paired again.
+- **SDK:** a session moving to its hub's next session retries sooner: a renewal the hub answers
+  busy (`HubLifecycleOperationRunning`, a hub still carrying its devices into its new primary,
+  #262) is retried after half a second, during a move the wait between attempts is at most 4 s,
+  and a newer notice or the hub's liveliness coming back ends the wait at once. A local app whose
+  leaf renewal fails retries after 1 s, doubling, instead of 5 s, so a short leaf no longer
+  expires while its hub restarts.
+- **SDK:** local app onboarding refusals say why and what to do (`OnboardingApprovalDenied`,
+  `OnboardingAppIdentityMismatch`, `OnboardingApprovalTimeout`): the approval that names the app
+  and what no longer matches (moved, rebuilt, re-signed, a copy), who denied it, how long the
+  prompt waited. On a member hub, a signed app that runs from a folder a non-administrator can
+  write is refused at once with `OnboardingApprovalDenied` and "install it under Program Files",
+  instead of asking the primary and then reporting a revoked approval; the primary answers a
+  member's request from an existing approval only when that approval admits the app where the
+  member has it installed. Status codes are unchanged.
+- **SDK:** `RejoinLastSession` / `qar_runtime_rejoin` ask the hub which session it serves first
+  (D10): another session renews into it and joins it with no code, the same session rejoins, a hub
+  that does not answer is rejoined as before, and a certificate the hub refuses fails with
+  `OnboardingRePairRequired` (`QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`).
+- **SDK:** the discovery announcement is version 3: a hub announces its role (`hubRole`: primary,
+  or member with its primary's id and name) under the announcement's signature (docs/hub-topology
+  D38). Readers accept versions 2 and 3 and refuse newer ones, unknown fields and `hubRole` in a
+  version 2 announcement; a client that reads only version 2 refuses a new hub's announcement.
+- **SDK:** a device whose session certificate has expired asks its hub once more before it
+  reports `OnboardingRePairRequired` (`QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`), instead of
+  failing at once without contacting the hub. Every hub still refuses it, except a hub that carried
+  that device into a primary's session when it joined it (#262); there it renews without a code,
+  once the device proves with its renewal that it holds the key of the certificate it presents.
+- **SDK:** on Android, with neither `QAR_APP_DATA_ROOT` nor `HOME` set, the data root no longer
+  falls back to the shared `/data/local/tmp`: an error is logged and a relative `quaternar`
+  directory is used, where writes normally fail. Set `QAR_APP_DATA_ROOT` (or the launch config's
+  `runtimeStorageRoot`) to the app's `getFilesDir()`.
+- **SDK:** `IRoomControl::GetOffsetForPeer`: a peer that is a member of several rooms takes the
+  offset of the first room in a fixed order (numeric room names ascending, then by name) instead of
+  an arbitrary one.
+- **SDK:** `qar_peer_spec_get_app_state` (C# `PeerSpec.AppState`) reports a peer the hub no longer
+  sees in the session as `QAR_APP_STATE_SHUTTING_DOWN`, whatever it last published, and as it was
+  again once it is back. A killed target app no longer reads `Running` forever, so an
+  app that streams to `Running` targets stops opening senders that never connect.
+- **SDK:** `qar_query_peer_specs` and `qar_query_peer_specs_count` no longer list retired peers
+  (`QAR_APP_STATE_RETIRED`); an update subscription still reports a peer turning retired.
+  `qar_session_find_render_target` skips target apps that have left, so a visualizer index counts
+  live receivers only.
+- **SDK:** the hub deletes the spec of a peer it has not seen for 7 days, and of a retired peer as
+  soon as it is gone. Such a peer drops out of every peer list; joining again under the
+  same id lists it again.
+- **SDK:** an empty `QarRuntimeInit::runtime_binaries_folder_path` (C#
+  `RuntimeOptions.RuntimeBinariesFolderPath` null) now means the folder the loaded
+  `qar-streaming-c` came from, the installed `bin/`, instead of the current working directory, where
+  no launcher was found and peer invites never completed. Leave it empty.
+- **SDK:** the hub assigns every device's peer id. A pairing code is bound to one peer id, planned
+  when the code is minted or assigned during the handshake; a request for another id is refused.
+  (#214)
+- **SDK:** discovery input is validated strictly: whitespace-only codes, codes or invitation ids
+  with control characters, expired invitations, and announcements with unknown, missing or
+  oversized fields are refused before any handshake. IPv6 hosts are accepted and printed in
+  brackets (`[v6]:port`). (#218)
+- **SDK:** a launcher-started child gets its onboarding password as a one-time launch secret; its
+  config, command line and environment no longer contain the password. (#217)
+- **SDK:** a rejoin (`qar_runtime_rejoin`, `RejoinLastSession`) whose stored slot cannot be read
+  on this machine (protected by another user's, machine's or TPM's key, or altered) reports
+  `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`; the slot is never deleted on read. Onboarding the same
+  onboarding id with a code replaces that slot, and only that one. (#203)
+- **Docs:** *Source Applications*: *Web apps QAROS provides* no longer lists the **three.js Littlest
+  Tokyo** and **three.js Shapes** tiles; Littlest Tokyo is opened from **three.js examples**.
+- **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
+  (duplicate a preset, remove your own), the four cards of the **+** dialog (QAROS supported apps
+  in every UI mode), and how
+  a running app's buttons move under its name in a narrow panel.
+- **Docs:** *Language Bindings* shows how a C++-only CMake project adds the header-only C++ wrapper
+  `qar-streaming-cpp` (no C language, no examples; `QAR_ENABLE_DYNAMIC_LOADING` comes with the
+  target), joins as a local app with `OnboardBuilder::WithLocalApp`, and migrates from the removed
+  `Runtime::Rejoin` / `Runtime::Forget`. It no longer asks for `/permissive-` with MSVC. *Limits
+  and Behaviors to Design Around* and *Qt AR Panels* say the same of the wrapper.
+- **Docs:** *Running the Hub* no longer mentions a portable ZIP: QAROS starts at sign-in as the
+  installer sets it up, and several Hubs on one PC run from one installation or development build.
+- **Docs:** headset certificates: *Managing Devices* has a section *How long a device stays
+  paired* (a paired headset's certificate is valid 30 days, every other device's 24 hours; a
+  headset off for up to 37 days rejoins without pairing; revoke a lost headset in the Devices tab;
+  an EST server must allow 30-day certificates and issue the `qar://device-class/headset` URI
+  name). *Security Model*, *Security Deep Dive*, *Maintenance & Updates*, *Pair a Headset* and the
+  launcher configuration reference follow.
+- **Docs:** every device's setup ends with **Anchor: look at the anchoring QR code**: *Scene
+  Origin: Anchor Several Devices Together* describes **Show anchoring QR code**, the *Anchor your
+  headset: look at the anchoring QR code* message on the headset, the step that completes by
+  itself with the room on Meta Quest, METALENSE 2 and Android XR (marked by hand on HoloLens) and
+  the wrong-room warning, and tells the anchoring QR code from the connection QR code; *Meta Quest
+  and METALENSE 2 - Install and Pair*, *Pair a Headset*, the *HoloLens 2* tutorial and the glossary
+  follow.
+- **Docs:** Meta Quest setup has the **Wi-Fi on the headset** step, as Android XR and METALENSE 2:
+  *Meta Quest and METALENSE 2 - Install and Pair* gains a Wi-Fi section, *Pair a Headset* covers
+  Quest in *Wi-Fi on a Meta Quest or Android XR headset*, and these pages, *Put METALENSE 2 on
+  Wi-Fi* and the player installation pages say to use a 5 GHz network only, with the marking and
+  warnings a 2.4 GHz network gets.
+- **Docs:** *Connecting to the Hub* and *Managing Devices* no longer describe the Debug-only QR
+  invite for other players: **By QR code** in the **Invite device** card, in every UI mode, is the
+  one QR invite, the same code as **Show QR code** in a headset's setup steps.
+- **Docs:** pairing codes no longer rotate every 8 s: *Managing Devices*, *Connecting to the Hub*,
+  *Pair a Headset*, *Security Deep Dive*, *Networking & Federation*, the user guide's
+  *Troubleshooting* and the glossary say
+  that a code is made only when a card or dialog that shows it opens, appears at once, lives 60 s
+  and is replaced a few seconds before it expires while it stays open. The launcher configuration
+  reference says `codeRotationSec` only sets the shortest lifetime of a code minted without one of
+  its own.
+- **Docs:** the device and launcher guides (*Managing Devices*, *Connecting to the Hub*, *Meta Quest
+  and METALENSE 2 - Install and Pair*, the METALENSE 2 Wi-Fi tutorial, the player installation
+  pages, *Launcher Configuration Reference*) pair Android headsets with **Pair headset** (USB) or
+  **Show QR code** instead of inviting them by IP address; **Invite device** and `targetApps` take
+  only a HoloLens. The target app invite docs (*Onboarding and Sessions*, *Choosing an Onboarding
+  Mode*, the C# and Rust API references) say an Android headset returns
+  `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`; *Working with Peers* says a headset joins with
+  its exact model.
+- **Docs:** the Rust binding README: `ci/run.py capi` runs the C API suite only with a local build
+  in `QAROS_C_TESTS_BIN`; on a downloaded C API runtime it reports the suite as skipped.
 - **Docs:** *Choosing an Onboarding Mode* and *Onboarding and Sessions* show exactly three ways an
   app joins: a local app on the QAROS PC, a companion process the local app starts (one invite per
   app session, reused for every start of the companion, reaching only this user on this PC; the
@@ -96,7 +3074,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   hub. An app QAROS starts is described as a local app. The onboarding-code, launch-invite,
   planned-peer-id and slot re-enrollment sections are gone, the *App Launched by QAROS* C tutorial
   is removed, and the code-pairing tutorials are no longer in the navigation.
-
 - **Docs:** the C examples and tutorials use only the local app, companion and member hub ways to
   join; the onboarding-and-rejoin and launched-app examples are removed. The examples that open a
   session join as a local app with an app tag of their own and take no pairing code; the
@@ -106,19 +3083,15 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   member hub ways to join; the Rust *Onboarding and Rejoin* tutorial is removed and its address
   redirects to *Onboarding and Sessions*. *API Conventions*, *Troubleshooting* and *Peers* show
   local-app onboarding instead of rejoin, forget and pairing codes.
-
 - **Docs:** the *C# API* menu no longer links *Language bindings*; the page stays in the Developer
   Guide.
-
 - **Docs:** *Unity* says what a join without QAROS Hub shows (the "QAROS Hub is not installed"
   error and, in the Editor, a dialog that opens the installation guide) and no longer lists
   `DllFolder` among the coordinator's settings.
-
 - **Docs:** *Player Installation to Device* names the player **QAROS Player** with its package IDs
   (`com.quaternar.qaros.player` on Meta Quest and HoloLens 2,
   `com.metalense.com.quaternar.qaros.player` on METALENSE 2) and says how to remove the earlier
   player (*QAR Player Vulkan*, *QuaternAR Player*) and scan the scene origin code again.
-
 - **Docs:** *Scene Origin: Anchor Several Devices Together* says every player ignores QR codes other
   than a scene origin code (the warning that Meta Quest and METALENSE 2 take any code is gone) and
   that Meta Quest needs a recent Horizon OS and the player's spatial data permission to detect one.
@@ -129,13 +3102,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   presence and device identity and declare the device with the safe API instead of raw calls, and
   *API Conventions* names the wrapped async calls. A Rust tutorial, *Remote App on Another PC*,
   ports the C one.
-
 - **Docs:** the operator guide names the program to start `qaros.exe` and explains the start at
   sign-in per user: the setup's boxes for this user and for every user, `/AutostartAllUsers`, and
   turning it on or off in the tray menu.
 - **Docs:** *Connecting to the Hub* and *Managing Devices* describe the Session tabs (Devices
   first), the always-open invite form, HoloLens as the legacy kind and the Revoked peers section.
-
 - **Docs:** *Running the Hub* says what a crash dump holds on Windows and Linux: the stacks and
   the QAROS memory they point at, without other libraries' memory or the application's data, and
   that each process keeps its newest 10 dumps.
@@ -148,7 +3119,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Troubleshooting* lists `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` with "QAROS instance
   '…' is not running": `QAR_INSTANCE` names a development hub that did not come up within about a
   minute, and the app waits for it but neither starts it nor joins the installed QAROS instead.
-
 - **Docs:** *Running the Hub* says an installed QAROS runs one Hub at a time per PC, for one
   Windows user, and that several Hubs side by side need a portable or development build.
 - **Docs:** *Installation*, *Security Deep Dive* and the launcher config reference say that an
@@ -165,7 +3135,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** *Installation* says what uninstalling keeps and what "delete the data" (`/PurgeData`)
   destroys: the Hub's protected secrets and the machine key that encrypts them, so a reinstall
   after keeping the data finds approvals, devices and the licence again.
-
 - **Docs:** *Onboarding and Sessions* explains app tags (several instances of one local app, each
   keeping its peer id across restarts), several API instances in one process sharing one session,
   and co-process invites with in-memory storage, with C and C# snippets; *What apps no longer do*
@@ -255,15 +3224,947 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   onboarding again, and say that a restarted app takes over the objects its previous run left,
   which then follow it into the hub's next session. The *Session Lifecycle* tutorial
   (`session_lifecycle.c`) does so on every new session id.
+- **Docs:** the documentation site opens the newest release by default and offers **Dev (main)** in
+  the version dropdown: the unreleased docs as they are on `main` now, under `/docs/dev/` and
+  `/api/dev/`. The former `/next/` addresses redirect there.
+
+### Deprecated
+
+- **Unity:** `QarStreamTarget.AppState` and `IsRunning` are `[Obsolete]`; `IsRunning` forwards to
+  `IsReachable`. Use `Presence` or `IsReachable`. Removal planned in 0.11.0.
+- **C API:** code onboarding, persisted slots and planned peer ids keep working but are
+  deprecated: `qar_runtime_rejoin`, `qar_runtime_rejoin_async` and `qar_runtime_forget` (the
+  wrappers carry a deprecation attribute), and `QarRejoinInit`, `QarForgetInit`,
+  `QarOnboardCodeExt`, `QarOnboardHostExt` and `QarOnboardPeerIdExt`. An app joins in one of
+  three ways and stores nothing: as a local app (`QarOnboardLocalAppExt`), as a companion that
+  onboards with `QarOnboardInviteExt` on the invite its app requests once per session
+  (`qar_session_request_onboarding_invite`), or through a member hub (`QarOnboardLocalAppExt`
+  with `QarOnboardRemoteAppGrantExt`). An app QAROS launched onboards as a plain local app.
+  Migration: onboard with one of these on every start and drop the saved onboarding id.
+  Removal planned in 0.11.0.
+- **C API:** `qar_peer_spec_get_app_state()` and `QarAppState`. They still work, computed from
+  the peer's presence; `QAR_APP_STATE_RUNNING` only ever meant the peer had joined, not that it
+  was ready. Use `qar_peer_spec_get_presence()`. Removal planned in 0.11.0.
+- **C#:** `PeerSpec.AppState` and `AppState` are `[Obsolete]`; use `PeerSpec.Presence` or
+  `PeerSpec.IsReachable`. Removal planned in 0.11.0.
+- **SDK:** the Rust binding's code onboarding and persisted slots are `#[deprecated]`, and keep
+  working: `OnboardMethod::Code` and its hub address `HubAddress`, `Runtime::rejoin`,
+  `rejoin_on_adapter`, `start_rejoin` and `forget`, the planned peer id
+  `OnboardExtensions::peer_id`, the re-enrolled slot `OnboardExtensions::onboarding_id`, and
+  `Onboarded::onboarding_id`. An app joins in one of three ways and stores nothing: as a local app
+  (`OnboardMethod::LocalApp`), as a companion that onboards with `OnboardMethod::Invite` on the
+  invite its local app requests once per session (`Session::request_onboarding_invite`), or
+  through a member hub (`OnboardMethod::LocalApp` with `OnboardExtensions::remote_app_grant`).
+  The Rust examples and tutorials use only these; the `onboarding_and_rejoin` example and its
+  tutorial are removed. Removal planned in 0.11.0.
+- **C#:** code onboarding, persisted slots and planned peer ids are `[Obsolete]` (a warning) and
+  keep working: `OnboardOptions.UseCode`, `WithHost`, `WithPeerId` and `OnboardingId`, the
+  structures `OnboardCode`, `OnboardHost` and `OnboardPeerId`, `Runtime.Rejoin`, `RejoinAsync`
+  and `Forget`, and their `RejoinOptions` and `ForgetOptions`. An app joins in one of three ways
+  and stores nothing: as a local app (`OnboardOptions.UseLocalApp`), as a companion that
+  onboards with `OnboardOptions.UseInvite` on a runtime with `RuntimeOptions.EphemeralStorage`,
+  on the invite its app requests once per session (`Session.RequestOnboardingInvite`), or through
+  a member hub (`UseLocalApp` with `OnboardLocalApp.RemoteAppGrant`). An app QAROS launched
+  onboards as a plain local app. Migration: call `Onboard` with one of these on every start and
+  drop the saved onboarding id. Removal planned in 0.11.0.
+
+### Removed
+
+- **Packaging:** a release no longer builds or ships `QuaternarRemoting <v>/QuaternarRemoting.dll`,
+  the TerraExplorer adapter; it is built and released from the Quaternar-Skyline repository.
+  `build_release.py` drops `--skip-remoting`.
+- **Visualizer:** the Debug-only **Other players** pick of the Invite device card and its **Pair
+  Other Device** QR dialog. **By QR code** (Pair headset's one-time code) is the one QR invite.
+- **Packaging:** `step.exe` and `step-ca.exe` are no longer installed, and the firewall-rule
+  exception for them is gone: every executable in `bin\` now gets the QAROS rules. (#253)
+- **Packaging:** `qaros-system-service.exe` no longer has `--register-identity` /
+  `--remove-identity` (the unused sparse package identity) or `--scope user`: QAROS installs per
+  machine only.
+- **Visualizer:** the movement keys no longer move GUI panels: Controls > Move > Keys move has no
+  **Panels** choice and Ctrl + M cycles Head / Volumes. Move a panel by dragging its title bar with
+  the mouse in the Texture Grid.
+- **Visualizer:** the **three.js Littlest Tokyo** tile and the Developer sample **three.js Shapes**
+  are gone. Open **three.js examples** and pick the example in its gallery
+  (https://threejs.org/examples/#webgl_animation_keyframes for Littlest Tokyo); it shows at the
+  old tile's size. A Littlest Tokyo adaptation installed earlier is no longer updated or picked for
+  the page; its own tile removes it (**...** > **Uninstall web app adaptation...**).
 
 ### Fixed
 
+- **Visualizer:** an adaptation a newer web app release no longer lists is never picked for a page
+  by its address. A leftover Littlest Tokyo adaptation had won over the three.js examples for that
+  example's page, because its address pattern was narrower.
+- **Visualizer:** a WebGPU web app streamed with the redirect presenter (WebGPU Deferred Rendering)
+  no longer shows its clear colour as a fringe at the edge of objects: an empty pixel beside an
+  edge takes the object's colour, as the three.js and WebGL adaptations already did.
+- **Visualizer:** thin lines and edges of a web app (a map's 1-px lines, wireframes) reach users
+  whole instead of dashed, at full brightness: each half-resolution depth sample keeps the nearest
+  depth of the pixels it stands for, and alpha their largest coverage. A custom adaptation's depth
+  packer must do the same (Developer Guide > Web App Adaptations > Recipes, and the
+  `webapp-authoring` skill).
+- **Mixer:** an object's edge against empty background no longer stretches into a spike when the
+  warp moves the view far from the pose the source rendered for: mesh vertices beside empty
+  background take the object's depth. Applies to the headset's own warp too.
+- **Visualizer:** the **three.js examples** web app streams the example you pick on
+  https://threejs.org/examples/: the example opens as the page itself (Back returns to the
+  gallery), and a web app source checks every page it navigates to for a renderer, so it starts
+  streaming without pressing **Probe**. The WebGPU examples (`webgpu_*`) stream too.
+- **Visualizer:** a running app's card in a narrow **Source Applications** panel no longer squeezes
+  its name and status into a column a character or two wide: the name keeps a minimum width and at
+  most two lines, text that does not fit is cut with "..." (hover for all of it), and the buttons
+  move to a line under the name, as icons when even that is too narrow. Every row in the panel
+  follows the same rule.
+- **Visualizer:** importing the same web app package again, or one whose app already has a row,
+  no longer adds another preset to **Source Applications**; picking an already located Blender or
+  ROS 2 folder again adds nothing.
+- **Visualizer:** a source app QAROS started and the hub refused without asking you (it does not
+  match its approval, its file was replaced or is no longer validly signed, its runtime differs)
+  shows **Not joined** at once with the hub's reason ("refused by the hub: ..."), in Source
+  Applications and in `viz_source_app_list`, instead of "reached the hub but was not admitted"
+  after 30 s.
+- **Visualizer:** the Approved / Not approved badge of a source app tile (and `approval` in
+  `viz_source_app_list`) now says whether QAROS would let that executable join without asking: a
+  second Blender version signed like the approved one reads Approved, an unsigned copy in another
+  folder or a rebuilt unsigned app reads Not approved. Before, only an approval of that exact path
+  counted.
+- **Mixer:** moving or resizing a GUI panel (pinching its title bar or a resize handle, by
+  hand ray, poke, simulated hand or mouse) never moves, turns or scales an app volume's
+  content any more, whichever volume is focused, and a tap or a ray on a panel no longer
+  reaches the volume behind it as a click or hover. A hand on a panel never joins the other
+  hand's drag as a two-hand scale or turn. A drag that began on the volume still finishes
+  there when its ray passes in front of a panel.
+- **Visualizer:** the MCP tools `viz_gui_panel_update`, `viz_gui_panel_close` and
+  `viz_gui_panel_tap` find a web app's page or agent panel by its short name plus `instance_id`
+  again; before, they answered "No GUI panel". `instance_id` is the `viz_webapp_list` id or the
+  app's volume common name. A short name that is both a page and an agent panel of one web app is
+  refused with both common names: pass the full common name.
+- **Packaging:** a silent uninstall run in place (`uninstall.exe /S _?=<install folder>`, as
+  deployment scripts do) no longer stops with exit code 9: it counted itself as a program holding
+  QAROS files.
+- **Runtime:** a setup or uninstall started while QAROS is still starting no longer stops with
+  exit code 9 (programs hold installed files): closing QAROS for an update now waits up to 15 s
+  for a starting QAROS and closes it too, and writes what it closed to the QAROS log. The programs
+  a setup or uninstall still finds holding files are also listed in `%TEMP%\QAROS-file-holders.log`.
+- **Mixer:** the mixer no longer asks for the stream of an app that has exited every 10 s for as
+  long as the session runs ([#625](https://github.com/Quaternar/Quaternar/issues/625)). Its app
+  volume stays, so the app finds it again when it restarts, but the mixer now waits longer after
+  each failed attempt, up to a minute, instead of sending a burst of stream requests every peer
+  answers. After about half a minute without an answer, the mixer hides the volume from its
+  headset instead of drawing an empty box; the volume is not closed. When the app comes back and
+  streams to that headset again, the volume reappears and the mixer connects at once.
+- **Runtime:** a development QAROS no longer stops at every start after **Reset to a new install**
+  with "the CA key ... does not belong to its certificate"
+  ([#623](https://github.com/Quaternar/Quaternar/issues/623)). The reset unregistered the
+  instance's development host, so the next start erased nothing in the host's store, made a new CA
+  in the user's store, and the old CA key and hub identity came back once the host ran again. The
+  reset now only releases the hub ports and keeps the host registered. The CA certificate, audit
+  log, secure store, sessions and the hub's secrets in the host or service store go together: a
+  start that cannot delete one of them stops with a message and finishes the reset on Restart. A
+  hub whose CA key and certificate do not belong together no longer restarts in a loop: it says
+  so once and offers **Reset to a new install...**; it never makes a new CA on its own.
+- **Runtime:** `qaros.exe --reset-data` deletes browser profiles nested deeper than 260
+  characters (`mixer-cef`) and exits 0 when an entry another program holds open is left: the entry
+  is reported and the next start finishes the hub's part of the reset. It exits 1 only when the
+  reset could not be left pending.
+- **Visualizer:** saved Source Applications presets load again when the catalog has grown large
+  (web app presets that carry adaptation scripts, such as Foxglove). The signed catalog the hub
+  sends was dropped by the Visualizer above 256 KiB, so the panel stayed empty, and saving a
+  preset (also over the MCP `viz_webapp_register`) answered `ok` and then failed with an edit
+  conflict against revision 0. The signed publication limit is now 4 MiB. The hub refuses a save
+  that would make the catalog larger than 2 MiB, naming the limit. A Visualizer that could not
+  read the catalog says so in a notification, asks the hub again with a growing pause until it
+  answers, and refuses saves at once with "Source application catalog not loaded" instead of
+  sending them.
+- **Visualizer:** the stereo strength and screen plane of a watched stream (stereo monitors,
+  anaglyph, interleaved) now move each eye's whole image sideways, symmetrically and with black at
+  the edge, instead of a depth-driven shift that left a broken image with double edges at every
+  depth discontinuity. Strength 1.0 shows the stream as received.
+- **Device apps:** the Vulkan cube source (`qar-vulkan-source`) streams again after its target app
+  restarts or crashes. It used to forget a target whose stream closed and wait for a peer-list
+  update that never came for a target that kept its peer id; it now creates a new sender for every
+  target still in the peer list, after a wait that grows from 1 s to 15 s.
+- **Visualizer:** in the Stereo Display panel, choosing another display (Display 2, Display 3, ...) for an output window now sticks, also while the output windows are shown and when several displays are of the same model. The selection used to jump back to the previous display on the next frame, and of displays sharing a name only the first could be chosen.
+- **Visualizer:** opening stereo output windows (Anaglyph, Interlaced, Side-by-side, Top / bottom, Stereo monitors) no longer takes the mouse and keyboard from the Visualizer. With a single monitor, clicks and scrolling in the Visualizer used to land in the output window behind it until each output window had been clicked once. Output windows now open without focus on any monitor, and an output window behind the Visualizer stays behind it when you switch back to the Visualizer.
+- **Visualizer:** a stream shown in a stereo output window that is on screen (a projector or 3D monitor) keeps running while the Visualizer's own window is covered by other windows. It used to pause, and its output window refreshed about once a second.
+- **Runtime:** a source app that QAROS launches from a source application definition (an API app such as the Vulkan cube) now takes its peer id from its own app tag, exactly as when you start it by hand: the hub remembers one peer per approval and app tag, so stopping and launching it again keeps its peer, and two instances need distinct tags (`QarOnboardLocalAppTagExt::app_tag`). QAROS no longer plans a peer id for it from the definition. The StereoKit, CPU and other QAROS-owned sources keep their launcher-stable peers.
+- **Visualizer:** the main window opens inside the usable area of its display: a saved size from a larger monitor, or a bottom edge under the taskbar, no longer leaves the lower part of the UI off screen.
+- **Visualizer:** device, member and room rows wrap their title, tags and status onto more lines instead of cutting them off, and the Scene Origin card's room picker, print buttons and checkboxes wrap in a narrow panel.
+- **Visualizer:** the hub's join code card shows the host and port to enter on the other hub, as the pairing code card does.
+- **Visualizer:** the cursor and the simulated hand no longer lose the Vulkan device ("device lost") while a web app source or a stream receiver is converting frames. Their depth probes submitted to the graphics queue from the GUI thread while another thread submitted to it; they now submit on the graphics thread, and the hand's depth probe keeps the stream image it reads alive until its fence is done.
+- **Runtime:** a Visualizer receiver slot's mixer no longer starts up to 19 s late when the
+  slot joined while the hub's subscription was not yet visible to it: its first proposals, which
+  found no subscriber, are put again once one matches.
+- **Visualizer:** a receiver whose own mixer is still starting no longer raises a "receiver could not be created" toast when no peer answers its stream request in time; the slot waits and asks again on its automatic retry, and still rejoins its session if the pipeline never comes up.
+- **Runtime:** development QAROS instances no longer exhaust the hub port range 19120-19199. A development instance keeps its stable hub ports for 48 hours without a start (an installed QAROS keeps its 30 days) and only while its data root exists; `qaros --reset-data` of a development data root releases them, a running hub keeps its ports however old its record is, and the first 18 ports of the range stay reserved for the installed QAROS. When the range is still full, the failed port reservation says how many ports which hubs hold in `hub-ports.json`.
+- **Visualizer:** a web app source no longer risks a GPU hang (Visualizer restart) while it streams
+  or when its stream is paused and resumed. The page is now copied only while Chromium has handed
+  its texture over, a frame is dropped instead of submitted when a shared texture is not
+  available, a partial hand-over failure is undone, and a changed destination (resize, new
+  frame) is re-recorded instead of copied into stale images.
+  ([#613](https://github.com/Quaternar/Quaternar/issues/613))
+- **Visualizer:** after a web app source or the hub restarts, a served panel of the web app that the
+  new run does not reopen no longer stays on screen with a dead page: a source closes the panels of
+  its web app whose content's publisher has been gone for 30 s. Panels served by a source still
+  running, on this or another PC, are never closed. ([#603](https://github.com/Quaternar/Quaternar/issues/603))
+- **Visualizer:** in hand mode a left click keeps the simulated hand: it keeps publishing, is
+  activated while the button is held and released with it, and no longer falls through to a regular
+  mouse click (holding Space used to drop on the press). The pointing arrow follows the aim pose of
+  the hand joints instead of a palm-to-fingertip line
+  ([#601](https://github.com/Quaternar/Quaternar/issues/601)).
+- **Mixer:** a ray toward an app volume is drawn in that volume's configured hover style while the
+  hand is not activated and its click style while it is, no longer in the manipulation green, and
+  the ray over an empty scene is white until the hand is activated
+  ([#601](https://github.com/Quaternar/Quaternar/issues/601)).
+- **Runtime:** in the Visualizer and the mixer, a lost GPU device (a GPU hang or driver reset) is now reported like a
+  crash ([#601](https://github.com/Quaternar/Quaternar/issues/601)). The process writes a crash
+  report and a minidump (the failing call, the submitting thread's stack, the last queue
+  submissions, `VK_EXT_device_fault` data where the driver has it), exits with its own code, and
+  the tray shows the crash dialog and offers the crash report. It restarted silently before.
+- **Runtime:** a PC with two signed-in Windows users no longer shows a crash loop for the second one
+  ([#611](https://github.com/Quaternar/Quaternar/issues/611)). QAROS runs one hub session per PC;
+  when another Windows user holds it, the tray now says so (QAROS is already running for that user,
+  only one user can run it at a time, sign that user out or quit QAROS there and it starts here
+  automatically), starts the hub again every 30 s until it is free, and shows no crash dialog, no
+  crash report and no "Reset to a new install" offer for it.
+- **Packaging:** the setup starts QAROS only for the user who installed it (the user at the console),
+  no longer for every signed-in Windows user at once. Other users get QAROS at their own sign-in when
+  their start at sign-in is on.
+- **Runtime:** the crash report packs only dumps and crash reports of QAROS executables from the shared
+  `%TEMP%\quaternar\crashes` folder, not the dumps of unrelated programs that write there.
+- **Visualizer:** the App Volumes panel's gesture modes show what the source app set. A volume
+  whose display name had been typed in kept the gestures it had at that moment and never showed
+  the ones the app set afterwards (the defaults, for an app that sets them a moment after the
+  volume appears); only a gesture edit not yet applied is kept now. The card also opens on the
+  mode every peer is in by default, the one the app selected, instead of always on mode 0.
+- **Mixer:** the Visualizer's own view draws the simulated hand's rays and landing glow while the
+  hand key is held or toggled, as a headset's hands: it showed nothing of the hand, because it
+  treated every hand of a Visualizer as the mouse pointer. The mouse pointer alone is still drawn
+  only by the Visualizer's own window.
+- **Visualizer:** the MCP `tools/list` answer is valid JSON Schema for every tool: `script_preload`
+  and `devtools_send` published their arguments as arrays, which clients rejected, and
+  `events_tail` now lists `since_sequence_number`.
+- **Visualizer:** MCP `navigate` keeps the adaptation profile selected with `viz_webapp_profile`:
+  the rebuilt page ran without its adaptation scripts before.
+- **Visualizer:** three.js web apps no longer show a coloured fringe on antialiased edges in the
+  headset: users' views render without the page's `scene.background`, whose colour bled into every
+  edge pixel.
+- **Visualizer:** the MCP `create` tool no longer requires `instance_id`; it is optional, as
+  documented.
+- **Visualizer:** `profile_finalize` and a `profile_save` of an edited adaptation keep each
+  script's file instead of moving it to `scripts/<name>.js` and leaving the old file behind.
+- **Mixer:** content of a web app source lying exactly on a face of its app volume (a ground plane
+  on the bottom face, feet on it) is no longer half dropped: the volume keeps a 1 cm tolerance at
+  its faces, and content outside it is still clipped. Opaque three.js materials drawn without
+  depth writes (a floor with `depthWrite: false`) now reach users instead of vanishing from their
+  view. The receiver views never cropped the stream; what is missing was outside the app volume.
+- **Visualizer:** docking a window through the Visualizer MCP (`viz_window_dock_region`,
+  `viz_window_dock`) could crash the Visualizer when a window still pointed at a dock node that had
+  been merged away or split, for example after several docks in a row. Any window now docks into
+  any region: `left` and `right` are created when the layout has none, a window undocked with
+  `viz_window_undock` just before stays where it is docked next, and a refused dock leaves the
+  window where it was. Sidebar panels are refused with a pointer to `viz_sidebar_move_panel`.
+- **Device apps:** the Android player (Metalens, Quest) no longer shows a stream as an empty
+  black view with no text when its scene is not anchored. The anchor prompt now shows over any
+  playing stream, also while the hub is briefly unreachable, and says which case it is: "Look at
+  the anchoring QR code" when no saved anchor can be loaded, "Walk towards where the anchoring QR
+  code was" while a saved anchor is being found again or tracking lost it. After 20 s of that it
+  asks for the code again. A saved anchor counts only while the headset tracks it; until then the
+  scene sits where the headset guesses it. The player also asks for its saved anchor again for a
+  minute after start, so an anchor the glasses load late is restored in the same room without a
+  new scan.
+- **Visualizer:** an API app started from **Source Applications** (the Vulkan cube, or your own
+  C or C# app) keeps its peer when you stop it and launch it again: the session shows the same
+  source instead of a new one on every launch. The same app for the same target and app volume is
+  one peer on that hub; another app, target or hub still gets its own.
+- **Visualizer:** every `(?)` explanation and hover tooltip wraps onto as many lines as it needs
+  instead of running off the right of the window as one line: a tooltip grows to at most 30 % of
+  the window's width. The `(?)` marker looks the same in every panel.
+- **Runtime:** after **Reset to a new install** the hub starts again instead of stopping at every
+  start ("QAROS Hub stops each time it starts"). The reset deletes the same things whether you
+  start it from the Visualizer or from the tray's problem dialog, and the tray's splash stays up
+  until the reset hub is running. A hub process still running
+  can no longer write its old secrets back into the reset store, and a store file another program
+  briefly holds no longer blocks the reset. When a program keeps a file of the hub's store open,
+  the tray shows "QAROS Hub cannot start" with that program's name instead of restarting the hub
+  in a loop: close it, then choose **Restart** in the tray menu.
+- **Runtime:** resetting a development hub from the tray no longer reports "Some of the hub's data
+  could not be reset ... qaros-host-dev (The process cannot access the file ...)". It keeps the
+  development host's folder and erases the hub's secrets in it through that host at the next
+  start.
+- **Visualizer:** renaming an app volume no longer shows its old name for a moment after you
+  confirm the new one.
+- **Visualizer:** saving settings no longer fails with "Settings could not be saved: ...
+  BackendSerializeDeserializeFailed ... MoveFileEx ... failed with 32" when a virus scanner, the
+  search indexer or an editor briefly holds the settings file: the save waits and tries again
+  for up to about 1.5 s. A save that still fails reports `VisualizerPersistedFileWriteFailed`
+  once per change, and is tried again every 2 s instead of on every frame.
+- **Runtime:** after a restart of the PC a mixer could exit every second and never stream (`Stream
+  '...' receiver could not be created: ... no peer acknowledged stream request`): it was told to use
+  a GPU by an id from before the restart. A mixer now takes the best GPU when the id names none,
+  and the pipeline follows the receiver's current GPU.
+- **Visualizer:** a closed Watch on this PC no longer stays in the stream graph as watching.
+- **Device apps:** METALENSE 2 glasses read the connection QR code: the Visualizer shows it as a
+  much smaller code (`QAR1:...`), which Snapdragon Spaces headsets detect. The code is taken by
+  its content alone, wherever the glasses locate it. It is the only connection QR code: a player
+  no longer takes the JSON code an older Visualizer shows, so update the PC and the headsets
+  together, and a pairing code that cannot be shown this small fails with a notification instead
+  of an unreadable code.
+- **Device apps:** an Android headset whose clock runs ahead of the PC's pairs by QR code, USB push
+  or typed code; before, every invite was expired on arrival. The hub decides whether an invite
+  expired.
+- **Mixer:** a source application restarted while a headset streams shows its content again.
+  Before, the mixer could stop on the restart and the headset kept its last frame (often the
+  "Enable streaming to this headset" hint) until the mixer was restarted.
+- **Visualizer:** stream latency and pose wait are correct for a headset whose clock differs from
+  the PC's. A headset clock a second behind used to show a second of latency; the figures now read
+  the real milliseconds, the route details show the estimated headset clock offset ("clock -1.063 s
+  +- 0.1 ms"), and latency and pose wait read "--" until that offset is estimated.
+- **Device apps:** a paired Android headset gets its stream back within a few seconds of QAROS
+  restarting. Before, the player could take up to 10 s more to reconnect to a hub that was away
+  for a while, and waited out the old stream's 5 s timeout before it took the new one.
+- **Device apps:** the Android player shows the newest decoded video frame on every headset frame
+  and keeps showing it until a newer one arrives. Before, it held one decoded frame back, waited up
+  to 3 ms per headset frame for a late one, and dropped a frame whenever its decoder was briefly
+  busy, which smeared the picture until it refreshed.
+- **Visualizer:** a paired Android headset is listed in the Devices tab, online or offline, with
+  its device and whether it is connected, and can be revoked and allowed again from there. The
+  Hubs tab lists it under the hub that issued its certificate (a member hub it paired with, or the
+  primary), instead of as an offline hub of its own; a device whose issuing hub is not known is
+  listed under **Unknown hub**.
+- **Visualizer:** the QR code that pairs an Android headset is offered in every interface mode:
+  the Invite device card's **By QR code**, beside **Show QR code** in the set-up steps. Before,
+  only Debug mode showed a QR invite on the card.
+- **Device apps:** a paired Android headset starts streaming within seconds of coming online.
+  Before, its first picture could take up to about 30 s after the player started or rejoined.
+- **Device apps:** the Android player gets its stream back after QAROS restarts, after its relay
+  restarts and after a network drop, without restarting the app. Before, a stream that ended while
+  the network under it had stalled could freeze the player's stream handling until the app was
+  restarted.
+- **Runtime:** a headset relay that loses its headset now ends within seconds, so the headset gets
+  a new relay as soon as it is back. A headset away for more than a few seconds has its relay and
+  mixer stopped, as any departed device, and gets new ones when it returns.
+- **Runtime:** each QAROS hub on a PC keeps the same network ports across restarts, so paired
+  devices reconnect after a restart even when several hubs run on one PC.
+- **Runtime:** an Android headset behind a NAT, such as the Android XR emulator, no longer drops
+  and reconnects its secured link to the hub dozens of times while a stream starts. Every QAROS
+  process now sends the same maximum datagram size, so neither end of a link sends datagrams the
+  other refuses.
+- **Device apps:** an Android headset whose session certificate has expired no longer
+  retries its rejoin forever while refusing every new invite. It renews the certificate with its
+  hub when the hub can still renew it, and otherwise takes **Pair headset** or a QR code again
+  without clearing the app's data; the old identity is replaced only once the new pairing
+  succeeds.
+- **Device apps:** an Android headset whose hub moved to new ports rejoins after **Pair headset**
+  or a QR scan instead of staying disconnected. The headset takes an invite in every state; one
+  from its own hub moves its stored connection to the hub's new address and keeps its identity
+  without using the pairing code. An invite from another hub replaces the identity only once that
+  pairing succeeds.
+- **Visualizer:** the Latency Simulator (Debug mode, now under **Tools**) lists every render sender
+  of every source, also when it is opened after the source started; before, it listed only CPU
+  Renderer and StereoKit sources, and only when it was open before they started. Each sender shows
+  its app's name, device and the peer it renders for, and a source that closed or crashed leaves
+  the list.
+- **Visualizer:** a receiver restored after a restart no longer stays on "Creating receiver" when
+  its hub came back with a new certificate authority in the same session. A restored receiver its
+  hub has not accepted within 15 s joins again with a fresh code while the Visualizer is connected
+  to that hub, and otherwise fails and retries.
+- **Mixer:** a slow or stalled source no longer slows the mixer down. Each source is received, copied
+  and warped on its own clock, and the whole frame is drawn in one GPU submission that never waits for
+  a source, so one source at 5 Hz, or one that never finishes a frame, leaves the others and the
+  mixer at full rate. The mixer also holds far less GPU memory: images exist only for the sources
+  that are connected, and each needs about half as many as before.
+- **Mixer:** content outside an app volume no longer shows lit edges inside the volume when the
+  volume is behind it. The warp blended the depth at an object's silhouette with the empty
+  background, which placed its edge inside the volume; depth is no longer filtered.
+- **Runtime:** ANARI apps no longer show a surface nearer than the near plane as an opaque sheet
+  inside their app volume, and at reduced render scale no longer send edge pixels without depth.
+- **Runtime:** the Blender ANARI add-on no longer crashes Blender 4.5 LTS and 5.0 when streaming
+  starts, on every backend. Those Blender versions bundle an older Microsoft C++ runtime
+  (`msvcp140.dll` 14.29), which our libraries now run on.
+- **Runtime:** several Visualizer receivers starting together (saved receivers restored at
+  start) no longer stall renewing their certificates: each renewed and joined at once instead of
+  timing out after 30 s (Code 6) while the others held every thread of the Visualizer's runtime.
+- **Runtime:** the hub admits every local service at once: receivers, their mixers, the
+  launcher's apps and local apps such as Slicer all connect from this PC's loopback address and
+  were refused beyond eight handshakes at a time. A refused mixer exited with code 1 and was
+  restarted every second; its receiver reported Code 507. Remote devices keep the limit of eight
+  per address.
+- **Runtime:** the hub no longer stops serving when several devices renew their certificates at
+  the same moment (it waited on itself and every renewal, pairing and new app timed out).
+- **Runtime:** a service the hub turns away for a moment (busy, overloaded, not answering) is
+  started again after a growing pause, 2 s to 30 s, instead of every second.
+- **Runtime:** ending the tray (a crash, End task) ends the runtime launcher, the development host
+  and every app with it. Before, the launcher and its apps kept running with nothing to stop them.
+- **Visualizer:** dragging a running StereoKit or CPU renderer app's Live settings (scale,
+  orientation, points, radius) no longer locks you out of the hub for minutes with
+  *HubRequesterNotAuthenticated ... already made 64 requests*. Every signed hub request of the
+  Visualizer (Live settings, Stop, device, member and approval actions, renames, rotation, reset)
+  now shares one budget kept below the hub's limit: the newest Live value goes out at most four
+  times a second and once more when you let go, and clicks always have room. A click over the
+  budget fails with *try again in N s*; if the hub refuses Live settings for too many requests, one
+  notification says so and the newest value is sent again by itself.
+- **Visualizer:** the mouse wheel scrolls the page in a GUI panel's window, with touch input too,
+  without scrolling the window around it. In a GUI panel's window and a web app source's page a
+  notch that came as the page appeared no longer stops the wheel for good.
+- **Visualizer:** the GUI panel and app volume editors show a pose moved elsewhere (a hand or
+  gesture in the mixer, another visualizer) and an edit there no longer puts the panel or volume
+  back where the editor first saw it: an edit sends only what was changed. Renaming an app volume
+  is no longer refused as "changed remotely" while it is being moved.
+- **Visualizer:** the simulated hand's arrow no longer jumps around while the camera orbits or
+  moves: it stays under the cursor. Outside hand mode the mouse's pointer is hidden during a camera
+  drag.
+- **Packaging:** setup payload signature checks work when packaging is launched from PowerShell 7.
+  Windows PowerShell loads its own Authenticode module even when it inherits another module path.
+- **Packaging:** the CUDA and GStreamer WebRTC transfer plugins load again. Every QAROS process
+  refused them with "incompatible ABI version" ERROR lines and streamed through the remaining
+  transfer; cross-GPU and cross-machine streams now use them again.
+- **Runtime:** a receiver whose mixer keeps exiting no longer waits for its stream forever. After
+  the restarts reach a restart storm, the hub rebuilds that receiver's pipeline under a new mixer
+  identity, and a source that joined meanwhile streams to it. Each rebuild is logged
+  (`pipeline_service_failed ... action=rebuild`).
+- **Visualizer:** after the Visualizer restarts, installing the QAROS Player on a HoloLens works
+  again. The adb server the Devices tab starts kept the previous Visualizer's ports bound (the
+  HoloLens install server, the automation server), so the new one could not listen on them until
+  adb exited.
+- **Visualizer:** a receiver restored at start no longer stays in "Creating receiver" with no
+  error, or misses devices on the LAN. The Devices tab started `adb` while the receiver checked its
+  port, and adb's server kept that port on one network adapter; the receiver could not listen
+  there for the whole run.
+- **Visualizer:** **Stop** then **Start** on a receiver whose stream could not be created ("no peer
+  acknowledged stream request") rejoins the hub and gets a new pipeline instead of asking the same
+  unresponsive one again. Removing and re-adding the receiver is no longer needed.
+- **Packaging:** `bin\` no longer carries Mesa's software `opengl32.dll`, so QAROS processes there,
+  the ANARI demo included, get OpenGL from the GPU driver: VisGL renders on the GPU instead of
+  being skipped for Helide.
+- **Unity:** leaving play mode or quitting a player after streaming no longer crashes now and then
+  with an access violation in `qar_streaming.dll`. Disconnecting an endpoint can take up to a frame
+  longer.
+- **Visualizer:** an Android phone or emulator connected to the PC is no longer listed as
+  Metalens glasses in the **Devices** tab, so the Metalens Wi-Fi step no longer shows or changes
+  its network when the glasses are unplugged.
+- **Packaging:** after **Clean data and start fresh**, an installed QAROS kept restarting with
+  "The launcher config cannot be used: ... qar-runtime-launcher.jsonc cannot be opened". The
+  config is created again before every start, and a config error is shown once instead of on
+  every restart.
+- **Visualizer:** the Logs panel's peer dropdown lists every online peer, not only those that
+  already sent a log record. A peer that logs only Debug (a mixer, a device app) can now be picked
+  and its severity raised. Nothing to do.
+- **Visualizer:** after the hub gets a new CA (a reinstall or a reset), receivers, camera sources
+  and web app sources pair again by themselves instead of failing every time with "Receiver
+  creation timed out". The hub's pairing codes now name its CA, so a receiver whose saved
+  certificate came from the old CA pairs again under the same id instead of rejoining with a
+  certificate the hub refuses. Nothing to do.
+- **Visualizer:** the window no longer stays on a disconnected monitor. At start, when it is shown
+  again, and when a monitor is removed or the primary display changes, a window no connected
+  display shows is moved to the primary display, keeping its size where it fits and staying
+  maximized or full screen.
+- **Visualizer:** stereo output windows no longer cover the Windows taskbar. They still fill their
+  whole monitor, so the stereo geometry is unchanged, but the taskbar stays on top and you can
+  switch windows.
+- **Visualizer:** Web App Source pages and their preview show an open `<select>` list and the date,
+  time and colour pickers, and take mouse and keyboard input on them like a normal browser.
+  `alert` is acknowledged, `confirm` and `prompt` are cancelled and `beforeunload` no longer blocks
+  a reload; each dialog is reported as a page event. A page's file chooser is cancelled and no
+  right-click menu is shown.
+- **Runtime:** OpenXR applications started through the QAROS OpenXR runtime now stream every frame
+  they render (about 60 frames/s) instead of every other one (30 frames/s). Nothing to do.
+- **Runtime:** the tray's **Start QAROS at login** check mark shows whether QAROS really starts at
+  sign-in.
+- **Visualizer:** stopping a device's app (**Stop** in Devices, or the C API kill) now also stops
+  its hand-gesture services, frees its launcher entry at once and stops its processes even when
+  the launcher held no pipeline for it; inviting the same device again right after a Stop keeps
+  the new pipeline instead of losing it to the old app's exit.
+- **Visualizer:** a device invited again after **Stop** shows **Stop** while it streams instead of
+  **Invite**, and **Stop** on a device just invited by address keeps its row instead of making it
+  look forgotten.
+- **Visualizer:** a Source Applications change (a saved preset, a started or removed app) could be
+  applied a second time when the hub restarted or started a new session within seconds of it,
+  bringing back a removed or older preset. Each change is now applied once, and changes made in
+  quick succession are sent one after the other. A change made against a view another change has
+  since replaced is refused with a notification: make it again on the current view.
+- **Packaging:** the developer ZIP's tray started on a PC with QAROS installed no longer takes over
+  `qaros://` sign-in links for that Windows user; it also removes such a takeover an earlier run left.
+  Sign-in links open the installed QAROS again.
+- **Runtime:** a catalog API app under local enrollment that runs for 10 s or more without being
+  admitted - it never reached the hub's enrollment pipe, or reached it and was not let in - is
+  started again after the 2-30 min backoff and reported once, instead of being restarted at once
+  in a loop.
+- **Runtime:** a source application or service whose config sets an environment variable in
+  another case than the launcher (`qar_crash_dump_dir`, or `Path` and `PATH` both) starts again:
+  the later name wins and the launcher logs a warning. On Linux, starting a child no longer
+  allocates between `fork` and `exec`, which could hang the child of the multithreaded launcher.
+- **Runtime:** every app the hub starts, a source application launched from the Visualizer
+  (TerraExplorer, the examples) included, gets the hub's own `QAR_INSTANCE`: `default` from the
+  installed QAROS, its own instance from a development hub. A `QAR_INSTANCE` left in the user's or
+  the shell's environment no longer makes such an app load another runtime or ask another hub to
+  join, and the installed hub ignores one that is not its instance (with a warning in its log).
+- **Runtime:** an API app the hub starts (the cube, for example) whose approval prompt nobody
+  answered no longer comes back with a new prompt about every 2 minutes. When the prompt times out
+  or the operator clicks Deny, the hub no longer restarts the app: the visualizer notifies that it
+  was not approved; stop it and launch it again to be asked again. A locally enrolled app that runs
+  but is never let into the session is restarted after 2 minutes, doubling up to 30 minutes, instead
+  of at once.
+- **Runtime:** an app that connected to the hub's local enrollment pipe and closed at once, before
+  the hub was waiting on that pipe instance, stopped local enrollment until the hub restarted. The
+  hub now drops such a connection and keeps accepting.
+- **Runtime:** apps the hub starts no longer pick up settings meant for another app it started
+  earlier. An OpenXR app could attach to another headset's Monado runtime, an app started without
+  a GPU preference could take the previous app's GPU, and the hub kept the last app's crash folder.
+  Each app now gets only its own settings on top of the hub's environment, and an app or Monado
+  started without a GPU preference no longer takes one set in the user's environment
+  (`QAR_GPU_ADAPTER_ID`).
+- **Unity:** a local-app join refused because the program answering on this PC is not the installed
+  QAROS (`OnboardingHubNotAuthentic`, 1807) says so and tells the user to reinstall QAROS; it was
+  reported as a raw native error. When no hub answers (`OnboardingHubUnreachable`, 1802) the
+  message says QAROS is not installed or not running, not only "not running". The README no longer
+  mentions a `Minimum Hub Tier` setting.
+- **Runtime:** `qaros-license.exe` activates and checks the licence of the hub's own store when
+  the launcher config sets `runtimeStorageRoot`; before, it always used the default data folder,
+  and the hub did not see the activation. The tool reads the config the hub starts with (the data
+  folder's `qar-runtime-launcher.jsonc`, else the one beside it); pass `--config <file>` or
+  `--runtime-storage-root <dir>` for a config elsewhere. It prints the store it opened, and an
+  unreadable config is an error.
+- **Visualizer:** finding hubs on the LAN no longer fails at start with "Discovery unavailable:
+  ... multicast join failed" on a PC whose preferred network adapter has no multicast route (for
+  example a VPN adapter): discovery now listens and announces on every network adapter. When no
+  adapter can, the Connection panel says so, without an error notification, and discovery tries
+  again every 30 s.
+- **Runtime:** the runtime launcher no longer takes up to ~30 % of the CPU while idle on some PCs;
+  it now stays near zero. Hub discovery also pauses after a network error instead of retrying
+  without a break.
+- **Packaging:** an update or uninstall no longer fails file by file ("Error opening file for
+  writing") while an application such as TerraExplorer, a Unity app or an ANARI app has the QAROS
+  runtime loaded. The setup and the uninstaller list the applications using QAROS files and offer
+  **Retry** / **Cancel**; nothing changes until they are closed, and Cancel leaves QAROS running as
+  it was. A silent (`/S`) setup or uninstall exits with code 9 instead while such an application
+  runs.
+- **Visualizer:** a view of a 3D camera's receiver keeps its binding across a restart and a new
+  session instead of loading unbound, and views of receivers that no longer exist load unbound
+  under one warning instead of one warning each. A receiver whose rejoin the hub answers with
+  "pair again" now pairs with a new code instead of retrying the rejoin forever.
+- **Visualizer:** starting four or more receiver slots at once no longer leaves them joining
+  forever; each slot connects as it would alone.
+- **Runtime:** several hubs on one PC (an installed hub beside a developer's, or test runs side by
+  side) no longer take each other's ports: every hub reserves its onboarding port machine-wide as
+  well as its router port, and a port held on 127.0.0.1 alone counts as taken. A newly created hub
+  CA has a unique name, so a device that reaches another hub fails with "not the expected hub"
+  instead of a certificate signature error.
+- **Runtime:** a device or app paired through a member hub that its primary removed now reports
+  that it must be paired again within seconds. Before, it kept running in a session that no longer
+  existed until it restarted. The removed member keeps running and shows the removal. (#262)
+- **Runtime:** two hubs started at once on one PC no longer pick the same router port, which left
+  one of them without connected devices. (#262)
+- **Visualizer:** no longer aborts on its first frames when its saved layout has no entry for the
+  Source Applications panel (a fresh install, or the visualizer restarted after a session
+  rotation).
+- **Visualizer:** no longer crashes with an access violation when it closes, after the Source
+  Applications panel, a camera source or the stream graph has been used.
+- **Visualizer:** peer tooltips show "Presence: ..." instead of an app state; a peer that left
+  without saying so reads "Offline (last reported: Running)".
+- **Runtime:** the hub adopts every live target app that has not announced its leave instead of
+  waiting for it to claim Running.
+- **Visualizer:** **Reset session** works: the hub comes back with an empty store on its old
+  router port and the Visualizer rejoins it, instead of the Visualizer crashing and failing to
+  join ("could not join the hub's session ... not connected within 5000 ms"). The Visualizer no
+  longer crashes when it is closed or stopped.
+- **Runtime:** a hub that restarts on another router port no longer strands the apps it starts:
+  the launcher hands each the hub's current endpoints when it starts it, and a restarted hub tries
+  its previous port first.
+- **Visualizer:** renaming a receiver renames its peer in the session too, so every peer list and
+  the Stream Graph show the new name.
+- **Visualizer:** **Streams to** names receivers as the Stream Graph does ("Receiver 1"), shows
+  each target's device, and offers only targets that are online and not leaving.
+- **Visualizer:** pulling a panel onto a rail button of its own a second time no longer creates two
+  rail buttons with the same id (an ImGui "conflicting ID" error and two buttons with one name).
+- **Visualizer:** Cameras: Point-cloud scene now streams. It opens an app volume for the camera's
+  point cloud, appears as a source app in the Stream Graph and shows in other receivers; turning it
+  off, Remove or a restart closes the volume. Changing an output while the camera is stopped takes
+  effect on the next Start.
+- **Visualizer:** Stereo Display settings (IPD, screen distance, depth strength, convergence, screen
+  size, calibration, manual frustum) now apply to the receiver they are set for, including a camera
+  blend in a Texture grid. Screen plane also moves a camera blend at depth strength 1. Controls a
+  stream cannot change say "Fixed by this stream".
+- **Visualizer:** Peer tooltips no longer show a crashed or departed peer as "Application state:
+  Running"; it reads "Shutting down (last reported: Running)".
+- **Visualizer:** Room Origin shows how many devices are in the room and links to Rooms; angles show
+  a degree sign; Cube Renderer, MCP port and camera rows line up.
+- **Visualizer:** Stream Graph orders mixers and targets so routes no longer cross where swapping two
+  of them avoids it.
+- **Visualizer:** popup sign-ins on a web app source page (Sign in with Google, Microsoft or SSO,
+  for example on Foxglove) open in the page panel, in place of the page, instead of in your default
+  browser, where they could never return to the page. Sign in there; the popup closes itself and
+  the page continues signed in. Close it with the button beside its address. Links that open a new
+  tab still open in your default browser.
+- **Visualizer:** inviting an Android device (e.g. Metalens) no longer fails with "A target app
+  invite supports only the Android and HoloLens devices": Add device's "Metalens" kind (was
+  "Android AR") now asks for the Android streamer.
+- **Visualizer:** launching a web app from its Source Applications tile starts streaming as soon
+  as the page is ready, instead of only showing the page until Start is pressed.
+- **Visualizer:** clicks, hover and the wheel in the web app Page panel reach the page again on
+  adapted pages that paint the streaming surface themselves (WebGPU Deferred Rendering, WebGL
+  Aquarium): their own controls, such as the light or fish count, were unclickable because the
+  pointer landed several times too far right and down.
+- **Visualizer:** a web app source no longer stops streaming for 2 s at a time on a busy PC: when
+  the browser drops the repaint a render request asked for, it is asked again until the frame
+  arrives. A render timeout now says whether the page, its paints or the frame tag stalled.
+- **Visualizer:** the MCP control and web app tools answer while the Visualizer window is hidden in
+  the tray or minimized (QAROS started from the hub service); they used to time out until the
+  window was opened. Only screenshots and window layout tools need the window.
+- **Visualizer:** the web app `capture_surface` returns the atlas as targets receive it (a paint
+  carrying a render-frame tag) instead of whichever paint was newest, which often showed only the
+  page region. The page probe lists iframes, and `webapp_skill_get` says which iframe address to
+  open when the 3D content is inside one.
+- **Visualizer:** the WebGL and WebGPU reference adaptation libraries pack the far plane as far
+  (it wrapped to black, read as nearest), render each depth view with its own eye's camera, and
+  the WebGPU one confines the app's view to the top-left page region. A web app source's
+  pre-document script that fails when the browser is created is now visible to the page
+  (`window.__qarPreDocumentErrors`), not only in cef.log.
+- **Device apps:** an Android headset or HoloLens that is switched off or away no longer makes the
+  QAROS Hub tray report its streamer as "keeps crashing". QAROS keeps trying to reach the device,
+  every 2 to 30 seconds, and connects when it comes back.
+- **Visualizer:** an embedded GUI panel page or web app source page that never repaints after
+  loading is shown instead of staying blank.
+- **Runtime:** a process QAROS starts for a target (the OpenXR runtime, the mixer, a StereoKit or
+  CPU source, the visualizer) rejoins the session when it is restarted after a crash. It used to be
+  restarted with its spent one-time invite, refused every time, and reported as "keeps crashing".
+- **Visualizer:** adapted web previews avoid repeated full-stereo-atlas copies while streaming,
+  updating only the page reservation for each new CEF paint.
+- **Visualizer:** HUB-hosted web sources always await registry routing. The stream graph keeps an
+  intermediate mixer labeled as a mixer while its output stream is not yet registered.
+- **Visualizer:** narrow web previews and three.js gallery frames reflow at their actual viewport
+  size, while exact atlas pixel mapping preserves packed stereo depth and completion markers.
+- **Visualizer:** web pages load before streaming, including restored pages. Start sends to headsets;
+  every Page click opens and focuses the preview. Toolbar input waits for its browser to exist.
+- **Visualizer:** web app sources scale clipping distances with their app scale. Shared three.js
+  adaptation preserves offscreen environment-map viewports, fixing black materials in lit demos.
+- **Visualizer:** runs in a Hyper-V VM with a GPU partition (GPU-P). It used to lose its Vulkan
+  device on the first frames and restart in a loop; there it now presents with FIFO instead of
+  MAILBOX (logged at start), elsewhere nothing changes.
+- **Runtime:** a hub that joins another hub's session no longer brings a visualizer, mixer or
+  source apps with the same peer ids as the other hub's: with `applyDeterministicIds` every
+  launcher-assigned id is derived from the hub's own peer id, so the session holds one visualizer
+  per hub. After the update the visualizer and launched apps enroll once under their new ids.
+- **Runtime:** a second hub on the same PC (another QAROS, a test) no longer shares the first
+  one's router port: the port is reserved machine-wide and checked free on every address, so
+  devices always reach the hub they were onboarded to (ADR-0364).
+- **Runtime:** *New session* no longer leaves the Visualizer failing to join ("not connected within
+  5000 ms") and the tray reporting it did not open. The hub waits, up to 40 s, for the retired
+  session's router to release its port before the next one listens on it, then starts the
+  services.
+- **Mixer:** no longer crashes when an app that shows a website panel (the RViz plugin, for
+  one) restarts and creates its panels again. The mixer restarted and the headset lost its view
+  for a moment.
+- **SDK:** a GUI panel created or brought into a new session Hidden or Minimized keeps that state;
+  the hub stored every new panel Visible, so the creator saw it hidden and then shown. What a change
+  means is now applied by one rule on the writer and on the hub, so no field reverts once stored.
+- **SDK:** closing a session no longer logs about ten `BackgroundTask: joining task created at
+  ResilientMessaging.cpp:... via foreign-executor-detach` errors, nor the `ChannelIsClosed` and
+  `Timeout` errors a closing video sender, its stream state and the peer list logged. The teardown
+  was safe; only its log level was wrong.
+- **SDK:** a video sender whose receiver closed its stream right after a reconnect no longer
+  stops: the sender's frame loop and every later stream request to it hung, and so did its
+  teardown, because the sender's close waited for the close of the replaced connection, which
+  waited for the sender's own graphics thread (#601).
+- **SDK:** a hub restarted at its router port within seconds of stopping, as QAROS restarts it,
+  gets its services and devices back at once. A dial a service made while the hub was down, given
+  up after the hub was back, left the stopped router's QUIC socket open and refusing every
+  handshake for 30 s; on Windows the restarted router bound beside it and received none of them
+  (#601).
+- **SDK:** a fast change (app volume pose, size, app pose and scale; panel pose and size; room
+  offset) made right after the object's create, or while the hub's object authority is being
+  elected or taken over, is no longer lost on the hub. The hub keeps such a change for up to 10 s
+  and stores it once it may, in the order the changes were made, so other apps and a late joiner
+  read it at once instead of only after the drag ends; the app that made the change reads it back
+  immediately, as before.
+- **SDK:** an app volume reads back every change of its gesture-mode selection at once. Setting
+  the default mode and then clearing all peers, or setting the mode of two peers, used to hide
+  the first change from `GetAppVolume` of the calling client until the hub answered; the changes
+  now stay layered on its reads in the order made, each until the hub answers it.
+- **SDK:** a session join that cannot reserve its listen port no longer asks the hub's certificate authority for a signing on every retry. The port is checked before the certificate is requested, a join that failed for a local reason backs off from 1 s up to 30 s and logs the reason once per change, so repeated retries no longer end in `CaGatewayOverloaded` ("used its 20 signings per 600 s") that hid the real cause.
+- **SDK:** `GetOrCreateAppVolume` and `GetOrCreateRoom` no longer use freed memory when the
+  configure callback calls `Build()` itself; the second build returns an error
+  (`AppVolumeBuilderValidationFailed`, `ArgumentNotSupported`), as `GetOrCreatePanel` already did.
+- **SDK:** two apps changing the gesture mode of two different peers of one app volume both
+  land, whichever change reaches the hub first. Before, the change stamped earlier was lost when it
+  arrived second. Nothing to change on your side.
+- **SDK:** an app onboarded or rejoined with a presented display name, app version or custom peer
+  info is listed by the hub with them from the start. Before, the hub could keep listing the
+  generated placeholder name (such as `confident_schrodinger`) instead. Nothing to change on your
+  side.
+- **SDK:** GUI panels keep their content, display name, pose, size, state and visibility when the
+  hub restarts. A panel that had been moved, resized or renamed could come back as a stream panel
+  with no content, which the mixer closed, and creating it again under the same common name was
+  refused as a content-type change. Nothing to change on your side.
+- **SDK:** ids the library generates (shared-object operations, invitation and app ids) no longer
+  repeat when two threads create one at the same moment.
+- **SDK:** an app's changes to a shared object (app volume, GUI panel, room, peer spec, media
+  stream) are no longer refused for being made against an older value, so changes sent right after
+  joining, before the app has read the object, or in a quick burst land in one round trip each.
+  Before, they were resent with backoff and a burst took seconds. When two apps change the same
+  field at once, the change the hub receives last wins, as before; a resend of an app's earlier
+  change no longer undoes its own later one.
+- **SDK:** the first change to a shared object nobody changed for 2 s no longer waits about 1.5 s
+  on a hub that is the only one serving it (single-hub sessions), and at most one round trip
+  with several primary hubs.
+- **SDK:** querying the shared objects a session holds (for example the app volumes right after
+  joining) returns as soon as the hub's storage has answered, instead of after about 2-5 s, and a
+  query that has its answer is no longer sent again to the peer that answered it.
+- **SDK:** a receiver that watches a running stream (a second receiver) and closes leaves the
+  stream's record at once. It was listed as reconnecting until the sender's `ReconnectTimeout`
+  (5 min by default). A lost connection still reconnects.
+- **SDK:** a runtime given a GPU adapter id that names no GPU on this machine (one from before a
+  restart) picks the best GPU and logs a warning instead of failing with `Could not find any
+  suitable GPU`.
+- **SDK:** onboarding with an invite (a pairing code, QR code or pushed invite) no longer fails on
+  a device whose clock runs ahead of the hub's. The device no longer checks the invite's expiry on
+  its own clock; the hub refuses an expired invite on its clock. An invite string may also be the
+  compact `QAR1:` form the Visualizer's connection QR code shows.
+- **SDK:** a message published in the second application-defined format
+  (`BinaryMsgMIME::AppCustom2`) arrives as `AppCustom2`; it arrived as `AppCustom1`.
+- **SDK:** messaging and shared-object fixes
+  ([#575](https://github.com/Quaternar/Quaternar/issues/575)):
+  - State a peer reads when it joins (settings, registries, shared state) no longer occasionally
+    falls back to an older stored value when a change arrives while the stored value is still being
+    fetched. A peer that joins late gets every change of a shared object, not only the first, and
+    two changes of different fields of one object made at the same time both land.
+  - A burst of shared-object changes written at once (several fields or objects, from several
+    threads) reaches every live reader: up to two in five of them were dropped on their way and
+    appeared only after the next read of the stored state.
+  - A shared-object change that is refused, or dropped because no hub took it within 30 s, no longer
+    stays visible on the peer that made it: the object reads and streams as stored again.
+  - The first messages on a topic published for the first time are no longer lost while the hub sets
+    up the topic's publication; they wait for its confirmation (about a millisecond on a LAN, never
+    more than 1 s).
+  - A reliable message published while a session restarts for a new CA trust bundle is no longer
+    occasionally lost, and publishing during the restart no longer fails as not connected.
+  - A peer that subscribes to a reliable topic no longer receives up to the last 1024 messages each
+    publisher sent before it subscribed (at most those of the last second). It receives every
+    message published from its subscription on, also those sent while its subscription was still
+    on its way to the publisher, which could be lost before.
+  - A video receiver that reconnects to the same stream reuses the stream's state topic instead of
+    adding one per reconnect, so frequent reconnects no longer slowly add latency to the session's
+    messaging.
+  - A hub's replicated storage keeps the newest write of each key whatever order two writes arrive
+    in.
+  - A session no longer aborts the process when best-effort messages back up on a congested or lossy
+    link (a fault of the QUIC library, which is updated), nor when a declaration races its removal
+    in a router with many peers joining and leaving (the declaration is skipped with a warning). An
+    exception thrown while the library handles a message, query or reply no longer ends the process
+    (on Windows exit code `0xc0000409`, e.g. when QAROS was quit): it is logged with the
+    subscription or query name and that one message is dropped.
+  - Closing a session whose message handling is stuck takes 2 s instead of hanging or waiting 30 s
+    (its network link stays open until the process exits; the log names the stuck handler). Closing
+    a session that hosts storage ends every storage task and thread before it returns.
+  - On Linux, a hub or peer no longer fails to find a listen port in its range ("no reservable
+    listen port") after many sessions in that range closed within the last minute.
+- **SDK:** a video receiver whose sender process restarts under the same peer id reconnects to
+  the restarted sender. Before, a receive already waiting for a frame was never completed once
+  the sender stopped answering, so the receiver stayed stuck until it was restarted itself.
+- **SDK:** a receiver's pose age is measured on one clock when the device that sampled the pose
+  runs on another clock than the PC (a headset): a rendering sender's frames carry its estimate of
+  that clock, and the receiver reports no pose age until it has one, instead of the difference of
+  the two clocks.
+- **SDK:** a device that joined a session by invite reconnects within about a second of its hub
+  listening again. Before, it could wait up to 4 s between attempts, and an attempt towards a hub
+  that was still away held the reconnect for 10 s. On Android it no longer tries the hub's
+  loopback address.
+- **SDK:** rejoining a stored session whose certificate expired more than 7 days ago
+  reports `OnboardingRePairRequired` instead of a generic security error, so an application knows
+  to pair the device again with a new code rather than retry the rejoin.
+- **SDK:** a request-driven render sender delivers again after its viewer reconnects. The
+  reconnected viewer sent its render requests under a new stream id, which the sender never read,
+  so its begin-frame waited for ever while its stream stayed open.
+- **SDK:** `qar-streaming-c` and the libraries it loads no longer crash on their first mutex lock
+  in a host application that bundles a Microsoft C++ runtime older than 14.40 (`msvcp140.dll`
+  14.29, for example Blender up to 5.0). Windows reuses the host's copy for every DLL it loads.
+- **SDK:** a session's listen port is no longer taken by a child process the application starts at
+  the same moment. The port check's socket was inherited by such a child (on Windows, any process
+  started with inherited handles) and stayed bound until the child exited; the session could then
+  not listen on that address (os error 10013), on the LAN address too. The SDK's own listeners
+  (onboarding, discovery) are no longer kept bound by such a child either, after the application
+  exits or restarts them. A session also no longer
+  fails to come up when one network adapter refuses its listen port: it logs
+  `full-mesh listener <address>:<port> was refused` with every process holding the address, and
+  listens on loopback and the other adapters. Only loopback failing still fails the session.
+- **C API:** an application can call `qar_library_unload()` after `qar_library_destroy()` and keep
+  running. `qar_library_destroy()` now removes the crash hooks `qar_library_init()` installed in the
+  process; before, the application's next C++ exception after the unload ended the process. A crash
+  handler the application installed after `qar_library_init()` is left in place.
+- **SDK:** Vulkan senders using an application's own device convert directly from shared images,
+  avoiding an intermediate full-frame copy when layout, colour or depth conversion is required.
+  Images remain safe to write as soon as the next frame is handed out.
+- **C API:** a Vulkan render sender works on a Vulkan 1.1 device without timeline semaphores, as a
+  Unity player creates one. Its frame semaphore was created with a structure such a device does
+  not accept.
+- **C API:** `qar_render_sender_frame_vulkan()` is documented as it behaves: signalling
+  `synchronization.semaphore` is required in every frame you begin, a discarded one included, and
+  `synchronization.fence` is not read. The docs said to set the semaphore or the fence.
+- **C API:** a Vulkan render sender no longer hands out the images of a new frame while it may still
+  be reading the previous one. That could happen after a `qar_render_sender_show_frame()` that
+  failed, so the application's next writes raced the sender's copy. Write the images of a frame you
+  begin without any wait of your own against the sender.
+- **C API:** `qar_render_stream_handle_destroy()` stops a begin-frame still waiting on the sender,
+  which then fails, and returns once it has let go: usually within a frame, at most after 5 s. The
+  sender used to outlive its handle until that wait ended, and destroying its session meanwhile
+  crashed the process now and then with an access violation in `qar_streaming.dll`. Do not destroy
+  a render sender from a callback of this library.
+- **SDK:** closing a sender that streams to another process on this machine no longer reports
+  `VUID-VkSemaphoreSignalInfo-value-03259` under Vulkan validation, in any graphics API. The frame
+  the close discards was signalled to the receiver out of order. Nothing to change on your side.
+- **SDK:** an invite from `qar_session_request_onboarding_invite` (C#:
+  `Session.RequestOnboardingInvite`) now names the hub's CA, like the codes on the visualizer's
+  onboarding screen. A co-process whose stored identity came from a CA the hub no longer uses
+  pairs again with the invite instead of rejoining with that certificate, which the hub refuses.
+- **SDK:** the application no longer crashes about a second after it stops a render stream and
+  destroys the render sender, session and runtime. The crash was an access violation on an SDK
+  worker thread. A sender or receiver that outlives its session now stops checking whether its
+  peer is still there, and no longer uses the session's freed connection to do so.
+- **SDK:** resuming a paused video stream right after pausing it no longer leaves the stream
+  paused. Under load the resume was dropped, and receivers kept seeing the stream as paused.
+- **SDK:** app volumes and rooms received through `ReceiveAppVolumeUpdates` (and the room
+  equivalent) no longer stay on an older `UpdateCount` during a burst of fast updates such as a
+  drag. The content was current, but the revision could stop advancing until the next change.
+- **C API:** a local-app onboarding (`QarOnboardLocalAppExt`) started with `QAR_INSTANCE` naming an
+  instance that is not installed, such as a development hub's `dev-<key>`, no longer starts that
+  hub when it is not running. It waits up to a minute for that instance's hub to come up, so an app
+  started together with its hub still joins it, then fails with
+  `QAR_STATUS_ONBOARDING_HUB_UNREACHABLE` and the message "QAROS instance '<name>' is not running".
+  It never joins another instance. Before, it
+  started the stopped development hub again from the runtime folder its record still named, and
+  joined it without a prompt when the app had been approved there. Installed instances are still
+  started as before.
+- **C API:** cancelling a pending `qar_render_sender_begin_frame` / `_async`, or destroying its render
+  sender or session, no longer hangs: the call ends with `QAR_STATUS_TIMEOUT` and the async result
+  callback fires once before the destroy returns. `qar_render_sender_begin_frame_async` now works on
+  OpenGL and Vulkan senders. Async calls without a cancel token share one internal token instead of
+  creating one per call.
+- **C API:** every `qar_*_async` call that returned success now fires its result callback exactly
+  once, also when its cancel token is cancelled, times out or is destroyed, and when its session,
+  runtime or the library is destroyed first; those end with `QAR_STATUS_TIMEOUT`, before the
+  destroy call returns. `qar_render_sender_create_async` and `qar_render_sender_begin_frame_async`
+  dropped the callback on cancellation, and an internal failure could drop it for the others:
+  an app or binding waiting for it hung and leaked what it had pinned for the call.
+- **SDK:** C# `Runtime.JoinHubAsMember` and an onboard with `OnboardOptions.UseInvite` hold a
+  reference on the `MemberHubInvitation` / `OnboardingInvite` for the whole native call. The
+  garbage collector could free an invitation the app kept no other reference to during the
+  minutes-long join, and a `Dispose` on another thread could free it mid-call: a crash or undefined
+  behaviour. Disposing it during the call now takes effect when the call returns.
+- **C#:** every call on a `Session` (its `Peers`, `AppVolumes`, `GuiPanels`, `RenderSenders` and
+  `PrimarylessVideoSenders` included), a `RenderSender`, a `PrimarylessVideoSender` or a
+  `RenderFrameInfo` holds a reference on the native object until it returns, an async call
+  (`BeginFrameAsync`, `CreateAsync`, `InviteTargetAppAsync`, `KillTargetAppAsync`,
+  `RequestOnboardingInviteAsync`) until its native completion. A `Dispose` on another thread, say
+  Unity's `OnDestroy` while a render thread waits in `BeginFrame` through a paused stream, or the
+  garbage collector, could free the object mid-call: a crash or undefined behaviour. Now the object
+  refuses new calls with `ObjectDisposedException` at once, cancels the calls that wait on it
+  (`BeginFrame`, sender creation, target-app invite and kill, invite request; they fail), waits
+  until every running call returned (an async one until its completion fired) and only then
+  releases the native object, on the thread that called `Dispose`. So when `Dispose` returns the
+  object is gone (a `Runtime.Dispose` or `Library.Destroy` may follow at once), a session's
+  subscription handlers have ended, and a D3D11, OpenGL or Vulkan sender was released on the
+  disposing thread. `Runtime.Dispose` likewise cancels and waits for a running `Onboard`, `Rejoin`
+  (and their async forms), `JoinHubAsMember` or `CreateMemberHubInvitation`. `Dispose` from inside
+  one of the object's own callbacks (a subscription handler, a progress report), or from another
+  QAROS callback while a call on the object runs, throws `InvalidOperationException` instead of
+  waiting on the library thread.
+- **SDK:** an app volume, GUI panel or room an app takes over with get_or_create
+  (`qar_app_volumes_get_or_create`, `qar_gui_panels_get_or_create`, C#
+  `AppVolumes.GetOrCreate`, `GuiPanels.GetOrCreate`; one its previous run left, say) is carried
+  into the hub's next session like one it created. It used to vanish at the next rotation or join
+  of its hub. The headers and the C# docs now recommend calling get_or_create again for every
+  common name the app owns on each new session id and after onboarding again.
+- **SDK:** an idle session no longer costs CPU for every topic it answers queries on. Each one
+  used to wake up to 1000 times a second, so a hub or app serving many topics could take tens of
+  percent of the CPU on PCs with a fine system timer.
+- **SDK:** a GUI panel or app volume no longer jumps back to an older pose or size, a room to an
+  older offset, and a closed one no longer reopens, when a storage answers late with an older copy
+  (after a hub restart, or with several storages in the session): the hub keeps the newest state it
+  holds and builds the next change on it.
+- **SDK:** a source app starts the QAROS hub at most once (its first local enrollment); renewals
+  and reconnects only reach a hub that runs. A hub stopped by the tray, an operator or an installer
+  no longer comes back while apps such as TerraExplorer run, so an update can replace it.
+- **SDK:** onboarding several sessions at once from one `qar::Runtime` (code pairing or local
+  enrollment) no longer hangs: four at once used to hold every thread of the runtime's pool while
+  their sessions waited for that pool to connect.
+- **SDK:** a renewed TLS identity that zenoh refuses no longer restarts the session of a router hub
+  (which dropped every token routed through it at its peers): the session keeps its links and its
+  current identity while that is valid for more than an hour, and the next renewal replaces it.
+- **SDK:** a device that reaches another hub at its hub's old address reads
+  `OnboardingHubNotAuthentic` ("not my hub") instead of `OnboardingRePairRequired`: a hub proves
+  itself before it refuses a certificate it does not serve, so the session follower keeps probing
+  its own hub instead of asking the user to pair again. A device whose own hub replaced its CA, and
+  a moved hub's old devices, still read the refusal and pair again.
+- **SDK:** a device whose renewal endpoint is unknown looks it up only from the beacon of the hub
+  that issued its certificate, and records it only after that hub proves itself over the
+  certificate channel; another hub on the same PC is ignored instead of being recorded as its
+  renewal endpoint. Code onboarding whose hub endpoint
+  file is stale likewise takes only the beacon of the hub that file names.
+- **SDK:** a long-running session no longer drops its peers when certificates expire. Before, when
+  the hub's 24-hour certificate expired every headset, receiver and source app was disconnected and
+  the session reset. Every certificate (the hub's, devices', local source apps') now renews in
+  place: also after the PC resumed from sleep past the renewal time, also when the hub's own
+  certificate had already expired, and without a recorded renewal address. A failed renewal is
+  retried and never resets the session. A local source app whose certificate the hub cannot renew
+  (recorded by an earlier version) is enrolled again under its approval without a prompt.
+- **SDK:** a process could crash when a subscription was torn down while a message for it was
+  arriving, for example while a session restarted to renew its certificate. A pending read now
+  keeps its channel reader alive until it completes.
+- **SDK:** the runtime (`qar-streaming-c.dll`, `qar_library_load(NULL)`, `Quaternar.Qaros`, Unity)
+  loads on PCs without an NVIDIA driver (AMD or Intel GPUs, virtual machines). Before, loading it
+  failed with Windows error 126 because `nvcuda.dll` was missing. There, CUDA-based transfers are
+  not offered and the GStreamer WebRTC transfer runs without CUDA.
+- **SDK:** a video or render sender, or a receiver, on your own Vulkan device
+  (`QarStreamParamsVulkan`) no longer aborts the process when the Khronos validation layer is
+  active: in a debug build, or forced on by Vulkan Configurator in a release build.
+- **SDK:** sessions expecting a stream register wait through an `Absent` presence reply as well as
+  silence, preventing direct-stream fallback during registry startup or recovery.
+- **SDK:** render senders prepare each frame's metadata in `BeginFrame`, so applications can reuse
+  the `Frame()` reference until the layout changes without stale metadata or an invalid frame
+  becoming valid again in `EndFrame`.
+- **SDK:** several render senders that join one app volume at the same moment all get their
+  target added. Before, concurrent adds could overwrite each other, and the dropped targets never
+  received a stream.
+- **Docs:** *Onboarding and Sessions*: onboarding as a local app (`QarOnboardLocalAppExt`) works on
+  Linux too; the page said Windows only.
+- **Docs:** *Custom GUI Panels* and *Limits and Behaviors to Design Around*: `get_or_create` on
+  an open served panel applies a served page from a bundle the calling session published, so an app
+  restarted under a new peer id shows its new bundle; the rest of the init is still ignored.
+- **Docs:** no page sends a device or an app to **Let another hub join us** for a pairing code any
+  more: that card shows a join code for another Hub only, and a device or an app that types it
+  fails pairing. *Getting Started* and *Troubleshooting* of the User Guide, *Connecting to the Hub*,
+  *Managing Devices* (new section *Handing a code to a device*), *Security Model*, *Security Deep
+  Dive* and the Developer Guide's *Getting Started* describe how a device really gets its code:
+  **Pair headset** over USB, the QR code of **Show QR code** or the **Pair Headset** dialog
+  (**Invite device** › **All devices**), the code the headset shows typed into that dialog, or an
+  invite by address on **HoloLens (legacy)**. The Ogre, Qt and RViz2 pages say that their code
+  pairing with a Hub on another PC has no code to use today, and to join a member Hub on this PC
+  as a local app instead. *Connecting to the Hub*: the HoloLens card has no Label field and its
+  button is **Invite HoloLens**. The C header, the C# and the Rust docs of the code onboarding no
+  longer name a hub onboarding screen.
+- **Docs:** the Ogre, Qt and RViz2 pages, *Limits and Behaviors to Design Around* and *Custom GUI
+  Panels* follow the current C header: a GUI panel shows a URI, served content or a video stream
+  (`QarGuiPanelServedContentExt` too); `get_or_create` ignores the init for a panel or volume that
+  exists and is not closed and takes it over; only a HoloLens is invited, an Android headset is
+  paired in the Visualizer (`headset:` returns `QAR_STATUS_HUB_TARGET_APP_DEVICE_NOT_INVITABLE`);
+  `qar_library_load(NULL)` no longer reads `QAROS_RUNTIME_DIR` (the libraries' own loader still
+  does); the C++ wrapper copy `1914bc2` does not compile against the current header.
+  *Language Bindings* describes the header-only C++ wrapper `qar-streaming-cpp` in this repository.
+- **Docs:** the *Tutorials* entry of the *Rust API* menu opens `/docs/dev/`, not the former `/next/`.
+- **Docs:** new page *When a Target Restarts*: what QAROS recovers by itself (reconnect, pause),
+  when a sender closes for good, the stream states and status codes to watch, recreating the sender
+  with a back-off while the target is in the peer list, with C code and the C# equivalent. Linked
+  from *Render Loops*, *Rendering Streams* and *Troubleshooting*. The Vulkan cube creates a new
+  sender after a close instead of waiting for a peer-list update.
+- **Docs:** the C and Rust Vulkan rendering tutorials and the Rust local-app onboarding tutorial
+  link to the *Started by QAROS* section of *Onboarding and Sessions* again, and the 0.9.0
+  *Onboarding and Rejoin* tutorial page is served instead of a redirect.
+- **Docs:** *Pair a Headset*, *Meta Quest and METALENSE 2 - Install and Pair* and *Scene Origin and
+  Rooms* quote the Android player's current connection prompt (*Scan the connection QR code or
+  enter in QAROS:*) and anchoring message (*Look at the anchoring QR code*).
 - **Docs:** *Onboarding and Sessions*, "Launched by QAROS": an API app QAROS starts is no longer
   restarted when it exits unless the operator turned on **Restart when it exits** for it.
-
 - **Docs:** Mermaid diagrams render as diagrams instead of code blocks, as in *Authoring a Binding*'s
   runtime lookup flow.
-
 - **Docs:** *Getting Started* and *Troubleshooting* say that every QAROS Hub sets `QAR_INSTANCE`
   for the apps it and the Visualizer start (`default` for the installed QAROS), so only an app
   started by hand needs it.
@@ -340,6 +4241,147 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   is described as geographic reference metadata in the glossary, the tutorial and the *World space*
   heading of *Coordinate Systems* (new anchor `#world-space--a-geographic-reference`). Guides no
   longer recount earlier behaviour.
+
+### Security
+
+- **Runtime:** a co-process invite can no longer be spent from another PC by someone who learned
+  its id: the hub refuses a redeemer that is not on its own PC with the answer an unknown invite
+  gets and keeps the invite for the co-process. A failed pairing from the hub's PC still spends it.
+- **Packaging:** uninstalling QAROS with "delete the data" (or `uninstall.exe /S /PurgeData`) now
+  also destroys the hub's protected store: the QAROS System Service deletes its machine key first,
+  then the store, and the uninstaller removes `%ProgramData%\Quaternar\Qaros`. Before, the
+  protected `secure` folder and the key stayed behind. The uninstaller asks the data question at
+  the start instead of the end. Keeping the data (the default) keeps the store and its key, so a
+  reinstall finds approvals, paired devices and the licence again. Installing the demo over data
+  the licensed QAROS left behind now removes that store as well.
+- **Packaging:** only administrators can start, stop or reconfigure `QAROS.SystemService`; other
+  users can only query it.
+- **Runtime:** on an installed QAROS, local apps now enrol through the QAROS System Service
+  instead of a pipe the hub opens in the user's session: the app talks only to the service's own
+  process, and the service hands the app to the hub of the app's own Windows user. Another program
+  of the same user can no longer pose as the hub to collect enrollments. Nothing changes for apps;
+  local enrollment of an installed hub needs `QAROS.SystemService` running (the setup starts it),
+  and an app of a user whose hub is not running is told so after up to a minute.
+- **Runtime:** a program that takes the name of a QAROS pipe while QAROS.SystemService or the hub
+  is stopped can no longer act as an app that connects to it: apps hand any QAROS pipe only their
+  identity. The hub grants the service the right to act as it only after checking, twice, that the
+  service's own process serves the pipe. The service and the hub also stop serving a pipe name
+  another Windows account has taken. Nothing to do.
+- **Runtime:** an older copy of the hub's device blacklist, app approvals or licence put back
+  between two hub runs (a restored backup or store file) is now refused instead of silently
+  undoing revocations or the licence's time floor: the hub does not start on a rolled-back
+  blacklist, a local app on rolled-back approvals is not admitted, and the licence reports it was
+  rolled back. A blacklist, approval set or licence deleted from the store is refused the same
+  way. Restore the current store or reset the hub to a new install, which clears this protection
+  with the values. An installed hub's protection is kept by the QAROS System Service, so update
+  the hub and the service together (the setup does); a development hub's is best effort against
+  its own user. When a reset cannot erase an installed hub's secrets (the service is stopped), the
+  hub does not start, the tray says why, and the next start tries the reset again.
+- **Runtime:** operator actions (pairing codes, invites, device revoke and allow, new session,
+  app approvals, source apps, hub name and room, remembered devices, audit log) are authorized on
+  an operator role the hub writes into the requester's certificate, and only while the hub still
+  assigns that role: the Hub Display gets it from the credential the launcher starts it with, a
+  launcher `operatorPeers` entry at its next pairing or certificate renewal. A peer id alone, or
+  anything a device says about itself, no longer makes an operator. (#221)
+- **Runtime:** member hubs get their own certificate name, and every process's session access
+  control keeps them off the primary's authority topics (trust bundle, revocation, approvals,
+  member admission, new session). (#245)
+- **Runtime:** every certificate the primary issues for a member hub's devices and apps names that
+  member, and the primary checks each one again; an app on a member's PC can never act as a local
+  app of the primary's PC. (#245)
+- **Runtime:** an app approval made for a member's PC applies only there, never on the primary.
+  (#241)
+- **Runtime:** the hub that runs a session signs the CA trust bundle it distributes, and
+  republishes it every 10 s. Devices and joined hubs refuse a bundle from any other peer (#213).
+  A device enrolled before this update ignores trust updates until it enrolls again.
+- **Runtime:** devices can no longer choose their own peer id, and revocation is bound to the
+  hub-assigned peer id and the device's key. (#214)
+- **Runtime:** device revoke, allow and list, session rotation, hub-connect, app approvals,
+  remembered devices and target-app kill name their sender by a signature from its session
+  certificate, and are allowed only for the hub's own visualizer or configured operators; the hub
+  no longer trusts a sender id or device type in the request. (#216)
+- **Runtime:** a hub's launcher defines, starts or stops a source app, or starts an OpenXR runtime
+  source, only when the hub's own visualizer signed the request; any other session peer's request
+  changes nothing. Hub name and room changes need a signed operator. (#221)
+- **Visualizer:** the visualizer signs hub name, room and source-application changes with its
+  session certificate. (#221)
+- **Runtime:** a hub mints pairing codes only for its operators, and a code planned for a peer
+  only for its own visualizer; a device can no longer obtain a code that enrols the visualizer's
+  identity. Target-app invites and shutdowns are served only to applications on the hub's machine
+  that it admitted itself. (#221)
+- **Runtime:** a source-application definition can no longer name a command interpreter, script
+  host or script (`cmd`, `powershell`, `pwsh`, `wscript`, `cscript`, `mshta`, `.bat`, `.cmd`,
+  `.ps1`, `.vbs`, `.js`, `.hta`, ...); such a definition is refused and a stored one does not
+  launch. (#221)
+- **Runtime:** the in-process certificate authority keeps its root and intermediate keys only in
+  memory that is zeroized. (#217)
+- **Runtime:** private keys, the hub's CA keys, invite tokens, the stored-data key, the
+  revoked-device list, the approved apps and the licence can no longer be read or edited by another
+  Windows user or from a copy of the disk: each is AES-256-GCM encrypted and bound to its name,
+  under a TPM-backed key of the signed-in user. Programs running as that same user can still reach
+  them; a key held by the QAROS service follows with #222. (#198, #203, #204)
+- **Runtime:** an edited, swapped or older copy of the revoked-device list, the approved apps or
+  the licence is refused while the hub runs. (#204)
+- **Device apps:** the Quest and METALENSE 2 players keep their pairing encrypted under an Android
+  Keystore key instead of in plain files; they pair again once after the update. (#202)
+- **Runtime:** only the session's primary hub authors shared-object state (panels, app volumes,
+  rooms, peers, media streams and their corrections) and hosts its processors. Devices can never
+  publish it; member hubs can never publish it into the primary and only relay the primary's state
+  to their own devices. Both still propose edits, and the primary decides. While the primary is
+  down, shared objects pause until it is back. (#258)
+- **Runtime:** hub-role pairing codes are refused: a codes request with role `hub` fails with
+  `CaAuthorizationDenied`, and a pairing channel never enrols the hub certificate. A session's
+  primary is the only holder; a joining hub pairs with a member join code. (#258)
+- **Visualizer:** the Visualizer MCP and automation server now answer `403` to any request whose
+  `Host` is not `127.0.0.1:<port>` or `localhost:<port>`, or that carries an `Origin` other than
+  `http://127.0.0.1:<port>` or `http://localhost:<port>`, or whose `Sec-Fetch-Site` is `cross-site`
+  or `same-site`. A web page in a browser on the PC can no longer drive the Visualizer, by a
+  cross-site POST, by an image or other cross-site GET, or by DNS rebinding. A browser-based MCP
+  client served from another origin (such as MCP Inspector) no longer connects: use a CLI or IDE
+  MCP client, or any tool that connects to `127.0.0.1` or `localhost` without an `Origin` (curl,
+  PowerShell, Python). (#220)
+- **SDK:** a device can no longer publish a media stream's live metrics (`qar/media-stream/liveMetrics`);
+  only the hub does. A gesture on a panel restricted to some peers (`UpdateVisibleTo`) from a
+  `SourcePeerId` outside them is ignored, and readers no longer receive it. A peer spec proposal is judged
+  by the peer it was published by, not by the peer the spec names.
+- **SDK:** messages between apps on one PC no longer pass through zenoh shared memory, which any
+  process of the same OS user could map and read or change, outside TLS and session access
+  control ([#579](https://github.com/Quaternar/Quaternar/issues/579)). Every session turns it off
+  and the library no longer contains it. Payloads of 16 KiB and more between apps on one PC take
+  a few hundred microseconds longer; smaller ones are unchanged.
+- **SDK:** a session peer allowed to delete a stored key can no longer block that key on the hub
+  with a delete carrying a far-future timestamp: the hub router bounds a delete's timestamp by its
+  clock as it does a put's ([#574](https://github.com/Quaternar/Quaternar/issues/574),
+  [#575](https://github.com/Quaternar/Quaternar/issues/575)).
+- **SDK:** a session member applies a hub trust-bundle update only when the session's trust
+  authority signed it, with the key the member pinned during its code- or password-authenticated
+  enrollment. Unsigned updates and updates from any other peer are refused. A device enrolled by an
+  older hub has pinned no key, so it ignores trust updates until it enrolls again.
+- **SDK:** session access control: only the hub's certificate may publish or answer on the hub's
+  authority topics (trust bundle, revocation list, onboarding invites and codes, app approvals,
+  device admin, rotation, hub-connect, launcher actions). A peer with another certificate keeps its
+  link, but nothing it sends there is delivered. (#209)
+- **SDK:** certificate lifetimes are capped by the hub's gateway (24 h devices and hubs, 1 h local
+  apps), whatever the CA is configured to allow. (#215)
+- **SDK:** the hub limits pairing handshakes in flight (overall and per address, with backoff after
+  failed attempts) and certificate signing (per peer and overall); an over-limit request is refused
+  at once and can be retried. (#215)
+- **SDK:** pairing and secure-channel confirmation tags are compared in constant time; private keys
+  and onboarding passwords are held in scrubbed buffers and zeroized after use. Zenoh's own copy of
+  the TLS key is not yet scrubbed. (#217)
+- **SDK:** persisted private keys, certificates, invite tokens and trusted hub CAs are no longer
+  plain files: each is AES-256-GCM encrypted, bound to its name, under a key of the current user
+  on this machine (TPM or DPAPI on Windows, TPM2 / keyring / file key on Linux, Android Keystore).
+  Another user or a copy of the storage folder cannot read or swap them; programs running as the
+  same user can. (#198, #203)
+- **SDK:** session access control on shared-object state (`qar/sharedObject/**`) and the panel,
+  app-volume and room correction topics: a device certificate may never publish, delete, answer
+  or declare a queryable there; a member hub's certificate may not do so into the primary hub, and
+  may only relay the primary's state to its own devices. Both still propose edits; anything else
+  they send there is not delivered. (#258)
+- **SDK:** an `OnboardingCodesRequest` with role `hub` fails with `CaAuthorizationDenied`, and no
+  pairing channel enrols the hub certificate: a session's primary hub is its only holder. A joining
+  hub pairs with a member join code. (#258)
 
 ## [0.9.0] - 2026-10-12
 
@@ -506,6 +4548,8 @@ First versioned release. Everything below is the baseline later entries are meas
 - **Runtime:** Monado driver supports Linux GPU UUID selection and per-runtime IPC paths.
   Linux frame delivery still requires GPU-memory descriptor transport; Linux runtime validation
   remains outstanding.
+- **Device apps:** desktop logs report the connected HoloLens Player's installed package version.
+  Older Players report unknown and continue streaming; QR room selection remains compatible.
 - **Packaging:** Windows x64 runtime as `QAROS <version>.zip` (release) and
   `QAROS Demo <version>.zip` (demo): `qar-runtime-launcher`, the device applications and the C API
   under `bin/`, the C API header under `include/`.
@@ -513,7 +4557,18 @@ First versioned release. Everything below is the baseline later entries are meas
   the native runtime next to the application on build and publish.
 - **Unity:** packages `com.quaternar.streaming` and `com.quaternar.streaming.mrtk` as
   `QAROS Unity <version>.zip` and `QAROS Unity Demo <version>.zip`, installed with "Add package
-  from disk", runtime included.
+  from disk", runtime included. The ZIP's `INSTALL.md` has the install steps; endpoints, prefabs,
+  MRTK and player builds are in the Unity guide at
+  https://docs.quaternar.com/docs/developer-guide/unity.
+- **Unity:** Direct3D 11 or Vulkan. Under any other graphics API the runtime is not started:
+  initialising throws `NotSupportedException` naming the API, instead of a warning followed by a
+  likely native crash. Put Direct3D11 or Vulkan first in Player Settings > Other Settings >
+  Graphics APIs. Vulkan shows a frame only once Unity's render thread has submitted it, so delivered
+  throughput depends on Unity frame pacing; see `Show Vulkan Frames On Worker` below.
+- **Packaging:** the Unity package carries `QarUnityGraphics.dll` in `QarStreaming/lib/windows-x64`.
+  It is the Vulkan interop plugin, and the one DLL Unity loads itself, at startup. A Windows player
+  therefore also has it in `<Player>_Data/Plugins/x86_64`. Leave its import settings as they are:
+  without "Load on startup" a Vulkan player cannot stream. The runtime ZIP carries it too.
 - **Packaging:** `CHANGELOG.md`, `third_party_licenses.md` and `README-Licensing.md` (LGPL notice)
   in every package.
 - **Packaging:** every runtime ZIP and Unity ZIP carries `devices/`: the Vulkan player APKs for
@@ -551,13 +4606,76 @@ First versioned release. Everything below is the baseline later entries are meas
   with `"warpFeather": false` in the mixer config or `QAR_WARP_FEATHER=0`. Tune where the fade
   starts and ends with `warpFeatherStartMagnification` / `QAR_WARP_FEATHER_START` (default 2) and
   `warpFeatherEndMagnification` / `QAR_WARP_FEATHER_END` (default 6). Legacy mode is unaffected.
-- **Mixer:** optional source alpha. With `"mixerSourceAlpha": true` in the mixer config or
-  `QAR_MIXER_SOURCE_ALPHA=1`, each source application's alpha is composited instead of drawn
-  opaque: translucent surfaces that write depth, soft edges, and one app volume seen through
-  another. The application's colour must be premultiplied by its alpha (rendered over a
-  transparent-black clear, as the Unity package's cameras are) and its alpha channel kept correct
-  through post-processing. Transparent materials that write no depth still do not appear. Off by
-  default, because an application whose alpha channel is undefined would turn invisible.
+  The mixer filters, fades and blends in linear light, so feathered trails, translucent overlaps
+  and reprojected edges are as bright as they should be instead of too dark.
+- **Device apps:** the Meta Quest player, when it receives depth, fades the trail a head movement
+  drags beside a near object into the room while passthrough is on. With passthrough off the trail
+  stays, since it would fade to black, but it is drawn in the background's colour instead of
+  smearing the object's edge.
+- **Mixer:** source applications are composited with their own alpha when they declare it:
+  translucent surfaces that write depth, soft edges, and one app volume seen through another. A
+  stream that declares `Premultiplied` is drawn with its alpha as coverage, one that declares
+  `Opaque` fully covered. For an application that declares nothing, `"mixerSourceAlpha": true` in
+  the mixer config or `QAR_MIXER_SOURCE_ALPHA=1` reads its alpha the same way; off by default,
+  because an application whose alpha channel is undefined would turn invisible. The colour must be
+  premultiplied by its alpha (rendered over a transparent-black clear) and its alpha channel kept
+  correct through post-processing. A `Premultiplied` stream keeps its alpha across machines too:
+  the network transfer carries it at half resolution, so hard edges are slightly softer than on
+  one machine; both ends must run this version. Translucent pixels that write no depth (transparent
+  materials, Unity's default) appear for a stream that declares `Premultiplied`: placed at the middle of its
+  app volume along each view ray, so they are sorted, occlude and stop hand rays there, and are
+  reprojected without parallax. For any other stream they still do not appear. Colour brighter
+  than its alpha in a `Premultiplied` stream -- glow, bloom, additive particles, even with alpha 0
+  -- adds its light over whatever is behind it instead of being dropped or clamped; the Quest
+  player does not show it yet.
+- **Mixer:** the mixer's output stream declares its colour `Premultiplied`, and web pages and
+  streamed windows on panels no longer write their own alpha into the frame: a page or window with
+  transparent pixels used to leave holes in the alpha the desktop OpenXR player hands to the
+  runtime.
+- **Visualizer:** a stream's colour is drawn as its sender declares it. Premultiplied colour (the
+  mixer's output) is no longer multiplied by its alpha a second time, so translucent content and
+  feathered trails show at their real brightness instead of darkened; a stream declared `Opaque`
+  is drawn opaque whatever its alpha holds. A stream that declares nothing is drawn as before.
+- **Device apps:** the Quest player can composite the mixer's alpha over passthrough instead of
+  keying out black, so dark content stays and translucent content is translucent. Turn it on with
+  `"alpha": { "enable": true }` in `android-streamer.json` (off by default: it adds a quarter of the
+  colour rows to every frame within the same bitrate). The host and the player speak hello protocol
+  v7 and must be updated together. While passthrough is on, the player now clears to transparent
+  black, so the room shows where the stream draws nothing. Not yet verified on a headset.
+- **Unity:** `QarDevice` declares what its colour's alpha means, through a new `Alpha Mode` field
+  on `QarDeviceBehaviour`, `Premultiplied` by default: the cameras clear to transparent black, so
+  translucent content is composited with its coverage. Set it to `Straight` if the colour is not
+  multiplied by its alpha (QAROS premultiplies it before sending), or to `Opaque` if
+  post-processing overwrites the alpha channel. In a Linear-colour-space project the cameras now render into an
+  sRGB texture, so content streams at the brightness it was authored at; it used to be sent as
+  linear values and looked too dark on every device.
+- **Unity:** `Show Vulkan Frames On Worker` on `QarDeviceBehaviour`, on by default, Vulkan only.
+  Each frame is shown and the next one begun on a worker thread as soon as Unity's render thread
+  has submitted it. A frame that begins late has its cameras placed just before they render. At a
+  60 fps cap a Vulkan player streams at the Direct3D 11 rate, about twice what it reaches with the
+  option off. Turn it off to show every frame from the main thread instead.
+  - Under Vulkan, cap with `Application.targetFrameRate` and turn VSync off. With VSync on, a Vulkan
+    player streams at little more than half the Direct3D 11 rate.
+  - If a frame's hand-off fails, the endpoint disconnects instead of streaming on.
+  - The eye cameras, hands and headset model can move just before the first eye camera renders, not
+    only in `Update` or `LateUpdate`, so a script reading them in `LateUpdate` may see the previous
+    frame's pose.
+- **Runtime:** a stream sent to another machine costs the network at most 16 Mbit/s, however fast
+  its application renders; one slower than 30 fps sends proportionally less. Set
+  `QAR_TRANSFER_GSTREAMER_WEBRTC_BITRATE_KBPS` (kbit/s) on the sending machine to change it.
+- **Mixer:** two hands pinching a panel's title bar scale the window continuously by how far
+  apart they pull it, keeping its aspect and size limits; the window moves with the hands. One
+  hand still only moves it. The title bar has no + and - buttons.
+- **Visualizer:** a two-hand scale press that starts with the cursor on a panel's title bar scales
+  the panel: both rays aim at the bar and move with their hands. A scale press on a panel is never
+  a touch, however near the hand is.
+- **Mixer:** in size editing (the title bar's pen) a panel has a handle beside each corner. One
+  hand on a corner resizes the window against the opposite corner, which stays put; two hands on
+  opposite corners set width and height independently, so pulling sideways changes only the
+  width. Every user sees the opposite corner hold. A side handle likewise moves only its own
+  side; the opposite side stays put.
+- **Visualizer:** press gesture `Two-hand panel corners` drags the panel corner handle nearest the
+  cursor while a second hand holds the opposite corner. Turn on size editing first.
 - **C#:** XML documentation for the public `Quaternar.Qaros` API: units, coordinate spaces, threading and
   lifetime rules, and the status codes to handle. Shows in IntelliSense (the NuGet ships
   `Quaternar.Qaros.xml`) and in the C# API reference on the documentation site.

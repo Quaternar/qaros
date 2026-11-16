@@ -39,6 +39,23 @@ namespace Quaternar.Qaros
             VisibleToPeers = visibleToPeers;
         }
 
+        private GuiPanel(GuiPanelId id, string displayName, Pose pose, GuiPanelSize size, GuiPanelServedContent servedContent, GuiPanelState state, PeerId[] visibleToPeers)
+        {
+            Id = id;
+            DisplayName = displayName;
+            Pose = pose;
+            Size = size;
+            ContentType = GuiPanelContentType.Served;
+            ServedContent = servedContent;
+            State = state;
+            VisibleToPeers = visibleToPeers;
+        }
+
+        internal static GuiPanel CreateWithServedContent(GuiPanelId id, string displayName, Pose pose, GuiPanelSize size, GuiPanelServedContent servedContent, GuiPanelState state, PeerId[] visibleToPeers)
+        {
+            return new GuiPanel(id, displayName, pose, size, servedContent, state, visibleToPeers);
+        }
+
         internal static GuiPanel CreateWithUri(GuiPanelId id, string displayName, Pose pose, GuiPanelSize size, string contentUri, GuiPanelState state, PeerId[] visibleToPeers)
         {
             return new GuiPanel(id, displayName, pose, size, contentUri, state, visibleToPeers);
@@ -69,6 +86,9 @@ namespace Quaternar.Qaros
 
         /// <summary>The video stream shown, for <see cref="GuiPanelContentType.StreamId"/>; null otherwise.</summary>
         public StreamId? ContentStreamId { get; }
+
+        /// <summary>The bundle page shown, for <see cref="GuiPanelContentType.Served"/>; null otherwise.</summary>
+        public GuiPanelServedContent? ServedContent { get; }
 
         /// <summary>
         /// Whether peers see the panel. A <see cref="GuiPanelState.Closed"/> panel is reopened by
@@ -139,6 +159,20 @@ namespace Quaternar.Qaros
                         state,
                         visibleToPeers.Value);
                 }
+                else if (contentType == GuiPanelContentType.Served)
+                {
+                    var served = GetServedContent(handle);
+                    if (!served.IsSuccess)
+                        return Result<GuiPanel>.Failure(served.Info);
+                    panel = CreateWithServedContent(
+                        GuiPanelId.FromNative(id),
+                        displayName.Value,
+                        Pose.FromNative(pose),
+                        GuiPanelSize.FromNative(size),
+                        served.Value,
+                        state,
+                        visibleToPeers.Value);
+                }
                 else
                 {
                     throw new NotSupportedException("Unsupported GUI panel content type: " + contentType);
@@ -149,6 +183,26 @@ namespace Quaternar.Qaros
             {
                 if (destroyHandle && handle != IntPtr.Zero)
                     NativeMethods.qar_impl_gui_panel_handle_destroy(handle);
+            }
+        }
+
+        /// <summary>An entry is at most 512 bytes, so one call with a 513-byte buffer reads it whole.</summary>
+        private static Result<GuiPanelServedContent> GetServedContent(IntPtr handle)
+        {
+            var bundle = PanelContentBundleIdNative.CreateDefault();
+            var buffer = new byte[513];
+            var pinned = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                UIntPtr entrySize;
+                var info = Results.ToInfo(NativeMethods.qar_impl_gui_panel_get_content_served(handle, ref bundle, pinned.AddrOfPinnedObject(), (UIntPtr)buffer.Length, out entrySize));
+                if (!info.IsSuccess)
+                    return Result<GuiPanelServedContent>.Failure(info);
+                return Result<GuiPanelServedContent>.Success(info, new GuiPanelServedContent(PanelContentBundleId.FromNative(bundle), NativeString.DecodeNullTerminated(buffer)));
+            }
+            finally
+            {
+                pinned.Free();
             }
         }
 

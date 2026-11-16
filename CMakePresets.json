@@ -19,7 +19,7 @@
         "CMAKE_CXX_STANDARD": "11",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
         "CMAKE_CXX_EXTENSIONS": "OFF",
-        "BUILD_CORE_EXAMPLES": "ON"
+        "QAROS_BUILD_EXAMPLES": "ON"
       },
         "environment": {
         "VCPKG_MANIFEST_FEATURES": "examples-core"

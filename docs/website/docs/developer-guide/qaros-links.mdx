@@ -1,0 +1,194 @@
+---
+sidebar_position: 11.5
+title: qaros:// Links
+description: Open the pairing QR code, the anchoring QR code or the setup of a device type in QAROS from your app with one URL.
+---
+
+import CodeTabs, { Lang } from '@site/src/components/CodeTabs';
+import LanguageSwitcher from '@site/src/components/LanguageSwitcher';
+
+# qaros:// Links
+
+<LanguageSwitcher />
+
+Your app can send the user straight to a place in QAROS: the QR code a headset pairs with, the QR code a device anchors its room with, or the setup steps of one device type. An app with a session opens it with one call on that session ([below](#opening-a-view-from-a-session)); anything else opens a `qaros://` link the way it opens any web link, with no API call and no session.
+
+- QAROS starts if it is not running, and the link is shown once it is ready.
+- While the Visualizer is hidden (QAROS running in the tray), only the dialog the link names comes up, as a window of its own: the dialog fills it, its title bar shows the dialog's title, and the user can move, resize, minimize or maximize it like any window. Closing the window closes the dialog and hides it again.
+- While the Visualizer is open, the dialog opens on top of it.
+- If the dialog cannot open (for example, a pairing is already running), the Visualizer opens instead and says why.
+
+Links work on Windows, where the QAROS installer registers the `qaros` scheme. Linux support is planned.
+
+## The links
+
+| Link | Opens |
+|---|---|
+| `qaros://visualizer/v1/devices/pair-qr` | **Pair Headset** dialog: the QR code and a field for the code shown on the headset. The QAROS Player on a headset scans the QR code to join, or you type the code and address the headset shows. A fresh single-use QR code is made each time; a dialog already on screen is brought to the front instead. |
+| `qaros://visualizer/v1/scene-origin/qr` | **Room Origin**: the anchoring QR code a device scans to place the room origin, with **Print** and **Save as PDF...** in the same dialog. |
+| `qaros://visualizer/v1/devices/setup?kind=<kind>` | **Set up a device**: the setup steps of one device type, the same as in the Devices tab. |
+
+`<kind>` is one of:
+
+| `kind` | Device type |
+|---|---|
+| `quest` | Meta Quest |
+| `metalens` | Metalens |
+| `android-xr` | Android XR headsets |
+| `hololens` | HoloLens |
+
+## Rules
+
+A link opens a dialog and nothing else: it never pairs, installs, changes a setting or carries data. Anything that is not exactly one of the links above is ignored, so check your link against the table.
+
+- `v1` is the link version. A link of a version this QAROS does not know is ignored and logged as made for a newer QAROS.
+- `qaros://visualizer` may be written in any case; the rest is lowercase, exactly as shown.
+- One trailing `/` after the place is accepted (`.../pair-qr/`).
+- Ignored: unknown places or kinds, any other parameter, a parameter repeated, a parameter on a place that takes none, a `#fragment`, a port or user name, percent-encoded characters, spaces or non-ASCII characters, and links longer than 256 characters.
+
+## Opening a view from a session
+
+An app that joined QAROS as a local app (`QarOnboardLocalAppExt`, see [Onboarding](/docs/developer-guide/onboarding)) opens a view with `qar_session_open_qaros_view` on the session it already has. This is the way to use from an app with a session: it opens the view in **the QAROS whose hub the session joined**, never in another one running beside it, and your app needs neither the link, nor `QAR_INSTANCE`, nor the registry.
+
+| `QarQarosView` | Opens the same as |
+|---|---|
+| `QAR_QAROS_VIEW_PAIR_HEADSET_QR` | `qaros://visualizer/v1/devices/pair-qr` |
+| `QAR_QAROS_VIEW_ROOM_ORIGIN_QR` | `qaros://visualizer/v1/scene-origin/qr` |
+| `QAR_QAROS_VIEW_DEVICE_SETUP` with a `QarQarosDeviceKind` | `qaros://visualizer/v1/devices/setup?kind=<kind>` |
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+/* Opens the setup of a Meta Quest in this session's QAROS; QAROS starts if it is not running. */
+QarOpenQarosViewInfo info = qar_open_qaros_view_info_default();
+info.view = QAR_QAROS_VIEW_DEVICE_SETUP;
+info.device_kind = QAR_QAROS_DEVICE_KIND_META_QUEST;
+QarResult result = qar_session_open_qaros_view(session, &info);
+if (!qar_result_is_success(result))
+{
+    /* QAR_STATUS_ARGUMENT_NOT_SUPPORTED: not a local-app session (or a bad view).
+       QAR_STATUS_ONBOARDING_HUB_UNREACHABLE: this session's QAROS is gone. */
+    qar_result_log_if_error(result);
+}
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+using Quaternar.Qaros;
+
+// Opens the setup of a Meta Quest in this session's QAROS; QAROS starts if it is not running.
+var opened = session.OpenQarosView(QarosView.DeviceSetup, QarosDeviceKind.MetaQuest);
+if (!opened.IsSuccess)
+    Console.WriteLine($"Could not open the view: {opened.Info.Message}");
+// The other views: QarosView.PairHeadsetQr, QarosView.RoomOriginQr (no device kind).
+```
+
+</Lang>
+<Lang value="rust">
+
+{/* Generated by cargo xtask guide from examples/guide/qaros-links.md of the Rust binding. Edit that file, not this tab. */}
+
+```rust
+// Opens the setup of a Meta Quest in this session's QAROS; QAROS starts if it is not running.
+session.open_qaros_view(QarosView::DeviceSetup(QarosDeviceKind::MetaQuest))?;
+// The other views: QarosView::PairHeadsetQr, QarosView::RoomOriginQr.
+```
+
+</Lang>
+</CodeTabs>
+
+- **Installed QAROS:** its own `qaros.exe` opens the view.
+- **Developer setup** (a QAROS run from a build folder, which starts its apps with `QAR_INSTANCE=dev-<hash>`): the `qaros.exe` of that instance's runtime folder, else the one in the folder `runtime_binaries_folder_path` names, else the one beside the loaded runtime. The registered `qaros://` handler is never used, since it may belong to another build, so the scheme need not be registered at all.
+- That `qaros.exe` hands the view to its running QAROS, or starts it. The dialog then behaves as described at the top of this page.
+- The call returns once the view was handed over, not when it shows.
+- A session that joined by invite or code is refused with `QAR_STATUS_ARGUMENT_NOT_SUPPORTED`: nothing ties it to a QAROS on this PC.
+- A device kind belongs to the setup view only; any other view takes `QAR_QAROS_DEVICE_KIND_NONE`.
+- Windows only (`QAR_STATUS_NOT_IMPLEMENTED` elsewhere). A runtime older than this call also answers `QAR_STATUS_NOT_IMPLEMENTED`; open the link instead.
+
+## Opening a link from your app
+
+Hand the link to the operating system. It starts the program registered for `qaros://` links, which passes the link to QAROS.
+
+<CodeTabs>
+<Lang value="c">
+
+```c
+#include <windows.h>
+#include <shellapi.h>
+
+/* Opens the setup of a Meta Quest in QAROS; QAROS starts if it is not running. */
+HINSTANCE opened = ShellExecuteW(
+    NULL, L"open", L"qaros://visualizer/v1/devices/setup?kind=quest", NULL, NULL, SW_SHOWNORMAL);
+if ((INT_PTR)opened <= 32)
+{
+    /* No program is registered for qaros:// links: QAROS is not installed. */
+}
+```
+
+</Lang>
+<Lang value="csharp">
+
+```csharp
+using System.ComponentModel;
+using System.Diagnostics;
+
+// Opens the setup of a Meta Quest in QAROS; QAROS starts if it is not running.
+try
+{
+    Process.Start(new ProcessStartInfo("qaros://visualizer/v1/devices/setup?kind=quest")
+    {
+        UseShellExecute = true,
+    });
+}
+catch (Win32Exception)
+{
+    // No program is registered for qaros:// links: QAROS is not installed.
+}
+```
+
+</Lang>
+<Lang value="rust">
+
+{/* Generated by cargo xtask guide from examples/guide/qaros-links.md of the Rust binding. Edit that file, not this tab. */}
+
+```rust
+use std::process::Command;
+
+// Opens the setup of a Meta Quest in QAROS; QAROS starts if it is not running.
+let link = "qaros://visualizer/v1/devices/setup?kind=quest";
+// Explorer hands the link to the program registered for qaros:// links.
+if let Err(error) = Command::new("explorer").arg(link).spawn() {
+    eprintln!("could not open {link}: {error}");
+}
+```
+
+</Lang>
+</CodeTabs>
+
+A web page can link to the same URLs (`<a href="qaros://visualizer/v1/devices/pair-qr">Pair a headset</a>`); the browser asks the user once whether to open QAROS. From a terminal: `start "" "qaros://visualizer/v1/scene-origin/qr"`.
+
+## Several QAROS on one PC
+
+The operating system has one handler for `qaros://` links, and it hands a link to the **most recently started** QAROS of the session. That is the right guess for a web page, but not for an app that a QAROS started itself: a development hub of one worktree, a build folder started by hand and the installed QAROS can run side by side, and each starts its apps with `QAR_INSTANCE=<name>` (`default` for the installed QAROS, `dev-<hash>` for a development hub).
+
+An app that has a session opens its view [from the session](#opening-a-view-from-a-session), which finds its own QAROS by itself. An app that was started by QAROS but has no session opens a link for **its own** QAROS instead: it starts that instance's tray, `qaros.exe`, with `--own-instance` and the link.
+
+```
+"<tray of QAR_INSTANCE>\qaros.exe" --own-instance "qaros://visualizer/v1/devices/pair-qr"
+```
+
+- The tray of the instance is the `RuntimeFolder` value of `HKCU\SOFTWARE\Quaternar\QAROS\Instances\<name>` (a development hub), else the `bin` folder of that record's `InstallFolder`; for `default`, the `bin` folder of `InstallFolder` in `HKLM\SOFTWARE\Quaternar\QAROS`. It is the same folder the runtime of that instance loads from.
+- The tray gives the link to the running QAROS of its own instance, and to no other. If that QAROS is not running, it starts and then shows the link.
+- Start the tray without the inherited `QAR_APP_DATA_ROOT` and `QAR_LOCAL_ENROLLMENT_PIPE`, so it works out its own data folder.
+- The link itself is the same one as in the table above: there is no `instance` parameter, and a link that another process or a web page writes cannot choose an instance.
+- If `QAR_INSTANCE` is set but its tray cannot be found (the instance is not installed, or its build folder is gone), report the error; do not fall back to the system handler, which could open a different QAROS.
+- If `QAR_INSTANCE` is not set, your app was not started by QAROS: open the link through the system handler as shown above. It goes to the most recently started QAROS.
+
+
+## See also
+
+- [Managing devices](/docs/operator-guide/managing-devices): what the operator does with these dialogs.
+- [Onboarding and Sessions](/docs/developer-guide/onboarding-and-sessions): how your own app joins QAROS.

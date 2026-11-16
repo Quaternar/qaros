@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Voxel Atelier</title>
+		<link rel="stylesheet" href="./src/style.css" />
+	</head>
+	<body>
+		<!--
+			A self-contained demo application: a hand-written WebGPU viewer with its own chrome (side
+			panels, notifications, a dialog, and a canvas overlay). It has no knowledge of QAR,
+			streaming, or multi-user rendering, and imports no rendering engine or matrix library of any
+			kind -- every shape, WGSL shader and matrix in src/ is written out by hand, mirroring
+			../webgl-reference-app/'s own "no framework global" shape but through WebGPU's own API
+			surface (GPUDevice/GPUCanvasContext) instead of WebGL2's.
+
+			Everything a user would ever see -- panels, toasts, the dialog, the HUD -- lives inside
+			#app-ui, a single container, exactly like the other two reference applications alongside
+			this one. That is deliberate scaffolding for the *adaptation*, not for the app: an
+			adaptation script confines exactly one element to the reserved page region, and keeping
+			every piece of chrome under one root is what makes that a one-line CSS change instead of
+			hunting down every fixed-position element in the document.
+		-->
+		<canvas id="viewport"></canvas>
+
+		<div id="app-ui">
+			<aside id="panel-left" class="panel">
+				<h2>Scene Objects</h2>
+				<ul id="object-list"></ul>
+			</aside>
+
+			<aside id="panel-right" class="panel">
+				<h2>Render Settings</h2>
+				<label class="field">
+					<span>Rotation speed</span>
+					<input id="rotation-speed" type="range" min="0" max="100" value="30" />
+				</label>
+				<label class="field">
+					<span>Light intensity</span>
+					<input id="light-intensity" type="range" min="0" max="100" value="65" />
+				</label>
+				<button id="open-about" type="button">About this viewer</button>
+			</aside>
+
+			<div id="hud">
+				<div id="reticle"></div>
+				<div id="hud-readout">FPS <span id="hud-fps">--</span></div>
+			</div>
+
+			<div id="toast-stack"></div>
+
+			<div id="modal-backdrop" class="hidden">
+				<div id="modal" role="dialog" aria-labelledby="modal-title">
+					<h2 id="modal-title">Welcome to Voxel Atelier</h2>
+					<p>
+						Toggle objects in the scene list, or tweak rotation and lighting on the right. This
+						preview build renders continuously in the background, through WebGPU.
+					</p>
+					<button id="modal-close" type="button">Got it</button>
+				</div>
+			</div>
+		</div>
+
+		<script type="module" src="./src/main.js"></script>
+	</body>
+</html>
