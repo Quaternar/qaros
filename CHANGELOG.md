@@ -1992,6 +1992,19 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
     invitation, remote-app grant, join-as-member, device identity, target-app invite, video
     sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** a new *Web App Adaptations* section of the Developer Guide
+  (https://docs.quaternar.com/docs/developer-guide/web-app-adaptations/) shows how to stream a
+  website's 3D canvas with the adaptation kit that ships with QAROS: an overview (scripts, stages,
+  libraries by `name@major`, the profile fields including `RenderRate`, `Channel` and
+  `AppScaleByAddress`), *Quick Start* (`qaros-adaptation init`, `check`, `test`, `package`,
+  `verify`, `pin`), *Library Reference* (every kit library: stage, needs, hooks, guarantees),
+  *Recipes* (atlas packing, thin lines and `RenderScale`, depth conventions, iframes, UI
+  confinement, render rate, WebGPU redirect presenter, common mistakes, each with a runnable
+  example) and *Troubleshooting* (the "update QAROS" and kit hash errors, leftover adaptations,
+  blank or dashed views).
+- **Docs:** *Source Applications*: *Web apps QAROS provides* says that an adaptation a newer release
+  no longer lists is never picked by address, how **Uninstall web app adaptation...** removes an
+  adaptation you installed, and links the new adaptation guide.
 - **Docs:** *Source Applications*: a new *Web apps QAROS provides* section lists the ready-made web
   app adaptations, where they are published, how the visualizer keeps them up to date (tile states,
   **Update ready**, the **Web app updates** settings) and how unsigned releases are handled.

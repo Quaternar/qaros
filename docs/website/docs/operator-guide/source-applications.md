@@ -162,6 +162,13 @@ them up to date by itself:
 To change one of these adaptations, contribute to the repository, or duplicate it in the
 visualizer under a new id: an update never changes your own copy.
 
+- An adaptation a newer release no longer lists stays installed but is never picked by address,
+  so it cannot override the adaptation that replaced it.
+- An adaptation you installed (an import, or such a leftover) is removed with the row's **...**
+  menu, **Uninstall web app adaptation...**. One that no tile opens gets a tile of its own for
+  this. Adaptations that ship with QAROS cannot be uninstalled.
+- To write your own adaptation, see [Web App Adaptations](../developer-guide/web-app-adaptations/index.md).
+
 ### Logging in
 
 When the address opens on a login page, there is no renderer yet and the row shows **Waiting for a renderer - log in on Page, then Probe**:
