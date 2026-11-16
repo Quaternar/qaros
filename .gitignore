@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 build/
 install/
 
+
+# Python bytecode
+__pycache__/
+*.py[cod]
