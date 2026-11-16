@@ -74,7 +74,7 @@ sequenceDiagram
 
 ![The row's ... menu with Duplicate as new preset](../../img/supported-apps/sources-row-menu.png)
 
-<!-- Screenshot needed: Rerun tile editor in Sources with Install / Launch (QAROS running). -->
+![The Rerun tile's dialog: Executable, Streams to chosen by the app, Download state Installed with its version, Launch](../../img/supported-apps/rerun-tile.png)
 
 ## First session
 

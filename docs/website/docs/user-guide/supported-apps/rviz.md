@@ -67,7 +67,7 @@ sequenceDiagram
   - `rviz2.exe` is not code-signed: QAROS asks again after RViz2 is updated or replaced.
 - **Several distributions:** each gets its own tile. For another configuration: **...** > **Duplicate as new preset**, then change **Executable** or arguments (Developer UI mode).
 
-<!-- Screenshot needed: ROS 2 Rviz tile editor with Install / Launch (QAROS running). -->
+![The ROS 2 Rviz (Humble) tile's dialog: the distribution's rviz2, Download state Installed with the plugin version, Launch](../../img/supported-apps/rviz-tile.png)
 <!-- Screenshot needed: RViz2 with the Qar Streaming panel, Connection tab connected. -->
 
 ## First session
