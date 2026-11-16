@@ -1,16 +1,16 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 title: Library Reference
 description: Every adaptation kit library - its stage, what it needs, the globals and hooks it provides, what it guarantees and what it does not cover.
 ---
 
 # Library Reference
 
-Each library is one file in the kit's `lib/`, named `<name>@<major>.js`. Its header comment states
-its exact version (`// @qaros-library name@major.minor`), its stage (`// @stage`) and the libraries
-it needs (`// @needs`); the header is the authoritative description, this page the overview.
-Reference a library from a profile with `"Library": "<name>@<major>"`
-([libraries by name](index.md#libraries-by-name-and-major-version)).
+- One file per library in the kit's `lib/`: `<name>@<major>.js`.
+- Its header names the exact version (`// @qaros-library name@major.minor`), the stage (`// @stage`)
+  and what it needs (`// @needs`). The header is authoritative; this page is the overview.
+- A profile references it as `"Library": "<name>@<major>"`
+  ([libraries by name](index.md#libraries-by-name-and-major-version)).
 
 | Library | Stage | Needs | For |
 |---|---|---|---|

@@ -6,11 +6,15 @@ description: Stream an existing website's 3D canvas (three.js, raw WebGL, WebGPU
 
 # Web App Adaptations
 
-A **web app** streams an existing website to every user of a session without changing the site.
-The Visualizer loads the page in a built-in browser; an **adaptation** injects scripts that render
-each user's two eyes from the page's own scene. Operators launch web apps from Source Applications
-([Web apps](../../operator-guide/source-applications.md#web-apps)); this guide is for writing an
-adaptation.
+A **web app** streams an existing website to every user of a session, unchanged. Its
+**adaptation** is the set of scripts that renders each user's eyes from the page's own scene.
+
+- The Visualizer loads the page in a built-in browser and injects the adaptation.
+- Operators launch web apps from Source Applications
+  ([Web apps](../../operator-guide/source-applications.md#web-apps)); this guide is for writing an
+  adaptation.
+
+![A three.js page running as a web app source in the Visualizer's page panel](../../img/web-app-adaptations/web-app-page.png)
 
 ## The adaptation kit
 
@@ -24,7 +28,7 @@ published in the public [`qaros` repository](https://github.com/Quaternar/qaros/
 | `examples/` | Reference apps (three.js, WebGL, WebGPU), the three.js reference page with served panels, and one runnable example per [recipe](recipes.md) |
 | `tools/` | `qaros-adaptation.py`, the [command line tool](quick-start.md), and `verify-depth.py` |
 
-The kit is versioned with QAROS: the kit in an install is the one that QAROS resolves libraries from.
+- The kit is versioned with QAROS: an install resolves libraries from its own kit.
 
 ## How a page is streamed
 
@@ -75,6 +79,17 @@ An adaptation is an ordered list of scripts, each run at one stage:
 
 ### Libraries by name and major version
 
+```mermaid
+flowchart LR
+    P["profile.json<br/>Library: threejs-render-frame@1"] --> L["QAROS loads the adaptation"]
+    L --> I{"in the installed kit's<br/>lib/index.json?"}
+    I -- "no" --> E1["not loaded:<br/>requires name@2 ... update QAROS"]
+    I -- "yes" --> H{"file hash matches<br/>the index?"}
+    H -- "no" --> E2["not loaded:<br/>reinstall QAROS"]
+    H -- "yes" --> S["page-region tokens replaced"]
+    S --> J["injected at the script's stage"]
+```
+
 - `Library` names `<name>@<major>`. QAROS injects its installed kit's file when the page loads, so
   a library fix in a QAROS update reaches every adaptation that uses it.
 - A **minor** version (a fix, a new optional option) keeps the major: every adaptation picks it
@@ -89,7 +104,7 @@ An adaptation is an ordered list of scripts, each run at one stage:
 
 ## The profile
 
-`profile.json` describes the adaptation. The fields an author sets:
+The fields an author sets in `profile.json`:
 
 | Field | Meaning |
 |---|---|
@@ -112,11 +127,15 @@ An adaptation is an ordered list of scripts, each run at one stage:
 - `Files` and `Signature` are written by `qaros-adaptation package`: never by hand.
 - Fields a QAROS version does not know are kept when it rewrites a profile.
 
+![The WebGL Aquarium developer sample, a developer-channel adaptation, shown in Developer mode](../../img/web-app-adaptations/developer-channel-aquarium.png)
+
 ## Where to go next
 
 | Page | For |
 |---|---|
 | [Quick start](quick-start.md) | `init`, `check`, `test`, `package`, `verify`, `pin` |
+| [Develop with AI agents](develop-with-ai-agents.md) | Connect a coding agent to the Visualizer's MCP endpoint, the authoring skills, an example session |
 | [Library reference](library-reference.md) | What each library needs, provides and guarantees |
 | [Recipes](recipes.md) | Atlas packing, thin lines, depth conventions, iframes, UI confinement, render rate, WebGPU redirect, common mistakes |
 | [Troubleshooting](troubleshooting.md) | Load errors, leftover adaptations, blank or dashed views |
+| [Contribute an adaptation](contribute-an-adaptation.md) | Publish an adaptation for every QAROS user through `Quaternar/qaros-webapps` |

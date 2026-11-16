@@ -1,15 +1,15 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 title: Recipes
 description: Atlas packing, thin lines and RenderScale, depth conventions, iframes, UI confinement, render rate, the WebGPU redirect presenter and the common mistakes check warns about, each with a runnable example.
 ---
 
 # Recipes
 
-Each recipe has a runnable example in the kit's
-[`examples/recipes/`](https://github.com/Quaternar/qaros/tree/main/adaptation-kit/examples/recipes):
-a page (`index.html`), its adaptation (`profile.json`) and a README. Serve the folder over http,
-import or save the adaptation, and open the page as a web app.
+- Each recipe has a runnable example in the kit's
+  [`examples/recipes/`](https://github.com/Quaternar/qaros/tree/main/adaptation-kit/examples/recipes):
+  a page (`index.html`), its adaptation (`profile.json`) and a README.
+- To run one: serve the folder over http, package or save the adaptation, open the page as a web app.
 
 ## 1. Atlas packing
 

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 title: Troubleshooting
 description: Web app adaptation load errors (update QAROS, kit file changed, Library and File), leftover adaptations and how to uninstall one, pages in iframes, blank views and dashed thin lines.
 ---

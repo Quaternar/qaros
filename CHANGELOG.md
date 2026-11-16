@@ -2006,7 +2006,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   `verify`, `pin`), *Library Reference* (every kit library: stage, needs, hooks, guarantees),
   *Recipes* (atlas packing, thin lines and `RenderScale`, depth conventions, iframes, UI
   confinement, render rate, WebGPU redirect presenter, common mistakes, each with a runnable
-  example) and *Troubleshooting* (the "update QAROS" and kit hash errors, leftover adaptations,
+  example), *Develop with AI Agents* (connecting a coding agent to the Visualizer's MCP endpoint,
+  the authoring skills, an example session, safety), *Contribute an Adaptation* (publishing through
+  `Quaternar/qaros-webapps`: layout, versions, changelog, checks, release) and *Troubleshooting* (the "update QAROS" and kit hash errors, leftover adaptations,
   blank or dashed views).
 - **Docs:** *Source Applications*: *Web apps QAROS provides* says that an adaptation a newer release
   no longer lists is never picked by address, how **Uninstall web app adaptation...** removes an

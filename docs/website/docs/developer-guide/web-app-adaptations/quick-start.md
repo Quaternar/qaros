@@ -18,16 +18,21 @@ is needed only for `test`.
   `QAROS_ADAPTATION_KIT` environment variable picks another, for instance the kit of the oldest
   QAROS you support.
 - Below, `qaros-adaptation` stands for the full command.
+- A coding agent can do the authoring in the Visualizer for you:
+  [Develop with AI agents](develop-with-ai-agents.md).
 
 ```mermaid
 flowchart LR
-    I[init] --> E[edit scripts and profile.json]
-    E --> C[check]
-    C --> T[test]
-    T --> P[package]
-    P --> M[import in the Visualizer]
-    M --> V[verify]
-    V --> E
+    I["1 init"] --> E["edit scripts<br/>and profile.json"]
+    E --> C["2 check"]
+    C -- "errors" --> E
+    C --> T["3 test"]
+    T -- "fails" --> E
+    T --> P["4 package"]
+    P --> M["import in the Visualizer"]
+    M --> V["5 verify"]
+    V -- "coverage too low" --> E
+    V --> D["share the .qarapp"]
 ```
 
 ## 1. Create
@@ -58,6 +63,13 @@ qaros-adaptation check my-viewer
 - **Warnings:** the known pitfalls listed in [common mistakes](recipes.md#8-common-mistakes).
   `--ignore <code>` skips one; `--strict` fails on warnings too.
 
+Example output:
+
+```
+my-viewer: warning: [iframe] AddressPattern 'https://example.com/gallery/*' matches index or gallery pages; ...
+my-viewer: 0 errors, 1 warnings
+```
+
 ## 3. Test
 
 ```
@@ -83,6 +95,8 @@ qaros-adaptation package my-viewer --out dist --sign key.pem --signer "Example L
   ([Importing a web app package](../../operator-guide/source-applications.md#importing-a-web-app-package)).
   An unsigned package or one from a publisher the hub does not trust asks first.
 
+![The Add source app dialog with the Import app package card](../../img/web-app-adaptations/import-app-package.png)
+
 ## 5. Verify
 
 With the adaptation running as a web app source, in a Visualizer in Developer mode with its MCP
@@ -93,7 +107,16 @@ qaros-adaptation verify my-viewer --address "https://example.com/viewer/"
 ```
 
 - Reads the streamed atlas and reports depth coverage of the coloured pixels, the thin-line check,
-  alpha coverage and the depth pack.
+  alpha coverage and the depth pack. It exits non-zero when a coverage is too low.
+
+Example output (one user, two eyes):
+
+```
+depth pack readback OK: ...
+target 1 left: 1840 coloured blocks, depth 100.00%, thin 100.00% of 212
+target 1 right: 1838 coloured blocks, depth 100.00%, thin 100.00% of 210
+```
+
 - `--instance <id>` picks a source; `--host` / `--port` the Visualizer's MCP endpoint.
 
 ## Pin a library
@@ -102,12 +125,15 @@ qaros-adaptation verify my-viewer --address "https://example.com/viewer/"
 qaros-adaptation pin my-viewer threejs-render-frame@1
 ```
 
-Replaces the `Library` reference with a copy at `scripts/threejs-render-frame@1.js` and names it as
-the script's `File`. The copy's header shows its exact version. A pinned copy no longer receives
-fixes from QAROS updates: pin only to hold a version you have verified, and re-pin after testing a
-newer one.
+- Replaces the `Library` reference with a copy at `scripts/threejs-render-frame@1.js`, named as the
+  script's `File`. Its header shows the exact version.
+- A pinned copy gets no fixes from QAROS updates: pin only a version you verified, and re-pin after
+  testing a newer one.
 
 ## Before you share it
+
+To offer it to every QAROS user, see [Contribute an adaptation](contribute-an-adaptation.md).
+
 
 - `AddressPattern` matches the site's pages and nothing more.
 - `check` and `test` pass against the kit of the oldest QAROS you support (`--kit`).
