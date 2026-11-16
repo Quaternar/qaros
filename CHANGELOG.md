@@ -2084,7 +2084,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   viewer from the Visualizer's **Rerun** tile, opens one of Rerun's example recordings, and shows
   what streams (the 3D view, the 2D views as panels, the timeline panel), how to scrub and play,
   and how to see it in a headset or a Display Receiver. *Rerun* links it and says the tile starts
-  the viewer with `--panels`.
+  the viewer with `--panels`; *Supported Apps* links it too.
 - **Docs:** a new *Web App Adaptations* section of the Developer Guide
   (https://docs.quaternar.com/docs/developer-guide/web-app-adaptations/) shows how to stream a
   website's 3D canvas with the adaptation kit that ships with QAROS: an overview (scripts, stages,
