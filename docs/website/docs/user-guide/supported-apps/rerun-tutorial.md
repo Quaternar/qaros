@@ -60,7 +60,7 @@ flowchart LR
    ![Sources with the Rerun row, Detected and Installed](../../img/supported-apps/rerun-tutorial/sources-rerun-row.webp)
 
 3. Click the row. The **Detected app** dialog opens.
-4. Under **Download**, press **Install** (or **Update**). QAROS downloads the latest [qaros-rerun release](https://github.com/Quaternar/qaros-rerun/releases/latest), checks it and unpacks it for your Windows user. No administrator rights.
+4. Under **Download**, press **Install** (or **Update**). QAROS downloads the [latest viewer](https://github.com/Quaternar/qaros-rerun/releases/latest), checks it and unpacks it for your Windows user. No administrator rights.
 5. When it shows **Installed** with its version, you are done.
 
    ![The Rerun tile's dialog: Executable, Streams to, Download Installed with version 0.1.0, Launch](../../img/supported-apps/rerun-tile.png)
@@ -69,8 +69,8 @@ The Visualizer installs it from QAROS **0.10.0**.
 
 ### By hand
 
-- **QAROS viewer:** download `qaros-rerun-<version>-windows-x64.zip` from the [qaros-rerun releases](https://github.com/Quaternar/qaros-rerun/releases/latest) and unzip it anywhere. It uses the installed QAROS.
-- **Rerun itself** (only for your own programs, not for this tutorial): the SDK and the stock viewer are on Rerun's [release page for 0.40.0](https://github.com/rerun-io/rerun/releases/tag/0.40.0); all versions are on [Rerun's releases](https://github.com/rerun-io/rerun/releases). For Python: `pip install rerun-sdk==0.40.0`. Use the SDK of the viewer's version.
+- **QAROS viewer:** [Download the viewer](https://github.com/Quaternar/qaros-rerun/releases/latest) (`qaros-rerun-<version>-windows-x64.zip`) and unzip it anywhere. It uses the installed QAROS.
+- **Rerun itself** (only for your own programs, not for this tutorial): [download the SDK and the stock viewer of Rerun 0.40.0](https://github.com/rerun-io/rerun/releases/tag/0.40.0), or [another version](https://github.com/rerun-io/rerun/releases). For Python: `pip install rerun-sdk==0.40.0`. Use the SDK of the viewer's version.
 - **C++ runtime:** the Microsoft Visual C++ 2015-2022 Redistributable (x64). The QAROS 0.10.0 setup installs it; otherwise `winget install Microsoft.VCRedist.2015+.x64`.
 
 ## Step 2: Start the Rerun source
@@ -105,7 +105,7 @@ A QAROS whose Rerun tile does not pass `--panels` yet streams the 3D view only. 
 2. Click an example. This tutorial uses **ARKit scenes**: a room scanned with a phone, with the camera image, depth and labelled boxes. Rerun downloads it (30 MB) and starts playing it.
 3. The viewer now shows the example's layout: the **3D** view, the **BGR** image (with **Depth** as a second tab), the **Readme**, and the time panel at the bottom.
 
-Each card lists its tags: **3D** examples fill the app volume, **2D** examples open panels, examples with both do both. More examples follow below the first row. An example with no 3D view streams panels and the timeline only; one with no 2D view streams the scene and the timeline.
+Each card names its kind: **3D** examples fill the app volume, **2D** examples open panels, examples with both do both. More examples follow below the first row. An example with no 3D view streams panels and the timeline only; one with no 2D view streams the scene and the timeline.
 
 ## Step 4: See what streams
 
@@ -168,4 +168,4 @@ Without a headset, add a **Display Receiver** in the Visualizer ([Stream to a 3D
 | `QAROS handed back app volume "rerun" closed` | Another viewer has that volume: give one `--volume-name` another name. |
 | Slow with large point clouds | Shorter time windows in the blueprint; compact recordings with `rerun rrd optimize`. |
 
-More: the [Rerun](./rerun.md) page, and the viewer's [quick start](https://github.com/Quaternar/qaros-rerun/blob/main/docs/quick-start.md) and [known issues](https://github.com/Quaternar/qaros-rerun/blob/main/docs/known-issues.md).
+More: the [Rerun](./rerun.md) page.
