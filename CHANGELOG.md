@@ -556,6 +556,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Visualizer:** a web app adaptation's profile can set `Antialias`, the samples per pixel of the
+  users' eye views (2, 4, 8 or 16; absent: none, as before). Lines thinner than a pixel, dense grids
+  and point clouds then stream antialiased like the page's own canvas, instead of dotted and with
+  moire rings at a distance, at about 1 ms more GPU time per frame. three.js WebGL pages only
+  (`threejs-render-frame@1.2`). The Foxglove adaptation sets it, with `RenderScale` 1.
 - **Runtime:** ANARI apps set how often the ANARI device renders for each headset with the device
   parameter `qar.renderRate` (FLOAT32, frames per second, 1 to 120, default 30; environment
   `QAR_ANARI_RENDER_RATE`). It applies from the next device commit, also while streaming;
@@ -2204,6 +2209,19 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Runtime:** hubs, launchers, Visualizers and device apps of different 0.10 or newer builds
+  work together: none refuses another for its version. Settings and records a newer build wrote
+  keep their newer fields when an older build saves them.
+- **Device apps:** 0.10.0 Android players and relays stream with 0.10.0-rc.1 ones in both
+  directions. A player sends a relay of 0.10.0 or newer its pose in a packet that carries its own
+  length, so later builds can add to it.
+- **Visualizer:** a camera saved by a newer QAROS with a kind or capture resolution this build does
+  not know no longer stops the whole camera list from loading: it is left out of the list and
+  kept in the file, so the newer build finds it again.
+- **Visualizer:** an adaptation backup (`backup.json`) made by a newer QAROS is restored with the
+  fields this build knows instead of being refused. A web app package (`.qarapp`) of a newer
+  layout version is still refused, naming both versions: its layout must be understood to install
+  it safely.
 - **Packaging:** a build made after a release candidate reports `X.Y.Z-rc.N.M+<sha>` (M commits
   after `rc.N`) instead of `X.Y.Z-dev.M+<sha>`, so it sorts after the candidate it follows and
   before the next one, and updates an installed candidate. Its Windows file version keeps the
@@ -2391,12 +2409,14 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   21 % / 15 %, 1.75 cores); Efficient 30 frames, 6 % / 4 %; a receiver in a hidden tab or a paused
   one about 4 frames and under 1 % GPU; a covered window one frame a second. The top bar's GUI
   FPS reads about 4 while idle.
-- **Visualizer:** streams no visible view shows now pause by default (Settings > Streams > Pause
-  streams: When not visible). Settings saved by an earlier version that hold the old default "When
-  window minimized" switch to it once; an older Visualizer no longer reads the new settings file and
-  starts from defaults. A camera's blending pauses only when no view of that camera is shown. Debug
-  UI mode keeps every stream running. Panels whose tab is hidden no longer prepare their content
-  every frame.
+- **Visualizer:** a receiver keeps streaming while its panel is hidden behind another tab and
+  pauses while the window is minimized, hidden or covered (Settings > Streams > Pause streams: When
+  window minimized, the default). The 0.10.0 release candidates paused hidden streams by default
+  (When not visible) and keep a choice they saved; pick When window minimized there to get the new
+  default. An older Visualizer no longer reads the new settings file and starts from defaults. Under
+  When not visible, a camera's blending pauses only when no view of that camera is shown. Debug UI
+  mode keeps every stream running. Panels whose tab is hidden no longer prepare their content every
+  frame.
 - **Visualizer:** a receiver asks its sender for video only at the window's frame rate; the camera
   pose goes to the sender at 200 Hz in every mode, so remote views follow camera moves smoothly
   (it went out at about 156 Hz before). Link statistics, stream statistics and GPU health in the
@@ -2842,6 +2862,19 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   moment, sends a held request when the pacer wanted it instead of up to a frame early, ignores
   latency measured across a stalled step, and moves the lead only when most recent frames agree on
   a new value.
+- **SDK:** from 0.10.0, every QAROS build reads what every other 0.10 or newer build sends or
+  stores, older and newer alike, until a release is declared breaking. Messages and stored
+  files carry no protocol version, so a peer, hub or app of another 0.10 build is no longer
+  refused for its version. Fields a build does not know are ignored, and kept when it rewrites
+  a stored value.
+- **C API:** `qar_member_hub_invitation_deserialize` accepts an invitation from a newer QAROS that
+  carries fields this build does not know, and keeps them when the invitation is serialized and
+  handed on; the signature still covers them. It still refuses text that is not an invitation or
+  lacks a required field.
+- **C API:** `qar_runtime_info` documents that its version is for logs and messages only: never
+  compare it for equality or choose functions by it. Call a function that may be newer than the
+  runtime and handle `QAR_STATUS_NOT_IMPLEMENTED`. The one version check left is the documented
+  numeric minimum for `QarRuntimeEphemeralStorageExt` and `QarOnboardLocalAppTagExt`.
 - **C API:** `qar_app_volumes_update_used_by_peers` sends its additions and removals as one
   change: the hub applies all of them or none, instead of one change per peer.
 - **SDK:** the shared-object protocol is 3: a peer and a hub of earlier 0.10 builds refuse each
@@ -3294,6 +3327,26 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Device apps:** an Android headset shown the connection QR code of another hub while it is in a
+  session now leaves that session and joins the new hub. It used to detect the code and stay
+  where it was, still playing the old stream. While it switches the panel says "Switching to
+  <hub>...". If the new hub cannot be joined, the panel says "Could not switch to <hub>" and the
+  headset goes back to its previous hub. Showing it the QR code of the hub it is already in changes
+  nothing, and the stream keeps playing.
+- **Mixer:** free-running sources (web app sources, the ANARI device, free-running C API and C#
+  apps) are drawn on the tick their pose was predicted for. Their frames were drawn on average
+  half a tick after their pose time, and the warp had to cover that much head motion.
+- **Visualizer:** Warping Timing counts a frame's prediction miss from the time the frame was
+  rendered for, the requested time plus the source's own wait. A free-running source, such as a
+  web app source, showed its loop's wait as a miss of nearly a tick and nearly every frame as late.
+- **Visualizer:** a web app source started after another one was removed gets its targets and
+  streams again. A removed source's peer stayed on the hub, so a receiver it had streamed to kept
+  waiting for it, and the Visualizer's peer list grew by one peer per source ever started. A
+  removed source now leaves the hub, and the hub forgets its peer.
+- **Mixer:** a source whose sender is replaced (a web app source removed and another started, an
+  app restarted) no longer stays on a blank image after its first frame. The replacement's first
+  frame could find no free input while the source was not shown, and the mixer then never asked
+  for another frame.
 - **Visualizer:** an adaptation a newer web app release no longer lists is never picked for a page
   by its address. A leftover Littlest Tokyo adaptation had won over the three.js examples for that
   example's page, because its address pattern was narrower.
@@ -3305,9 +3358,6 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   depth of the pixels it stands for, and alpha their largest coverage. A custom adaptation's depth
   packer must do the same (Developer Guide > Web App Adaptations > Recipes, and the
   `webapp-authoring` skill).
-- **Mixer:** an object's edge against empty background no longer stretches into a spike when the
-  warp moves the view far from the pose the source rendered for: mesh vertices beside empty
-  background take the object's depth. Applies to the headset's own warp too.
 - **Visualizer:** the **three.js examples** web app streams the example you pick on
   https://threejs.org/examples/: the example opens as the page itself (Back returns to the
   gallery), and a web app source checks every page it navigates to for a renderer, so it starts
@@ -3857,6 +3907,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Mixer:** no longer crashes when an app that shows a website panel (the RViz plugin, for
   one) restarts and creates its panels again. The mixer restarted and the headset lost its view
   for a moment.
+- **SDK:** a render sender created with `RenderLoop::FreeRunning` (C API
+  `QAR_RENDER_LOOP_FREE_RUNNING`) predicts its pose for the display tick its frame is first shown
+  on. It predicted for the moment the frame would be ready, which falls between two ticks, so the
+  pose was on average half a tick older than the tick that showed it. Needs a mixer from this
+  version, whose render requests carry the display grid (`VideoRenderRequest::DisplayTick`,
+  `DisplayIntervalNs`); with an older mixer the time stays as before. Nothing to change in the
+  application.
 - **SDK:** a GUI panel created or brought into a new session Hidden or Minimized keeps that state;
   the hub stored every new panel Visible, so the creator saw it hidden and then shown. What a change
   means is now applied by one rule on the writer and on the hub, so no field reverts once stored.
