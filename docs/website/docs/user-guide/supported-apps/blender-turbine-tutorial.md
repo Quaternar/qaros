@@ -36,7 +36,7 @@ The screenshots show add-on **0.4.1** in Blender 4.5 LTS. For the add-on in gene
 
 - Work: "Turbine | Turbofan Engine | Jet Engine" by [blenderbirb](https://sketchfab.com/blenderbirb).
 - Licence: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit the author when you show or share it.
-- Source: [Sketchfab](https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262). The download above is the unchanged copy kept in the add-on's [demo](https://github.com/Quaternar/qaros-blender/tree/main/demo).
+- Source: [Sketchfab](https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262). The download above is the unchanged model.
 - Contents: 19 meshes, about 236,000 triangles, 6 materials with constant colours and no textures. Everything in it streams.
 
 ## Step 1: Install Blender
@@ -237,4 +237,4 @@ The selected part is outlined in orange in the headset on VisRTX, OSPRay and Hel
 | Slow, all CPU cores busy | The backend is OSPRay or Helide: choose **VisGL** and restart Blender. |
 | A colour change does nothing | Edit the **Principled BSDF** that feeds **Material Output** with a constant value. |
 
-More: [Blender troubleshooting](./blender.md#troubleshooting) and the [add-on user guide](https://github.com/Quaternar/qaros-blender/blob/main/docs/user-guide.md).
+More: [Blender troubleshooting](./blender.md#troubleshooting).
