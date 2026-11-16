@@ -1,0 +1,28 @@
+{
+	"Name": "threejs-reference-panels",
+	"DisplayName": "three.js reference with panels",
+	"Id": "com.quaternar.threejs-reference-panels",
+	"Version": "1.0.0",
+	"Channel": "developer",
+	"CommonName": "reference-panels.threejs-reference",
+	"AddressPattern": "*threejs-reference-app*",
+	"Engine": "three.js",
+	"PageRegion": { "Width": 1024, "Height": 1024 },
+	"AppScale": 0.2,
+	"RenderScale": 0.75,
+	"ContinuousRendering": true,
+	"RenderRate": 60,
+	"TransportAlpha": false,
+	"ShareBrowserProfile": true,
+	"Panels": "panels",
+	"_sv": 3,
+	"Scripts": [
+		{ "Name": "capture-renderer", "Stage": "preDocument", "Library": "threejs-capture@1" },
+		{ "Name": "render-frame-core", "Stage": "afterLoad", "Library": "render-frame-core@1" },
+		{ "Name": "ui-confinement", "Stage": "afterLoad", "Library": "ui-confinement@1" },
+		{ "Name": "webgl-atlas-pack", "Stage": "afterLoad", "Library": "webgl-atlas-pack@1" },
+		{ "Name": "render-frame-webgl", "Stage": "afterLoad", "Library": "threejs-render-frame@1" },
+		{ "Name": "render-frame-webgpu", "Stage": "afterLoad", "Library": "threejs-webgpu-render-frame@1" },
+		{ "Name": "page-panels", "Stage": "afterLoad", "File": "scripts/page-panels.js" }
+	]
+}

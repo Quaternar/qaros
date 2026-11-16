@@ -1,0 +1,52 @@
+<!doctype html>
+<!--
+	Fixture of KitLibraries.Threejs*OnePixelLinesKeepTheirDepth: a three.js scene of 1-px lines at
+	many angles and sub-pixel offsets, drawn by a WebGPURenderer, or by a WebGLRenderer with
+	`#webgl`. A module script cannot load another file from a file:// page, so the test replaces
+	__THREE_IMPORT_MAP__ with an import map whose `three`, `three/webgpu` and `three-core` entries
+	are data: URLs of the three.js build of examples/threejs-reference-app (their
+	`three.core.min.js` import renamed to `three-core`).
+-->
+<html>
+<body style="margin:0;overflow:hidden;background:#000">
+<canvas id="c" style="display:block"></canvas>
+<script>
+window.__fixtureErrors = [];
+window.addEventListener("error", (event) => window.__fixtureErrors.push(String(event.message)));
+window.addEventListener("unhandledrejection", (event) => window.__fixtureErrors.push(String(event.reason)));
+</script>
+<script type="importmap">__THREE_IMPORT_MAP__</script>
+<script type="module">
+const webgl = location.hash === "#webgl";
+const THREE = await import(webgl ? "three" : "three/webgpu");
+
+async function start() {
+	// The adaptation's devtools hook must exist first, so three.js announces the renderer to it.
+	while (!window.__THREE_DEVTOOLS__) await new Promise((resolve) => setTimeout(resolve, 20));
+	const canvas = document.getElementById("c");
+	const renderer = webgl ? new THREE.WebGLRenderer({ canvas, antialias: false }) : new THREE.WebGPURenderer({ canvas, antialias: false });
+	if (!webgl) await renderer.init();
+	renderer.setPixelRatio(1);
+	renderer.setSize(window.innerWidth, window.innerHeight);
+	window.addEventListener("resize", () => renderer.setSize(window.innerWidth, window.innerHeight));
+	const scene = new THREE.Scene();
+	const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 20);
+	camera.position.set(0, 1, 3);
+	const material = webgl ? new THREE.LineBasicMaterial({ color: 0xffffff }) : new THREE.LineBasicNodeMaterial({ color: 0xffffff });
+	const angles = [0, 7, 15, 30, 45, 60, 75, 90, 105, 135, 160, 172];
+	angles.forEach((angle, index) => {
+		const radians = (angle * Math.PI) / 180;
+		const x = ((index % 4) - 1.5) * 0.5 + index * 0.0031;
+		const y = 1 + (Math.floor(index / 4) - 1) * 0.6 + index * 0.0047;
+		const dx = Math.cos(radians) * 0.2;
+		const dy = Math.sin(radians) * 0.2;
+		const points = [new THREE.Vector3(x - dx, y - dy, 0), new THREE.Vector3(x + dx, y + dy, 0)];
+		scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+	});
+	renderer.setAnimationLoop(() => renderer.render(scene, camera));
+	window.__fixtureReady = true;
+}
+start().catch((error) => window.__fixtureErrors.push(String((error && error.stack) || error)));
+</script>
+</body>
+</html>

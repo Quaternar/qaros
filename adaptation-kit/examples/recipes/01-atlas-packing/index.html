@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Recipe: atlas packing</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; background: #202028; } canvas { display: block; }</style>
+<script type="importmap">
+{ "imports": {
+	"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+	"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+const useWebGpu = new URLSearchParams(location.search).has("webgpu");
+const THREE = await import(useWebGpu ? "three/webgpu" : "three");
+const renderer = useWebGpu ? new THREE.WebGPURenderer({ antialias: false }) : new THREE.WebGLRenderer({ antialias: false });
+if (useWebGpu) await renderer.init();
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202028);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 3));
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
+camera.position.set(0, 1.2, 3);
+camera.lookAt(0, 1, 0);
+window.addEventListener("resize", () => {
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize(window.innerWidth, window.innerHeight);
+});
+const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+for (let index = 0; index < 12; ++index) {
+	const angle = (index * 15 * Math.PI) / 180;
+	const x = ((index % 4) - 1.5) * 0.5, y = 1 + (Math.floor(index / 4) - 1) * 0.5;
+	const points = [new THREE.Vector3(x - Math.cos(angle) * 0.2, y - Math.sin(angle) * 0.2, 0),
+		new THREE.Vector3(x + Math.cos(angle) * 0.2, y + Math.sin(angle) * 0.2, 0)];
+	scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMaterial));
+}
+const box = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0x3f8fd0 }));
+box.position.set(0, 1, -0.5);
+scene.add(box);
+function animate(time) { box.rotation.y = time / 1000; }
+
+renderer.setAnimationLoop((time) => {
+	if (typeof animate === "function") animate(time);
+	renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

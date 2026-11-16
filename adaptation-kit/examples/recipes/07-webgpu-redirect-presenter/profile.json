@@ -1,0 +1,42 @@
+{
+	"Name": "recipe-07-webgpu-redirect-presenter",
+	"DisplayName": "Recipe: WebGPU redirect presenter",
+	"Id": "com.quaternar.recipe-07-webgpu-redirect-presenter",
+	"Version": "1.0.0",
+	"Channel": "debug",
+	"AddressPattern": "*recipes/07-webgpu-redirect-presenter/*",
+	"Engine": "webgpu",
+	"PageRegion": {
+		"Width": 640,
+		"Height": 480
+	},
+	"AppScale": 0.5,
+	"RenderScale": 0.5,
+	"ContinuousRendering": true,
+	"RenderRate": 60,
+	"TransportAlpha": true,
+	"ShareBrowserProfile": true,
+	"_sv": 3,
+	"Scripts": [
+		{
+			"Name": "capture-webgpu-redirect",
+			"Stage": "preDocument",
+			"Library": "webgpu-redirect-capture@1"
+		},
+		{
+			"Name": "render-frame-core",
+			"Stage": "afterLoad",
+			"Library": "render-frame-core@1"
+		},
+		{
+			"Name": "render-frame-presenter",
+			"Stage": "afterLoad",
+			"Library": "webgpu-redirect-presenter@1"
+		},
+		{
+			"Name": "site",
+			"Stage": "afterLoad",
+			"File": "scripts/site.js"
+		}
+	]
+}
