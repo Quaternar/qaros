@@ -2076,6 +2076,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.
+- **Docs:** a new *TerraExplorer* page in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/terraexplorer) streams Skyline
+  TerraExplorer Pro with its HoloLens add-on: install QAROS from the add-on's **Install QarOS** /
+  **Update QarOS** offer or by hand from the `.tez` package, start QAROS and add a receiver, allow
+  TerraExplorer, stream, connect a Meta Quest or METALENSE by QR code and a HoloLens 2 by IP address,
+  anchor, pan and zoom with the hands, the controls panel, the table settings, the add-on's device
+  set-up buttons and troubleshooting, with screenshots.
 - **Docs:** a new *Tutorial: Stream a Turbine from Blender* in the User Guide's *Supported Apps*
   (https://docs.quaternar.com/docs/user-guide/supported-apps/blender-turbine-tutorial): the
   supported Blender LTS versions, installing the add-on from the Visualizer's **Sources** or by
