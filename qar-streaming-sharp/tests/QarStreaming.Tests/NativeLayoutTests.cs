@@ -290,6 +290,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(1812, (int)StatusCode.OnboardingInviteRefused);
             Assert.Equal(3100, (int)StatusCode.HubTargetAppDeviceNotInvitable);
             Assert.Equal(3101, (int)StatusCode.PeerDeviceCategoryNotAllowed);
+            Assert.Equal(3103, (int)StatusCode.HubTargetAppNotHosted);
             Assert.Equal(3300, (int)StatusCode.HubLifecycleOperationRunning);
             Assert.Equal(602, (int)StatusCode.MediaStreamingStreamIsPaused);
             Assert.Equal(3400, (int)StatusCode.MemberJoinPending);

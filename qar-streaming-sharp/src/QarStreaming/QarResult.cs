@@ -132,6 +132,12 @@ namespace Quaternar.Qaros
         /// <see cref="DeviceCategory.Camera"/>. Nothing was changed.
         /// </summary>
         PeerDeviceCategoryNotAllowed = 3101,
+        /// <summary>
+        /// A request to stop or remove a target app reached the hub on this machine, but that hub
+        /// did not start it or issue its certificate: it belongs to another hub, or is already
+        /// gone. Nothing was changed.
+        /// </summary>
+        HubTargetAppNotHosted = 3103,
         /// <summary>The hub is in the middle of another session-wide operation (a session rotation, a member join, a leave). Retry once it has finished.</summary>
         HubLifecycleOperationRunning = 3300,
         /// <summary>Member join: the primary hub has the join request and waits for its operator to allow it. Not a failure; ask again later.</summary>
