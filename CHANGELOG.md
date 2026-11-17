@@ -690,7 +690,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   `rviz2` imports (from `QAR_QT_ROOT` or `Qt5_DIR`, a `qt` folder beside the distribution, its pixi
   environment, or `C:\Qt`), and a tile with no Qt found cannot launch and says so. The panel joins
   QAROS on start (`QAR_PANEL_AUTO_CONNECT=1`; an older plugin still needs **Connect to QarOS**). Rerun starts with its QAROS sink as an app QAROS launched
-  (`--sink qaros --launched-by-qaros --window`); allow it in the QAROS tray prompt on its first start. Offline, a tile keeps the last state it showed. Distributions in
+  (`--sink qaros --launched-by-qaros --local-app --window --panels`), so an example or recording
+  opened in its window streams its 3D view, each visible 2D view (images, plots, text) as a panel,
+  and a timeline panel to scrub and play; allow it in the QAROS tray prompt on its first start. Offline, a tile keeps the last state it showed. Distributions in
   other folders are added with **Add ROS installation...** in the Apps heading.
 - **Packaging:** the setup installs the Microsoft Visual C++ 2015-2022 Redistributable (x64) for
   the whole PC when it is missing or older than the one in the setup; a newer one is kept. Programs
@@ -2221,10 +2223,27 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **Docs:** a build that is neither a release nor a release candidate is versioned
-  `X.Y.Z-<commits>+<sha>` (was `X.Y.Z-dev.<commits>+<sha>`); decision record ADR-0003 and the
-  *Compatibility* page say so.
-
+- **Visualizer:** a web app adaptation whose `profile.json` has no `"_sv": 3` (untagged, or an
+  earlier format from before 0.10) is no longer loaded; it is listed with the adaptation load
+  issues instead of being converted. Every adaptation QAROS ships or the adaptation kit creates
+  already has it, and so does the profile skeleton in the shipped `webapp-threejs` skill. For one
+  you wrote by hand, add `"_sv": 3`, `Id`, `DisplayName` and `Version`; the adaptation kit's
+  `qaros-adaptation.py check` now reports a missing or earlier `_sv` as an error.
+- **Packaging:** a build that is not a release or a release candidate is versioned
+  `X.Y.Z-<commits>+<sha>`, for example `QAROS-Setup-0.10.1-34+bdd9afb7.exe` (was
+  `X.Y.Z-dev.<commits>+<sha>`); its Linux package is `X.Y.Z~<commits>+g<sha>`, still in the `dev`
+  channel. It still sorts below every release candidate and the release. A script that looked for
+  `-dev` in a version: treat a pre-release that starts with a digit as such a build.
+- **Packaging:** a release candidate's device players are stamped `-rc.N` (Android `versionCode`
+  and HoloLens package version slot `N`), no longer as released players: `QAROS Player Quest
+  0.10.1-rc.3.apk` in the 0.10.0-rc.3 setup, plain `0.10.1` only from a release, and
+  `-<commits>+<sha>` in any other build (`QAROS Player Quest 0.10.1-34+bdd9afb7.apk`). A player
+  a release already shipped keeps that release's
+  name and version in every later setup while it is unchanged, so a headset is never offered an
+  identical player as an update or a downgrade.
+- **Device apps:** the Android player is version 0.10.1 and the HoloLens player 0.9.1. Both
+  install over the players of 0.10.0-rc.2 and earlier, which claimed the released 0.10.0 and
+  0.9.0, without uninstalling them first.
 - **Runtime:** hubs, launchers, Visualizers and device apps of different 0.10 or newer builds
   work together: none refuses another for its version. Settings and records a newer build wrote
   keep their newer fields when an older build saves them.
@@ -2878,6 +2897,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   moment, sends a held request when the pacer wanted it instead of up to a frame early, ignores
   latency measured across a stalled step, and moves the lead only when most recent frames agree on
   a new value.
+- **C API:** an untagged build reports its version (`qar_runtime_info`,
+  `qar_peer_spec_get_version_id`, C# `PeerSpec.VersionId`) as `X.Y.Z-<commits>+<sha>`, for
+  example `0.10.1-34+bdd9afb7` (was `X.Y.Z-dev.<commits>+<sha>`). It still sorts below every
+  `-rc.N` and the release. Code that looked for `-dev` in the string: treat a pre-release that
+  starts with a digit as an untagged build. Tagged versions are unchanged.
 - **SDK:** from 0.10.0, every QAROS build reads what every other 0.10 or newer build sends or
   stores, older and newer alike, until a release is declared breaking. Messages and stored
   files carry no protocol version, so a peer, hub or app of another 0.10 build is no longer
@@ -3068,6 +3092,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   on this machine (protected by another user's, machine's or TPM's key, or altered) reports
   `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`; the slot is never deleted on read. Onboarding the same
   onboarding id with a code replaces that slot, and only that one. (#203)
+- **Docs:** a build that is neither a release nor a release candidate is versioned
+  `X.Y.Z-<commits>+<sha>` (was `X.Y.Z-dev.<commits>+<sha>`); decision record ADR-0003 and the
+  *Compatibility* page say so.
 - **Docs:** *Source Applications*: *Web apps QAROS provides* no longer lists the **three.js Littlest
   Tokyo** and **three.js Shapes** tiles; Littlest Tokyo is opened from **three.js examples**.
 - **Docs:** *Source Applications* describes the list as rows with **Locate...**, the **...** menu
