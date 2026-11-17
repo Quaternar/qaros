@@ -3432,6 +3432,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** the Blender page names the supported Blender versions, 4.5 LTS to 5.2, and says Blender 5.3 is not supported yet.
 - **Visualizer:** **Launch** works right after **Install** in an app's dialog (Rerun, ROS 2 Rviz,
   the Blender add-on, web app adaptations). Before, **Executable** stayed empty until the dialog
   was closed and reopened. **+** > **Open QAROS supported app** with a `qaros-rerun.exe` no longer
