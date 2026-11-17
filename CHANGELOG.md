@@ -2223,6 +2223,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Tutorial: Stream a Turbine from Blender* sets Blender up in three ways, in order:
+  found by the Visualizer (**Install QAROS add-on**, **Launch**), added in **Sources** with **+** >
+  **Open QAROS supported app** or **Locate...**, and by hand (download, **Install from Disk**,
+  **Start Streaming**). It describes the add-on's redesigned **QAROS** tab: its panels, the
+  **Active Object** eye that leaves a part out of the stream, the stream following the viewport
+  shading, and the **Renderer** drop-down, with new screenshots. *Blender* and *Source
+  Applications* say the same where they overlap.
 - **Visualizer:** a web app adaptation whose `profile.json` has no `"_sv": 3` (untagged, or an
   earlier format from before 0.10) is no longer loaded; it is listed with the adaptation load
   issues instead of being converted. Every adaptation QAROS ships or the adaptation kit creates

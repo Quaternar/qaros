@@ -240,6 +240,8 @@ QAROS looks for Blender (4.5 or newer) and ROS 2 distributions with rviz2 in the
 
 To add another Blender version while one is already found, use **Locate another folder...** in the row's **...** menu, or duplicate the row and set its **Executable**.
 
+**Open QAROS supported app** with a `blender.exe` does the same as **Locate...**: that Blender gets its own Blender row, which installs the QAROS add-on and starts Blender with it, instead of a plain app that starts Blender without the add-on. A plain app saved for a `blender.exe` before keeps working as saved; the Blender it starts also gets a row when no other Blender of its version has one. (Before QAROS 0.10.0, **Open QAROS supported app** saves a plain app: use **Locate...** for Blender there.)
+
 ## Importing a web app package
 
 A web app adaptation exported on another PC is a `.qarapp` package. Click **+**, then the **Import app package** card, and pick the file. The package is checked as every package is (signature, publisher trust, version) before it installs; an unsigned package or one from an unknown publisher asks first. Importing the same package again updates its row instead of adding a second one.
