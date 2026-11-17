@@ -476,7 +476,11 @@ namespace Quaternar.Qaros
         /// Removes a target app from the session for good ("uninvite"), also one started outside
         /// QAROS such as the headset player. This machine's hub stops the pipeline it runs for the
         /// target app, revokes the peer's device and forgets its pairing; the device is refused until
-        /// it is paired or invited again. Fails with <see cref="StatusCode.HubTargetAppNotHosted"/> for
+        /// it is paired or invited again. A receiver of the QAROS Visualizer on this machine is
+        /// stopped instead of forgotten: nothing is revoked, the receiver stays in the Visualizer
+        /// and starts again from there, and the call returns once it has stopped (<see cref="StatusCode.Timeout"/>
+        /// when the Visualizer does not answer, <see cref="StatusCode.ArgumentNotSupported"/> when it refuses).
+        /// Fails with <see cref="StatusCode.HubTargetAppNotHosted"/> for
         /// a peer this hub issued no certificate to (another hub's target app), and with
         /// <see cref="StatusCode.ArgumentNotSupported"/> for a peer that is not a target app. On a QAROS
         /// runtime that predates the call it returns <see cref="StatusCode.NotImplemented"/>.
