@@ -35,10 +35,14 @@ flowchart LR
 - The picture is not Blender's viewport: an ANARI renderer inside Blender draws it.
 - VisGL needs an OpenGL 4.3 GPU; OSPRay and Helide run on the CPU; VisRTX needs an NVIDIA RTX GPU and is optional.
 
+## Before you start
+
+Step 1 for every app: [Before You Start: Start QAROS and Add a Receiver](./start-qaros-and-add-a-receiver.md). Start QAROS, open the Visualizer and add a **Display Receiver**, or start the player app on a paired headset. A fresh Visualizer has no receiver: without one, the app streams to nobody.
+
 ## Install
 
 - **Blender** 4.5 or newer from [blender.org](https://www.blender.org/download/) (installer, zip or Steam).
-- **The add-on:** three ways, in this order ([Tutorial, step 2](./blender-turbine-tutorial.md#step-2-set-up-blender-with-qaros) shows each with screenshots):
+- **The add-on:** three ways, in this order ([Tutorial, step 3](./blender-turbine-tutorial.md#step-3-set-up-blender-with-qaros) shows each with screenshots):
   1. **Found by the Visualizer (recommended):** open your Blender's row in **Sources**, for example **Blender 4.5**, and press **Install QAROS add-on** (later **Update QAROS add-on**).
      - QAROS downloads the latest add-on, checks its SHA-256, copies it into that Blender version's add-ons folder and enables it.
      - No other add-on or setting changes. Blender started any other way has the add-on too.
@@ -84,7 +88,7 @@ sequenceDiagram
 
 ## First session
 
-1. **Open a target:** a paired headset or a Display Receiver.
+1. **Open a target:** a paired headset or a Display Receiver ([Before You Start](./start-qaros-and-add-a-receiver.md)).
 2. **What you see:**
    - an app volume *Blender* (*Blender 2* for a second Blender);
    - Blender's world origin at the volume centre, Z-up is up;

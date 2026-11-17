@@ -25,6 +25,10 @@ flowchart LR
   hub --> headset["Headsets and<br/>Visualizers (up to 8)"]
 ```
 
+## Before you start
+
+Step 1 for every app: [Before You Start: Start QAROS and Add a Receiver](./start-qaros-and-add-a-receiver.md). Start QAROS, open the Visualizer and add a **Display Receiver**, or start the player app on a paired headset. A fresh Visualizer has no receiver: without one, the app streams to nobody.
+
 ## Install
 
 The Visualizer does not list or install 3D Slicer yet: install the module by hand.

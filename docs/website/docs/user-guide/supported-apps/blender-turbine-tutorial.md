@@ -39,13 +39,17 @@ The screenshots show add-on **0.5.0** in Blender 4.5 LTS. For the add-on in gene
 - Source: [Sketchfab](https://sketchfab.com/3d-models/turbine-turbofan-engine-jet-engine-74c6aceed86b4a41aaad3b93afc3e262). The download above is the unchanged model.
 - Contents: 19 meshes, about 236,000 triangles, 6 materials with constant colours and no textures. Everything in it streams.
 
-## Step 1: Install Blender
+## Step 1: Start QAROS and add a receiver
+
+Follow [Before You Start: Start QAROS and Add a Receiver](./start-qaros-and-add-a-receiver.md): start QAROS, open the Visualizer, and add a **Display Receiver** (**+ Add receiver** at the bottom of the **Stream Graph**), or start the player app on your paired headset. Without one, Blender streams to nobody and you see nothing.
+
+## Step 2: Install Blender
 
 - Download an LTS release from [blender.org/download/lts](https://www.blender.org/download/lts/): **[Blender 4.5 LTS](https://www.blender.org/download/lts/4-5/)** is the oldest version the add-on supports.
 - Newer Blender releases work too (checked with 5.2). Get them from [blender.org/download](https://www.blender.org/download/).
 - Installer, zip or Steam: all work. Install it on the QAROS PC.
 
-## Step 2: Set up Blender with QAROS
+## Step 3: Set up Blender with QAROS
 
 Three ways, in this order. Start with the first; if it does not find your Blender, take the second; the third always works.
 
@@ -117,7 +121,7 @@ Always works, also when QAROS cannot reach the internet. Use it to troubleshoot.
 2. In Blender: **Edit > Preferences > Add-ons**, then **Install from Disk** (in the menu at the top right), and pick the zip.
 3. Enable **QAROS ANARI Streaming**. Leave **ANARI folder** in its preferences empty.
 4. Start **QAROS** from the Start menu (or run `qaros.exe` in the QAROS `bin` folder).
-5. In Blender's 3D Viewport, press `N` and click the **QAROS** tab, then **Start Streaming** ([Step 6](#step-6-stream-it)).
+5. In Blender's 3D Viewport, press `N` and click the **QAROS** tab, then **Start Streaming** ([Step 7](#step-7-stream-it)).
 
 The Visualizer leaves a hand-installed add-on alone: its row says so. To let QAROS manage it again, remove your copy from Blender and use way 1.
 
@@ -134,14 +138,14 @@ The add-on puts a **QAROS** tab in the sidebar of the 3D Viewport. Open it with 
 | Panel | What it shows or does |
 |---|---|
 | **QAROS** | the status: **Off**, **Joining QAROS**, **Streaming to N users**, or why it stopped (the icon in the header says the same). **Start Streaming**, or **Stop** with a restart button beside it. The **App volume** name: empty is **Blender** (**Blender 2** for a second Blender); change it only while stopped |
-| **Active Object** | the object Blender's selection makes active, with its eye (**Stream to QAROS**), what the stream does with it, and its material ([Step 5](#step-5-select-a-part-and-set-its-look)) |
-| **View** | the stream's shading, following the viewport by default, and **Fit Scene to Volume** ([Step 8](#step-8-shading-and-renderer)) |
+| **Active Object** | the object Blender's selection makes active, with its eye (**Stream to QAROS**), what the stream does with it, and its material ([Step 6](#step-6-select-a-part-and-set-its-look)) |
+| **View** | the stream's shading, following the viewport by default, and **Fit Scene to Volume** ([Step 9](#step-9-shading-and-renderer)) |
 | **Renderer** | the renderer that draws the stream, what it can show of your materials, **Frame Rate**, **Resolution** and the VisRTX materials |
 | **Streams To** | **All devices**, or a checkbox per headset or receiver; a dot marks one that receives the stream now |
 | **Headset** | what hand gestures in the app volume do: **Navigation** or **Object selection**; whether the controls panel beside the app volume is open |
 | **Diagnostics** (folded) | objects and triangles streamed, objects outside the volume, and every material approximation or object left out; a warning sign in its header when there is one |
 
-## Step 3: Import the turbine
+## Step 4: Import the turbine
 
 1. In Blender's default scene, select the **Cube** and press `X` > **Delete**.
 2. **File > Import > glTF 2.0 (.glb/.gltf)**.
@@ -153,18 +157,18 @@ The add-on puts a **QAROS** tab in the sidebar of the 3D Viewport. Open it with 
 
 The import makes one empty, **Sketchfab_model**, with the engine parts as its children (**Object_2**, **Object_3**, ...).
 
-## Step 4: Scale and place it
+## Step 5: Scale and place it
 
 The world origin sits at the centre of the app volume. One Blender unit is 0.25 m in the room by default, so the 4 m engine is 1 m long there.
 
 - **Move it:** select **Sketchfab_model** in the Outliner, press `G`, or type **Location** in the sidebar's **Item** tab. Keep it near the origin.
 - **Scale it:** press `S`, or set **Scale** on **Sketchfab_model**. All parts follow.
 - **Turn it:** press `R`, for example `R` `Z` `90` to face it along Y.
-- Skip exact sizing: **Fit Scene to Volume** (step 6) fits whatever you have.
+- Skip exact sizing: **Fit Scene to Volume** (step 7) fits whatever you have.
 
 Objects hidden in the viewport (eye icon in the Outliner) are not streamed.
 
-## Step 5: Select a part and set its look
+## Step 6: Select a part and set its look
 
 The stream follows Blender's selection and the selected object's own settings.
 
@@ -190,7 +194,7 @@ The stream follows Blender's selection and the selected object's own settings.
 |---|---|
 | ![Active Object: Object_9 with its eye closed, Left out of the stream](../../img/supported-apps/blender-tutorial/qaros-tab-left-out.webp) | ![The turbine in the Display Receiver without its outer casing rings](../../img/supported-apps/blender-tutorial/receiver-left-out.webp) |
 
-## Step 6: Stream it
+## Step 7: Stream it
 
 If you launched Blender from the Visualizer (ways 1 and 2), it already streams: skip to point 6.
 
@@ -204,7 +208,7 @@ If you launched Blender from the Visualizer (ways 1 and 2), it already streams: 
 
 To pick devices, untick **All devices** under **Streams To** and tick the ones you want. The change applies at once.
 
-## Step 7: View it in the headset
+## Step 8: View it in the headset
 
 1. Put on the paired headset, or open a Display Receiver. The engine sits in its app volume, with a **Blender** panel beside it.
 2. Walk around it and look through the open casing.
@@ -224,7 +228,7 @@ To pick devices, untick **All devices** under **Streams To** and tick the ones y
 
 4. Edit in Blender at the same time: every change shows in the room within a moment.
 
-## Step 8: Shading and renderer
+## Step 9: Shading and renderer
 
 The headset picture does not come from Blender's viewport: a renderer inside Blender draws it. It follows the viewport's shading, though.
 
@@ -238,7 +242,7 @@ The headset picture does not come from Blender's viewport: a renderer inside Ble
 |---|---|
 | **Wireframe** | the edges of every mesh, faces empty |
 | **Solid** | matte surfaces in each material's **Viewport Display > Color** |
-| **Material Preview** | the materials (step 5), lit like the viewport: the scene's lamps and World only with its **Scene Lights** / **Scene World** options |
+| **Material Preview** | the materials (step 6), lit like the viewport: the scene's lamps and World only with its **Scene Lights** / **Scene World** options |
 | **Rendered** | the materials with the scene's lamps and World |
 
 - **View** in the QAROS tab can fix one shading for the stream instead: its first button (a chain link, **Follow Viewport**) follows the viewport, the others keep one shading whatever the viewport shows. The line below names the shading in use.
@@ -259,7 +263,7 @@ The headset picture does not come from Blender's viewport: a renderer inside Ble
 - The line below the drop-down says which renderer runs and what it can show of your materials.
 - The selected part is outlined in orange in the headset on VisRTX, OSPRay and Helide. VisGL draws no outline.
 
-## Step 9: Stop
+## Step 10: Stop
 
 - **Stop** in the QAROS tab. The app volume closes; Blender stays open.
 - Or **Stop** on Blender's card under **Running** in the Visualizer: that quits Blender.

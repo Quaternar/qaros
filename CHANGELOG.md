@@ -2066,6 +2066,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
     invitation, remote-app grant, join-as-member, device identity, target-app invite, video
     sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** a new *Before You Start: Start QAROS and Add a Receiver* page in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/start-qaros-and-add-a-receiver)
+  starts QAROS, opens the Visualizer, adds a Display Receiver from the **Stream Graph**'s
+  **+ Add receiver** (or a paired headset) and shows how to tell it works, with screenshots. It is
+  step 1 of the *Rerun* and *Tutorial: Stream a Turbine from Blender* tutorials (whose later steps
+  move down by one), and *Blender*, *RViz (ROS 2)*, *3D Slicer* and *Supported Apps* link it
+  before their install steps.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.
@@ -2223,6 +2230,17 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *Rerun* in the User Guide's *Supported Apps* is now one tutorial
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/rerun) that starts on a PC
+  without Rerun and sets the viewer up in three ways, in order: from the Visualizer's **Rerun** row
+  (**Install**, **Launch**, **Approve**; where the viewer is installed), added in **Sources** with
+  **+** > **Open QAROS supported app** (a plain app that needs the viewer's six argument lines in
+  Developer mode), and by hand from a terminal. It then opens an example recording, shows what
+  streams and the timeline, with new screenshots. It replaces *Tutorial: Stream a Rerun Example*,
+  whose address redirects to it. The command-line options, joining, panels and timeline,
+  placement, logging your own data, building the viewer, how the Visualizer installs it, limits
+  and troubleshooting move to a new Developer Guide page, *The Rerun Viewer*
+  (https://docs.quaternar.com/docs/dev/developer-guide/rerun-viewer). *Supported Apps* links both.
 - **Docs:** *Tutorial: Stream a Turbine from Blender* sets Blender up in three ways, in order:
   found by the Visualizer (**Install QAROS add-on**, **Launch**), added in **Sources** with **+** >
   **Open QAROS supported app** or **Locate...**, and by hand (download, **Install from Disk**,

@@ -29,6 +29,10 @@ flowchart LR
 
 Full reference (every tab, environment variables, log messages): [Running the RViz2 Plugin on Windows](../../operator-guide/rviz2-plugin.md).
 
+## Before you start
+
+Step 1 for every app: [Before You Start: Start QAROS and Add a Receiver](./start-qaros-and-add-a-receiver.md). Start QAROS, open the Visualizer and add a **Display Receiver**, or start the player app on a paired headset. A fresh Visualizer has no receiver: without one, the app streams to nobody.
+
 ## Install
 
 - **ROS 2 Humble** with a working `rviz2`. QAROS does not repair a broken distribution: see the [repair scripts](https://github.com/Quaternar/qaros-ros-rviz/blob/main/docs/TROUBLESHOOTING.md).
@@ -71,7 +75,7 @@ sequenceDiagram
 
 ## First session
 
-1. **Open a target.** A paired headset, or a Display Receiver (**Add receiver** in the Visualizer). A fresh Visualizer has no receiver: RViz has nothing to stream to until you add one.
+1. **Open a target.** A paired headset, or a Display Receiver (**+ Add receiver** in the Visualizer, [Before You Start](./start-qaros-and-add-a-receiver.md)). A fresh Visualizer has no receiver: RViz has nothing to stream to until you add one.
 2. **Check the panel.** It reads *QarOS: connected (local app) - N target(s)*.
 3. **What you see:**
 
