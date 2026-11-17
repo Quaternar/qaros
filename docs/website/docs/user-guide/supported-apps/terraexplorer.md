@@ -72,12 +72,12 @@ Installing QAROS needs administrator rights on the PC: Windows asks for them.
    | QAROS on this PC | **QAROS Hub** | Message | Button |
    |---|---|---|---|
    | not installed | **Not installed** | *QAROS is not installed on this PC. Install it to connect TerraExplorer.* | **Install QAROS** |
-   | older than the add-on's | **Connecting**, then **Connected** | *A QAROS update is available (installed &lt;version&gt;), bundled &lt;version&gt;. When you click Update, this panel closes and the QAROS setup starts; open the panel again after the setup.* | **Update QAROS** |
+   | older than the add-on's | **Connecting**, then **Connected** | *A QAROS update is available (installed &lt;version&gt;), bundled &lt;version&gt;. The QAROS setup closes TerraExplorer: save your project first, then start TerraExplorer again after the setup.* | **Update QAROS** |
    | the same or newer | **Connecting**, then **Connected** | none | none |
 
-4. Click **Install QAROS** (or **Update QAROS**). TerraExplorer stops its streams, unloads QAROS, closes the panel and starts the QAROS setup at the same moment. Windows asks for administrator approval: click **Yes**. TerraExplorer stays open and does not block the setup.
-5. The QAROS setup opens. Follow it to the end. You do not need to close TerraExplorer.
-6. When the setup has ended, open the panel again: **Tools** › **XR Headset**. QAROS loads fresh from the updated install, and **QAROS Hub** at the top changes to **Connected** (after you allow TerraExplorer in [Step 3](#step-3-open-the-xr-headset-panel-and-allow-terraexplorer)).
+4. Click **Install QAROS** (or **Update QAROS**, or **Reinstall QAROS**). A message says that TerraExplorer must be closed to install or update QAROS. Save your project first, then click **OK** (**Cancel** changes nothing). The QAROS setup starts and TerraExplorer closes. Windows asks for administrator approval: click **Yes**.
+5. The QAROS setup opens. Follow it to the end.
+6. When the setup has ended, start TerraExplorer again and open the panel: **Tools** › **XR Headset**. QAROS loads from the updated install, and **QAROS Hub** at the top changes to **Connected** (after you allow TerraExplorer in [Step 3](#step-3-open-the-xr-headset-panel-and-allow-terraexplorer)).
 
 - The offer never holds TerraExplorer back. With an older QAROS, TerraExplorer connects and streams with it; the **Update QAROS** button stays until you update.
 - **If QAROS cannot be unloaded:** when TerraExplorer still holds a QAROS file, the panel stays open, names the file and starts no setup. Save your project, close TerraExplorer and run the QAROS setup by hand ([way 2](#way-2-by-hand-from-the-add-on-package)).
@@ -275,7 +275,6 @@ The **Disconnect device** button under each device in **Devices** stops the play
 | The **XR Headset** button is greyed out | No project is open. Open a project first |
 | **QAROS Hub: Not installed** | QAROS is not installed on this PC: click **Install QAROS**, or install it by hand ([way 2](#way-2-by-hand-from-the-add-on-package)). The panel connects by itself afterwards |
 | **QAROS Hub: Connecting** stays | Check that QAROS is running (its tray icon), and look for the *Allow ... to join QAROS?* window, possibly behind TerraExplorer |
-| *QAROS cannot be updated while TerraExplorer keeps QAROS files loaded* | A QAROS file could not be unloaded, and no setup started. Save your project, close TerraExplorer, then run the QAROS setup by hand ([way 2](#way-2-by-hand-from-the-add-on-package)) |
 | The panel closed and nothing else happened | The QAROS setup is starting: look for the Windows administrator prompt, possibly behind TerraExplorer. After the setup, open the panel again from **Tools** › **XR Headset** |
 | *QAROS installation was cancelled at the Windows permission prompt* | Click **Install QAROS** again and answer **Yes**. Installing needs an administrator |
 | You clicked **Deny** on *Allow ... to join QAROS?*, or it expired | QAROS remembers no denial: close TerraExplorer, start it again, open the XR Headset panel and click **Allow** |
