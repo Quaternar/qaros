@@ -67,26 +67,21 @@ Installing QAROS needs administrator rights on the PC: Windows asks for them.
 
    ![The TerraExplorer Tools tab with the Hololens button in the Tools group](../../img/supported-apps/terraexplorer/te-ribbon-hololens.webp)
 
-3. The **Hololens** panel opens. Before it connects, it checks the QAROS on this PC against the one in the add-on and shows a message at the top:
+3. The **Hololens** panel opens. It compares the QAROS on this PC with the one in the add-on and shows the result at the top:
 
-   | QAROS on this PC | Message | Buttons |
-   |---|---|---|
-   | not installed | *QarOS is not installed on this PC. Install it now, or close and install it later.* | **Install QarOS**, **Close** |
-   | older than the add-on's | *A QarOS update is available (installed &lt;version&gt;), bundled &lt;version&gt;. Update now, or skip and connect with the installed version.* | **Update QarOS**, **Skip** |
-   | the same or newer | no message; the panel connects | |
+   | QAROS on this PC | **QAROS Hub** | Message | Button |
+   |---|---|---|---|
+   | not installed | **Not installed** | *QAROS is not installed on this PC. Install it to connect TerraExplorer.* | **Install QAROS** |
+   | older than the add-on's | **Connecting**, then **Connected** | *A QAROS update is available (installed &lt;version&gt;), bundled &lt;version&gt;. TerraExplorer uses the installed version meanwhile. The setup asks you to close TerraExplorer before it updates QAROS; save your project first.* | **Update QAROS** |
+   | the same or newer | **Connecting**, then **Connected** | none | none |
 
-   ![The Hololens panel offering an update: A QarOS update is available, with Update QarOS and Skip](../../img/supported-apps/terraexplorer/panel-update-offer.webp)
+4. Click **Install QAROS** (or **Update QAROS**). Windows asks for administrator approval: click **Yes**.
+5. The QAROS setup opens. Follow it to the end. The panel shows *QAROS setup is running* meanwhile.
+6. When the setup ends, the panel connects by itself. **QAROS Hub** at the top changes to **Connected** (after you allow TerraExplorer in [Step 3](#step-3-open-the-hololens-panel-and-allow-terraexplorer)).
 
-4. Click **Install QarOS** (or **Update QarOS**). Windows asks for administrator approval: click **Yes**.
-5. The QAROS setup opens. Follow it to the end. The panel shows *QarOS setup is running* meanwhile.
-6. When the setup ends, the panel checks again and connects by itself. **QAROS Hub** at the top changes from **Connecting** to **Connected** (after you allow TerraExplorer in [Step 3](#step-3-open-the-hololens-panel-and-allow-terraexplorer)).
-
-- The panel connects only once the question is answered: until you install, update or skip, it stays at **Connecting**.
-- **Skip** connects with the QAROS you have. To update later, close TerraExplorer, start it again and click **Update QarOS**: QAROS cannot be updated while TerraExplorer uses it.
-- **Close** hides the message. The panel stays at **Connecting** until QAROS is installed: install it by hand (way 2) and the panel connects by itself, or reopen TerraExplorer to get the button again.
-- The same button is also in the panel's settings: click the gear, then **Install**. It reads **Install QarOS**, **Update QarOS** or **Reinstall QarOS**, with the installed and the bundled version.
-
-  ![The add-on settings, Install: 2. Update QarOS on this PC, with the installed and bundled versions and the Update QarOS button](../../img/supported-apps/terraexplorer/setup-install-update.webp)
+- The offer never holds TerraExplorer back. With an older QAROS, TerraExplorer connects and streams with it; the **Update QAROS** button stays until you update.
+- **Updating while TerraExplorer is connected:** TerraExplorer uses QAROS, so the QAROS setup lists it among the programs that hold QAROS files and asks you to close it. Save your project, close TerraExplorer, and choose **Retry** in the setup. **Cancel** stops the setup without changing anything; the panel then says so.
+- The same button is also in the panel's settings: click the gear, then **Install**. It reads **Install QAROS**, **Update QAROS** or **Reinstall QAROS**, with the installed and the bundled version.
 
 The add-on finds the setup inside its own folder and reads the version from the file name, `QAROS-Setup-<version>.exe`. Nothing else is downloaded.
 
@@ -96,7 +91,7 @@ A `.tez` add-on package is a ZIP file. The QAROS setup is inside it.
 
 1. Copy `HoloLens.tez` and rename the copy to `HoloLens.zip` (or open it with 7-Zip).
 2. Unzip it. Inside is the folder `HoloLens\prerequisites\` with exactly one file, `QAROS-Setup-<version>.exe`, for example `QAROS-Setup-0.10.0.exe`.
-3. Run `QAROS-Setup-<version>.exe` and follow the setup. To update a QAROS that TerraExplorer already uses, close TerraExplorer first.
+3. Run `QAROS-Setup-<version>.exe` and follow the setup. To update a QAROS that TerraExplorer uses, close TerraExplorer when the setup asks.
 
 If the add-on is already installed, the same file is in its installed folder: `%APPDATA%\Skyline\TerraExplorer\Add-ons\HoloLens\prerequisites\`. Paste that path into the File Explorer address bar.
 
@@ -231,8 +226,7 @@ The gear at the top of the Hololens panel opens the add-on's settings. Its butto
 
 | Button | What it shows |
 |---|---|
-| **Connect** | a QR code with this PC's address, for the older handheld companion app. Headsets do not need it |
-| **Install** | **2. QarOS on this PC**: the installed and the bundled QAROS version and the **Install QarOS** / **Update QarOS** / **Reinstall QarOS** button ([Step 1](#way-1-from-the-hololens-panel)) |
+| **Install** | **QAROS on this PC**: the installed and the bundled QAROS version and the **Install QAROS** / **Update QAROS** / **Reinstall QAROS** button ([Step 1](#way-1-from-the-hololens-panel)); below it, how to install the player on a HoloLens, with a **Set up HoloLens** button |
 | **Devices** | the buttons that install the player on a headset, and the connected devices |
 | **Done** | back to the main panel |
 
@@ -279,10 +273,10 @@ The **Disconnect device** button under each device in **Devices** stops the play
 | What you see | Why, and what to do |
 |---|---|
 | The **Hololens** button is greyed out | No project is open. Open a project first |
-| **QAROS Hub: Connecting** stays | The panel waits for your answer to *Install* or *Update*: click one, or **Skip**. If QAROS is installed and current, check that QAROS is running (its tray icon), and look for the *Allow ... to join QAROS?* window, possibly behind TerraExplorer |
-| No *Install QarOS* or *Update QarOS* offer, although QAROS is missing or old | The add-on's `prerequisites` folder must hold exactly one `QAROS-Setup-<version>.exe`. Reinstalling the add-on over an older one can leave the old setup beside the new one; then the add-on offers neither. Close TerraExplorer, delete the older `QAROS-Setup-*.exe` from `%APPDATA%\Skyline\TerraExplorer\Add-ons\HoloLens\prerequisites\`, start TerraExplorer again. Or install by hand (way 2) |
-| *QarOS is in use; close TerraExplorer and start it again to update* | You clicked **Skip** earlier, so this TerraExplorer already uses QAROS. Restart TerraExplorer and click **Update QarOS** |
-| *QarOS installation was cancelled at the Windows permission prompt* | Click **Install QarOS** again and answer **Yes**. Installing needs an administrator |
+| **QAROS Hub: Not installed** | QAROS is not installed on this PC: click **Install QAROS**, or install it by hand ([way 2](#way-2-by-hand-from-the-add-on-package)). The panel connects by itself afterwards |
+| **QAROS Hub: Connecting** stays | Check that QAROS is running (its tray icon), and look for the *Allow ... to join QAROS?* window, possibly behind TerraExplorer |
+| *QAROS setup stopped without changes: a program still uses QAROS* | You chose **Cancel** when the setup asked to close TerraExplorer. Save your project, click **Update QAROS** again, close TerraExplorer when the setup asks, then choose **Retry** |
+| *QAROS installation was cancelled at the Windows permission prompt* | Click **Install QAROS** again and answer **Yes**. Installing needs an administrator |
 | You clicked **Deny** on *Allow ... to join QAROS?*, or it expired | QAROS remembers no denial: close TerraExplorer, start it again, open the Hololens panel and click **Allow** |
 | *No connected target devices.* | Nothing can show the stream yet: add a receiver ([Step 2](#step-2-start-qaros-and-add-a-receiver)) or start the player on a paired headset |
 | **Connect** is greyed out | The panel is not **Connected** yet, or the device is busy. Wait for **Connected** |
