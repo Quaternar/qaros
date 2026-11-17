@@ -1,0 +1,177 @@
+name: Publish packages
+
+# Publishes the C# binding to nuget.org (Quaternar.Qaros, with its symbol package) and the Rust
+# binding to crates.io (qaros-sys, then qaros) when a v<version> tag is pushed. The tag must match
+# the VERSION file, which the csproj reads and which the Cargo workspace version and its exact pins
+# of the two crates must equal. Every step is `python ci/run.py package` / `publish`; run them
+# locally the same way (`publish --dry-run` pushes nothing). A version already published is
+# skipped, so re-running a partly failed release finishes it.
+#
+# Pull requests that touch the manifests run the package job only. A manual run is a dry run unless
+# `dry_run` is unticked; a real manual run must be started from a v<version> tag.
+#
+# One-time setup:
+# - Environments `nuget` and `crates-io` (Settings > Environments), each limited to tags v* and
+#   with required reviewers: a release waits there for approval.
+# - nuget.org: a Trusted Publishing policy (account > Trusted Publishing) for repository
+#   Quaternar/qaros, workflow file publish.yml, environment nuget; repository variable NUGET_USER
+#   is the nuget.org account (profile name, not email) that owns the policy and Quaternar.Qaros.
+# - crates.io: trusted publishing can be set up only for a crate that exists, so the first release
+#   uses an API token with the publish-new and publish-update scopes, saved as the secret
+#   CARGO_REGISTRY_TOKEN of the crates-io environment. Afterwards add a Trusted Publisher to both
+#   crates (crate > Settings: repository Quaternar/qaros, workflow publish.yml, environment
+#   crates-io) and delete the secret: without it the job uses trusted publishing.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "VERSION"
+      - "qar-streaming-sharp/Quaternar.Qaros.csproj"
+      - "qar-streaming-sharp/Directory.Build.*"
+      - "qar-streaming-sharp/README.md"
+      - "qar-streaming-rust/Cargo.toml"
+      - "qar-streaming-rust/Cargo.lock"
+      - "qar-streaming-rust/crates/qaros/Cargo.toml"
+      - "qar-streaming-rust/crates/qaros-sys/Cargo.toml"
+      - ".github/workflows/publish.yml"
+      - "ci/**"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check and package only, push nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The tag the packages are for: checked against VERSION. Empty outside tag refs.
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # Version checks, dotnet pack, cargo package (builds both crates from their .crate files).
+      - name: Package
+        run: python ci/run.py package --tag "$RELEASE_TAG"
+
+      - name: Dry-run publish
+        run: python ci/run.py publish --nuget --crates --dry-run --tag "$RELEASE_TAG"
+
+      - name: Upload the NuGet package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: build/packages/nuget
+          if-no-files-found: error
+
+  nuget:
+    needs: package
+    if: >-
+      github.ref_type == 'tag' && startsWith(github.ref_name, 'v') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: nuget
+      url: https://www.nuget.org/packages/Quaternar.Qaros
+    permissions:
+      contents: read
+      id-token: write # nuget.org trusted publishing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Download the NuGet package
+        uses: actions/download-artifact@v5
+        with:
+          name: nuget-package
+          path: build/packages/nuget
+
+      # A short-lived API key from the repository's GitHub OIDC token.
+      - name: nuget.org login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: python ci/run.py publish --nuget --tag "$RELEASE_TAG"
+
+  crates:
+    needs: package
+    if: >-
+      github.ref_type == 'tag' && startsWith(github.ref_name, 'v') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/qaros
+    permissions:
+      contents: read
+      id-token: write # crates.io trusted publishing
+    env:
+      # Set only for the first release, before the crates exist (see the setup above).
+      BOOTSTRAP_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      # A short-lived token from the repository's GitHub OIDC token, revoked when the job ends.
+      - name: crates.io login
+        id: login
+        if: env.BOOTSTRAP_TOKEN == ''
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.login.outputs.token || env.BOOTSTRAP_TOKEN }}
+        run: python ci/run.py publish --crates --tag "$RELEASE_TAG"
