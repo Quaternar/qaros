@@ -26,7 +26,7 @@ The screenshots show add-on **0.5.0** in Blender 4.5 LTS.
 |---|---|
 | **QAROS ANARI Streaming** add-on | 0.5.0 (step 3 installs it) |
 | QAROS | installed and running on this PC, with the **ANARI device** component (default from 0.10.0). 0.9.0 or newer for the add-on; the Visualizer installs it from 0.10.0 |
-| Blender | **4.5 LTS or newer**, on the same PC (Windows). Older versions are not supported |
+| Blender | **4.5 LTS to 5.2**, on the same PC (Windows). Older versions and Blender 5.3 are not supported yet |
 | GPU | OpenGL 4.3 for the VisGL renderer (any recent NVIDIA, AMD or Intel GPU). OSPRay and Helide run on the CPU; VisRTX needs an NVIDIA RTX GPU and is optional |
 | Viewer | a Display Receiver in the Visualizer, or a headset paired with this QAROS ([Before You Start](./start-qaros-and-add-a-receiver.md)) |
 
@@ -57,7 +57,7 @@ Follow [Before You Start: Start QAROS and Add a Receiver](./start-qaros-and-add-
 ## Step 2: Install Blender
 
 - Download an LTS release from [blender.org/download/lts](https://www.blender.org/download/lts/): **[Blender 4.5 LTS](https://www.blender.org/download/lts/4-5/)** is the oldest version the add-on supports.
-- Newer Blender releases work too (checked with 5.2). Get them from [blender.org/download](https://www.blender.org/download/).
+- Newer Blender releases up to 5.2 work too. Get them from [blender.org/download](https://www.blender.org/download/). Blender 5.3 is not supported yet: the add-on does not start there, and the Visualizer's Blender tile says so instead of offering it.
 - Installer, zip or Steam: all work. Install it on the QAROS PC.
 
 ## Step 3: Set up Blender with QAROS
