@@ -18,17 +18,20 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Breaking
 
-- **Device apps:** every Android headset now streams with depth on (`depth.enable`; it was off), so the
-  player reprojects with real depth, and takes its stream size and bitrate from a preset scaled to
+- **Device apps:** every Android headset but the Quests now streams with depth on (`depth.enable`; it
+  was off), so the player reprojects with real depth. The Quests send the alpha band instead
+  (`alpha.enable`; depth stays off): over camera passthrough the player shows the stream's exact
+  coverage, black content included, and the Quest reprojects the stream itself. Every headset
+  takes its stream size and bitrate from a preset scaled to
   its display (Quest 2, 3, 3S and Pro, Samsung Galaxy XR, XREAL Project Aura; METALENSE 2 and any
   other headset keep today's 1272x720 per eye at 90 fps and 60 Mbit/s, now with depth). A Quest
   streams 1600x1600 per eye at 90 fps and 100 Mbit/s (Quest 2, 3S and Pro scaled from it): more
   than METALENSE for the wider field of view, and no more than the player's warp holds on a Quest 3
   (2000x2000 dropped it to about 61 fps, 1600x1600 holds about 71 of 72); its bitrate is still to
-  be confirmed on the device. Depth adds a strip below the colour rows. Presets are capped to the decoder (METALENSE
+  be confirmed on the device. Depth, or the Quests' alpha band, adds a strip below the colour rows. Presets are capped to the decoder (METALENSE
   and the Android XR devices H.264 level 5.2, Quests level 6.0) and 100 Mbit/s: the Galaxy XR
-  preset streams 1776x1920 per eye at 60 fps and 100 Mbit/s (not yet tried on a device). To change a value for one headset, set `stream.*`, `depth.enable`
-  or `encoder.bitrateKbps` in the Visualizer (Debug mode, Tools, Streamer) or in a drop-in of
+  preset streams 1776x1920 per eye at 60 fps and 100 Mbit/s (not yet tried on a device). To change a value for one headset, set `stream.*`, `depth.enable`,
+  `alpha.enable` or `encoder.bitrateKbps` in the Visualizer (Debug mode, Tools, Streamer) or in a drop-in of
   `android-streamer-presets.d`.
 - **Packaging:** upgrading an installation older than 0.10 with a 0.10 or newer setup starts QAROS
   clean, interactive and silent alike: the protected service storage is made new, the installing
@@ -556,6 +559,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Added
 
+- **Device apps:** the Android player (0.10.1) keeps its log in a file on the headset, one file
+  per app start, so the log of the last session can always be fetched, release builds included:
+  `adb pull /sdcard/Android/data/com.quaternar.qaros.player/files/logs` (METALENSE:
+  `com.metalense.com.quaternar.qaros.player`). The previous start's file is always kept; older
+  ones go after a day or once all of them pass 48 MB. Per-second statistics are in the file once
+  every 10 s, GStreamer's debug output only from warnings up; logcat still gets every line.
 - **Visualizer:** a web app adaptation's profile can set `Antialias`, the samples per pixel of the
   users' eye views (2, 4, 8 or 16; absent: none, as before). Lines thinner than a pixel, dense grids
   and point clouds then stream antialiased like the page's own canvas, instead of dotted and with
@@ -2230,29 +2239,22 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **Docs:** *Rerun* in the User Guide's *Supported Apps* is now one tutorial
-  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/rerun) that starts on a PC
-  without Rerun and sets the viewer up in three ways, in order: from the Visualizer's **Rerun** row
-  (**Install**, **Launch**, **Approve**; where the viewer is installed), added in **Sources** with
-  **+** > **Open QAROS supported app** (a plain app that needs the viewer's six argument lines in
-  Developer mode), and by hand from a terminal. It then opens an example recording, shows what
-  streams and the timeline, with new screenshots. It replaces *Tutorial: Stream a Rerun Example*,
-  whose address redirects to it. The command-line options, joining, panels and timeline,
-  placement, logging your own data, building the viewer, how the Visualizer installs it, limits
-  and troubleshooting move to a new Developer Guide page, *The Rerun Viewer*
-  (https://docs.quaternar.com/docs/dev/developer-guide/rerun-viewer). *Supported Apps* links both.
-- **Docs:** *Blender* in the User Guide's *Supported Apps*
-  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/blender) is now one page: the
-  turbofan walkthrough of *Tutorial: Stream a Turbine from Blender*, which it replaces (its address
-  redirects there), plus the old page's requirements, renderer overview, detection, several Blender
-  versions, the controls panel's tabs, limits and troubleshooting.
-- **Docs:** *Tutorial: Stream a Turbine from Blender* sets Blender up in three ways, in order:
-  found by the Visualizer (**Install QAROS add-on**, **Launch**), added in **Sources** with **+** >
-  **Open QAROS supported app** or **Locate...**, and by hand (download, **Install from Disk**,
-  **Start Streaming**). It describes the add-on's redesigned **QAROS** tab: its panels, the
-  **Active Object** eye that leaves a part out of the stream, the stream following the viewport
-  shading, and the **Renderer** drop-down, with new screenshots. *Blender* and *Source
-  Applications* say the same where they overlap.
+- **Mixer:** hand gestures move an app volume's content only on purpose. A one-hand drag starts
+  after 0.16 s of pinch instead of 0.08 s, and a wrist turn waits for it too, so lowering the hands
+  or resting them on a keyboard clicks at most. A drag, two-hand scale or rotation now needs the
+  hand's ray pointing into the volume's box as the pinch begins (no content needs to be under it)
+  and the hand within 3 m of the volume; otherwise the pinch moves nothing and the user walks
+  closer. Hover and click are unchanged. To get the old hold time back, set Hold time to 0.08 s in
+  the Visualizer's gesture recognition card (App Volumes panel).
+- **Visualizer:** a source app's download or update (app, plugin, add-on or adaptation) is now at
+  the top of its dialog in **Sources**, so you no longer have to scroll to find it.
+- **Visualizer:** **+** > **Open QAROS supported app** with a `blender.exe` gives that Blender its
+  own Blender tile, the same as **Locate...** on the Blender row, instead of saving a plain app. The
+  tile installs the QAROS add-on (**Install QAROS add-on**) and **Launch** starts Blender with it,
+  streaming by itself. A plain app saved that way before started Blender without the add-on: no
+  QAROS tab unless Blender's preferences enabled it, and no streaming until **Start Streaming**. It
+  stays in the list as saved, and the Blender it starts now also gets a tile when no other Blender
+  of its version has one; launch that tile instead.
 - **Visualizer:** a web app adaptation whose `profile.json` has no `"_sv": 3` (untagged, or an
   earlier format from before 0.10) is no longer loaded; it is listed with the adaptation load
   issues instead of being converted. Every adaptation QAROS ships or the adaptation kit creates
@@ -3122,6 +3124,29 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   on this machine (protected by another user's, machine's or TPM's key, or altered) reports
   `QAR_STATUS_ONBOARDING_RE_PAIR_REQUIRED`; the slot is never deleted on read. Onboarding the same
   onboarding id with a code replaces that slot, and only that one. (#203)
+- **Docs:** *Rerun* in the User Guide's *Supported Apps* is now one tutorial
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/rerun) that starts on a PC
+  without Rerun and sets the viewer up in three ways, in order: from the Visualizer's **Rerun** row
+  (**Install**, **Launch**, **Approve**; where the viewer is installed), added in **Sources** with
+  **+** > **Open QAROS supported app** (a plain app that needs the viewer's six argument lines in
+  Developer mode), and by hand from a terminal. It then opens an example recording, shows what
+  streams and the timeline, with new screenshots. It replaces *Tutorial: Stream a Rerun Example*,
+  whose address redirects to it. The command-line options, joining, panels and timeline,
+  placement, logging your own data, building the viewer, how the Visualizer installs it, limits
+  and troubleshooting move to a new Developer Guide page, *The Rerun Viewer*
+  (https://docs.quaternar.com/docs/dev/developer-guide/rerun-viewer). *Supported Apps* links both.
+- **Docs:** *Blender* in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/blender) is now one page: the
+  turbofan walkthrough of *Tutorial: Stream a Turbine from Blender*, which it replaces (its address
+  redirects there), plus the old page's requirements, renderer overview, detection, several Blender
+  versions, the controls panel's tabs, limits and troubleshooting.
+- **Docs:** *Tutorial: Stream a Turbine from Blender* sets Blender up in three ways, in order:
+  found by the Visualizer (**Install QAROS add-on**, **Launch**), added in **Sources** with **+** >
+  **Open QAROS supported app** or **Locate...**, and by hand (download, **Install from Disk**,
+  **Start Streaming**). It describes the add-on's redesigned **QAROS** tab: its panels, the
+  **Active Object** eye that leaves a part out of the stream, the stream following the viewport
+  shading, and the **Renderer** drop-down, with new screenshots. *Blender* and *Source
+  Applications* say the same where they overlap.
 - **Docs:** a build that is neither a release nor a release candidate is versioned
   `X.Y.Z-<commits>+<sha>` (was `X.Y.Z-dev.<commits>+<sha>`); decision record ADR-0003 and the
   *Compatibility* page say so.
@@ -3400,6 +3425,30 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Visualizer:** **Launch** works right after **Install** in an app's dialog (Rerun, ROS 2 Rviz,
+  the Blender add-on, web app adaptations). Before, **Executable** stayed empty until the dialog
+  was closed and reopened. **+** > **Open QAROS supported app** with a `qaros-rerun.exe` no longer
+  saves a plain entry that never joins: the viewer becomes the Rerun tile's build, which launches
+  it joined to QAROS.
+- **Device apps:** the Android player shows streamed models in their real colours over camera
+  passthrough on Meta Quest and Galaxy XR. Mid-tones and shadows were too dark and colours too
+  saturated; on Quest dark materials faded into the room and edges had a dark rim; on Galaxy XR the
+  room around the models now shows. Over camera passthrough the player takes the stream's alpha
+  from the alpha band (the Quest default), else from depth, so black content and thin lines such
+  as the volume outline show without a dark border; only a stream with neither still cuts black
+  out. MetaLens looks as before; opaque VR shows slightly brighter mid-tones. To tune on a headset
+  without a rebuild: `adb shell setprop debug.qar.black_key "<threshold> <softness>"` (default
+  `0.03 0.05`, used only without band and depth) or `debug.qar.color_space`, then reconnect.
+- **Device apps:** a Meta Quest restores the anchor it saved at the last anchoring QR code scan
+  and places the scene without the code, at start and when the headset is put back on. It used
+  to ask for the anchoring QR code every time. While the anchor is looked for the panel says
+  "Localizing anchor"; it asks for the code only when the anchor cannot be found. A scene
+  placed by a scan this run stays where it is while the anchor is looked for after the headset
+  was off.
+- **Device apps:** an Android headset shown the connection QR code of the session it is already
+  in says "You are already in this session" over "Look away from the connection QR code to
+  continue", also over a playing stream. It used to show nothing, so the code looked broken. The
+  message goes 5 s after the code leaves the view; the session and stream go on.
 - **Device apps:** an Android headset shown the connection QR code of another hub while it is in a
   session now leaves that session and joins the new hub. It used to detect the code and stay
   where it was, still playing the old stream. While it switches the panel says "Switching to
