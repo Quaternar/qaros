@@ -18,7 +18,7 @@ Your open Blender scene, live in the room: edits in Blender show up within a mom
 
 | | Version |
 |---|---|
-| **QAROS ANARI Streaming** add-on | 0.4.1 |
+| **QAROS ANARI Streaming** add-on | 0.5.0 |
 | Blender | 4.5 LTS or newer |
 | QAROS | 0.9.0 or newer, with the **ANARI device** component (default from 0.10.0). Install from the Visualizer: 0.10.0. |
 | OS | Windows |
@@ -38,13 +38,15 @@ flowchart LR
 ## Install
 
 - **Blender** 4.5 or newer from [blender.org](https://www.blender.org/download/) (installer, zip or Steam).
-- **The add-on, from the Visualizer (recommended):** open the **Blender 4.5** tile (your version), press **Install QAROS add-on** (later **Update QAROS add-on**).
-  - QAROS downloads the [latest release](https://github.com/Quaternar/qaros-blender/releases/latest), checks its SHA-256, copies it into that Blender version's add-ons folder and enables it.
-  - No other add-on or setting changes. Blender started any other way has the add-on too.
-- **By hand:** download `qaros_blender_anari-<version>.zip` from the [releases](https://github.com/Quaternar/qaros-blender/releases/latest).
-  1. In Blender: **Edit > Preferences > Add-ons > Install from Disk**, pick the zip.
-  2. Enable **QAROS ANARI Streaming**.
-  3. QAROS leaves a hand-installed add-on alone: the tile shows **Detected**.
+- **The add-on:** three ways, in this order ([Tutorial, step 2](./blender-turbine-tutorial.md#step-2-set-up-blender-with-qaros) shows each with screenshots):
+  1. **Found by the Visualizer (recommended):** open your Blender's row in **Sources**, for example **Blender 4.5**, and press **Install QAROS add-on** (later **Update QAROS add-on**).
+     - QAROS downloads the latest add-on, checks its SHA-256, copies it into that Blender version's add-ons folder and enables it.
+     - No other add-on or setting changes. Blender started any other way has the add-on too.
+  2. **Added in Sources:** for a Blender QAROS did not find, **+** > **Open QAROS supported app** and pick its `blender.exe`, or **Locate...** on the Blender row. It gets its own row; continue as in 1. A QAROS older than 0.10.0 adds a plain app from **Open QAROS supported app**, which starts Blender without the add-on: use **Locate...** there.
+  3. **By hand (troubleshooting):** [download the add-on](https://github.com/Quaternar/qaros-blender/releases/download/v0.5.0/qaros_blender_anari-0.5.0.zip) (`qaros_blender_anari-0.5.0.zip`).
+     1. In Blender: **Edit > Preferences > Add-ons > Install from Disk**, pick the zip.
+     2. Enable **QAROS ANARI Streaming**.
+     3. Start QAROS, then **Start Streaming** in Blender's **QAROS** tab. QAROS leaves a hand-installed add-on alone: the row shows **Detected**.
 - Leave the add-on's **ANARI folder** preference empty: it then uses the ANARI device QAROS installed.
 
 ## Connect to QAROS
@@ -69,7 +71,7 @@ sequenceDiagram
   2. Pick the folder with `blender.exe` (an unzipped blender.org download works).
   3. Every **Refresh** searches it from then on. See [Locating an app QAROS did not find](../../operator-guide/source-applications.md#locating-an-app-qaros-did-not-find).
 - **Start it:** click the tile, press **Launch**. Blender starts streaming by itself.
-- **Start it from Blender instead:** 3D View > `N` > **QAROS** tab > **Start streaming**. **Stop streaming** keeps Blender open.
+- **Start it from Blender instead:** 3D View > `N` > **QAROS** tab > **Start Streaming**. **Stop** keeps Blender open.
 - **Allow it once:** click **Allow** within 120 s ([Approved local apps](../../operator-guide/source-applications.md#approved-local-apps)).
 - **Stop** in the Visualizer quits that Blender without a save prompt. It saves `quit.blend` first: **File > Recover > Last Session** brings your work back. A Blender you started yourself is never closed by QAROS.
 - **Several Blender versions:**
@@ -87,7 +89,7 @@ sequenceDiagram
    - an app volume *Blender* (*Blender 2* for a second Blender);
    - Blender's world origin at the volume centre, Z-up is up;
    - 1 Blender unit = 0.25 m by default (a 4 m scene fills a 1 m volume);
-   - objects fully outside the volume are not streamed. **Fit scene to volume** on the **QAROS** tab fixes that.
+   - objects fully outside the volume are not streamed. **Fit Scene to Volume** on the **QAROS** tab fixes that.
 3. **Gestures:**
 
    | Gesture | Does |
@@ -108,25 +110,28 @@ sequenceDiagram
    | **Frame** | Current frame, play |
    | **Panels** | Blender's Transform, Relations, Visibility |
 
-5. **Streams to** on the **QAROS** tab: **All devices**, or single headsets and receivers.
+5. **Streams To** on the **QAROS** tab: **All devices**, or single headsets and receivers.
 
 ## Tips and limits
 
 - Materials: only constant **Principled BSDF** values stream (base colour, metallic, roughness, alpha, emission). Not textures, vertex colours, normal maps, glass, coat, sheen or subsurface.
 - Lights: a sun stays a sun; point, spot and area lamps become point lights. The World/HDRI is not streamed.
 - Not streamed: Gaussian splats, point clouds, meshes without faces.
-- One app volume per Blender. **Backend** and **ANARI folder** changes need a Blender restart.
+- One app volume per Blender. An **ANARI folder** change needs a Blender restart; a **Renderer** chosen in the QAROS tab restarts the stream on it at once.
+- The stream follows the viewport's shading (Wireframe, Solid, Material Preview, Rendered), or the shading fixed in the tab's **View** panel.
+- The eye in the tab's **Active Object** panel leaves an object out of the stream; it stays in Blender.
 - Fastest backend: **VisGL**.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| Nothing after **Start streaming** | Click **Allow** in the QAROS prompt; it expires after 120 s. |
+| Nothing after **Start Streaming** | Click **Allow** in the QAROS prompt; it expires after 120 s. |
 | No backend loads | Install QAROS with the ANARI device component; leave **ANARI folder** empty. |
-| Slow, all CPU cores busy | Choose the **VisGL** backend. |
-| Part of the scene missing, or tiny or huge | **Fit scene to volume**, or a new **App volume** name to reset its scale. |
+| Slow, all CPU cores busy | Choose **VisGL** in the QAROS tab's **Renderer**. |
+| Part of the scene missing, or tiny or huge | **Fit Scene to Volume**, or a new **App volume** name to reset its scale. Check the object's eye in **Active Object**. |
+| No **QAROS** tab in Blender | Blender started without the add-on: start it from its Blender row in **Sources**, or enable **QAROS ANARI Streaming** in Blender's preferences. |
 | A headset shows nothing | Check **Streams to** and the **Users** limit (default 2). |
 | Tile says *Installed by hand, not by QAROS* | Remove your copy from Blender to let QAROS manage it, or keep updating it yourself. |
 
-Full add-on guide: [qaros-blender user guide](https://github.com/Quaternar/qaros-blender/blob/main/docs/user-guide.md).
+Full add-on guide: [QAROS Blender add-on user guide](https://github.com/Quaternar/qaros-blender/blob/main/docs/user-guide.md).
