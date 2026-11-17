@@ -627,6 +627,12 @@ namespace Quaternar.Qaros.Interop
         internal static extern ResultNative qar_impl_session_kill_target_app_async(IntPtr session, ref PeerIdNative targetApp, TargetAppResultCallback resultCallback, ProgressCallback? updateCallback, IntPtr userState, IntPtr cancel);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_session_forget_target_app(IntPtr session, ref PeerIdNative targetApp, ProgressCallback? onProgress, IntPtr progressState, IntPtr cancel);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern ResultNative qar_impl_session_forget_target_app_async(IntPtr session, ref PeerIdNative targetApp, TargetAppResultCallback resultCallback, ProgressCallback? updateCallback, IntPtr userState, IntPtr cancel);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern ResultNative qar_impl_target_app_connection_string_hololens(IntPtr host, [Out] byte[] buffer, UIntPtr bufferSize);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
