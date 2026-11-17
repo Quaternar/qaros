@@ -2221,6 +2221,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** a build that is neither a release nor a release candidate is versioned
+  `X.Y.Z-<commits>+<sha>` (was `X.Y.Z-dev.<commits>+<sha>`); decision record ADR-0003 and the
+  *Compatibility* page say so.
+
 - **Runtime:** hubs, launchers, Visualizers and device apps of different 0.10 or newer builds
   work together: none refuses another for its version. Settings and records a newer build wrote
   keep their newer fields when an older build saves them.

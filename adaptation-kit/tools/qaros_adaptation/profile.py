@@ -156,15 +156,15 @@ def _check_scalars(profile: dict, report: Report) -> None:
     if sv is None:
         report.error(
             "schema",
-            f"profile.json has no \"_sv\": {PROFILE_SCHEMA_VERSION}; QAROS reads a profile without it as the first "
-            "format and replaces its Id, DisplayName and Version",
+            f"profile.json has no \"_sv\": {PROFILE_SCHEMA_VERSION}; QAROS reads a profile without it as a format "
+            "from before 0.10 and does not load it",
         )
     elif not isinstance(sv, int) or isinstance(sv, bool) or sv < 1:
         report.error("schema", f"_sv must be a positive integer, not {sv!r}")
     elif sv > PROFILE_SCHEMA_VERSION:
         report.error("schema", f"_sv {sv} is newer than this kit knows ({PROFILE_SCHEMA_VERSION}); use the kit of a newer QAROS")
     elif sv < PROFILE_SCHEMA_VERSION:
-        report.warning("schema", f"_sv {sv} is an earlier profile format; QAROS migrates it on load")
+        report.error("schema", f"_sv {sv} is a profile format from before 0.10; QAROS does not load it. Set \"_sv\": {PROFILE_SCHEMA_VERSION}")
 
     for name, kind in REQUIRED_FIELDS.items():
         if name not in profile:
