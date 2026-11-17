@@ -1,7 +1,7 @@
 ---
 title: "Before You Start: Start QAROS and Add a Receiver"
-sidebar_label: "Before You Start"
-sidebar_position: 1.5
+sidebar_label: "Start Here: Add a Receiver"
+sidebar_position: 0.5
 description: Step 1 of every supported-app tutorial. Start QAROS, open the Visualizer, and add a Display Receiver (or start a paired headset), so a streamed app has somewhere to show. How to tell it works.
 ---
 
@@ -76,7 +76,7 @@ A headset and a receiver work side by side: each gets its own picture of the sam
 Pick your app:
 
 - [Rerun](./rerun.md)
-- [Tutorial: Stream a Turbine from Blender](./blender-turbine-tutorial.md), or [Blender](./blender.md)
+- [Blender](./blender.md)
 - [RViz (ROS 2)](./rviz.md)
 - [3D Slicer](./3d-slicer.md)
 

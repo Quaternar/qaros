@@ -142,6 +142,8 @@ const config: Config = {
 					{ from: "/docs/developer-guide/examples/c/cpu-rendering", to: "/docs/developer-guide/tutorials/c/cpu-rendering" },
 					// The Rerun tutorial became the Rerun page (not in a release yet, so only Dev has it).
 					{ from: "/docs/dev/user-guide/supported-apps/rerun-tutorial", to: "/docs/dev/user-guide/supported-apps/rerun" },
+					// The Blender turbine tutorial became the Blender page.
+					{ from: "/docs/dev/user-guide/supported-apps/blender-turbine-tutorial", to: "/docs/dev/user-guide/supported-apps/blender" },
 				],
 				// The working copy moved from /next/ to /dev/.
 				createRedirects: legacyDevRedirects,

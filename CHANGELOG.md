@@ -2070,9 +2070,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/start-qaros-and-add-a-receiver)
   starts QAROS, opens the Visualizer, adds a Display Receiver from the **Stream Graph**'s
   **+ Add receiver** (or a paired headset) and shows how to tell it works, with screenshots. It is
-  step 1 of the *Rerun* and *Tutorial: Stream a Turbine from Blender* tutorials (whose later steps
-  move down by one), and *Blender*, *RViz (ROS 2)*, *3D Slicer* and *Supported Apps* link it
-  before their install steps.
+  step 1 of the *Rerun* and *Blender* tutorials (whose later steps move down by one), and *RViz*
+  *(ROS 2)*, *3D Slicer* and *Supported Apps* link it before their install steps. It is the first
+  page of *Supported Apps* and *Getting Started* links it.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.
@@ -2241,6 +2241,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   placement, logging your own data, building the viewer, how the Visualizer installs it, limits
   and troubleshooting move to a new Developer Guide page, *The Rerun Viewer*
   (https://docs.quaternar.com/docs/dev/developer-guide/rerun-viewer). *Supported Apps* links both.
+- **Docs:** *Blender* in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/blender) is now one page: the
+  turbofan walkthrough of *Tutorial: Stream a Turbine from Blender*, which it replaces (its address
+  redirects there), plus the old page's requirements, renderer overview, detection, several Blender
+  versions, the controls panel's tabs, limits and troubleshooting.
 - **Docs:** *Tutorial: Stream a Turbine from Blender* sets Blender up in three ways, in order:
   found by the Visualizer (**Install QAROS add-on**, **Launch**), added in **Sources** with **+** >
   **Open QAROS supported app** or **Locate...**, and by hand (download, **Install from Disk**,

@@ -8,6 +8,10 @@ description: "Join your first QAROS session in about five minutes: the Hub opera
 
 You can be inside a QAROS Shared Space in about five minutes. All you need is the QAROS app on your device and the person running the Hub (the operator), who pairs your device with the Hub once.
 
+:::tip Streaming an app on this PC?
+To see an app such as Rerun or Blender without a headset, or before you put one on, start with [Before You Start: Start QAROS and Add a Receiver](./supported-apps/start-qaros-and-add-a-receiver.md). A fresh Visualizer has no receiver, so a streamed app shows nowhere until you add one.
+:::
+
 ## Before you start
 
 - **Get on the right network.** Devices find the Hub by listening for its beacon on the local network, so the simplest path is to be on the same Wi-Fi or LAN as the Hub. If you are off-site, your operator can set up a **relay** that lets you reach the Hub from elsewhere — ask them whether one is available for you.

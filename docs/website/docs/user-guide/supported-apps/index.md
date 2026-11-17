@@ -41,6 +41,6 @@ flowchart LR
 
 - The Visualizer installs and updates add-ons and plugins from QAROS **0.10.0**. With an older QAROS, install them by hand as each page says.
 - Tiles, **Locate...**, presets, the **+** dialog and UI modes: [Source Applications](../../operator-guide/source-applications.md).
-- Step by step with Blender: [Tutorial: Stream a Turbine from Blender](./blender-turbine-tutorial.md).
+- Step by step with Blender: [Blender](./blender.md), with a turbofan engine.
 - Step by step with Rerun: [Rerun](./rerun.md), from a PC without Rerun to an example recording in the headset. Logging your own data, every option and building the viewer: [The Rerun Viewer](../../developer-guide/rerun-viewer.md) in the Developer Guide.
 - To stream an app of your own: [Developer Guide](/docs/developer-guide/getting-started).
