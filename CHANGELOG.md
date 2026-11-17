@@ -2246,6 +2246,12 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** *TerraExplorer* in the User Guide's *Supported Apps*
+  (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/terraexplorer) matches the HoloLens
+  add-on that no longer waits for its install/update offer: TerraExplorer connects at once, a missing
+  QAROS shows **Not installed**, **Update QAROS** stays available while TerraExplorer is connected (a message
+  asks you to save and close TerraExplorer; **OK** starts the setup and closes it), and the buttons say QAROS. The Skip and
+  Close answers, the handheld Connect screen and their screenshots are gone.
 - **Mixer:** hand gestures move an app volume's content only on purpose. A one-hand drag starts
   after 0.16 s of pinch instead of 0.08 s, and a wrist turn waits for it too, so lowering the hands
   or resting them on a keyboard clicks at most. A drag, two-hand scale or rotation now needs the
