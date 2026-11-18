@@ -2246,12 +2246,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
-- **C API:** `qar_session_kill_target_app` (and `_async`; C# `Session.KillTargetApp` /
-  `KillTargetAppAsync`) now stops every kind of target app, not only one you invited. An invited
-  HoloLens loses its OpenXR desktop app, a headset player (Meta Quest, other Android headsets) is
-  asked to quit and its relay on the PC stops, and a Visualizer receiver is stopped and stays in
-  the Visualizer. Nothing is remembered: a target app that comes back is listed again. A headset
-  player of an older version does not quit; its relay still stops.
+- **C API:** `qar_session_kill_target_app` (C# `KillTargetApp`) stops any target app: a HoloLens's OpenXR desktop app, a headset player and its relay, or a Visualizer receiver (kept). Nothing is remembered.
 - **Docs:** *TerraExplorer* in the User Guide's *Supported Apps*
   (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/terraexplorer) matches the HoloLens
   add-on that no longer waits for its install/update offer: TerraExplorer connects at once, a missing
