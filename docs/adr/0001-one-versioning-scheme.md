@@ -67,7 +67,20 @@ flowchart LR
   - `rc.N`, and every build after it until `rc.N+1`: `N`;
   - the release: `99`.
 
-  Builds that share `S` are told apart only by the full SemVer string.
+  Builds that share `S` are told apart only by the full SemVer string, except on Android.
+- The Android `versionCode` must rise with every build, or a later build will not install over an
+  earlier one. It is `major*1e8 + minor*1e6 + patch*1e4 + S*100 + min(commits, 99)`, where
+  `commits` counts the commits since the last tag (`0` on a tag):
+
+  | Build | versionCode |
+  |---|---|
+  | 12 commits after `v0.10.0`, `VERSION` 0.10.1 | 10010012 |
+  | `v0.10.0-rc.4` | 10000400 |
+  | 12 commits after `v0.10.0-rc.4` | 10000412 |
+  | `v0.10.0` | 10009900 |
+
+  `major` is at most 20 and `minor` and `patch` at most 99, which keeps the code under Android's
+  limit of 2100000000. Past 99 commits after a tag, builds share a code until the next tag.
 - Minimum-version checks (an app's `min_qaros_version`, for example) compare the `X.Y.Z` core. A
   development build or a candidate of `X.Y.Z` counts as `X.Y.Z`, so it can be tested with the
   apps that require it.
