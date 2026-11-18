@@ -424,11 +424,28 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Asks this machine's hub to stop a target app it started, with the whole
-        /// pipeline feeding it. A target app this hub did not start (another hub's, or one
-        /// launched outside QAROS such as the headset player) fails with
-        /// <see cref="StatusCode.HubTargetAppNotHosted"/>; use <see cref="ForgetTargetApp"/> to remove
-        /// such a target app from the session.
+        /// Asks this machine's hub to stop a target app, whatever kind it is.
+        /// <list type="bullet">
+        /// <item>A target app the hub started (an invited HoloLens, remoted through the HoloLens OpenXR
+        /// desktop app on the PC): the desktop app and the whole pipeline feeding it are stopped.</item>
+        /// <item>A headset that joined the session itself (Meta Quest, other Android headsets): the
+        /// player application on the headset is asked to quit, and the Android streamer the hub runs
+        /// on this PC to relay video to it is stopped. A headset player of an older release cannot be
+        /// asked to quit: its relay still stops, and the player keeps running without a stream.</item>
+        /// <item>A receiver of the QAROS Visualizer on this machine: the Visualizer stops the receiver
+        /// so nothing streams into it. The receiver stays in the Visualizer and starts again from
+        /// there.</item>
+        /// </list>
+        /// A stop is not remembered: nothing is revoked, forgotten or hidden, and a target app that
+        /// comes back (the receiver started again, the headset app relaunched, the HoloLens app
+        /// restarted) is listed again. To forget or unpair a device use the Visualizer's Forget, or
+        /// pair the device again with a new QR code.
+        /// The call returns once the target app has stopped. A target app that is none of the above
+        /// (another hub's, one started outside QAROS that is neither a headset player nor a Visualizer
+        /// receiver, or one already gone) fails with <see cref="StatusCode.HubTargetAppNotHosted"/> and
+        /// nothing is stopped. A Visualizer that refuses to stop its receiver fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>, and one that does not answer in time with
+        /// <see cref="StatusCode.Timeout"/>; nothing changes then.
         /// </summary>
         public Result<Unit> KillTargetApp(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -464,74 +481,6 @@ namespace Quaternar.Qaros
                 var info = Results.ToInfo(NativeMethods.qar_impl_session_kill_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
                 if (!info.IsSuccess)
                     state.Complete(Result<Unit>.Failure(info));
-            }
-            catch (Exception ex)
-            {
-                state.Fault(ex);
-            }
-            return state.Task;
-        }
-
-        /// <summary>
-        /// Removes a target app from the session for good ("uninvite"), also one started outside
-        /// QAROS such as the headset player. This machine's hub stops the pipeline it runs for the
-        /// target app, revokes the peer's device and forgets its pairing; the device is refused until
-        /// it is paired or invited again. A receiver of the QAROS Visualizer on this machine is
-        /// stopped instead of forgotten: nothing is revoked, the receiver stays in the Visualizer
-        /// and starts again from there, and the call returns once it has stopped (<see cref="StatusCode.Timeout"/>
-        /// when the Visualizer does not answer, <see cref="StatusCode.ArgumentNotSupported"/> when it refuses).
-        /// Fails with <see cref="StatusCode.HubTargetAppNotHosted"/> for
-        /// a peer this hub issued no certificate to (another hub's target app), and with
-        /// <see cref="StatusCode.ArgumentNotSupported"/> for a peer that is not a target app. On a QAROS
-        /// runtime that predates the call it returns <see cref="StatusCode.NotImplemented"/>.
-        /// </summary>
-        public Result<Unit> ForgetTargetApp(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            _context.ThrowIfDisposed();
-            var cancellationResult = NativeCancellationScope.Create(cancellationToken, _context.Owner);
-            if (!cancellationResult.IsSuccess)
-                return Result<Unit>.Failure(cancellationResult.Info);
-            using (var cancellation = cancellationResult.Value)
-            using (var progressState = ProgressState.Create(progress, _context.Owner))
-            {
-                var native = targetApp.ToNative();
-                using var session = _context.Borrow();
-                try
-                {
-                    return Results.FromNative(NativeMethods.qar_impl_session_forget_target_app(session.Handle, ref native, progressState.Callback, progressState.UserState, cancellation.Handle));
-                }
-                catch (EntryPointNotFoundException)
-                {
-                    return Result<Unit>.Failure(new ResultInfo(
-                        StatusCode.NotImplemented, 0, "The QAROS runtime is older than Session.ForgetTargetApp; update QAROS."));
-                }
-            }
-        }
-
-        /// <summary>Async <see cref="ForgetTargetApp"/>.</summary>
-        public Task<Result<Unit>> ForgetTargetAppAsync(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            _context.ThrowIfDisposed();
-            var state = new TargetAppAsyncState<Unit>(progress, peer => Unit.Value);
-            var cancelHandle = state.UseStandardCancellation(cancellationToken, _context.Owner);
-            if (!cancelHandle.IsSuccess)
-            {
-                state.Complete(Result<Unit>.Failure(cancelHandle.Info));
-                return state.Task;
-            }
-            try
-            {
-                var native = targetApp.ToNative();
-                using var session = _context.Borrow();
-                state.HoldUntilCompletion(_context.Owner);
-                var info = Results.ToInfo(NativeMethods.qar_impl_session_forget_target_app_async(session.Handle, ref native, state.ResultCallback, state.ProgressCallback, state.UserState, cancelHandle.Value));
-                if (!info.IsSuccess)
-                    state.Complete(Result<Unit>.Failure(info));
-            }
-            catch (EntryPointNotFoundException)
-            {
-                state.Complete(Result<Unit>.Failure(new ResultInfo(
-                    StatusCode.NotImplemented, 0, "The QAROS runtime is older than Session.ForgetTargetAppAsync; update QAROS.")));
             }
             catch (Exception ex)
             {
