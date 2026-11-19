@@ -326,7 +326,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(344, (int)StatusCode.PanelContentNotPublisher);
             Assert.Equal(345, (int)StatusCode.PanelContentNotFound);
             Assert.Equal(346, (int)StatusCode.PanelContentMessageRefused);
-            Assert.Equal(71, Enum.GetValues(typeof(StatusCode)).Length);
+            Assert.Equal(73, Enum.GetValues(typeof(StatusCode)).Length);
         }
 
         [Fact]

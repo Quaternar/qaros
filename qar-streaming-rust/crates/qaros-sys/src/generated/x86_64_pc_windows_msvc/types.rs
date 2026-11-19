@@ -434,6 +434,12 @@ impl QarStatusCode {
     QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
     QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed.*/
     pub const QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED: QarStatusCode = QarStatusCode(3101);
+    /** A request to stop a target app reached the hub on this machine, but
+    that hub has no way to stop it: it belongs to another hub, was started
+    outside QAROS and is neither a headset player nor a Visualizer receiver
+    (for example an OpenXR desktop app started by hand), or is already
+    gone. Nothing was stopped.*/
+    pub const QAR_STATUS_HUB_TARGET_APP_NOT_HOSTED: QarStatusCode = QarStatusCode(3103);
     /** The hub is in the middle of another session-wide operation (a session
     rotation, a member join, a leave). Retry once it has finished.*/
     pub const QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING: QarStatusCode = QarStatusCode(3300);
@@ -1668,6 +1674,9 @@ impl QarAppScaleSensitivityMode {
         QarAppScaleSensitivityMode(2);
 }
 #[repr(transparent)]
+/** How far a translation reaches at the app's current scale. It does not
+limit or reshape a scale: a rule that maps a gesture to the app scale always
+multiplies the current scale, at any app_scale.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarAppScaleSensitivityMode(pub ::std::os::raw::c_int);
 impl QarGestureAppTransformMapping {
@@ -2003,7 +2012,18 @@ impl QarLogSeverity {
 /// @brief Logging severity filter.
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarLogSeverity(pub ::std::os::raw::c_int);
-/// @brief Library initialization parameters.
+/** @brief Library initialization parameters.
+
+Besides the console and the log file below, the library sends its log records
+(Info and above) to the session, so a Visualizer's Logs panel, or anything
+else that asks a peer for its logs, receives them. Nothing here switches that
+on or off: it holds with the console and the file both off. Records go out
+only while someone listens, over reliable messaging at background priority.
+A safety cap of 500 records per second (bursts of 1000) stops a runaway app;
+a record over it is dropped and shows at the receiver as a gap in the
+sequence. Setting the environment variable `QAR_NETWORK_LOGS` to `0` (also
+`off`, `false`, `no`) before qar_library_init() keeps the records off the
+network.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarLibraryInit {
@@ -2079,9 +2099,12 @@ in-memory secure store and is gone when the runtime is.
   expires (30 minutes for a co-process).
 - QarOnboardLocalAppExt is stateless already and is unaffected.
 - A runtime older than this extension skips it like any unknown chained
-  struct and stores the identity on disk. Before relying on it, check
-  QarRuntimeInfo::version (qar_runtime_info) against the version whose
-  changelog introduces it. The same holds for QarOnboardLocalAppTagExt.*/
+  struct and stores the identity on disk. A chained struct cannot report
+  QAR_STATUS_NOT_IMPLEMENTED, so this is the one case for a version check:
+  before relying on it, check that QarRuntimeInfo::version
+  (qar_runtime_info) is at least the release whose changelog introduces it,
+  comparing the numeric major.minor.patch only. Never compare for equality
+  or by the pre-release suffix. The same holds for QarOnboardLocalAppTagExt.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRuntimeEphemeralStorageExt {
