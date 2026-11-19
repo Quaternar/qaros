@@ -1,6 +1,6 @@
 ## Finding rendering targets
 
-`PeerInfo::identity` carries the role and presence (where the bindings declare them). `PeerInfo` also selects the same targets without them: `is_target_app` is role == target, and the app state, which the header derives from the presence, reads `Running` for an `ONLINE` or `UNKNOWN` peer and `ShuttingDown` for an `OFFLINE` or `LEAVING` one, which may come back.
+`PeerInfo::identity` carries the role and presence (where the bindings declare them). `PeerInfo` also selects the same targets without them: `is_target_app` is role == target, and the app state, which the header derives from the presence, reads `Running` for an `ONLINE` peer and `ShuttingDown` for an `OFFLINE`, `LEAVING` or `UNKNOWN` one (not known yet, treated as offline), which may come back.
 
 ```rust
 {{#include ../tests/guide/rendering_streams.rs:find_targets}}

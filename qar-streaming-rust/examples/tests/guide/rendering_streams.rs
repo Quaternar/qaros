@@ -12,9 +12,9 @@ fn find_targets(session: &Session, render_thread: Sender<PeerId>) -> qaros::Resu
     // Runs on a library thread: hand the target to your render thread, which creates its
     // sender (see "Creating a sender" below).
     let on_peer = move |peer: PeerInfo| {
-        // The header derives the app state from the presence: Running is ONLINE, or UNKNOWN
-        // on a hub that has not reconciled the peer. ShuttingDown is OFFLINE or LEAVING: the
-        // peer is gone for now and may come back as Running. Retired never comes back. Serve
+        // The header derives the app state from the presence: Running is ONLINE. ShuttingDown
+        // is OFFLINE, LEAVING or UNKNOWN (not known yet, treated as offline): the peer is away
+        // for now and may come back as Running. Retired never comes back. Serve
         // Running targets, and stop a target's sender when it leaves Running.
         if peer.is_target_app && peer.app_state == AppState::Running {
             let _ = render_thread.send(peer.id);

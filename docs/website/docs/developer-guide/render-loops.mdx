@@ -108,7 +108,7 @@ static void on_peer(QarPeerSpec* peer, void* user_state)
        || qar_result_is_error(qar_peer_spec_get_presence(peer, &presence))
        || qar_result_is_error(qar_peer_spec_get_id(peer, &id)))
         return;
-    bool online = presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN;
+    bool online = presence == QAR_PEER_PRESENCE_ONLINE; /* UNKNOWN: treat as offline */
     viewer_queue_push(user_state, id, online);   /* your thread-safe queue */
 }
 
@@ -150,7 +150,7 @@ void UpdateViewers(Dictionary<PeerId, Viewer> viewers)
 {
     while (updates.TryDequeue(out PeerSpec peer))
     {
-        bool online = peer.Presence == PeerPresence.Online || peer.Presence == PeerPresence.Unknown;
+        bool online = peer.Presence == PeerPresence.Online; // Unknown: treat as offline
         if (online && !viewers.ContainsKey(peer.Id))
         {
             Result<RenderSender> created = session.RenderSenders.Create(OptionsFor(peer.Id));

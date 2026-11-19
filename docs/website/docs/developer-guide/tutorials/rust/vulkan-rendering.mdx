@@ -874,7 +874,7 @@ The C tutorial is [Vulkan Rendering](/docs/developer-guide/tutorials/c/vulkan-re
 | `SessionAdapter` (`qar_session_get_graphics_device_id`) | `Session::graphics_adapter` |
 | `QarStreamParamsVulkan` chained into `QarRenderSenderInit` | `VulkanStreamParams`, `unsafe Session::create_vulkan_render_sender` |
 | `qar_peer_spec_get_role` is `QAR_PEER_ROLE_TARGET` | `PeerInfo::is_target_app` (`qar_peer_spec_is_target_app`, defined as the same test) |
-| `IsReachable`: `qar_peer_spec_get_presence` is `ONLINE` or `UNKNOWN` | `PeerInfo::app_state` is `AppState::Running` (`is_running_target`): the deprecated app state, computed from the presence, so the same targets for every current peer ([CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering#4-follow-the-target-apps-in-the-peer-list)) |
+| `IsReachable`: `qar_peer_spec_get_presence` is `ONLINE` | `PeerInfo::app_state` is `AppState::Running` (`is_running_target`): the deprecated app state, computed from the presence, so the same targets for every current peer ([CPU Rendering](/docs/developer-guide/tutorials/rust/cpu-rendering#4-follow-the-target-apps-in-the-peer-list)) |
 | one thread per target, blocking `qar_render_sender_begin_frame` | one loop, `RenderSender::try_begin_owned_frame` |
 | `qar_render_sender_frame_vulkan` | `OwnedFrame::vulkan_frame` |
 | `FindFrameView` | `VulkanFrameState::view_index` |

@@ -93,9 +93,9 @@
  * \snippet d3d11_render_sender.c d3d11_target
  *
  * A running target app is a peer whose role is `QAR_PEER_ROLE_TARGET` and
- * whose presence is `QAR_PEER_PRESENCE_ONLINE`, or `QAR_PEER_PRESENCE_UNKNOWN`
- * on a Hub that has not reconciled it yet. The CPU program uses the same
- * check from `common.h`:
+ * whose presence is `QAR_PEER_PRESENCE_ONLINE`. A peer whose presence is
+ * `QAR_PEER_PRESENCE_UNKNOWN` is not known yet: treat it as offline. The CPU
+ * program uses the same check from `common.h`:
  * \snippet common.h example_is_running_target
  *
  * Destroy every spec \ref qar_query_peer_specs wrote, also when it returned

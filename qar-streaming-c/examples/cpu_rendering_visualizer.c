@@ -137,8 +137,8 @@
  * application that waits for requests waits forever.
  *
  * A peer is a target to render for when its role is `QAR_PEER_ROLE_TARGET`
- * and its presence is `QAR_PEER_PRESENCE_ONLINE`, or
- * `QAR_PEER_PRESENCE_UNKNOWN` on a Hub that has not reconciled it yet. The
+ * and its presence is `QAR_PEER_PRESENCE_ONLINE`. A peer whose presence is
+ * `QAR_PEER_PRESENCE_UNKNOWN` is not known yet: treat it as offline. The
  * check is in `common.h`, shared with the D3D11 program:
  * \snippet common.h example_is_running_target
  *

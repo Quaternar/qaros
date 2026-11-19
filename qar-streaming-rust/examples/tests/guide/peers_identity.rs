@@ -14,9 +14,9 @@ fn read_presence(session: &Session) -> qaros::Result<()> {
     // ANCHOR: read_presence
     for peer in session.peers()? {
         let presence = peer.identity.presence;
-        // Render for ONLINE peers and UNKNOWN ones (not reconciled yet); stop at OFFLINE,
-        // LEAVING or RETIRED. OFFLINE and LEAVING peers may come back as ONLINE.
-        let is_here = matches!(presence, PeerPresence::Online | PeerPresence::Unknown);
+        // Render for ONLINE peers only. UNKNOWN (not known yet) is treated as offline;
+        // OFFLINE and LEAVING peers may come back as ONLINE, RETIRED ones never do.
+        let is_here = presence == PeerPresence::Online;
         render_for(&peer, is_here);
     }
     // ANCHOR_END: read_presence

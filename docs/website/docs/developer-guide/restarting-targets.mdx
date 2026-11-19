@@ -63,7 +63,7 @@ extern bool render_and_show(QarRenderSender*);                             /* on
  * an update is not the signal to recreate the sender; it is only the signal to stop. */
 void on_target_presence(Serve* s, QarPeerPresence presence)
 {
-    s->wanted = (presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN);
+    s->wanted = (presence == QAR_PEER_PRESENCE_ONLINE); /* UNKNOWN: treat as offline */
 }
 
 static void drop_sender(Serve* s, bool streamed)

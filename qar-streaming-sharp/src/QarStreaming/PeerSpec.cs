@@ -57,8 +57,9 @@ namespace Quaternar.Qaros
         public string AppCustomPeerInfo { get; }
 
         /// <summary>
-        /// Deprecated: read <see cref="Presence"/>. Computed from it: <see cref="PeerPresence.Offline"/>
-        /// and <see cref="PeerPresence.Leaving"/> read <see cref="AppState.ShuttingDown"/>,
+        /// Deprecated: read <see cref="Presence"/>. Computed from it: <see cref="PeerPresence.Offline"/>,
+        /// <see cref="PeerPresence.Leaving"/> and <see cref="PeerPresence.Unknown"/> read
+        /// <see cref="AppState.ShuttingDown"/>,
         /// <see cref="PeerPresence.Retired"/> reads <see cref="AppState.Retired"/>, and any other peer
         /// reads what it claimed, which is <see cref="AppState.Running"/> from the moment it joins.
         /// </summary>
@@ -74,10 +75,10 @@ namespace Quaternar.Qaros
 
         /// <summary>
         /// Whether the peer can be rendered for, waited for or counted: its <see cref="Presence"/> is
-        /// <see cref="PeerPresence.Online"/>, or <see cref="PeerPresence.Unknown"/> on a hub that has
-        /// not reconciled it. False once it is offline, leaving or retired.
+        /// <see cref="PeerPresence.Online"/>. <see cref="PeerPresence.Unknown"/> (not known yet) is
+        /// treated as offline, so it is false then, as when the peer is offline, leaving or retired.
         /// </summary>
-        public bool IsReachable => Presence == PeerPresence.Online || Presence == PeerPresence.Unknown;
+        public bool IsReachable => Presence == PeerPresence.Online;
 
         public string VersionId { get; }
 

@@ -63,11 +63,11 @@ namespace Quaternar.Qaros.Tests
 
         [Theory]
         [InlineData(PeerPresence.Online, true)]
-        [InlineData(PeerPresence.Unknown, true)]
+        [InlineData(PeerPresence.Unknown, false)]
         [InlineData(PeerPresence.Offline, false)]
         [InlineData(PeerPresence.Leaving, false)]
         [InlineData(PeerPresence.Retired, false)]
-        public void APeerIsReachableUnlessItIsGoneOrLeaving(PeerPresence presence, bool reachable)
+        public void APeerIsReachableOnlyWhileItIsOnline(PeerPresence presence, bool reachable)
         {
             var peer = new PeerSpec(
                 PeerId.Default, "Quest", "1.0", "", AppState.Running, "v", "",

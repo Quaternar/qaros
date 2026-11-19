@@ -315,8 +315,9 @@ example_same_pose(const QarPose* first, const QarPose* second)
 //! [example_same_pose]
 
 //! [example_is_running_target]
-/** \brief A target app you can render for: role target, and online or not yet
- *  reconciled by the Hub. Offline, leaving and retired peers are gone. */
+/** \brief A target app you can render for: role target, and online. A peer
+ *  not known yet (unknown) is treated as offline, like offline and leaving
+ *  peers; a retired peer is gone. */
 static bool
 example_is_running_target(QarPeerSpec* peer)
 {
@@ -325,7 +326,7 @@ example_is_running_target(QarPeerSpec* peer)
 	return qar_result_is_success(qar_peer_spec_get_role(peer, &role))
 		   && role == QAR_PEER_ROLE_TARGET
 		   && qar_result_is_success(qar_peer_spec_get_presence(peer, &presence))
-		   && (presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN);
+		   && presence == QAR_PEER_PRESENCE_ONLINE;
 }
 //! [example_is_running_target]
 

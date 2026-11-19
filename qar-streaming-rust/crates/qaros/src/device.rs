@@ -82,21 +82,25 @@ impl DeviceIdentityStorage {
     }
 }
 
-/// Where a peer is (`QarPeerPresence`). Render for [`PeerPresence::Online`] peers and
-/// [`PeerPresence::Unknown`] ones; stop at the others. A value the header does not name reads as
+/// Where a peer is (`QarPeerPresence`). Render for [`PeerPresence::Online`] peers only;
+/// [`PeerPresence::Unknown`] is treated as offline. A value the header does not name reads as
 /// [`PeerPresence::Unknown`], as the header says to treat it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum PeerPresence {
-    /// The hub has not reconciled the peer yet; nothing says it is gone: treat it like online.
+    /// Not known yet, or not reachable (the hub has not reconciled the peer): treat it as
+    /// offline. Do not expect frames to be shown; the stream, if any, is paused.
     #[default]
     Unknown,
-    /// The hub sees the peer in the session.
+    /// The hub sees the peer in the session: stream to it.
     Online,
-    /// The hub no longer sees it (a crash, a kill, a network drop); it reads online once back.
+    /// The hub no longer sees it (a crash, a kill, a network drop). Temporary: the stream is
+    /// paused and may resume within the hub's grace; it reads online once back.
     Offline,
-    /// The peer announced its leave; it may come back under the same id.
+    /// The peer announced its leave. Temporary: the stream is paused and may resume within the
+    /// hub's grace; it may come back under the same id.
     Leaving,
-    /// The peer left for good and never comes back under its id.
+    /// The peer left for good (or moved to another session) and never comes back under its id:
+    /// the stream ends.
     Retired,
 }
 

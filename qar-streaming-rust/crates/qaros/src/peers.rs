@@ -13,11 +13,10 @@ pub struct PeerInfo {
     pub app_version: String,
     pub custom_info: String,
     /// `qar_peer_spec_get_app_state`. The public header deprecates it for the peer presence and
-    /// derives it from the presence: an `ONLINE` peer, or one the hub has not reconciled
-    /// (`UNKNOWN`), reads as what it claimed, which every current peer claims as
-    /// [`AppState::Running`] once it joins; `OFFLINE` and `LEAVING` read as
-    /// [`AppState::ShuttingDown`], and the peer may come back as `Running`; `RETIRED` reads as
-    /// [`AppState::Retired`]. [`PeerInfo::identity`] carries the presence itself.
+    /// derives it from the presence: an `ONLINE` peer reads as what it claimed, which every
+    /// current peer claims as [`AppState::Running`] once it joins; `OFFLINE`, `LEAVING` and
+    /// `UNKNOWN` (not known yet, treated as offline) read as [`AppState::ShuttingDown`], and the
+    /// peer may come back as `Running`; `RETIRED` reads as [`AppState::Retired`]. [`PeerInfo::identity`] carries the presence itself.
     pub app_state: AppState,
     pub version_id: String,
     pub room_tag: String,

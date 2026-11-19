@@ -27,7 +27,7 @@ namespace Quaternar.Qaros
 
     /// <summary>
     /// Whether a peer is here, as an application should act on it (C <c>QarPeerPresence</c>).
-    /// Render for, wait for and count <see cref="Online"/> and <see cref="Unknown"/> peers
+    /// Render for, wait for and count <see cref="Online"/> peers only
     /// (<see cref="PeerSpec.IsReachable"/>). The hub's own view of the session decides
     /// <see cref="Online"/> and <see cref="Offline"/>; a leave the peer announced decides
     /// <see cref="Leaving"/> and <see cref="Retired"/>.
@@ -35,20 +35,28 @@ namespace Quaternar.Qaros
     public enum PeerPresence
     {
         /// <summary>
-        /// The hub has not reconciled the peer yet (an older hub that never does, or one that just
-        /// started). Nothing says it is gone: treat it like <see cref="Online"/>.
+        /// Not known yet, or not reachable: the hub has not reconciled the peer yet (one that just
+        /// started, or an older hub that never does). Treat it as offline: do not expect frames to
+        /// be shown; the stream, if any, is paused.
         /// </summary>
         Unknown = 0,
-        /// <summary>The hub sees the peer in the session.</summary>
+        /// <summary>The hub sees the peer in the session: stream to it.</summary>
         Online = 1,
         /// <summary>
-        /// The hub no longer sees the peer: a crash, a kill, a network loss or a short drop. It reads
+        /// The hub no longer sees the peer: a crash, a kill, a network loss or a short drop.
+        /// Temporary: the stream is paused and may resume within the hub's grace. It reads
         /// <see cref="Online"/> again once it is back, without doing anything.
         /// </summary>
         Offline = 2,
-        /// <summary>The peer announced it is leaving (a clean exit); it may come back under its id.</summary>
+        /// <summary>
+        /// The peer announced it is leaving (a clean exit). Temporary: the stream is paused and may
+        /// resume within the hub's grace; it may come back under its id.
+        /// </summary>
         Leaving = 3,
-        /// <summary>The peer left for good and never comes back under its id.</summary>
+        /// <summary>
+        /// The peer left for good (or moved to another session) and never comes back under its id:
+        /// the stream ends.
+        /// </summary>
         Retired = 4
     }
 
