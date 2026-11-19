@@ -372,6 +372,14 @@ impl QarStatusCode {
     what is missing.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED: QarStatusCode =
         QarStatusCode(807);
+    /** This session already has an open render sender to the same final
+    consumer. Returned by qar_render_sender_create() at once, before any
+    receiver is waited for; nothing was created. A sender whose stream state
+    reads QAR_RENDER_SENDER_STREAM_STATE_CLOSED (it stopped itself and
+    returned QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED) no longer
+    counts, so a reopen works before the old handle is destroyed. Other
+    sessions may each stream to the same consumer.*/
+    pub const QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN: QarStatusCode = QarStatusCode(808);
     /** Code-based onboarding handshake rejected / expired / timed out: a wrong,
     spent or expired code, or a code that is no device pairing code (a hub
     join code). Retry with a fresh code.*/
@@ -544,19 +552,23 @@ working.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarAppState(pub ::std::os::raw::c_int);
 impl QarPeerPresence {
-    /** The hub has not reconciled this peer yet (an older hub that never
-    does, or a hub that has just started). The peer has not announced a
-    leave: treat it like ONLINE.*/
+    /** Not known yet, or not reachable: the hub has not reconciled this peer
+    yet (a hub that has just started, or an older hub that never does) and
+    the peer has not announced a leave. Treat it as offline: do not expect
+    frames to be shown, the stream (if any) is paused.*/
     pub const QAR_PEER_PRESENCE_UNKNOWN: QarPeerPresence = QarPeerPresence(0);
-    /// The hub sees the peer in the session.
+    /// The hub sees the peer in the session: stream to it.
     pub const QAR_PEER_PRESENCE_ONLINE: QarPeerPresence = QarPeerPresence(1);
     /** The hub no longer sees the peer: a crash, a kill, a network loss or a
-    short drop. It reads ONLINE again when it is back.*/
+    short drop. Temporary: the stream is paused and may resume within the
+    hub's grace. It reads ONLINE again when it is back.*/
     pub const QAR_PEER_PRESENCE_OFFLINE: QarPeerPresence = QarPeerPresence(2);
-    /** The peer announced it is leaving (a clean exit). It may come back under
+    /** The peer announced it is leaving (a clean exit). Temporary: the stream
+    is paused and may resume within the hub's grace. It may come back under
     the same id, and reads ONLINE when it does.*/
     pub const QAR_PEER_PRESENCE_LEAVING: QarPeerPresence = QarPeerPresence(3);
-    /// The peer left for good and never comes back under its id.
+    /** The peer left for good (or moved to another session) and never comes
+    back under its id: the stream ends.*/
     pub const QAR_PEER_PRESENCE_RETIRED: QarPeerPresence = QarPeerPresence(4);
 }
 #[repr(transparent)]
@@ -565,11 +577,19 @@ impl QarPeerPresence {
 Two sources make it up: the hub's own liveliness evidence (ONLINE /
 OFFLINE, which follows the peer's session without the peer republishing
 anything), and the leave the peer itself announced on its way out (LEAVING /
-RETIRED), which outranks the evidence. Render for, wait for and count ONLINE
-peers, and UNKNOWN ones: a hub that has not reconciled a peer yet (or an
-older hub that never does) says nothing about it being gone. Stop at
-OFFLINE, LEAVING or RETIRED. Treat a value this header does not name as
-QAR_PEER_PRESENCE_UNKNOWN.*/
+RETIRED), which outranks the evidence.
+
+What each value means to a source app:
+- ONLINE: stream to it.
+- UNKNOWN: not known yet, or not reachable: treat it as offline. Do not
+  expect frames to be shown; the stream, if any, is paused.
+- OFFLINE, LEAVING: temporary. The stream is paused and may resume within
+  the hub's grace.
+- RETIRED: left, moved to another session, will not return. The stream
+  ends.
+
+Render for, wait for and count ONLINE peers only. Treat a value this header
+does not name as QAR_PEER_PRESENCE_UNKNOWN.*/
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct QarPeerPresence(pub ::std::os::raw::c_int);
 impl QarPeerRole {

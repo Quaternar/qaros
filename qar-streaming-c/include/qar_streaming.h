@@ -82,8 +82,8 @@
  *    - find the target apps already in the session: watch the peer list with
  *      qar_peer_subscribe_updates() and pick each peer whose
  *      qar_peer_spec_get_role() is QAR_PEER_ROLE_TARGET and whose
- *      qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or
- *      QAR_PEER_PRESENCE_UNKNOWN, a peer the hub has not reconciled). Show it
+ *      qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (an UNKNOWN
+ *      peer is not known yet: treat it as offline). Show it
  * to the user with qar_peer_spec_get_device_name() (and the family and category
  * for an icon);
  *    - or start one with qar_session_invite_target_app() (or its async form),
@@ -462,6 +462,14 @@ typedef enum QarStatusCode
 	 * receiver is waited for; nothing was created. The result's message names
 	 * what is missing. */
 	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
+	/** This session already has an open render sender to the same final
+	 * consumer. Returned by qar_render_sender_create() at once, before any
+	 * receiver is waited for; nothing was created. A sender whose stream state
+	 * reads QAR_RENDER_SENDER_STREAM_STATE_CLOSED (it stopped itself and
+	 * returned QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED) no longer
+	 * counts, so a reopen works before the old handle is destroyed. Other
+	 * sessions may each stream to the same consumer. */
+	QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN = 808,
 	/// Code-based onboarding handshake rejected / expired / timed out: a wrong,
 	/// spent or expired code, or a code that is no device pairing code (a hub
 	/// join code). Retry with a fresh code.
@@ -631,27 +639,39 @@ typedef enum QarAppState
  * Two sources make it up: the hub's own liveliness evidence (ONLINE /
  * OFFLINE, which follows the peer's session without the peer republishing
  * anything), and the leave the peer itself announced on its way out (LEAVING /
- * RETIRED), which outranks the evidence. Render for, wait for and count ONLINE
- * peers, and UNKNOWN ones: a hub that has not reconciled a peer yet (or an
- * older hub that never does) says nothing about it being gone. Stop at
- * OFFLINE, LEAVING or RETIRED. Treat a value this header does not name as
- * QAR_PEER_PRESENCE_UNKNOWN.
+ * RETIRED), which outranks the evidence.
+ *
+ * What each value means to a source app:
+ * - ONLINE: stream to it.
+ * - UNKNOWN: not known yet, or not reachable: treat it as offline. Do not
+ *   expect frames to be shown; the stream, if any, is paused.
+ * - OFFLINE, LEAVING: temporary. The stream is paused and may resume within
+ *   the hub's grace.
+ * - RETIRED: left, moved to another session, will not return. The stream
+ *   ends.
+ *
+ * Render for, wait for and count ONLINE peers only. Treat a value this header
+ * does not name as QAR_PEER_PRESENCE_UNKNOWN.
  */
 typedef enum QarPeerPresence
 {
-	/** The hub has not reconciled this peer yet (an older hub that never
-	 * does, or a hub that has just started). The peer has not announced a
-	 * leave: treat it like ONLINE. */
+	/** Not known yet, or not reachable: the hub has not reconciled this peer
+	 * yet (a hub that has just started, or an older hub that never does) and
+	 * the peer has not announced a leave. Treat it as offline: do not expect
+	 * frames to be shown, the stream (if any) is paused. */
 	QAR_PEER_PRESENCE_UNKNOWN = 0,
-	/** The hub sees the peer in the session. */
+	/** The hub sees the peer in the session: stream to it. */
 	QAR_PEER_PRESENCE_ONLINE = 1,
 	/** The hub no longer sees the peer: a crash, a kill, a network loss or a
-	 * short drop. It reads ONLINE again when it is back. */
+	 * short drop. Temporary: the stream is paused and may resume within the
+	 * hub's grace. It reads ONLINE again when it is back. */
 	QAR_PEER_PRESENCE_OFFLINE = 2,
-	/** The peer announced it is leaving (a clean exit). It may come back under
+	/** The peer announced it is leaving (a clean exit). Temporary: the stream
+	 * is paused and may resume within the hub's grace. It may come back under
 	 * the same id, and reads ONLINE when it does. */
 	QAR_PEER_PRESENCE_LEAVING = 3,
-	/** The peer left for good and never comes back under its id. */
+	/** The peer left for good (or moved to another session) and never comes
+	 * back under its id: the stream ends. */
 	QAR_PEER_PRESENCE_RETIRED = 4
 } QarPeerPresence;
 
@@ -1670,9 +1690,10 @@ typedef enum QarLogSeverity
  * on or off: it holds with the console and the file both off. Records go out
  * only while someone listens, over reliable messaging at background priority.
  * A safety cap of 500 records per second (bursts of 1000) stops a runaway app;
- * a record over it is dropped and shows at the receiver as a gap in the sequence.
- * Setting the environment variable `QAR_NETWORK_LOGS` to `0` (also `off`,
- * `false`, `no`) before qar_library_init() keeps the records off the network.
+ * a record over it is dropped and shows at the receiver as a gap in the
+ * sequence. Setting the environment variable `QAR_NETWORK_LOGS` to `0` (also
+ * `off`, `false`, `no`) before qar_library_init() keeps the records off the
+ * network.
  */
 typedef struct QarLibraryInit
 {
@@ -3858,6 +3879,9 @@ static inline QarResult
 qar_session_get_id(const QarSession* session, QarSessionId* out_session_id);
 
 /** @brief Find an already-connected render target from its connection string.
+ *
+ * Only a QAR_PEER_PRESENCE_ONLINE peer is a render target: an UNKNOWN peer
+ * (not known yet, treated as offline) is not found.
  */
 static inline QarResult qar_session_find_render_target(
 	const QarSession* session, const char* connection, QarPeerId* out_peer
@@ -4276,10 +4300,10 @@ static inline QarResult qar_peer_spec_get_app_custom_peer_info(
  * @brief Get application state for this peer.
  *
  * @deprecated Use qar_peer_spec_get_presence(). Kept working: the value is
- * computed from the presence. OFFLINE and LEAVING read as
- * QAR_APP_STATE_SHUTTING_DOWN, RETIRED as QAR_APP_STATE_RETIRED, and an
- * ONLINE or not yet reconciled peer reads as what it claimed, which every
- * current peer claims as QAR_APP_STATE_RUNNING from the moment it joins.
+ * computed from the presence. OFFLINE, LEAVING and UNKNOWN (offline-like) read
+ * as QAR_APP_STATE_SHUTTING_DOWN, RETIRED as QAR_APP_STATE_RETIRED, and an
+ * ONLINE peer reads as what it claimed, which every current peer claims as
+ * QAR_APP_STATE_RUNNING from the moment it joins.
  * RUNNING therefore means "joined", never "finished configuring".
  */
 static inline QarResult
@@ -4292,23 +4316,32 @@ qar_peer_spec_get_app_state(QarPeerSpec* handle, QarAppState* out_state);
  * leave) and as ONLINE again once it is back, without the peer doing anything.
  * A peer that announced its leave reads as QAR_PEER_PRESENCE_LEAVING, or
  * QAR_PEER_PRESENCE_RETIRED when it never comes back under its id.
- * QAR_PEER_PRESENCE_UNKNOWN is a peer the hub has not reconciled yet: an older
- * hub that never reports presence, or one that has just started. Nothing says
- * it is gone, so render for it like an ONLINE peer. A peer's readiness to
- * receive a stream is negotiated by its render sender, not announced here.
+ * QAR_PEER_PRESENCE_UNKNOWN is a peer the hub has not reconciled yet (one that
+ * has just started, or an older hub that never reports presence), or one that
+ * is not reachable. A peer's readiness to receive a stream is negotiated by its
+ * render sender, not announced here.
+ *
+ * What each value means to a source app:
+ * - ONLINE: stream to it.
+ * - UNKNOWN: not known yet, or not reachable: treat it as offline. Do not
+ *   expect frames to be shown; the stream, if any, is paused.
+ * - OFFLINE, LEAVING: temporary. The stream is paused and may resume within
+ *   the hub's grace; keep the render sender.
+ * - RETIRED: left, moved to another session, will not return. The stream
+ *   ends; destroy the render sender.
  *
  * @code
  * QarPeerPresence presence;
  * QAR_CHECK(qar_peer_spec_get_presence(peer, &presence));
- * if(presence == QAR_PEER_PRESENCE_ONLINE
- *    || presence == QAR_PEER_PRESENCE_UNKNOWN)
+ * if(presence == QAR_PEER_PRESENCE_ONLINE)
  * {
  *     StartRenderingFor(peer);
  * }
- * else
+ * else if(presence == QAR_PEER_PRESENCE_RETIRED)
  * {
- *     StopRenderingFor(peer); // offline, leaving or retired
+ *     StopRenderingFor(peer); // will not return
  * }
+ * // UNKNOWN, OFFLINE, LEAVING: paused, wait for ONLINE
  * @endcode
  *
  * @param handle Peer spec handle.
@@ -4439,15 +4472,18 @@ static inline QarResult qar_peer_spec_get_device_name(
 /** @brief Get spec describing the current device/peer of a session. */
 static inline QarResult
 qar_session_get_my_spec(const QarSession* session, QarPeerSpec** out_handle);
-/** @brief Query number of known peer specs, retired peers excluded. */
+/** @brief Query number of known peer specs, retired peers included until the
+ * hub purges them. */
 static inline QarResult
 qar_query_peer_specs_count(QarSession* session, size_t* out_count);
 /**
  * @brief Enumerate peer specs into user-provided array.
  *
  * Size the array with qar_query_peer_specs_count(). Retired peers
- * (QAR_PEER_PRESENCE_RETIRED) never come back and are not listed; an update
- * subscription still reports a peer turning retired. The list also contains
+ * (QAR_PEER_PRESENCE_RETIRED) are listed, with their presence, until the hub
+ * purges their stale spec; they never come back, so read the presence before
+ * counting or rendering for a peer. UNKNOWN peers are listed too. The list
+ * also contains
  * this process' own peer; qar_session_get_my_spec() identifies it. Match
  * qar_peer_spec_get_id() against the id qar_session_invite_target_app()
  * returned to find an invited peer, and read qar_peer_spec_get_presence() to
@@ -4500,8 +4536,8 @@ typedef void (*qar_peer_update_callback_t)(
  *
  * The push form of qar_query_peer_specs(), and the way to learn that a peer
  * invited with qar_session_invite_target_app() has joined: it is listed, and
- * its qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (or UNKNOWN on
- * a hub that does not report presence).
+ * its qar_peer_spec_get_presence() is QAR_PEER_PRESENCE_ONLINE (UNKNOWN is not
+ * known yet: treat it as offline).
  *
  * @param token Required; cancelling or destroying it ends the subscription
  *              and waits for a running callback, see
@@ -4593,6 +4629,17 @@ static inline QarResult qar_render_request_get_stream_id(
  * volume is what places the stream in the shared 3D scene, so create it first
  * with qar_app_volumes_get_or_create() and pass the id it returns.
  *
+ * **One open sender per target and session.** While this session has a
+ * sender to `init->peer_id` (or a create for it is still running), another
+ * create to the same target returns
+ * QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN (808) at once, before any
+ * receiver is waited for. A sender that stopped itself (its stream state reads
+ * QAR_RENDER_SENDER_STREAM_STATE_CLOSED, and its calls return
+ * QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED) no longer counts: reopen
+ * once the target is online again, before or after destroying the old handle.
+ * A create that fails or is cancelled leaves no trace. Other sessions (other
+ * source applications) may each stream to the same target.
+ *
  * @param session Active session handle.
  * @param init Stream configuration (views, formats, target peer, app volume).
  * @param cancel Optional cancellation token for creation.
@@ -4604,6 +4651,8 @@ static inline QarResult qar_render_request_get_stream_id(
  *         qar_session_get_graphics_device_id() reports.
  *         QAR_STATUS_GRAPHICS_DEVICE_NOT_INITIALIZED when the session was
  *         created with QarGraphicsDeviceDisabledExt; nothing is created.
+ *         QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN when this session
+ *         already has an open sender to the same target; nothing is created.
  */
 static inline QarResult qar_render_sender_create(
 	QarSession* session,
@@ -4710,9 +4759,17 @@ static inline QarResult qar_render_sender_frame_vulkan(
  * spin.
  *
  * Waits, rather than fails, while the receiver has paused the stream (for
- * example, its display is not visible): the sender and its stream stay up and
- * the frame begins as soon as the receiver resumes. Cancel @p token to stop
- * waiting; the call then fails.
+ * example, its display is not visible) and while the stream is reconnecting
+ * to a lost receiver: the sender and its stream stay up and the frame begins
+ * as soon as the receiver resumes or is back. Tell the cases apart with
+ * qar_render_sender_get_stream_state(). Cancel @p token to stop waiting; the
+ * call then fails.
+ *
+ * Returns QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED (804), also to a call
+ * that is waiting, once the sender stopped: its target retired, or a long
+ * pause was followed by a reconnect that did not come back in time. The
+ * sender is closed for good; destroy it, and create a new one once the
+ * target is QAR_PEER_PRESENCE_ONLINE again.
  */
 static inline QarResult qar_render_sender_begin_frame(
 	QarRenderSender* stream,
@@ -4732,8 +4789,10 @@ static inline QarResult qar_render_sender_begin_frame(
  * an error. Poll with the same @p stream until @p out_ready becomes true.
  * Fails like qar_render_sender_begin_frame(), including
  * QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED while the app volume does
- * not resolve. While the receiver has paused the stream the wait does not
- * complete: @p out_ready stays false and the call succeeds until it resumes.
+ * not resolve, and QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED once the
+ * sender stopped. While the receiver has paused the stream, or the stream is
+ * reconnecting, the wait does not complete: @p out_ready stays false and the
+ * call succeeds until it resumes.
  *
  * A loop that polls once per frame calls it once more right after
  * qar_render_sender_show_frame(): the next wait then runs while the loop is
@@ -4887,8 +4946,11 @@ static inline QarResult qar_render_sender_is_ready_for_next_frame(
  *   sender and its connection stay up; keep the sender and poll again, frames
  *   resume when the receiver resumes.
  * - QAR_RENDER_SENDER_STREAM_STATE_RECONNECTING: the receiver's connection was
- *   lost and is being re-established.
- * - QAR_RENDER_SENDER_STREAM_STATE_CLOSED: the stream is closed for good.
+ *   lost and is being re-established. Begin-frame keeps waiting; keep the
+ *   sender, frames resume when the receiver is back.
+ * - QAR_RENDER_SENDER_STREAM_STATE_CLOSED: the stream is closed for good (the
+ *   sender stopped, and begin-frame returns
+ *   QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED).
  *
  * The value is a snapshot and may change right after the call.
  *

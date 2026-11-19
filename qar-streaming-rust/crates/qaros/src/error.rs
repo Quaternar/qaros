@@ -46,6 +46,11 @@ impl StatusCode {
     /// waited for, with what is missing in the message.
     pub const RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED: Self =
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED);
+    /// This session already has an open render sender to the same target; returned by the
+    /// creation at once, before any receiver is waited for. A sender whose stream state reads
+    /// closed no longer counts, so a reopen works before the old one is dropped.
+    pub const RENDERING_STREAM_ALREADY_OPEN: Self =
+        Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN);
     pub const PAKE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_PAKE_ERROR);
     pub const ONBOARDING_SESSION_NOT_FOUND: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND);
@@ -219,6 +224,7 @@ impl StatusCode {
             Self::RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED => {
                 "RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED"
             }
+            Self::RENDERING_STREAM_ALREADY_OPEN => "RENDERING_PRODUCER_STREAM_ALREADY_OPEN",
             Self::PAKE_ERROR => "PAKE_ERROR",
             Self::ONBOARDING_SESSION_NOT_FOUND => "ONBOARDING_SESSION_NOT_FOUND",
             Self::ONBOARDING_FAILED => "ONBOARDING_FAILED",
@@ -492,6 +498,10 @@ mod tests {
         assert_eq!(
             StatusCode::RENDERING_DEPTH_FORMAT_NOT_SUPPORTED.to_string(),
             "QAR_STATUS_RENDERING_PRODUCER_DEPTH_FORMAT_NOT_SUPPORTED (806)"
+        );
+        assert_eq!(
+            StatusCode::RENDERING_STREAM_ALREADY_OPEN.to_string(),
+            "QAR_STATUS_RENDERING_PRODUCER_STREAM_ALREADY_OPEN (808)"
         );
         assert_eq!(
             StatusCode::MEMBER_INVITATION_EXPIRED.to_string(),

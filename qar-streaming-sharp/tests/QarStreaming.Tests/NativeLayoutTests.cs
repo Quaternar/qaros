@@ -276,6 +276,7 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(805, (int)StatusCode.RenderingProducerAppVolumeUnresolved);
             Assert.Equal(806, (int)StatusCode.RenderingProducerDepthFormatNotSupported);
             Assert.Equal(807, (int)StatusCode.RenderingProducerExternalDeviceNotSupported);
+            Assert.Equal(808, (int)StatusCode.RenderingProducerStreamAlreadyOpen);
             Assert.Equal(609, (int)StatusCode.MediaStreamingDeviceOnAnotherAdapter);
             Assert.Equal(610, (int)StatusCode.GraphicsDeviceNotInitialized);
             Assert.Equal(804, (int)StatusCode.RenderingProducerStreamIsClosed);
