@@ -187,7 +187,7 @@
  * \snippet main.cpp vulkan_volume
  *
  * Which targets to serve is the source app's choice. The cube serves every
- * target app that is not gone. The peer callback runs on a library thread, so
+ * target app that is online. The peer callback runs on a library thread, so
  * it only queues ids under a lock:
  * \snippet main.cpp vulkan_targets
  *
@@ -195,9 +195,12 @@
  * in between is not missed. The main thread then manages targets only: it
  * starts one for each new target app and creates a new sender for every one
  * whose sender ended, a stream closed for good included, after a wait that
- * grows from 1 s to 15 s. A target that restarts keeps its peer id and stays
- * online, so the peer list says nothing when its stream closes: the cube
- * forgets a target only when the list says it is gone.
+ * grows from 1 s to 15 s and only while the target is online: an offline,
+ * leaving or unknown target gets no new sender until it is online again. The
+ * old sender handle is destroyed before the new sender opens. A target that
+ * restarts keeps its peer id and stays online, so the peer list says nothing
+ * when its stream closes: the cube forgets a target only when the list says it
+ * retired or no longer lists it.
  * \snippet main.cpp vulkan_follow
  *
  * \subsection vulkan_sender_step 6. One sender per target
@@ -279,7 +282,7 @@
  * volume that does not resolve yet, or a target whose first head pose has not
  * arrived; the next pass tries again. Any other failure ends the target,
  * `QAR_STATUS_RENDERING_PRODUCER_STREAM_IS_CLOSED` included; a closed stream
- * gets a new sender after a short wait while the peer list still shows the target
+ * gets a new sender after a short wait, once the peer list shows the target online
  * (see
  * <a href="/docs/developer-guide/restarting-targets">When a target restarts</a>)
  * (<a href="/docs/developer-guide/troubleshooting#status-codes-that-are-part-of-normal-flow">Status
@@ -354,7 +357,7 @@
  * | `This app no longer matches what QAROS approved ...` (exit 7) | `QAR_STATUS_ONBOARDING_APP_IDENTITY_MISMATCH`: the executable moved, was copied or re-signed | revoke it in the Visualizer, then start it again |
  * | `` The session's GPU (...) names no graphics GPU with external memory/semaphore support `` (exit 1) | no Vulkan device on the session's adapter has a graphics queue and both extensions | update the GPU driver; check that the GPU is supported |
  * | `Connected. Waiting for rendering targets.` and nothing more | no target app runs in the session, or none answered its sender yet | open the Visualizer, or start a headset |
- * | `The stream to a target closed; creating a new sender in <n> s.` | the target restarted or was replaced and its old stream closed for good | none; the cube creates a new sender and serves the target again once it answers |
+ * | `The stream to a target closed; creating a new sender in <n> s, once the target is online.` | the target restarted, was replaced or was away too long, and its old stream closed for good | none; once the target is online again the cube creates a new sender and serves the target again once it answers |
  * | `Expected separated stereo color/depth layout` | the sender reported another layout than the cube asked for | none in your setup; the cube ends that target and tries it again after a short wait |
  * | no more frames after the "Vulkan Cube" volume was removed | begin-frame reports `QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED`; a removed volume never resolves, and the cube does not recreate it | start the cube again |
  * | your own app crashes at exit | the Vulkan device was destroyed before the session | destroy the session first, the device last |
@@ -371,6 +374,7 @@
 // clang-format on
 
 #include "renderer.hpp"
+#include "reopen_gate.hpp"
 #ifndef _WIN32
 #include <cerrno>
 #include <sys/stat.h>
@@ -985,18 +989,61 @@ private:
 };
 
 //! [vulkan_targets]
-// A target can be rendered for unless the hub says it is gone or it announced its leave. UNKNOWN
-// is a hub that has not reconciled the peer yet (or an older hub that never does): nothing says
-// it is gone, so it counts.
+// A target gets a new sender only while it is ONLINE. UNKNOWN (a hub that has not reconciled the
+// peer yet, or an older hub that never does) is treated like OFFLINE: frames sent to it are not
+// expected to show. OFFLINE and LEAVING are temporary, the target may come back under its id; a
+// sender that already streams to it stays, paused, and only RETIRED ends its stream for good.
 //
 // A closed stream is not a departure. A target that restarts under the same peer id, or one whose
 // pipeline the launcher rebuilt, closes the old stream while the peer stays online, so the peer
 // list reports nothing new. The cube therefore keeps serving every target until the list says it
-// is gone, and creates a new sender after each close (see TargetBook).
+// is gone, and creates a new sender after each close once the target is ONLINE (see TargetBook).
 bool
 IsReachable(QarPeerPresence presence)
 {
-	return presence == QAR_PEER_PRESENCE_ONLINE || presence == QAR_PEER_PRESENCE_UNKNOWN;
+	return presence == QAR_PEER_PRESENCE_ONLINE;
+}
+
+// The peer's presence in the session's peer list now. `read` is false when the
+// list could not be read; `presence` is empty when the peer is not listed.
+struct PresenceLookup
+{
+	bool read = false;
+	std::optional<QarPeerPresence> presence;
+};
+
+PresenceLookup
+LookUpPresence(QarSession* session, const PeerKey& key)
+{
+	PresenceLookup lookup;
+	size_t count = 0;
+	if(not Check(qar_query_peer_specs_count(session, &count)))
+	{
+		return lookup;
+	}
+	std::vector<QarPeerSpec*> specs(count, nullptr);
+	size_t written = 0;
+	lookup.read =
+		count == 0 || Check(qar_query_peer_specs(session, specs.data(), specs.size(), &written));
+	// A failed query may still have written some specs: destroy those too.
+	const size_t owned = std::min(written, specs.size());
+	for(size_t index = 0; index < owned; ++index)
+	{
+		if(specs[index] == nullptr)
+		{
+			continue;
+		}
+		QarPeerId id{};
+		QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
+		if(lookup.read && Check(qar_peer_spec_get_id(specs[index], &id))
+		   && std::memcmp(id.data, key.data(), key.size()) == 0
+		   && Check(qar_peer_spec_get_presence(specs[index], &presence)))
+		{
+			lookup.presence = presence;
+		}
+		qar_peer_spec_handle_destroy(specs[index]);
+	}
+	return lookup;
 }
 
 // The cube renders for every running target app in the session: which targets
@@ -1010,9 +1057,10 @@ struct Targets
 {
 	std::mutex lock;
 	std::map<PeerKey, QarPeerId> pending;
-	// Target apps the list says are gone; the cube stops recreating their senders.
+	// Target apps the list says are not ONLINE; the cube creates no new sender
+	// for them until they are ONLINE again, and a sender that streams stays.
 	std::set<PeerKey> departed;
-	// Queues the peer when it is a reachable target app, and notes it when a target app is gone.
+	// Queues the peer when it is an ONLINE target app, and notes it when a target app is not.
 	void Offer(QarPeerSpec* spec)
 	{
 		QarPeerRole role = QAR_PEER_ROLE_INTERNAL;
@@ -1106,9 +1154,11 @@ struct LoopOptions
 };
 
 // The targets the cube serves, managed between render passes: one is started
-// for each target app the peer list offers, and a new one replaces every
-// sender that ended, closed for good or failed, after a growing wait. A target
-// is forgotten only when the peer list says it is gone.
+// for each ONLINE target app the peer list offers, and a new one replaces every
+// sender that ended, closed for good or failed, after a growing wait and only
+// once the target is ONLINE again; the old sender handle is destroyed first. A
+// target is forgotten only when the peer list says it retired or no longer
+// lists it.
 struct TargetBook
 {
 	// The wait before a new sender: 1 s, doubling to 15 s while the target keeps
@@ -1134,13 +1184,49 @@ struct TargetBook
 		{
 			wanted.insert_or_assign(key, id);
 		}
+		// The ended targets go first: destroying one destroys its old sender
+		// handle, so it is gone before a new sender to the same target opens.
+		DropEnded(now);
+		std::vector<PeerKey> forgotten;
 		for(const auto& [key, id] : wanted)
 		{
-			if(not targets.contains(key) && now >= retries[key])
+			if(targets.contains(key) || now < retries[key])
+			{
+				continue;
+			}
+			// A new sender only while the target is ONLINE right now.
+			const PresenceLookup lookup = LookUpPresence(scene.session, key);
+			if(not lookup.read)
+			{
+				continue;
+			}
+			const ReopenAction action = DecideReopen(lookup.presence, now, retries[key]);
+			if(action == ReopenAction::Forget)
+			{
+				forgotten.push_back(key);
+			}
+			if(action == ReopenAction::Wait)
+			{
+				// Asked again after the shortest wait, not on every pass.
+				retries[key] = now + kFirstWait;
+			}
+			if(action == ReopenAction::Create)
 			{
 				targets.emplace(key, std::make_unique<Target>(id, scene, loop));
 			}
 		}
+		for(const PeerKey& key : forgotten)
+		{
+			wanted.erase(key);
+			retries.erase(key);
+			waits.erase(key);
+		}
+	}
+
+	// Destroys every target whose sender ended, and its sender handle with it,
+	// and sets when its next sender may open.
+	void DropEnded(Clock::time_point now)
+	{
 		for(auto it = targets.begin(); it != targets.end();)
 		{
 			if(not it->second->Finished())
@@ -1158,7 +1244,7 @@ struct TargetBook
 			if(it->second->StreamClosed())
 			{
 				std::cout << "The stream to a target closed; creating a new sender in "
-						  << wait.count() << " s.\n";
+						  << wait.count() << " s, once the target is online.\n";
 			}
 			retries[it->first] = now + wait;
 			wait = std::min(wait * 2, kLongestWait);

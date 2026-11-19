@@ -1,7 +1,10 @@
 #include "renderer.hpp"
+#include "reopen_gate.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
+#include <optional>
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 
@@ -330,11 +333,41 @@ struct Readback
 		return true;
 	}
 };
+
+// A target gets a new sender only while it is ONLINE: an OFFLINE, LEAVING or
+// UNKNOWN target waits, a RETIRED or unlisted one is forgotten, and an ONLINE
+// one waits out the back-off after its last sender ended.
+bool
+ReopenGateHolds()
+{
+	using std::chrono::seconds;
+	const std::chrono::steady_clock::time_point now{ seconds(100) };
+	const auto decide = [now](std::optional<QarPeerPresence> presence, seconds notBefore)
+	{
+		return DecideReopen(presence, now, std::chrono::steady_clock::time_point{ notBefore });
+	};
+	const bool holds = decide(QAR_PEER_PRESENCE_OFFLINE, seconds(0)) == ReopenAction::Wait
+					   && decide(QAR_PEER_PRESENCE_LEAVING, seconds(0)) == ReopenAction::Wait
+					   && decide(QAR_PEER_PRESENCE_UNKNOWN, seconds(0)) == ReopenAction::Wait
+					   && decide(QAR_PEER_PRESENCE_ONLINE, seconds(0)) == ReopenAction::Create
+					   && decide(QAR_PEER_PRESENCE_ONLINE, seconds(101)) == ReopenAction::Wait
+					   && decide(QAR_PEER_PRESENCE_RETIRED, seconds(0)) == ReopenAction::Forget
+					   && decide(std::nullopt, seconds(0)) == ReopenAction::Forget;
+	if(not holds)
+	{
+		std::cerr << "Reopen gate: a sender opened for a target that is not online\n";
+	}
+	return holds;
+}
 } // namespace
 
 int
 main()
 {
+	if(not ReopenGateHolds())
+	{
+		return 1;
+	}
 	VulkanDevice gpu;
 	if(not gpu.Create())
 	{
