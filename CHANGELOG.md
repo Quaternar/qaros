@@ -2075,6 +2075,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   - `qaros-sys` ports the remaining `qar_*_default()` initializers: the planned peer id, member-hub
     invitation, remote-app grant, join-as-member, device identity, target-app invite, video
     sender, GUI panel stream and URL, and gesture allowed-peers structures.
+- **Docs:** *Working with Peers*, *Rendering Streams*, *Render Loops*, *When a Target Restarts* and
+  the Rust *Vulkan Rendering* tutorial say what each presence value means to a source app: stream
+  to `ONLINE` targets only; `UNKNOWN` is treated as offline; `OFFLINE` and `LEAVING` are temporary
+  and the stream is paused meanwhile; `RETIRED` ends the stream, and query results still list a
+  retired peer until the hub purges it. Their C, C# and Rust snippets pick `ONLINE` targets only.
 - **Docs:** a new *Before You Start: Start QAROS and Add a Receiver* page in the User Guide's *Supported Apps*
   (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/start-qaros-and-add-a-receiver)
   starts QAROS, opens the Visualizer, adds a Display Receiver from the **Stream Graph**'s
