@@ -83,11 +83,11 @@ sequenceDiagram
    |---|---|
    | The RViz2 scene in a 10 m app volume *RViz Scene* | Follows your own pose, not the RViz camera |
    | **QAR control** panel, about 1 m ahead | Pick mode (**Off** / **Point** / **Nav goal**), **Confirm pick**, **Cancel pick**, panel and tool switches |
-   | **Displays (AR)** and other RViz docks | Real RViz widgets: clicks in AR reach them. Add more on the **AR panels** tab, **Stream panel to AR**. |
+   | **Displays (AR)** and other RViz docks | Real RViz widgets, drawn with enlarged controls: clicks in AR reach them. Add more on the **AR panels** tab: select a row, **Stream to AR**. |
    | Video panels | Image topics, up to 30 fps |
 
 4. **Pick.** Choose a mode, point in the headset, confirm. Points go to `/clicked_point`, goals to `/goal_pose`, initial poses to `/initialpose`.
-5. **AR tools.** **AR tools** tab > **Add from ROS graph...**. Publishing stays off until **Allow publishing from AR**; **Publish** and **Send goal** need a second press.
+5. **AR tools.** **AR tools** tab > **Add from ROS graph...**. A tool publishes only if its type is `Bool`, `Twist` or `TwistStamped`, or after **Allow publishing** on the **AR tools** tab; **Publish** and **Send goal** need a second press.
 6. **Move and scale** the scene with the usual app volume gestures ([Moving and scaling app volumes](../working-in-a-session.md#moving-and-scaling-app-volumes)).
 
 ## Tips and limits
@@ -95,7 +95,7 @@ sequenceDiagram
 - Several headsets: lower **Resolution** (default 1280x720) and **FPS cap** (default 60) on the **Settings** tab. At most 8 targets.
 - AR tool pages are plain HTTP on a random port. If a headset cannot load them, pin it with `QAR_PANEL_WEB_PORT` and allow it in the firewall.
 - RViz2 joins the Hub of its own PC only.
-- RViz2 may crash when it closes (known issue).
+- When QAROS does not answer while RViz2 closes, RViz2 ends itself 5 seconds after the close was requested.
 
 ## Troubleshooting
 
