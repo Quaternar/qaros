@@ -46,6 +46,10 @@ impl StatusCode {
     /// waited for, with what is missing in the message.
     pub const RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED: Self =
         Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED);
+    /// The render sender's target app is gone or leaving (its player stopped answering, or it
+    /// quit); not a pause. Recoverable: begin-frame renders once the same peer is back.
+    pub const RENDERING_RECEIVER_GONE: Self =
+        Self(QarStatusCode::QAR_STATUS_RENDERING_PRODUCER_RECEIVER_GONE);
     pub const PAKE_ERROR: Self = Self(QarStatusCode::QAR_STATUS_PAKE_ERROR);
     pub const ONBOARDING_SESSION_NOT_FOUND: Self =
         Self(QarStatusCode::QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND);
@@ -219,6 +223,7 @@ impl StatusCode {
             Self::RENDERING_EXTERNAL_DEVICE_NOT_SUPPORTED => {
                 "RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED"
             }
+            Self::RENDERING_RECEIVER_GONE => "RENDERING_PRODUCER_RECEIVER_GONE",
             Self::PAKE_ERROR => "PAKE_ERROR",
             Self::ONBOARDING_SESSION_NOT_FOUND => "ONBOARDING_SESSION_NOT_FOUND",
             Self::ONBOARDING_FAILED => "ONBOARDING_FAILED",

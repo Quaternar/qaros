@@ -356,6 +356,10 @@ impl QarStatusCode {
     what is missing.*/
     pub const QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED: QarStatusCode =
         QarStatusCode(807);
+    /** The target app this render sender streams for is gone or leaving: its
+     player stopped answering, or it quit. Not a pause. Recoverable: keep
+     the sender and call begin-frame again later, or recreate it. */
+    pub const QAR_STATUS_RENDERING_PRODUCER_RECEIVER_GONE: QarStatusCode = QarStatusCode(808);
     /** Code-based onboarding handshake rejected / expired / timed out: a wrong,
     spent or expired code, or a code that is no device pairing code (a hub
     join code). Retry with a fresh code.*/

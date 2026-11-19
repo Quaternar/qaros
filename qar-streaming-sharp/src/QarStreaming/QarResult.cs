@@ -96,6 +96,8 @@ namespace Quaternar.Qaros
         RenderingProducerDepthFormatNotSupported = 806,
         /// <summary>The device in a Vulkan render sender's <see cref="StreamParamsVulkan"/> was created without the external memory and semaphore extensions sharing its images needs. Nothing was created; the message names what is missing.</summary>
         RenderingProducerExternalDeviceNotSupported = 807,
+        /// <summary>A render sender's target app is gone or leaving: its player stopped answering, or it quit. Not a pause. Nothing is received, so stop waiting for frames and tell the user. Recoverable: call begin-frame again later, it renders once the same peer is back, or recreate the sender.</summary>
+        RenderingProducerReceiverGone = 808,
         /// <summary>Code-based onboarding handshake rejected, expired or timed out: a wrong, spent or expired code, or a code that is no device pairing code (a hub join code). Retry with a fresh code.</summary>
         PakeError = 1600,
         /// <summary>No persisted state for the onboarding id; fall back to a full onboard.</summary>

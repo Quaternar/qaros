@@ -462,6 +462,14 @@ typedef enum QarStatusCode
 	 * receiver is waited for; nothing was created. The result's message names
 	 * what is missing. */
 	QAR_STATUS_RENDERING_PRODUCER_EXTERNAL_DEVICE_NOT_SUPPORTED = 807,
+	/** The target app this render sender streams for is gone or leaving: its
+	 * player stopped answering, or it quit. Not a pause (a paused stream is
+	 * waited out inside begin-frame, and the target is still there). Nothing is
+	 * being received, so stop waiting for frames and show the user that the
+	 * target is gone. Recoverable: keep the sender and call begin-frame again
+	 * later, it renders once the same peer is back (or recreate the sender
+	 * if it never is). Only reported while the hub says the target is gone. */
+	QAR_STATUS_RENDERING_PRODUCER_RECEIVER_GONE = 808,
 	/// Code-based onboarding handshake rejected / expired / timed out: a wrong,
 	/// spent or expired code, or a code that is no device pairing code (a hub
 	/// join code). Retry with a fresh code.
