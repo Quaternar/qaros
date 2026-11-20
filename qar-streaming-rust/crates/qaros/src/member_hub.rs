@@ -202,9 +202,11 @@ impl Drop for MemberHubInvitation {
 
 impl Library {
     /// Reads an invitation from the bytes [`MemberHubInvitation::serialize`] wrote
-    /// (`qar_member_hub_invitation_deserialize`). Strict: an invitation with an unknown or missing
-    /// field, of another kind or version, out of its bounds, or over 16 KiB fails with
-    /// [`StatusCode::MEMBER_INVITATION_INVALID`]. Its signature is checked by
+    /// (`qar_member_hub_invitation_deserialize`). Lenient: a field a newer QAROS version added is
+    /// ignored and kept, so [`MemberHubInvitation::serialize`] writes it again under the signature.
+    /// Bytes that are no JSON, or an invitation with a missing or mistyped field, of another kind,
+    /// out of its bounds, or over 16 KiB fail with [`StatusCode::MEMBER_INVITATION_INVALID`]. Its
+    /// signature is checked by
     /// [`Runtime::join_hub_as_member`], not here.
     pub fn deserialize_member_hub_invitation(
         &self,
