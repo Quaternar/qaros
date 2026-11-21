@@ -31,7 +31,8 @@ sequenceDiagram
 - **One session, two hubs.** After the join, the peer list of either app lists the target apps of both hubs. Which targets to render for is the app's choice: `--target <text>` keeps each app to the viewers whose name contains the text, for example its own PC's Visualizer receiver.
 - **The primary creates, the member joins.** Only an app on the primary's PC whose approval allows it to bring in member hubs can create an invitation; the hub of the client's PC checks the primary's signature and that it trusts that primary before it joins.
 - **A grant admits one app.** The invitation carries a remote-app grant for the client's app tag: the first client executable that redeems it is approved on the primary without a prompt, and only that executable afterwards.
-- **Two app volumes, one session state.** The server's cube sits in `member-hub-cube-server`, the client's in `member-hub-cube-client`, both 1 m ahead of the room origin. The primary stores both for the whole session, so moving a volume on either PC moves it for every viewer; each viewer still sees only the cube rendered for it. Give both apps one common name and they draw into one volume, which then moves both cubes.
+- **One app volume, two renderers.** Both apps ask for the app volume `member-hub-cube` ([`cube_app.hpp`](cube_app.hpp)). The common name is the volume's identity in the session, so the second app gets the volume the first one created, whichever hub it joined. Each app still renders only for its own viewers, in its own color: A's viewer shows the red cube, B's the green one, in the same place.
+- **A move on one PC moves both cubes.** Move the volume, or the content in it (its app pose), in either PC's Visualizer or with a headset: the primary stores it once for the whole session, both apps print `The shared app volume is at x=... y=... z=...` (or `The cube's app pose in the shared volume is at ...`), and the cube moves on both PCs.
 - **Your channel carries the invitation.** QAROS does not send it to the other PC. Here UDP multicast with [standalone asio](https://think-async.com/Asio/) carries it ([`invite_channel.hpp`](invite_channel.hpp)).
 
 ## The invitation channel is a demo
@@ -78,8 +79,9 @@ cmake --build --preset x64-windows-release --target qar-member-hub-server qar-me
    ```
 
    The console shows `Received a member-hub invitation.`, `The hub of this PC is a member of the primary hub.` and `Joined QAROS as peer <id>`. The hub of PC B and its Visualizer restart into A's session meanwhile; nobody is asked to approve the client.
-3. Open a viewer on each PC (a Visualizer receiver, a headset). A's viewer shows the red cube, B's the green one, each from the app on its own PC. In either Visualizer the hub list shows two hubs: A primary, B member.
-4. Later starts on PC B need no server: `.\qar-member-hub-client.exe --target <name>` joins as the app approved by the first start.
+3. Open a viewer on each PC (a Visualizer receiver, a headset). A's viewer shows the red cube, B's the green one, each from the app on its own PC, in the one **Member Hub Cube** volume. In either Visualizer the hub list shows two hubs: A primary, B member.
+4. Move the **Member Hub Cube** volume on one PC (Visualizer, App Volumes; or grab it with a headset): the cube moves on the other PC too, and both consoles print the new position.
+5. Later starts on PC B need no server: `.\qar-member-hub-client.exe --target <name>` joins as the app approved by the first start.
 
 - Without `--target` an app renders for every viewer in the session, on both PCs.
 - On a PC with several networks, `--interface <IPv4>` picks the one to use (both apps).

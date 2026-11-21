@@ -10,11 +10,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <vector>
@@ -424,6 +426,58 @@ struct TargetBook
 	}
 };
 
+// Prints where the shared volume and its content are whenever either moves,
+// whoever moved them: this app, the other app, or a user in any Visualizer or
+// headset of the session. The callback runs on a library thread; the handle is
+// the library's and valid during the call only.
+struct VolumeWatch
+{
+	QarAppVolumeId volume = qar_app_volume_id_default();
+	std::mutex lock;
+	std::optional<QarPose> pose;
+	std::optional<QarPose> appPose;
+
+	static bool Moved(const std::optional<QarPose>& before, const QarPose& now)
+	{
+		constexpr float kMinimumMove = 0.005f; // metres; below this is noise
+		return not before || std::abs(before->position.x - now.position.x) > kMinimumMove
+			   || std::abs(before->position.y - now.position.y) > kMinimumMove
+			   || std::abs(before->position.z - now.position.z) > kMinimumMove;
+	}
+
+	static void Print(const char* what, const QarPose& pose)
+	{
+		std::cout << what << " at x=" << pose.position.x << " y=" << pose.position.y
+				  << " z=" << pose.position.z << '\n';
+	}
+
+	static void OnUpdate(QarAppVolume* handle, void* state)
+	{
+		auto* watch = static_cast<VolumeWatch*>(state);
+		QarAppVolumeId id = qar_app_volume_id_default();
+		QarPose pose = qar_pose_default();
+		QarPose appPose = qar_pose_default();
+		if(not qar_result_is_success(qar_app_volume_get_id(handle, &id))
+		   || not qar_app_volume_id_equals(&id, &watch->volume)
+		   || not qar_result_is_success(qar_app_volume_get_pose(handle, &pose))
+		   || not qar_result_is_success(qar_app_volume_get_app_pose(handle, &appPose)))
+		{
+			return;
+		}
+		const std::lock_guard<std::mutex> guard(watch->lock);
+		if(Moved(watch->pose, pose))
+		{
+			Print("The shared app volume is", pose);
+			watch->pose = pose;
+		}
+		if(Moved(watch->appPose, appPose))
+		{
+			Print("The cube's app pose in the shared volume is", appPose);
+			watch->appPose = appPose;
+		}
+	}
+};
+
 } // namespace
 
 void
@@ -577,14 +631,30 @@ SessionAdapter(const QarSession* session)
 bool
 RenderCube(QarSession* session, VulkanDevice& gpu, const CubeOptions& options)
 {
+	// The first app asks for the volume and creates it; the other gets the same
+	// volume back, where it is now: the pose here only counts for the first.
 	auto volumeInit = qar_app_volume_init_default();
-	volumeInit.common_name = options.volumeName;
-	volumeInit.display_name = options.volumeDisplayName;
+	volumeInit.common_name = kSharedVolumeName;
+	volumeInit.display_name = kSharedVolumeDisplayName;
 	volumeInit.pose.position.z = -1.0f;
 	volumeInit.size = { 1.2f, 1.2f, 1.2f };
 	Scene scene{ .gpu = &gpu, .session = session, .color = options.color, .started = Clock::now() };
 	if(not Check(qar_app_volumes_get_or_create(session, &volumeInit, &scene.volume)))
 	{
+		return false;
+	}
+	VolumeWatch watch;
+	watch.volume = scene.volume;
+	QarCancelToken* subscription = nullptr;
+	if(not Check(qar_cancel_token_create(&subscription))
+	   || not Check(
+		   qar_app_volumes_subscribe_updates(session, VolumeWatch::OnUpdate, &watch, subscription)
+	   ))
+	{
+		if(subscription != nullptr)
+		{
+			qar_cancel_token_handle_destroy(subscription);
+		}
 		return false;
 	}
 	if(options.targetFilter.empty())
@@ -612,5 +682,7 @@ RenderCube(QarSession* session, VulkanDevice& gpu, const CubeOptions& options)
 		}
 	}
 	book.served.clear();
+	// Ends the subscription and waits for a running callback: `watch` may go.
+	qar_cancel_token_handle_destroy(subscription);
 	return success;
 }

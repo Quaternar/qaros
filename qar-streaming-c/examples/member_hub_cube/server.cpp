@@ -177,15 +177,13 @@ RunServer(QarRuntime* runtime, const ServerOptions& options)
 	VulkanDevice gpu; // Outlives every sender and camera.
 	std::atomic<bool> channelFailed = false;
 	std::thread channel(ServeClients, runtime, &options, &channelFailed);
-	const bool rendered = gpu.Create(SessionAdapter(session))
-						  && RenderCube(
-							  session,
-							  gpu,
-							  CubeOptions{ .color = { 1.f, .12f, .12f },
-										   .targetFilter = options.target,
-										   .volumeName = "member-hub-cube-server",
-										   .volumeDisplayName = "Member Hub Cube (server)" }
-						  );
+	const bool rendered =
+		gpu.Create(SessionAdapter(session))
+		&& RenderCube(
+			session,
+			gpu,
+			CubeOptions{ .color = { 1.f, .12f, .12f }, .targetFilter = options.target }
+		);
 	g_stopRequested.store(true);
 	channel.join();
 	qar_session_handle_destroy(session);

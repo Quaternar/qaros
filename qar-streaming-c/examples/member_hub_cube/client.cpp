@@ -196,15 +196,13 @@ RunClient(QarRuntime* runtime, const ClientOptions& options)
 	}
 	PrintMyPeerId(session);
 	VulkanDevice gpu; // Outlives every sender and camera.
-	const bool rendered = gpu.Create(SessionAdapter(session))
-						  && RenderCube(
-							  session,
-							  gpu,
-							  CubeOptions{ .color = { .12f, 1.f, .12f },
-										   .targetFilter = options.target,
-										   .volumeName = "member-hub-cube-client",
-										   .volumeDisplayName = "Member Hub Cube (client)" }
-						  );
+	const bool rendered =
+		gpu.Create(SessionAdapter(session))
+		&& RenderCube(
+			session,
+			gpu,
+			CubeOptions{ .color = { .12f, 1.f, .12f }, .targetFilter = options.target }
+		);
 	qar_session_handle_destroy(session);
 	return rendered ? 0 : 1;
 }

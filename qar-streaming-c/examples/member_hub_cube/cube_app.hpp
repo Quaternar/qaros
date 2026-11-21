@@ -48,11 +48,16 @@ struct CubeOptions
 	// Render only for target apps whose display name contains this text;
 	// empty renders for every target app in the session.
 	std::string targetFilter;
-	// The app volume the cube sits in.
-	const char* volumeName = nullptr;
-	const char* volumeDisplayName = nullptr;
 };
 
-// Renders the cube for every running target app the filter admits until a
-// stop. Returns whether it ran without a failure.
+// The one app volume both apps draw into. The common name is the volume's
+// identity in the session: the server and the client ask for the same name and
+// get the same volume, whichever hub they joined. Moving it, or the content in
+// it, on either PC moves both cubes.
+constexpr const char* kSharedVolumeName = "member-hub-cube";
+constexpr const char* kSharedVolumeDisplayName = "Member Hub Cube";
+
+// Renders the cube in the shared app volume for every running target app the
+// filter admits until a stop, and prints every move of that volume. Returns
+// whether it ran without a failure.
 bool RenderCube(QarSession* session, VulkanDevice& gpu, const CubeOptions& options);
