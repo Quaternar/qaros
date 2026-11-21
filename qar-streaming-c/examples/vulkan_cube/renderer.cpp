@@ -8,6 +8,17 @@
 #include <iostream>
 #include <span>
 
+namespace
+{
+// The vertex shader's push constants (cube.vert): tint.a == 0 keeps each
+// face's own color.
+struct CubePushConstants
+{
+	glm::mat4 mvp;
+	glm::vec4 tint;
+};
+} // namespace
+
 bool
 Check(QarResult result)
 {
@@ -313,7 +324,7 @@ CubeCamera::CreatePipeline()
 	{
 		return false;
 	}
-	const VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) };
+	const VkPushConstantRange push{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(CubePushConstants) };
 	VkPipelineLayoutCreateInfo layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 	layout.pushConstantRangeCount = 1;
 	layout.pPushConstantRanges = &push;
@@ -653,7 +664,10 @@ CubeCamera::Render(
 		pass.renderArea.extent = { width, height };
 		pass.clearValueCount = 2;
 		pass.pClearValues = clears.data();
-		const glm::mat4 mvp = ViewProjection(cameras[eye].pose, cameras[eye].fov) * model;
+		const CubePushConstants constants{
+			.mvp = ViewProjection(cameras[eye].pose, cameras[eye].fov) * model,
+			.tint = m_tint ? glm::vec4((*m_tint)[0], (*m_tint)[1], (*m_tint)[2], 1) : glm::vec4(0),
+		};
 		const VkViewport viewport{ 0,
 								   static_cast<float>(height),
 								   static_cast<float>(width),
@@ -666,7 +680,7 @@ CubeCamera::Render(
 		vkCmdSetScissor(slot->commands, 0, 1, &scissor);
 		vkCmdBindPipeline(slot->commands, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 		vkCmdPushConstants(
-			slot->commands, m_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvp), &mvp
+			slot->commands, m_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(constants), &constants
 		);
 		vkCmdDraw(slot->commands, 36, 1, 0, 0);
 		vkCmdEndRenderPass(slot->commands);

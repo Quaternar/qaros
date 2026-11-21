@@ -1,5 +1,7 @@
 #version 450
-layout(push_constant) uniform Camera { mat4 mvp; } camera;
+// tint.a == 0: each face its own color. tint.a > 0: every face in tint.rgb,
+// each a little darker or lighter so the cube still reads as a solid.
+layout(push_constant) uniform Camera { mat4 mvp; vec4 tint; } camera;
 layout(location = 0) out vec3 color;
 const vec3 corners[8] = vec3[](
     vec3(-1,-1,-1), vec3(1,-1,-1), vec3(1,1,-1), vec3(-1,1,-1),
@@ -10,7 +12,9 @@ const int indices[36] = int[](
 const vec3 colors[6] = vec3[](
     vec3(1,.2,.2), vec3(.2,1,.2), vec3(.2,.2,1),
     vec3(1,1,.2), vec3(1,.2,1), vec3(.2,1,1));
+const float shades[6] = float[](1, .6, .85, .7, .95, .75);
 void main() {
     gl_Position = camera.mvp * vec4(corners[indices[gl_VertexIndex]], 1);
-    color = colors[gl_VertexIndex / 6];
+    int face = gl_VertexIndex / 6;
+    color = camera.tint.a > 0 ? camera.tint.rgb * shades[face] : colors[face];
 }
