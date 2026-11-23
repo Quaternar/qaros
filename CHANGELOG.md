@@ -2246,6 +2246,7 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **C API:** `qar_session_kill_target_app` (C# `KillTargetApp`) stops any target app: a HoloLens's OpenXR desktop app, a headset player and its relay, or a Visualizer receiver (kept). Nothing is remembered.
 - **Docs:** *TerraExplorer* in the User Guide's *Supported Apps*
   (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/terraexplorer) matches the HoloLens
   add-on that no longer waits for its install/update offer: TerraExplorer connects at once, a missing

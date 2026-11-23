@@ -424,9 +424,28 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Asks this machine's hub to stop a target app it started, with the whole
-        /// pipeline feeding it. A target app this hub did not start ends in
-        /// <see cref="StatusCode.Timeout"/>.
+        /// Asks this machine's hub to stop a target app, whatever kind it is.
+        /// <list type="bullet">
+        /// <item>A target app the hub started (an invited HoloLens, remoted through the HoloLens OpenXR
+        /// desktop app on the PC): the desktop app and the whole pipeline feeding it are stopped.</item>
+        /// <item>A headset that joined the session itself (Meta Quest, other Android headsets): the
+        /// player application on the headset is asked to quit, and the Android streamer the hub runs
+        /// on this PC to relay video to it is stopped. A headset player of an older release cannot be
+        /// asked to quit: its relay still stops, and the player keeps running without a stream.</item>
+        /// <item>A receiver of the QAROS Visualizer on this machine: the Visualizer stops the receiver
+        /// so nothing streams into it. The receiver stays in the Visualizer and starts again from
+        /// there.</item>
+        /// </list>
+        /// A stop is not remembered: nothing is revoked, forgotten or hidden, and a target app that
+        /// comes back (the receiver started again, the headset app relaunched, the HoloLens app
+        /// restarted) is listed again. To forget or unpair a device use the Visualizer's Forget, or
+        /// pair the device again with a new QR code.
+        /// The call returns once the target app has stopped. A target app that is none of the above
+        /// (another hub's, one started outside QAROS that is neither a headset player nor a Visualizer
+        /// receiver, or one already gone) fails with <see cref="StatusCode.HubTargetAppNotHosted"/> and
+        /// nothing is stopped. A Visualizer that refuses to stop its receiver fails with
+        /// <see cref="StatusCode.ArgumentNotSupported"/>, and one that does not answer in time with
+        /// <see cref="StatusCode.Timeout"/>; nothing changes then.
         /// </summary>
         public Result<Unit> KillTargetApp(PeerId targetApp, IProgress<ActionProgress>? progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {

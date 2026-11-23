@@ -515,6 +515,12 @@ typedef enum QarStatusCode
 	 * QAR_DEVICE_CATEGORY_DESKTOP_PC, QAR_DEVICE_CATEGORY_SERVER or
 	 * QAR_DEVICE_CATEGORY_CAMERA. Nothing was changed. */
 	QAR_STATUS_PEER_DEVICE_CATEGORY_NOT_ALLOWED = 3101,
+	/** A request to stop a target app reached the hub on this machine, but
+	 * that hub has no way to stop it: it belongs to another hub, was started
+	 * outside QAROS and is neither a headset player nor a Visualizer receiver
+	 * (for example an OpenXR desktop app started by hand), or is already
+	 * gone. Nothing was stopped. */
+	QAR_STATUS_HUB_TARGET_APP_NOT_HOSTED = 3103,
 	/// The hub is in the middle of another session-wide operation (a session
 	/// rotation, a member join, a leave). Retry once it has finished.
 	QAR_STATUS_HUB_LIFECYCLE_OPERATION_RUNNING = 3300,
@@ -1433,6 +1439,9 @@ typedef enum QarAppVolumeAxisFlags
 	QAR_APP_VOLUME_AXIS_ALL = (1 << 3) - 1
 } QarAppVolumeAxisFlags;
 
+/// How far a translation reaches at the app's current scale. It does not
+/// limit or reshape a scale: a rule that maps a gesture to the app scale always
+/// multiplies the current scale, at any app_scale.
 typedef enum QarAppScaleSensitivityMode
 {
 	/// Gesture output ignores app_scale. With precision = 1.0, 1 cm hand
@@ -1652,7 +1661,19 @@ typedef enum QarLogSeverity
 	QAR_LOG_SEVERITY_FATAL = 5
 } QarLogSeverity;
 
-/** @brief Library initialization parameters. */
+/**
+ * @brief Library initialization parameters.
+ *
+ * Besides the console and the log file below, the library sends its log records
+ * (Info and above) to the session, so a Visualizer's Logs panel, or anything
+ * else that asks a peer for its logs, receives them. Nothing here switches that
+ * on or off: it holds with the console and the file both off. Records go out
+ * only while someone listens, over reliable messaging at background priority.
+ * A safety cap of 500 records per second (bursts of 1000) stops a runaway app;
+ * a record over it is dropped and shows at the receiver as a gap in the sequence.
+ * Setting the environment variable `QAR_NETWORK_LOGS` to `0` (also `off`,
+ * `false`, `no`) before qar_library_init() keeps the records off the network.
+ */
 typedef struct QarLibraryInit
 {
 	QarStructureHeader header;
@@ -4112,16 +4133,41 @@ static inline QarResult qar_session_invite_target_app_async(
 );
 
 /**
- * @brief Ask this machine's hub to stop a target app it started.
+ * @brief Ask this machine's hub to stop a target app, whatever kind it is.
  *
- * Stops the target app and the whole streaming pipeline feeding it. A request
- * for a target app this machine's hub did not start is not served by any hub,
- * so it ends in a timeout rather than an authorization error - there is
- * deliberately no way for an application to learn about, or act on, another
- * hub's target apps.
+ * What stopping means depends on the target app:
+ * - A target app this machine's hub started (an invited HoloLens, remoted
+ *   through the HoloLens OpenXR desktop app on the PC): the desktop app and the
+ *   whole streaming pipeline feeding it are stopped.
+ * - A headset that joined the session itself (Meta Quest and other Android
+ *   headsets): the player application on the headset is asked to quit, and the
+ *   Android streamer the hub runs on this PC to relay video to it is stopped.
+ *   A headset player built before this call cannot be asked to quit: the relay
+ *   still stops, and the player keeps running without a stream.
+ * - A receiver of the QAROS Visualizer on this machine (a target app of the
+ *   Visualizer category): the Visualizer stops the receiver the way its Stop
+ *   button does, so nothing streams into it. The receiver stays in the
+ *   Visualizer and starts again from there.
+ *
+ * A stop is not remembered: nothing is revoked, forgotten or hidden. A target
+ * app that comes back - the receiver started again, the headset app relaunched,
+ * the HoloLens app restarted - appears in the session's target app list again.
+ * To forget or unpair a device, use the Visualizer's Forget or pair the device
+ * again with a new QR code.
+ *
+ * The call succeeds once the target app has stopped. A target app that is
+ * none of the above - another hub's, one started outside QAROS that is neither
+ * a headset player nor a Visualizer receiver (for example an OpenXR desktop
+ * app started by hand), or one already gone - is refused with
+ * QAR_STATUS_HUB_TARGET_APP_NOT_HOSTED and nothing is stopped. A Visualizer
+ * that refuses to stop its receiver (it is being removed) fails the call with
+ * QAR_STATUS_ARGUMENT_NOT_SUPPORTED, and one that does not answer in time with
+ * QAR_STATUS_TIMEOUT; nothing changes then. An application can not act on
+ * another hub's target apps, and a hub on another machine never answers.
  *
  * @param session Active session handle.
- * @param target_app Peer id returned by qar_session_invite_target_app.
+ * @param target_app Peer id of the target app, from
+ *   qar_session_invite_target_app or the session's peer list.
  * @param on_progress Optional progress callback (can be NULL).
  * @param progress_state User pointer passed to on_progress unchanged.
  * @param cancel Optional cancellation token (can be NULL).
@@ -4135,9 +4181,12 @@ static inline QarResult qar_session_kill_target_app(
 );
 
 /**
- * @brief Ask this machine's hub to stop a target app it started.
+ * @brief Ask this machine's hub to stop a target app, without blocking.
+ *
+ * Non-blocking form of qar_session_kill_target_app: stops any kind of target
+ * app and remembers nothing.
  * @param session Active session handle.
- * @param target_app Peer id returned by qar_session_invite_target_app.
+ * @param target_app Peer id of the target app.
  * @param result_callback Fires exactly once with the outcome, see
  *   @ref qar_c_async_calls "Async calls". Required.
  * @param update_callback Optional progress callback (can be NULL).
