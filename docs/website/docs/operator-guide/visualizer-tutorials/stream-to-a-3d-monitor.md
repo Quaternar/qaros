@@ -93,8 +93,10 @@ choice:
 
 3. If depth looks inverted, tick **Screen** › **Swap eyes** (in **Stereo monitors**, use **Swap left
    / right** instead).
-4. **Screen** › **Show calibration pattern** replaces the video with a test pattern, useful to set
-   up the display; untick it to get the video back.
+4. For **Interlaced 3D monitor**, **Screen** › **Show calibration pattern** replaces the video with
+   a test pattern; untick it to get the video back. For **Stereo monitors**, use the
+   [calibration wizard](#5-calibrate-a-two-screen-rig). The other outputs have no calibration-pattern
+   checkbox.
 
 To move the picture to another display, click another display button. To close the output, untick **Show
 output windows** (the view keeps its settings), or set **Output** back to **Texture grid

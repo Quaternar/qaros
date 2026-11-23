@@ -3425,6 +3425,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** *Stream to a 3D Monitor* identifies the interlaced output's calibration-pattern
+  checkbox and directs two-screen rigs to the calibration wizard.
+
 - **Visualizer:** **Launch** works right after **Install** in an app's dialog (Rerun, ROS 2 Rviz,
   the Blender add-on, web app adaptations). Before, **Executable** stayed empty until the dialog
   was closed and reopened. **+** > **Open QAROS supported app** with a `qaros-rerun.exe` no longer
