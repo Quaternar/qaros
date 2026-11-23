@@ -11,7 +11,7 @@ namespace Quaternar.Qaros.Tests
 {
     /// <summary>
     /// The member-hub invitation surface (docs/hub-topology §5, GitHub #262): the invitation round
-    /// trip, strict parsing, the options, and the checks made before a hub is asked. The joins
+    /// trip, lenient parsing, the options, and the checks made before a hub is asked. The joins
     /// against real hubs are <see cref="HubMemberInvitationTests"/>.
     /// </summary>
     [Collection("QAR Native")]
@@ -61,9 +61,19 @@ namespace Quaternar.Qaros.Tests
             Assert.Equal(StatusCode.MemberInvitationInvalid, MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes("not json")).Info.StatusCode);
             Assert.Equal(StatusCode.MemberInvitationInvalid, MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes("{}")).Info.StatusCode);
             Assert.Equal(StatusCode.MemberInvitationInvalid, MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson("member-join-request"))).Info.StatusCode);
-            Assert.Equal(StatusCode.MemberInvitationInvalid, MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson(extra: ",\"sponsor\":\"me\""))).Info.StatusCode);
+            Assert.Equal(StatusCode.MemberInvitationInvalid, MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson().Replace("\"generation\":3", "\"generation\":\"3\""))).Info.StatusCode);
             Assert.Equal(StatusCode.ArgumentNotSupported, MemberHubInvitation.Deserialize(new byte[0]).Info.StatusCode);
             Assert.Throws<ArgumentNullException>(() => MemberHubInvitation.Deserialize(null!));
+        }
+
+        [Fact]
+        public void AFieldOfANewerVersionIsKept()
+        {
+            // Read leniently: an unknown field is ignored by the parse and serialized again, so the
+            // hub checking the signature still sees it.
+            using var invitation = MemberHubInvitation.Deserialize(Encoding.UTF8.GetBytes(InvitationJson(extra: ",\"sponsor\":\"me\""))).ValueOrThrow();
+            var written = Encoding.UTF8.GetString(invitation.Serialize().ValueOrThrow());
+            Assert.Contains("\"sponsor\":\"me\"", written);
         }
 
         [Fact]
