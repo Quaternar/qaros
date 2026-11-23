@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <qar_streaming.h>
 #include <string>
 #include <string_view>
@@ -65,8 +66,11 @@ class CubeCamera
 public:
 	static constexpr size_t kFramesInFlight = 2;
 
-	explicit CubeCamera(VulkanDevice* gpu)
+	// tint: linear RGB, 0 to 1, that paints every face in one color (each face
+	// shaded a little differently). Without it each face has its own color.
+	explicit CubeCamera(VulkanDevice* gpu, std::optional<std::array<float, 3>> tint = std::nullopt)
 		: m_gpu(gpu)
+		, m_tint(tint)
 	{
 	}
 	CubeCamera(const CubeCamera&) = delete;
@@ -109,6 +113,7 @@ private:
 	void DestroyTargets();
 
 	VulkanDevice* m_gpu;
+	std::optional<std::array<float, 3>> m_tint;
 	VkCommandPool m_pool = VK_NULL_HANDLE;
 	std::array<Slot, kFramesInFlight> m_slots{};
 	size_t m_nextSlot = 0;
