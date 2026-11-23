@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "qar-streaming-rust-ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ash",
  "libloading",
@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "qaros"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ash",
  "libloading",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "qaros-conformance"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "cc",
  "qaros-sys",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "qaros-examples"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ash",
  "glam",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "qaros-stub"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ash",
  "libloading",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "qaros-sys"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "libloading",
 ]
@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bindgen",
  "prettyplease",
