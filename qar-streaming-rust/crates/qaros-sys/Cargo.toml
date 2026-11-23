@@ -7,11 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-publish.workspace = true
+# Published to crates.io by .github/workflows/publish.yml; the rest of the workspace is not.
+publish = ["crates-io"]
 keywords = ["qaros", "quaternar", "xr", "streaming", "ffi"]
 categories = ["external-ffi-bindings"]
 links = "qar-streaming-c"
 build = "build.rs"
+
+# docs.rs builds for the runtime's platform, with every feature.
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = ["x86_64-pc-windows-msvc"]
+all-features = true
 
 [features]
 default = []

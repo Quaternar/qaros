@@ -11,6 +11,36 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!--
+    NuGet package Quaternar.Qaros, published to nuget.org by .github/workflows/publish.yml.
+    The version is the repository's VERSION file (a prerelease such as 1.0.0-rc.1 goes there too).
+    The package is the binding only: it carries no native library, Library.Init loads the
+    installed QAROS runtime.
+  -->
+  <PropertyGroup>
+    <PackageId>Quaternar.Qaros</PackageId>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</Version>
+    <Authors>Quaternar</Authors>
+    <Company>Quaternar</Company>
+    <Product>QAROS</Product>
+    <Description>C# binding of the QAROS streaming C API: runtime, onboarding, sessions, peers, render senders, app volumes and GUI panels, with SafeHandles and Result&lt;T&gt;. Loads the QAROS runtime installed on the PC; ships no native library.</Description>
+    <PackageTags>qaros;quaternar;xr;streaming;rendering</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://docs.quaternar.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Quaternar/qaros</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
