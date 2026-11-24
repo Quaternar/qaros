@@ -1,7 +1,7 @@
 ---
 title: Blender
 sidebar_position: 4
-description: Stream a Blender scene into QAROS with the QAROS ANARI Streaming add-on. Set Blender up (found by the Visualizer, added in Sources, or installed by hand), import a turbofan engine GLB, stream it to a headset, edit it live, follow the viewport shading and choose the renderer.
+description: Stream a Blender scene into QAROS with the QAROS ANARI Streaming add-on. A quick start, then step by step - set Blender up (found by the Visualizer, added in Sources, or installed by hand), import a turbofan engine GLB, stream it to a headset, edit it live, follow the viewport shading and choose the renderer - and what makes a scene stream well, performance tips and troubleshooting.
 ---
 
 # Blender
@@ -18,14 +18,26 @@ You will:
 - edit the selected part live, and leave a part out of the stream;
 - see the stream follow Blender's viewport shading, and choose the renderer.
 
-The screenshots show add-on **0.5.0** in Blender 4.5 LTS.
+The steps match add-on **0.6.2**. Most screenshots show 0.5.0 in Blender 4.5 LTS: the **QAROS** tab looks the same in 0.6.2.
+
+## Quick start
+
+Already know Blender and QAROS? Five steps:
+
+1. Start QAROS and add a **Display Receiver**, or start the player on your paired headset ([Step 1](#step-1-start-qaros-and-add-a-receiver)).
+2. In the Visualizer, **Sources** > your Blender's row > **Install QAROS add-on** > **Launch** ([Step 3](#way-1-found-by-the-visualizer)). Approve Blender under **Waiting for approval** the first time.
+3. Open or import your scene in that Blender.
+4. In the 3D Viewport, press `N`, open the **QAROS** tab and click **Fit Scene to Volume** (**View** panel).
+5. Look at it in the headset or the Display Receiver. Edit in Blender; the stream follows within a moment.
+
+The rest of this page does the same step by step with a turbine, and then covers [what streams well](#what-streams-well), [performance](#performance) and [troubleshooting](#if-something-is-off).
 
 ## Before you start
 
 | | Needed |
 |---|---|
-| **QAROS ANARI Streaming** add-on | 0.5.0 (step 3 installs it) |
-| QAROS | installed and running on this PC, with the **ANARI device** component (default from 0.10.0). 0.9.0 or newer for the add-on; the Visualizer installs it from 0.10.0 |
+| **QAROS ANARI Streaming** add-on | 0.6.2, the latest (step 3 installs it) |
+| QAROS | installed and running on this PC, with the **ANARI device** component (default from 0.10.0). 0.9.0 or newer for the add-on; the Visualizer installs it from 0.10.0. Metal reflecting its surroundings ([Step 9](#step-9-shading-and-renderer)) needs QAROS 0.10.0 or newer |
 | Blender | **4.5 LTS to 5.2**, on the same PC (Windows). Older versions and Blender 5.3 are not supported yet |
 | GPU | OpenGL 4.3 for the VisGL renderer (any recent NVIDIA, AMD or Intel GPU). OSPRay and Helide run on the CPU; VisRTX needs an NVIDIA RTX GPU and is optional |
 | Viewer | a Display Receiver in the Visualizer, or a headset paired with this QAROS ([Before You Start](./start-qaros-and-add-a-receiver.md)) |
@@ -43,7 +55,7 @@ The picture in the headset is not Blender's viewport: an ANARI renderer inside B
 
 ## The model
 
-**[Download turbofan.glb](https://github.com/Quaternar/qaros-blender/raw/v0.5.0/demo/assets/turbofan.glb)** (11 MB, glTF binary).
+**[Download turbofan.glb](https://github.com/Quaternar/qaros-blender/raw/v0.6.2/demo/assets/turbofan.glb)** (11 MB, glTF binary).
 
 - Work: "Turbine | Turbofan Engine | Jet Engine" by [blenderbirb](https://sketchfab.com/blenderbirb).
 - Licence: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit the author when you show or share it.
@@ -128,7 +140,7 @@ Way 2 needs QAROS 0.10.0 or newer. An older QAROS adds a plain app from **Open Q
 
 Always works, also when QAROS cannot reach the internet. Use it to troubleshoot.
 
-1. **[Download the QAROS Blender add-on](https://github.com/Quaternar/qaros-blender/releases/download/v0.5.0/qaros_blender_anari-0.5.0.zip)** (`qaros_blender_anari-0.5.0.zip`).
+1. **[Download the QAROS Blender add-on](https://github.com/Quaternar/qaros-blender/releases/download/v0.6.2/qaros_blender_anari-0.6.2.zip)** (`qaros_blender_anari-0.6.2.zip`), or the newest from the [releases page](https://github.com/Quaternar/qaros-blender/releases/latest).
 2. In Blender: **Edit > Preferences > Add-ons**, then **Install from Disk** (in the menu at the top right), and pick the zip.
 3. Enable **QAROS ANARI Streaming**. Leave **ANARI folder** in its preferences empty.
 4. Start **QAROS** from the Start menu (or run `qaros.exe` in the QAROS `bin` folder).
@@ -177,6 +189,10 @@ The add-on puts a **QAROS** tab in the sidebar of the 3D Viewport. Open it with 
 
 The import makes one empty, **Sketchfab_model**, with the engine parts as its children (**Object_2**, **Object_3**, ...).
 
+:::note
+Is your scene in millimetres or centimetres (**Scene Properties > Units > Unit Scale** below 1)? The importer then scales the engine to match: in millimetres it is about 4000 units long. The stream counts Blender units and ignores **Unit Scale**, so such an engine streams 1000 times too large: press **Fit Scene to Volume** (step 7).
+:::
+
 ## Step 5: Scale and place it
 
 The world origin sits at the centre of the app volume. One Blender unit is 0.25 m in the room by default, so the 4 m engine is 1 m long there.
@@ -194,10 +210,12 @@ The stream follows Blender's selection and the selected object's own settings.
 
 1. Click a part in the viewport or the Outliner, for example the yellow rings (**Object_5**).
 2. **Active Object** in the QAROS tab shows it:
-   - **Streamed, outlined in the headset**: it is in the stream, and the headset marks the selection;
+   - **Streamed**: it is in the stream;
    - its material, with the values the stream uses.
 
-   ![Active Object: Object_5, Streamed, outlined in the headset, material accent-yellow with its Viewport Color](../../img/supported-apps/blender-tutorial/qaros-tab-active-object.webp)
+   ![Active Object: Object_5, Streamed, material accent-yellow with its Viewport Color](../../img/supported-apps/blender-tutorial/qaros-tab-active-object.webp)
+
+   The headset outlines the selected object and its children, on VisRTX, OSPRay and Helide ([Step 9](#step-9-shading-and-renderer)).
 
 3. **Object Properties** (orange square): **Location**, **Rotation**, **Scale** stream as you change them. **Transform** in **Active Object** has the same values.
 4. **Material Properties** (red sphere): edit the **Principled BSDF**.
@@ -236,9 +254,12 @@ To pick devices, untick **All devices** under **Streams To** and tick the ones y
 
    | Do | **Navigation** (default) | **Object selection** |
    |---|---|---|
-   | Double tap a part | selects it in Blender too | selects it in Blender too |
-   | One-hand drag | moves your view; Blender's scene stays unchanged | moves the selected part, when the drag starts on it, in Blender too |
-   | Two hands apart or together | zooms the view | scales the selected part |
+   | Double tap a part | selects the whole model (here **Sketchfab_model**, the top of the part's parent chain) in Blender too | the same |
+   | Click with the hand ray | nothing | selects the single part it hits |
+   | One-hand drag | moves your view; Blender's scene stays unchanged | moves the selection, when the drag starts on it, in Blender too |
+   | Two hands apart or together | zooms the view | scales the selection |
+
+   A model imported as one empty with parts below it (as the turbine is) moves and scales as a whole after a double tap. Click a part in **Object selection** to move only that part.
 
    | On the panel | Does |
    |---|---|
@@ -258,32 +279,33 @@ The headset picture does not come from Blender's viewport: a renderer inside Ble
 
 | Wireframe | Material Preview |
 |---|---|
-| ![Viewport in Wireframe shading beside the stream, also in wireframe](../../img/supported-apps/blender-tutorial/shading-wireframe.webp) | ![Viewport in Material Preview shading beside the stream, with metallic materials](../../img/supported-apps/blender-tutorial/shading-material-preview.webp) |
+| ![Viewport in Wireframe shading beside the stream, also in wireframe](../../img/supported-apps/blender-tutorial/shading-wireframe.webp) | ![Viewport in Material Preview shading beside the stream, where the metal parts reflect the studio light](../../img/supported-apps/blender-tutorial/shading-material-preview.webp) |
 
 | Shading | The stream shows |
 |---|---|
 | **Wireframe** | the edges of every mesh, faces empty |
 | **Solid** | matte surfaces in each material's **Viewport Display > Color** |
-| **Material Preview** | the materials (step 6), lit like the viewport: the scene's lamps and World only with its **Scene Lights** / **Scene World** options |
-| **Rendered** | the materials with the scene's lamps and World |
+| **Material Preview** | the materials (step 6), lit like the viewport: by its studio light (HDRI, with its strength and rotation), or by the scene's lamps and World with its **Scene Lights** / **Scene World** options |
+| **Rendered** | the materials with the scene's lamps and World; the studio light when **Scene World** is off |
 
 - **View** in the QAROS tab can fix one shading for the stream instead: its first button (a chain link, **Follow Viewport**) follows the viewport, the others keep one shading whatever the viewport shows. The line below names the shading in use.
 - A change rebuilds the scene in the new shading, which takes a moment on a large scene.
-- Metal reflects only lamps, not Material Preview's studio light: add a lamp or two for highlights.
+- On VisGL, metal reflects its surroundings, as in Material Preview and EEVEE: the World's environment image, or the studio light. This needs QAROS 0.10.0 or newer; with an older QAROS, metal shows only the lamps' highlights.
 
 **The renderer** is the drop-down in the **Renderer** panel:
 
 | Renderer | Runs on | Look | Use it for |
 |---|---|---|---|
 | **Automatic** (default) | the first that starts: VisGL, VisRTX, OSPRay, Helide | as that renderer | most PCs |
-| **VisGL** | GPU, OpenGL 4.3 | lit, shadows, metallic, roughness, emission; no selection outline | headsets: fastest |
+| **VisGL** | GPU, OpenGL 4.3 | lit, shadows, metallic, roughness, emission, reflections of the World or studio light; no selection outline | headsets: fastest |
 | **VisRTX** | NVIDIA RTX GPU | ray traced; grain in a moving view, or smooth with **VisRTX** materials **Matte** | comparing with a ray tracer |
 | **OSPRay** | CPU | flat shading, hard shadows; colour only | PCs without a usable GPU |
 | **Helide** | CPU | simple reference shading | checking a result |
 
 - Choose one while streaming: the stream restarts on it at once, in the same app volume. Stopped, it applies at the next **Start Streaming**.
+- **VisRTX's first start takes a few minutes** on a new PC or after a driver update, while it prepares its GPU programs; later starts take a second. Meanwhile the stream stays on the renderer it had, and the tab reads **Starting VisRTX... the first start can take a few minutes**. It switches by itself once VisRTX is ready. If VisRTX fails, or is not ready within ten minutes, the stream stays where it was and the tab says why.
 - The line below the drop-down says which renderer runs and what it can show of your materials.
-- The selected part is outlined in orange in the headset on VisRTX, OSPRay and Helide. VisGL draws no outline.
+- The selection is outlined in orange in the headset on VisRTX, OSPRay and Helide. VisGL draws no outline.
 
 ## Step 10: Stop
 
@@ -291,30 +313,77 @@ The headset picture does not come from Blender's viewport: a renderer inside Ble
 - Or **Stop** on Blender's card under **Running** in the Visualizer: that quits Blender.
 - **File > Save** keeps the scene, its **App volume** name, its **Streams To** choice and every part's eye.
 
+## What streams well
+
+| | Streams well | Why |
+|---|---|---|
+| **Size and place** | a model near the world origin, a few Blender units across; else **Fit Scene to Volume** | the origin is the volume centre and 1 unit is 0.25 m; objects completely outside the volume are not streamed |
+| **Units** | **Unit Scale** 1 (metres), or a press of **Fit Scene to Volume** after import | the stream ignores **Unit Scale**: a scene in millimetres streams 1000 times too large |
+| **Objects** | up to about 10,000 objects on VisGL (an RTX 3070 Ti holds 30 fps for two users there); few materials | objects that do not move are merged per material, so objects sharing a material cost little; an object you move streams on its own until it settles |
+| **Triangles** | up to a few hundred thousand (the turbine has 236,000) | **Diagnostics** counts what is streamed |
+| **Materials** | constant **Principled BSDF** values; one material shared by many parts | textures and node inputs stream the material's viewport colour |
+| **Lights** | a sun or a few lamps, or the World; on VisGL metal reflects the World or the studio light | without them, surfaces look flat and metal looks dull |
+| **Edits** | moving, turning and scaling objects | changing a mesh's shape (Edit Mode, an animated modifier) sends the whole mesh again, which takes longer on a large mesh |
+
+## Performance
+
+- **Renderer:** **VisGL** for headsets. OSPRay and Helide render on the CPU and slow down with several users; VisRTX is ray traced and heavier on the GPU.
+- **Frame Rate** (**Renderer** panel, default 30): the frames per second each user's headset gets. Lower leaves the renderer time for more users: scene changes then show later, head motion stays smooth.
+- **Resolution** (**Renderer** panel): 0 is automatic, full resolution on VisGL and VisRTX and half on OSPRay and Helide. 0.25 to 1 renders each eye at that share of the headset's resolution.
+- **Users:** each device that watches gets its own picture. Untick the ones you do not need under **Streams To**. The add-on's **Users** preference (2 by default) caps how many are served at once.
+- **Scene:** leave out what you do not need in the headset (eye in **Active Object**), and share materials between parts where you can.
+- **Shading:** a change of viewport shading rebuilds the stream's scene. On a large scene, fix the stream's shading in **View** while you switch the viewport around.
+
 ## Limits
 
 - **Materials:** only constant **Principled BSDF** values stream (base colour, metallic, roughness, alpha, emission). Not textures, vertex colours, normal maps, glass, coat, sheen or subsurface.
-- **Lights:** a sun stays a sun; point, spot and area lamps become point lights. The World or HDRI streams only in **Rendered** shading or with Material Preview's **Scene World** option.
+- **Lights:** a sun stays a sun; point, spot and area lamps become point lights. The World streams in **Rendered** shading or with Material Preview's **Scene World** option; otherwise Material Preview streams the viewport's studio light. Reflections of either need VisGL and QAROS 0.10.0 or newer.
 - **Not streamed:** Gaussian splats, point clouds, meshes without faces, objects hidden in the viewport, and objects completely outside the app volume.
 - **One app volume per Blender.** A second Blender streams into *Blender 2*.
-- **Scale:** Blender's world origin sits at the volume centre, Z up is up, and 1 Blender unit is 0.25 m by default.
+- **Scale:** Blender's world origin sits at the volume centre, Z up is up, and 1 Blender unit is 0.25 m by default. The scene's **Unit Scale** is ignored.
 - A change of the add-on's **ANARI folder** preference needs a Blender restart. Leave it empty: the add-on then uses the ANARI device QAROS installed.
 - A Blender you started yourself is never closed by QAROS; **Stop** in the Visualizer quits only a Blender it launched.
 
 ## If something is off
-| Problem | Fix |
-|---|---|
-| No **QAROS** tab in Blender | Blender started without the add-on. Start it from its Blender row in **Sources** (way 1 or 2), or install and enable the add-on by hand (way 3). |
-| Status stays at **Joining QAROS** | Approve Blender in the Visualizer's **Sources** under **Waiting for approval**; the request expires after 120 s. |
-| No **Install QAROS add-on** on the row | The add-on was installed by hand: update it by hand, or remove it from Blender and let QAROS install it. |
-| Your Blender has no row | Way 2: **+** > **Open QAROS supported app**, or **Locate...**. |
-| Nothing in the headset | Check **Streams To**, and that the headset is paired. |
-| A part is missing in the headset | Its eye in **Active Object** is closed, or it is hidden in the viewport, or outside the volume (**Diagnostics**). |
-| Engine tiny, huge or cut off | **Fit Scene to Volume**. |
-| Slow, all CPU cores busy | The renderer is OSPRay or Helide: choose **VisGL** in **Renderer**. |
-| A colour change does nothing | Edit the **Principled BSDF** that feeds **Material Output** with a constant value; in **Solid** shading, edit **Viewport Display > Color**. |
-| No renderer loads | Install QAROS with the **ANARI device** component; leave the add-on's **ANARI folder** preference empty. |
-| A second headset shows nothing | Check **Streams To**, and the **Users** limit in the **QAROS** tab (2 by default). |
-| The row says *Installed by hand, not by QAROS* | Remove your copy from Blender to let QAROS manage it, or keep updating it yourself (way 3). |
+
+**Setup**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No **QAROS** tab in Blender | Blender started without the add-on | Start it from its Blender row in **Sources** (way 1 or 2), or install and enable the add-on by hand (way 3) |
+| Your Blender has no row | QAROS did not find it | Way 2: **+** > **Open QAROS supported app**, or **Locate...** |
+| No **Install QAROS add-on** on the row; it says *Installed by hand, not by QAROS* | the add-on was installed by hand | Update it by hand (way 3), or remove it from Blender and let QAROS install it |
+| The add-on refuses to start and says why | Blender 5.3 or newer, which it does not support yet | Use Blender 4.5 LTS to 5.2 |
+| Status stays at **Joining QAROS** | Blender waits for approval | Approve it in the Visualizer's **Sources** under **Waiting for approval**; the request expires after 120 s |
+| No renderer loads | QAROS has no ANARI device, or the add-on looks in the wrong folder | Install QAROS with the **ANARI device** component; leave the add-on's **ANARI folder** preference empty |
+
+**In the headset**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Nothing in the headset | the device is not in **Streams To**, or not paired | Tick it (or **All devices**) under **Streams To**; pair the headset |
+| A second headset shows nothing | the add-on serves at most **Users** devices (preference, 2 by default) | Raise **Users** in the add-on's preferences, then restart streaming |
+| Model tiny, huge or cut off | its size in Blender units, or a **Unit Scale** below 1 (millimetres, centimetres) | **Fit Scene to Volume** |
+| A part is missing | its eye in **Active Object** is closed, it is hidden in the viewport, or it is outside the volume | Open the eye, unhide it, or **Fit Scene to Volume**; **Diagnostics** lists what was left out |
+| A double tap selects the whole model, not the part | a double tap takes the top of the part's parent chain | Choose **Object selection** and click the part with the hand ray |
+| Metal looks dull or dark | no lamps or World in the stream, **Solid** shading, a renderer other than VisGL, or QAROS older than 0.10.0 | Use **Material Preview** or **Rendered** on VisGL, or add a lamp |
+| No orange outline on the selection | VisGL draws none | Choose VisRTX, OSPRay or Helide to see it |
+
+**Materials**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A colour change does nothing | the edited node does not feed **Material Output**, or the input is linked to a texture or node | Edit the **Principled BSDF** that feeds **Material Output**, with a constant value; in **Solid** shading, edit **Viewport Display > Color** |
+| A part shows its viewport colour instead of its texture | textures do not stream | Set a constant **Base Color** |
+| Alpha stays opaque | the renderer cannot blend (**Diagnostics** says so) | Choose VisGL |
+| Glass, transmission, coat or sheen have no effect | they do not stream | Use **Alpha** for see-through parts |
+
+**Speed**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Slow, all CPU cores busy | the renderer is OSPRay or Helide | Choose **VisGL** in **Renderer** |
+| **Starting VisRTX...** for minutes | VisRTX's first start on this PC or driver | Wait: the stream stays on the current renderer and switches by itself |
+| Low frame rate with several users | each user gets their own picture | Lower **Frame Rate** or **Resolution**, or stream to fewer devices ([Performance](#performance)) |
 
 More, for every add-on setting: the [QAROS Blender add-on user guide](https://github.com/Quaternar/qaros-blender/blob/main/docs/user-guide.md).
