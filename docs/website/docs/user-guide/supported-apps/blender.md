@@ -90,21 +90,22 @@ The Visualizer finds every Blender on the PC and installs the add-on into it. It
 2. Click **Sources** on the left rail. Type `Blender` in the search field.
    - One row per Blender version, for example **Blender 5.2**.
    - **Detected:** QAROS found it. **Installable** / **Installed** / **Needs update:** the add-on's state in that Blender.
+   - **Not available:** a Blender the add-on does not support yet, such as 5.3. Its row cannot launch.
 
-   ![Sources filtered to Blender: Blender 5.2, Detected, add-on Installable](../../img/supported-apps/blender-tutorial/sources-blender-tiles.webp)
+   ![Sources filtered to Blender: Blender 5.2 Detected with the add-on Installable, Blender 5.3 Not available](../../img/supported-apps/blender-tutorial/sources-blender-tiles.webp)
 
 3. Click the row of your Blender. The **Detected app** dialog opens.
-4. Under **QAROS add-on**, click **Install QAROS add-on** (or **Update QAROS add-on**).
+4. At the top, under **QAROS add-on**, click **Install QAROS add-on** (or **Update QAROS add-on**).
    - QAROS downloads the latest add-on, checks it, copies it into that Blender's add-ons folder and enables it.
    - Nothing else in Blender changes.
 
-   ![The Detected app dialog for Blender 5.2: QAROS add-on Installable, Install QAROS add-on, Launch](../../img/supported-apps/blender-tutorial/sources-blender-tile-dialog.webp)
+   ![The Detected app dialog for Blender 5.2: QAROS add-on Installable with the latest version, Install QAROS add-on, then the preset, and Launch at the bottom](../../img/supported-apps/blender-tutorial/sources-blender-tile-dialog.webp)
 
 5. The section then shows **Installed** and the version.
 
-   ![QAROS add-on: Installed, with its version, and Launch](../../img/supported-apps/blender-tutorial/sources-addon-installed.webp)
+   ![The Detected app dialog after the install: QAROS add-on Installed with its version, Launch at the bottom](../../img/supported-apps/blender-tutorial/sources-addon-installed.webp)
 
-6. Click **Launch**. Blender starts and streams its scene by itself.
+6. Click **Launch** at the bottom of the dialog. Blender starts and streams its scene by itself.
    - First time only: QAROS asks whether Blender may join. In **Sources**, under **Waiting for approval**, click **Approve** within 120 s ([Approved local apps](../../operator-guide/source-applications.md#approved-local-apps)).
    - **Running** shows Blender as **Connected**. **Stop** quits that Blender (it saves `quit.blend` first: **File > Recover > Last Session**).
 
@@ -122,8 +123,10 @@ Point QAROS at the Blender it did not find. It then gets its own row, as in way 
 
 2. Click **Open QAROS supported app**.
 3. **Executable:** click **Browse** and pick `blender.exe` in your Blender folder, for example `C:\Program Files\Blender Foundation\Blender 4.5\blender.exe` or the folder you unzipped a blender.org download into. Leave **Name** empty.
+   - The dialog confirms: *Add app gives this Blender its own tile, with the QAROS add-on.*
+   - *This Blender has its tile already* means way 1 found it: use its row instead.
 
-   ![Open QAROS supported app: Executable set to blender.exe, Name, Add app](../../img/supported-apps/blender-tutorial/sources-open-supported-app.webp)
+   ![Open QAROS supported app: Executable set to an unzipped Blender's blender.exe, Name empty, the note that it gets its own tile, Add app](../../img/supported-apps/blender-tutorial/sources-open-supported-app.webp)
 
 4. Click **Add app**. Your Blender gets its own row, for example **Blender 4.5**.
 5. Continue with step 3 of way 1: click the row, **Install QAROS add-on**, **Launch**.
@@ -165,7 +168,7 @@ The add-on puts a **QAROS** tab in the sidebar of the 3D Viewport. Open it with 
 
 | Stopped | Streaming | Lower down |
 |---|---|---|
-| ![QAROS tab while stopped: Off, Start Streaming, App volume, Active Object, View, Renderer](../../img/supported-apps/blender-tutorial/qaros-tab-stopped.webp) | ![QAROS tab while streaming: Streaming to 1 user, Stop and restart, Active Object, View, Renderer](../../img/supported-apps/blender-tutorial/qaros-tab-streaming.webp) | ![Lower panels: Renderer, Streams To with All devices and one Display Receiver, Headset with Navigation and Object selection, Diagnostics](../../img/supported-apps/blender-tutorial/qaros-tab-streams-to.webp) |
+| ![QAROS tab while stopped: Off, Start Streaming, Active Object, View, Renderer, Streams To, Headset](../../img/supported-apps/blender-tutorial/qaros-tab-stopped.webp) | ![QAROS tab while streaming: Streaming to 1 user, Stop and restart, Active Object, View, Renderer](../../img/supported-apps/blender-tutorial/qaros-tab-streaming.webp) | ![Lower panels: View, Renderer, Streams To with All devices and one Display Receiver, Headset with Navigation and Object selection, Diagnostics](../../img/supported-apps/blender-tutorial/qaros-tab-streams-to.webp) |
 
 | Panel | What it shows or does |
 |---|---|

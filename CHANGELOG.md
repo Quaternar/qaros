@@ -3165,7 +3165,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   metal reflects the World or the studio light on VisGL (QAROS 0.10.0 or newer), VisRTX's first
   start takes a few minutes in the background, and the stream ignores the scene's **Unit Scale**.
   It gains a five-step quick start, *What streams well*, *Performance*, and a troubleshooting table
-  by symptom, cause and fix for setup, the headset, materials and speed.
+  by symptom, cause and fix for setup, the headset, materials and speed. Its pictures show add-on
+  0.6.2 in Blender 5.2 and today's **Sources** dialogs (the add-on section first), and step 2 says
+  a Blender the add-on does not support yet, such as 5.3, shows **Not available**.
 - **Docs:** a build that is neither a release nor a release candidate is versioned
   `X.Y.Z-<commits>+<sha>` (was `X.Y.Z-dev.<commits>+<sha>`); decision record ADR-0003 and the
   *Compatibility* page say so.
