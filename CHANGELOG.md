@@ -3161,8 +3161,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   **Active Object** eye that leaves a part out of the stream, the stream following the viewport
   shading, and the **Renderer** drop-down, with new screenshots. *Blender* and *Source
   Applications* say the same where they overlap.
-- **Docs:** *Blender* follows add-on 0.6.3: a double tap in the headset selects the whole model,
-  **Active Object** reads **Streamed, outlined in the headset** for the selection, metal reflects the World or the studio light on VisGL (QAROS 0.10.0 or newer), VisRTX's first
+- **Docs:** *Blender* follows add-on 0.6.4: a double tap in the headset selects the whole model,
+  **Active Object** reads **Streamed, outlined in the headset** for the selection (on VisGL, which
+  draws no outline, **Streamed, selected**), metal reflects the World or the studio light on VisGL (QAROS 0.10.0 or newer), VisRTX's first
   start takes a few minutes in the background, and the stream ignores the scene's **Unit Scale**.
   It gains a five-step quick start, *What streams well*, *Performance*, and a troubleshooting table
   by symptom, cause and fix for setup, the headset, materials and speed. Its pictures show add-on

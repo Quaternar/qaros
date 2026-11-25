@@ -18,7 +18,7 @@ You will:
 - edit the selected part live, and leave a part out of the stream;
 - see the stream follow Blender's viewport shading, and choose the renderer.
 
-The steps match add-on **0.6.3**. The screenshots show 0.6.2 in Blender 5.2; the **QAROS** tab of 0.6.3 differs only in the outlined status of Step 6.
+The steps match add-on **0.6.4**. The screenshots show 0.6.2 in Blender 5.2; the **QAROS** tab of 0.6.4 differs only in the selection status of Step 6.
 
 ## Quick start
 
@@ -36,7 +36,7 @@ The rest of this page does the same step by step with a turbine, and then covers
 
 | | Needed |
 |---|---|
-| **QAROS ANARI Streaming** add-on | 0.6.3, the latest (step 3 installs it) |
+| **QAROS ANARI Streaming** add-on | 0.6.4, the latest (step 3 installs it) |
 | QAROS | installed and running on this PC, with the **ANARI device** component (default from 0.10.0). 0.9.0 or newer for the add-on; the Visualizer installs it from 0.10.0. Metal reflecting its surroundings ([Step 9](#step-9-shading-and-renderer)) needs QAROS 0.10.0 or newer |
 | Blender | **4.5 LTS to 5.2**, on the same PC (Windows). Older versions and Blender 5.3 are not supported yet |
 | GPU | OpenGL 4.3 for the VisGL renderer (any recent NVIDIA, AMD or Intel GPU). OSPRay and Helide run on the CPU; VisRTX needs an NVIDIA RTX GPU and is optional |
@@ -55,7 +55,7 @@ The picture in the headset is not Blender's viewport: an ANARI renderer inside B
 
 ## The model
 
-**[Download turbofan.glb](https://github.com/Quaternar/qaros-blender/raw/v0.6.3/demo/assets/turbofan.glb)** (11 MB, glTF binary).
+**[Download turbofan.glb](https://github.com/Quaternar/qaros-blender/raw/v0.6.4/demo/assets/turbofan.glb)** (11 MB, glTF binary).
 
 - Work: "Turbine | Turbofan Engine | Jet Engine" by [blenderbirb](https://sketchfab.com/blenderbirb).
 - Licence: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit the author when you show or share it.
@@ -143,7 +143,7 @@ Way 2 needs QAROS 0.10.0 or newer. An older QAROS adds a plain app from **Open Q
 
 Always works, also when QAROS cannot reach the internet. Use it to troubleshoot.
 
-1. **[Download the QAROS Blender add-on](https://github.com/Quaternar/qaros-blender/releases/download/v0.6.3/qaros_blender_anari-0.6.3.zip)** (`qaros_blender_anari-0.6.3.zip`), or the newest from the [releases page](https://github.com/Quaternar/qaros-blender/releases/latest).
+1. **[Download the QAROS Blender add-on](https://github.com/Quaternar/qaros-blender/releases/download/v0.6.4/qaros_blender_anari-0.6.4.zip)** (`qaros_blender_anari-0.6.4.zip`), or the newest from the [releases page](https://github.com/Quaternar/qaros-blender/releases/latest).
 2. In Blender: **Edit > Preferences > Add-ons**, then **Install from Disk** (in the menu at the top right), and pick the zip.
 3. Enable **QAROS ANARI Streaming**. Leave **ANARI folder** in its preferences empty.
 4. Start **QAROS** from the Start menu (or run `qaros.exe` in the QAROS `bin` folder).
@@ -214,6 +214,7 @@ The stream follows Blender's selection and the selected object's own settings.
 1. Click a part in the viewport or the Outliner, for example the yellow rings (**Object_5**).
 2. **Active Object** in the QAROS tab shows it:
    - **Streamed, outlined in the headset**: it is in the stream and selected, so the headset outlines it;
+   - **Streamed, selected (VisGL draws no outline)**: the same on VisGL, which draws no outline;
    - **Streamed**: it is in the stream;
    - its material, with the values the stream uses.
 
