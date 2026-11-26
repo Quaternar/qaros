@@ -2249,6 +2249,13 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   names, installed QAROS, `PATH`), how candidates
   load, and the C ABI conventions a new binding keeps, with a checklist. Getting Started,
   Troubleshooting, Onboarding and the Unity page describe the new fallback.
+- **Docs:** *Running the RViz2 Plugin on Windows*, *Ogre, Qt and RViz2 on QAROS*, *Streaming an Ogre
+  Scene to QAROS*, *Video in GUI Panels, and Qt Widgets as AR Panels*, *Limits and Behaviors to Design
+  Around* and *RViz (ROS 2)* describe the plugin and its libraries as they now behave: they join the
+  Hub of this PC only, and RViz2 keeps working when QAROS stops answering (outage states, frame
+  workers, a bounded exit). The pages also cover the enlarged AR copies of Qt panels, the settings
+  version 5, the idle tier of the render tick, and the QAROS limits after a Hub restart, in a GPU
+  fault and in the Visualizer's close of an orphaned panel.
 
 ### Changed
 
