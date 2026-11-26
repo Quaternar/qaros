@@ -3453,6 +3453,9 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Fixed
 
+- **Docs:** the *Unity* guide lists the MRTK packages `com.quaternar.streaming.mrtk` depends on:
+  MRTK Core, Input, UX Core and Standard Assets. MRTK UX Components and Extended Assets are no
+  longer needed, the MRTK sample scene included.
 - **Docs:** the Blender page names the supported Blender versions, 4.5 LTS to 5.2, and says Blender 5.3 is not supported yet.
 - **Docs:** *Stream to a 3D Monitor* identifies the interlaced output's calibration-pattern
   checkbox and directs two-screen rigs to the calibration wizard.

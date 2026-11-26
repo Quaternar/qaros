@@ -13,7 +13,7 @@ player load the runtime of the QAROS installed on the PC, like any other source 
 | Package | Folder | Install when | Depends on |
 |---|---|---|---|
 | `com.quaternar.streaming` | `QarStreaming` | Always | Unity Input System `1.7.0`, Unity UI `1.0.0` |
-| `com.quaternar.streaming.mrtk` | `QarStreamingMRTK` | Only in MRTK 3 projects | `com.quaternar.streaming`, Unity Input System `1.7.0`, XR Core Utils `2.2.3`, MRTK Core `4.0.0-pre.1`, MRTK Input `4.0.0-pre.1`, MRTK UX Components `4.0.0-pre.1`, MRTK Extended Assets `3.0.3` |
+| `com.quaternar.streaming.mrtk` | `QarStreamingMRTK` | Only in MRTK 3 projects | `com.quaternar.streaming`, Unity Input System `1.7.0`, XR Core Utils `2.2.3`, MRTK Core `4.0.0-pre.1`, MRTK Input `4.0.0-pre.1`, MRTK UX Core `4.0.0-pre.1`, MRTK Standard Assets `3.1.0` |
 
 - **`QarStreaming`** is the integration: the `QarStreaming` and `QarDevice` prefabs, stereo
   camera capture for the built-in render pipeline and URP, a sample scene and the C# binding in
@@ -248,9 +248,9 @@ hands become MRTK hands.
 - **It uses the first streamed target only.** To keep a hand from being handled twice, by MRTK and
   by QAROS app volume gestures, it turns gestures off for that target's device at runtime. The
   **Enable Gestures** value in the Inspector does not change. Further targets stream as usual.
-- **The MRTK sample scene** `QarSampleSceneMrtk` has a debug **Connect** button built with MRTK UX
-  Components and MRTK Extended Assets. The integration itself does not use those two packages;
-  only that button does.
+- **The MRTK sample scene** `QarSampleSceneMrtk` needs no MRTK package beyond the four the
+  package depends on: its **Connect** button is Unity UI, and its pressable cylinder is built from
+  MRTK UX Core and MRTK Standard Assets.
 
 ## Player builds
 
