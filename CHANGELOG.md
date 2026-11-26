@@ -2086,7 +2086,8 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   code through `GuiPanelOptions.DisplayName` and `GuiPanels.ChangeDisplayName` (no panel component
   or Inspector field), counts Unicode code points rather than C# `char`s, is refused with
   `StatusCode.GuiPanelDisplayNameInvalid` when it breaks a rule, and turns a lone surrogate into
-  U+FFFD. *Custom GUI Panels* names the C# rename call.
+  U+FFFD. *Custom GUI Panels* names the C# rename call and no longer calls a non-empty display
+  name required: an empty one is accepted and shows no label.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.
