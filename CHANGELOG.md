@@ -2082,6 +2082,11 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
   step 1 of the *Rerun* and *Blender* tutorials (whose later steps move down by one), and *RViz*
   *(ROS 2)*, *3D Slicer* and *Supported Apps* link it before their install steps. It is the first
   page of *Supported Apps* and *Getting Started* links it.
+- **Docs:** the *Unity* guide has a *Naming a panel* section: a GUI panel's display name is set in
+  code through `GuiPanelOptions.DisplayName` and `GuiPanels.ChangeDisplayName` (no panel component
+  or Inspector field), counts Unicode code points rather than C# `char`s, is refused with
+  `StatusCode.GuiPanelDisplayNameInvalid` when it breaks a rule, and turns a lone surrogate into
+  U+FFFD. *Custom GUI Panels* names the C# rename call.
 - **Docs:** a new *Compatibility* page in the developer guide says which QAROS builds work
   together from 0.10.0, what that means for C API, C#, Rust and Unity apps, and how an app uses a
   function a runtime may not have yet. *API conventions* and *Getting started* link to it.

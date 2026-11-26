@@ -93,5 +93,98 @@ namespace Quaternar.Qaros.Tests
                 () => scope.Session.GuiPanels.SetStream(id, replacementStreamId).EnsureSuccess());
             Assert.Equal(replacementStreamId, updated.ContentStreamId);
         }
+
+        // Control characters (C0, DEL, C1) and bidi formatting characters. Invalid UTF-8
+        // cannot be written as a C# string; a lone surrogate is covered on its own below.
+        private static readonly string[] InvalidDisplayNames =
+        {
+            "line\nbreak",
+            "tab\there",
+            "del\u007F",
+            "next\u0085line",
+            "‮gnp.exe",
+            "⁦isolate",
+            "mark‏",
+        };
+
+        [Fact]
+        public void DisplayNameOf64CharactersIsAcceptedOnCreateAndChange()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            // 64 code points outside the BMP: 128 UTF-16 chars and 256 UTF-8 bytes. The limit
+            // counts code points, never C# chars.
+            var longestEmoji = string.Concat(System.Linq.Enumerable.Repeat("\U0001F3AC", 64));
+            var longestAscii = new string('a', 64);
+            var id = GuiPanelId.Default;
+            var created = QarNativeAssert.WaitForGuiPanelUpdate(
+                scope.Session,
+                panel => id != GuiPanelId.Default && panel.Id == id,
+                () => id = scope.Session.GuiPanels.GetOrCreate(new GuiPanelOptions(Guid.NewGuid().ToString())
+                {
+                    DisplayName = longestEmoji
+                }).ValueOrThrow());
+            Assert.Equal(longestEmoji, created.DisplayName);
+            var renamed = QarNativeAssert.WaitForGuiPanelUpdate(
+                scope.Session,
+                panel => panel.Id == id && panel.DisplayName == longestAscii,
+                () => scope.Session.GuiPanels.ChangeDisplayName(id, longestAscii).EnsureSuccess());
+            Assert.Equal(longestAscii, renamed.DisplayName);
+        }
+
+        [Fact]
+        public void ControlAndBidiDisplayNamesAreRefusedOnCreateAndChange()
+        {
+            using var scope = _fixture.CreateSessionScope();
+            foreach (var invalid in InvalidDisplayNames)
+            {
+                var refused = scope.Session.GuiPanels.GetOrCreate(new GuiPanelOptions(Guid.NewGuid().ToString())
+                {
+                    DisplayName = invalid
+                });
+                Assert.True(refused.Info.StatusCode == StatusCode.GuiPanelDisplayNameInvalid,
+                    $"create with {Escape(invalid)} returned {refused.Info.StatusCode}");
+            }
+
+            var id = GuiPanelId.Default;
+            QarNativeAssert.WaitForGuiPanelUpdate(
+                scope.Session,
+                panel => id != GuiPanelId.Default && panel.Id == id,
+                () => id = scope.Session.GuiPanels.GetOrCreate(new GuiPanelOptions(Guid.NewGuid().ToString())
+                {
+                    DisplayName = "Kept"
+                }).ValueOrThrow());
+            foreach (var invalid in InvalidDisplayNames)
+            {
+                var refused = scope.Session.GuiPanels.ChangeDisplayName(id, invalid);
+                Assert.True(refused.Info.StatusCode == StatusCode.GuiPanelDisplayNameInvalid,
+                    $"change to {Escape(invalid)} returned {refused.Info.StatusCode}");
+            }
+        }
+
+        [Fact]
+        public void LoneSurrogateInADisplayNameReachesTheRuntimeAsTheReplacementCharacter()
+        {
+            // A C# string can hold a lone surrogate, which has no UTF-8 form. The binding encodes
+            // with Encoding.UTF8, which replaces it with U+FFFD: valid text, so the name is
+            // accepted with the replacement character instead of being refused.
+            using var scope = _fixture.CreateSessionScope();
+            var id = GuiPanelId.Default;
+            var created = QarNativeAssert.WaitForGuiPanelUpdate(
+                scope.Session,
+                panel => id != GuiPanelId.Default && panel.Id == id,
+                () => id = scope.Session.GuiPanels.GetOrCreate(new GuiPanelOptions(Guid.NewGuid().ToString())
+                {
+                    DisplayName = "a\uD800b"
+                }).ValueOrThrow());
+            Assert.Equal("a�b", created.DisplayName);
+        }
+
+        private static string Escape(string text)
+        {
+            var escaped = new System.Text.StringBuilder();
+            foreach (var c in text)
+                escaped.Append(c < 0x20 || c >= 0x7F ? $"\\u{(int)c:X4}" : c.ToString());
+            return escaped.ToString();
+        }
     }
 }

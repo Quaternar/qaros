@@ -178,6 +178,35 @@ var bundle = session.PanelContent.PublishDirectory("ui", Application.streamingAs
   described in [Custom GUI Panels](/docs/developer-guide/gui-panels#serving-panel-content-from-your-app).
 - Put panel pages under `StreamingAssets` so a player build ships them as plain files.
 
+### Naming a panel
+
+There is no panel component, so a panel's name is set in code, not in the Inspector. The display
+name is the label the mixer shows above the panel; the common name is its stable identity.
+
+```csharp
+var options = new GuiPanelOptions("inspector.myapp.example.com") // stable identity, ASCII
+{
+    DisplayName = "🎬 Inspector", // label shown above the panel, emoji allowed
+};
+GuiPanelId panelId = session.GuiPanels.GetOrCreate(options).ValueOrThrow();
+
+Result<Unit> renamed = session.GuiPanels.ChangeDisplayName(panelId, "Settings");
+if (renamed.Info.StatusCode == StatusCode.GuiPanelDisplayNameInvalid)
+    Debug.LogWarning("Panel name refused: " + renamed.Info.Message);
+```
+
+- The name follows the [display name rules](/docs/developer-guide/gui-panels#creating-a-panel-idempotent):
+  one line of at most 64 characters, counted as Unicode code points, not C# `char`s (one emoji is
+  two `char`s but one character).
+- Line breaks, other control characters and bidirectional formatting characters are refused with
+  `StatusCode.GuiPanelDisplayNameInvalid`, both on create and on rename. A refused name is never
+  shortened, and a refused rename keeps the previous name.
+- A C# string can hold a lone surrogate (half of an emoji), which has no UTF-8 form. It reaches
+  QAROS as U+FFFD (�) and is accepted, so cut a name only at whole characters, for example with
+  `StringInfo`.
+- Show the name in your own Unity UI from `GuiPanel.DisplayName` in the panel updates, never from
+  the common name.
+
 ## Coordinate spaces
 
 The views and hands a target's device receives are in its app volume's
