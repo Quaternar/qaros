@@ -2043,9 +2043,12 @@ in-memory secure store and is gone when the runtime is.
   expires (30 minutes for a co-process).
 - QarOnboardLocalAppExt is stateless already and is unaffected.
 - A runtime older than this extension skips it like any unknown chained
-  struct and stores the identity on disk. Before relying on it, check
-  QarRuntimeInfo::version (qar_runtime_info) against the version whose
-  changelog introduces it. The same holds for QarOnboardLocalAppTagExt.*/
+  struct and stores the identity on disk. A chained struct cannot report
+  QAR_STATUS_NOT_IMPLEMENTED, so this is the one case for a version check:
+  before relying on it, check that QarRuntimeInfo::version
+  (qar_runtime_info) is at least the release whose changelog introduces it,
+  comparing the numeric major.minor.patch only. Never compare for equality
+  or by the pre-release suffix. The same holds for QarOnboardLocalAppTagExt.*/
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct QarRuntimeEphemeralStorageExt {
