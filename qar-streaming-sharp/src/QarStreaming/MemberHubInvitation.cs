@@ -67,10 +67,11 @@ namespace Quaternar.Qaros
         }
 
         /// <summary>
-        /// Parses an invitation from <see cref="Serialize()"/> bytes. Strict: bytes with an unknown or
-        /// missing field, of another kind or version, out of bounds or over 16 KiB fail with
-        /// <see cref="StatusCode.MemberInvitationInvalid"/>. The signature is checked by
-        /// <see cref="Runtime.JoinHubAsMember"/>, not here.
+        /// Parses an invitation from <see cref="Serialize()"/> bytes. Lenient: a field a newer QAROS
+        /// version added is ignored and kept, so <see cref="Serialize()"/> writes it again under the
+        /// signature. Bytes that are no JSON, with a missing or mistyped field, of another kind, out of
+        /// bounds or over 16 KiB fail with <see cref="StatusCode.MemberInvitationInvalid"/>. The
+        /// signature is checked by <see cref="Runtime.JoinHubAsMember"/>, not here.
         /// </summary>
         public static Result<MemberHubInvitation> Deserialize(byte[] data)
         {
