@@ -272,13 +272,19 @@ The package streams under Direct3D 11 and under Vulkan, in the Editor and in pla
   for sharing frames. Keep **Load on startup** set in its import settings. Without it a Vulkan
   player cannot stream, and the runtime refuses to start with a `NotSupportedException` that says
   why.
-- **Under Vulkan, cap the frame rate instead of using VSync.** A Vulkan frame is shown only after
-  Unity's render thread has handed it over. **Show Vulkan Frames On Worker**, on `QarDevice` and
-  on by default, waits for that hand-off on a worker thread instead of the next frame.
-  - In our measurements a Vulkan player capped at 60 fps with `Application.targetFrameRate` streamed
-    at the Direct3D 11 rate, with frames within 2 ms as fresh.
-  - Under VSync it streamed a little over half the Direct3D 11 rate (46 against 79 per second on a
-    165 Hz display), so set `QualitySettings.vSyncCount` to 0 and cap with `targetFrameRate`.
+- **Vulkan streams fastest with a frame-rate cap; VSync costs about a tenth.** A Vulkan frame is
+  shown only after Unity's render thread has handed it over. **Show Vulkan Frames On Worker**, on
+  `QarDevice` and on by default, waits for that hand-off on a worker thread instead of the next
+  frame.
+  - In our measurements a Vulkan player capped with `Application.targetFrameRate` streamed at the
+    Direct3D 11 rate, with frames as fresh.
+  - Under VSync, Unity's queued frames wait for the display and hold each streamed frame back. While
+    an endpoint streams under Vulkan with VSync, the package therefore sets
+    `QualitySettings.maxQueuedFrames` to 1 and restores your value when streaming stops; that
+    reached 90% of the Direct3D 11 rate, against about 60% without it.
+  - **Limit Vulkan Queued Frames Under Vsync**, on `QarDevice` and on by default, controls this.
+    Turn it off to keep your project's value, for example in a GPU-bound application that needs
+    more frames queued.
   - Turning the option off shows every frame from the main thread, which streams about half as many
     frames at a cap. Leave it on unless you need that fallback.
   - With the option on, the package can move the eye cameras, hands and headset model just before

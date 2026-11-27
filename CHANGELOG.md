@@ -2252,6 +2252,10 @@ are written here by hand, under `Unreleased`; every other entry is overwritten.
 
 ### Changed
 
+- **Docs:** the *Unity* guide's *Graphics APIs* section no longer tells Vulkan users to avoid VSync:
+  it describes **Limit Vulkan Queued Frames Under Vsync**, which brings Vulkan under VSync to 90% of
+  the Direct3D 11 rate.
+
 - **C API:** `qar_session_kill_target_app` (C# `KillTargetApp`) stops any target app: a HoloLens's OpenXR desktop app, a headset player and its relay, or a Visualizer receiver (kept). Nothing is remembered.
 - **Docs:** *TerraExplorer* in the User Guide's *Supported Apps*
   (https://docs.quaternar.com/docs/dev/user-guide/supported-apps/terraexplorer) matches the HoloLens
